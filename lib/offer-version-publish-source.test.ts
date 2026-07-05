@@ -9,7 +9,7 @@ describe("offer version publish source guards", () => {
   it("requires full AI create new-deal publish to use offer versions", () => {
     expect(fullCreateSource).toMatch(/!editingDealId && !offerDefinition/);
     expect(fullCreateSource).toMatch(/publishOfferVersionedDeal/);
-    expect(fullCreateSource).toMatch(/buildOfferVersionPublishAdSpec\("create_ai"/);
+    expect(fullCreateSource).toMatch(/buildOfferVersionPublishAdSpec\(\s*"create_ai"/);
     expect(fullCreateSource).toMatch(/selectedComposedPresentationHash/);
     expect(fullCreateSource).toMatch(/approvedComposedPresentationHash/);
     expect(fullCreateSource).toMatch(/runDeterministicAdCompositeQa/);
@@ -20,7 +20,7 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).toMatch(/invalidateAcceptedAdDraft/);
 
     const newDealBranch = fullCreateSource.indexOf("const locTargets =");
-    const versionedPublish = fullCreateSource.indexOf("const versionedResult = await publishOfferVersionedDeal", newDealBranch);
+    const versionedPublish = fullCreateSource.indexOf("publishOfferVersionedDeal", newDealBranch);
 
     expect(newDealBranch).toBeGreaterThan(-1);
     expect(versionedPublish).toBeGreaterThan(newDealBranch);

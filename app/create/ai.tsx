@@ -184,6 +184,7 @@ import {
   buildPublishMechanicsValidationCopy,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
+  type PublishOfferVersionedDealResult,
 } from "../../lib/offer-version-publish";
 import {
   buildAdImageSelection,
@@ -986,7 +987,7 @@ export default function AiDealScreen() {
   } = useBusiness();
   const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
   const automaticLocalizationApprovalEnabled = isAiV5AutomaticVerifiedBundleApprovalEnabled();
-  const defaultAuthoringLocale = supportedLocaleOrDefault(businessPreferredLocale ?? i18n.language);
+  const defaultAuthoringLocale = supportedLocaleOrDefault(i18n.language);
   const [draftSourceLocale, setDraftSourceLocale] = useState<SupportedLocale | null>(null);
   const draftSourceBusinessRef = useRef<string | null>(null);
   useEffect(() => {
@@ -2603,11 +2604,7 @@ export default function AiDealScreen() {
     const raw = err instanceof Error ? err.message : String(err);
     const lower = raw.toLowerCase();
     const code = getErrorCode(err);
-    const reasonCodes = Array.isArray((err as { reasonCodes?: unknown } | null)?.reasonCodes)
-      ? ((err as { reasonCodes?: unknown[] }).reasonCodes ?? []).filter(
-          (reason): reason is string => typeof reason === "string" && reason.trim().length > 0,
-        )
-      : [];
+    const reasonCodes = publishReasonCodes(err);
 
     if (code === "INVALID_OFFER_DEFINITION") return t("createAi.errPublishInvalidOfferDefinition");
     if (code === "INVALID_AD_SPEC") {
@@ -2684,6 +2681,21 @@ export default function AiDealScreen() {
     ];
     if (generic.includes(cleaned.toLowerCase())) return null;
     return cleaned.length > 180 ? `${cleaned.slice(0, 177).trim()}...` : cleaned;
+  }
+
+  function publishReasonCodes(err: unknown): string[] {
+    return Array.isArray((err as { reasonCodes?: unknown } | null)?.reasonCodes)
+      ? ((err as { reasonCodes?: unknown[] }).reasonCodes ?? []).filter(
+          (reason): reason is string => typeof reason === "string" && reason.trim().length > 0,
+        )
+      : [];
+  }
+
+  function isPosterPublishSpecError(err: unknown): boolean {
+    if (getErrorCode(err) !== "INVALID_AD_SPEC") return false;
+    return publishReasonCodes(err).some(
+      (reason) => reason.startsWith("POSTER_") || reason === "INVALID_POSTER_SPEC",
+    );
   }
 
   function cancelGeneration() {
@@ -3818,19 +3830,55 @@ export default function AiDealScreen() {
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
         if (!offerDefinition) throw new Error("Missing offer definition for versioned publish.");
-        const versionedResult = await publishOfferVersionedDeal({
+        const publishAdSpecOptions = {
+          composedCard: composedCardPublishSpec,
+          localizationApproval: localizationApprovalForPublish,
+          ...(localizationBundleForPublish ? {} : { localization: null }),
+        };
+        const publishBodyBase = {
           business_id: businessId,
           offer_definition: offerDefinition,
           deal_rows: rows,
           idempotency_key:
             publishIdempotencyKeyRef.current ??
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
-          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpecWithPoster, {
-            composedCard: composedCardPublishSpec,
-            localizationApproval: localizationApprovalForPublish,
-            ...(localizationBundleForPublish ? {} : { localization: null }),
-          }),
-        });
+        };
+        let versionedResult: PublishOfferVersionedDealResult;
+        try {
+          versionedResult = await publishOfferVersionedDeal({
+            ...publishBodyBase,
+            ad_spec: buildOfferVersionPublishAdSpec(
+              "create_ai",
+              offerDefinition,
+              adForPublishSpecWithPoster,
+              publishAdSpecOptions,
+            ),
+          });
+        } catch (publishErr) {
+          if (!posterForPublishSpec || !isPosterPublishSpecError(publishErr)) {
+            throw publishErr;
+          }
+          trackEvent("deal_publish_poster_spec_fallback_used", {
+            businessId,
+            reason_codes: publishReasonCodes(publishErr).join(","),
+            source: "create_ai",
+          });
+          const standardCardAdForPublish = adForPublishSpecWithPoster
+            ? {
+                ...adForPublishSpecWithPoster,
+                poster: undefined,
+              }
+            : null;
+          versionedResult = await publishOfferVersionedDeal({
+            ...publishBodyBase,
+            ad_spec: buildOfferVersionPublishAdSpec(
+              "create_ai",
+              offerDefinition,
+              standardCardAdForPublish,
+              publishAdSpecOptions,
+            ),
+          });
+        }
         const dealsOut = versionedResult.deals.map((row) => ({
           id: row.deal_id,
           shouldNotify: row.idempotency_replayed !== true,

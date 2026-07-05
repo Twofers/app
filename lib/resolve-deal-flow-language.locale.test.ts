@@ -3,8 +3,8 @@ import { resolveDealFlowLanguage } from "./translate-deal-quality";
 
 /**
  * Explicit matrix for Offers & AI language:
- * - null preferred_locale → follow app (i18n) language
- * - en | es | ko preferred → override app for AI + deal-quality banners on create flows
+ * - Create flows follow the active app (i18n) language.
+ * - Stored business preferred_locale must not override the current owner UI language.
  */
 describe("resolveDealFlowLanguage", () => {
   it("1. English app + English AI (null preferred)", () => {
@@ -19,16 +19,16 @@ describe("resolveDealFlowLanguage", () => {
     expect(resolveDealFlowLanguage(null, "ko")).toBe("ko");
   });
 
-  it("4. English app + Korean AI (preferred ko)", () => {
-    expect(resolveDealFlowLanguage("ko", "en")).toBe("ko");
+  it("4. English app + English AI even when preferred is Korean", () => {
+    expect(resolveDealFlowLanguage("ko", "en")).toBe("en");
   });
 
   it("5. Korean app + Same as app (null preferred)", () => {
     expect(resolveDealFlowLanguage(null, "ko")).toBe("ko");
   });
 
-  it("6. Spanish app + English AI (preferred en)", () => {
-    expect(resolveDealFlowLanguage("en", "es")).toBe("en");
+  it("6. Spanish app + Spanish AI even when preferred is English", () => {
+    expect(resolveDealFlowLanguage("en", "es")).toBe("es");
   });
 
   it("invalid preferred falls back to app", () => {

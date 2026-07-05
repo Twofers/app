@@ -21,10 +21,10 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "2165cff880f22777e254dafd72e1af13f8127520f8e71026a6ed7cbfd2af25fb",
+      "sha256": "836637e07d6636957fa6c3398ff21f771c7768a4e3028bee783b2da6143d6280",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-04 chat approval: preserve generated image across Standard/Poster format switches and render Standard AI review with a consumer-feed-style image card",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved change keeps generated assets across format switches while forcing re-review, and makes Standard preview match the image-led consumer card instead of deterministic fallback art."
+      "approvalRef": "2026-07-05 chat approval: use active business app language for localized-owner-UI AI Create source language",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, and ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",
