@@ -4,7 +4,7 @@
 
 **File:** `supabase/migrations/20260130120000_business_preferred_locale.sql`
 
-**What it does:** Adds nullable `preferred_locale` (`TEXT`). `NULL` = client uses **app UI language** for AI output and deal-quality banners.
+**What it does:** Adds nullable `preferred_locale` (`TEXT`). Create flows use the active **app UI language** for AI output and deal-quality banners so stale owner profile language cannot override the language currently selected by the business user.
 
 ### Apply (local / linked project)
 
@@ -56,8 +56,8 @@ Redeploy after any change to `index.ts`.
 | `en` | `NULL` | English |
 | `es` | `NULL` | Spanish |
 | `ko` | `NULL` | Korean |
-| `en` | `ko` | Korean |
+| `en` | `ko` | English |
 | `ko` | `NULL` | Korean |
-| `es` | `en` | English |
+| `es` | `en` | Spanish |
 
 Implemented in `resolveDealFlowLanguage()` in `lib/translate-deal-quality.ts`. Covered by `lib/resolve-deal-flow-language.locale.test.ts`.

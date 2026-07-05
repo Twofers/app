@@ -106,7 +106,7 @@ describe("admin dashboard foundation", () => {
 
   it("serves audited per-tab reads for every admin directory page", () => {
     const source = read("supabase/functions/admin-dashboard-summary/index.ts");
-    expect(source).toMatch(/SECTION_NAMES = \[.*"businesses".*"offers".*"billing_events".*"audit_log".*"settings".*"business_detail".*\]/);
+    expect(source).toMatch(/SECTION_NAMES = \[[\s\S]*"businesses"[\s\S]*"offers"[\s\S]*"billing_events"[\s\S]*"audit_log"[\s\S]*"settings"[\s\S]*"business_detail"[\s\S]*"prospects"[\s\S]*"prospect_detail"[\s\S]*\]/);
     expect(source).toMatch(/isSectionName\(payload\.section\)/);
     // Section reads must be audited the same way as the summary view.
     expect(source).toMatch(/admin_\$\{payload\.section\}_viewed/);

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prospect Detail | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-section="prospect_detail"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-prospect-enrich-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-prospect-enrich"
+    data-admin-prospect-score-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-prospect-score"
+    data-admin-demand-proof-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-demand-proof"
+    data-admin-prospect-sales-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-prospect-sales"
+    data-admin-sales-script-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-sales-script"
+    data-admin-claim-link-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-claim-link-create"
+    data-admin-claim-link-assistant-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-claim-link-assistant"
+    data-admin-trial-from-prospect-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-trial-create-from-prospect"
+    data-admin-trial-conversion-assistant-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-trial-conversion-assistant"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Prospect detail</p>
+          <h1 data-prospect-title>Loading prospect</h1>
+          <p class="lede" data-prospect-meta></p>
+        </div>
+        <div class="admin-actions">
+          <span class="admin-badge" data-prospect-status></span>
+          <a class="button button-small" href="/admin/prospects">Back</a>
+        </div>
+      </div>
+
+      <section class="admin-grid three">
+        <article class="admin-card"><span>Linked business</span><strong data-prospect-linked>Not linked</strong></article>
+        <article class="admin-card"><span>Billing/trial status</span><strong data-prospect-billing>No billing record</strong></article>
+        <article class="admin-card"><span>Public state</span><strong>Never show as a partner until claimed</strong></article>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <div>
+            <h2>Actions</h2>
+            <p>All actions run through admin Edge Functions and audit privileged changes.</p>
+          </div>
+          <div class="admin-inline-actions">
+            <button type="button" class="button button-small" data-enrich-button>Run AI Enrichment</button>
+            <button type="button" class="button button-small button-secondary" data-enrich-refresh-button>Refresh AI Enrichment</button>
+            <button type="button" class="button button-small" data-score-button>Score</button>
+            <button type="button" class="button button-small button-secondary" data-demand-proof-button>Demand Proof</button>
+            <button type="button" class="button button-small button-secondary" data-sales-script-button>Sales Script</button>
+          </div>
+        </div>
+        <p class="status" data-action-status role="status" aria-live="polite"></p>
+        <div class="admin-inline-actions">
+          <button type="button" class="button button-small button-secondary" data-review-ai-facts-button>Review AI Facts</button>
+          <button type="button" class="button button-small" data-approve-ai-facts-button>Approve selected facts</button>
+          <button type="button" class="button button-small button-secondary" data-reject-ai-facts-button>Reject AI facts</button>
+          <button type="button" class="button button-small button-secondary" data-manual-research-button>Mark needs manual research</button>
+        </div>
+        <pre class="admin-note" data-enrichment-json></pre>
+        <div class="admin-inline-actions">
+          <button type="button" class="button button-small button-secondary" data-copy-demand-proof>Copy demand proof</button>
+          <button type="button" class="button button-small button-secondary" data-copy-sales-script>Copy sales script</button>
+        </div>
+        <pre class="admin-note" data-demand-proof-output></pre>
+        <pre class="admin-note" data-sales-script-output></pre>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Sales Account</h2>
+          <form class="admin-form" data-sales-form novalidate>
+            <label>
+              Stage
+              <select name="stage">
+                <option value="new">New</option>
+                <option value="enriched">Enriched</option>
+                <option value="ready_to_contact">Ready to contact</option>
+                <option value="contacted">Contacted</option>
+                <option value="demo_scheduled">Demo scheduled</option>
+                <option value="claim_link_sent">Claim link sent</option>
+                <option value="claimed">Claimed</option>
+                <option value="trial_created">Trial created</option>
+                <option value="active">Active</option>
+                <option value="not_interested">Not interested</option>
+                <option value="duplicate">Duplicate</option>
+                <option value="stale">Stale</option>
+              </select>
+            </label>
+            <label>
+              Priority
+              <select name="priority">
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+            <label class="full">
+              Next action
+              <input name="next_action" autocomplete="off" maxlength="300" />
+            </label>
+            <label class="full">
+              Notes
+              <textarea name="notes" maxlength="4000"></textarea>
+            </label>
+            <button type="submit" class="button button-small">Save Sales Account</button>
+            <p class="status full" data-sales-status role="status" aria-live="polite"></p>
+          </form>
+        </article>
+
+        <article class="admin-panel">
+          <h2>Log Activity</h2>
+          <form class="admin-form" data-activity-form novalidate>
+            <label>
+              Type
+              <select name="activity_type">
+                <option value="call">Call</option>
+                <option value="visit">Visit</option>
+                <option value="email">Email</option>
+                <option value="note">Note</option>
+              </select>
+            </label>
+            <label>
+              Outcome
+              <input name="outcome" autocomplete="off" maxlength="200" />
+            </label>
+            <label class="full">
+              Summary
+              <textarea name="summary" maxlength="1000"></textarea>
+            </label>
+            <button type="submit" class="button button-small">Log Activity</button>
+            <p class="status full" data-activity-status role="status" aria-live="polite"></p>
+          </form>
+        </article>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Claim Link</h2>
+          <div class="admin-inline-actions">
+            <button type="button" class="button button-small button-secondary" data-claim-link-assistant-button>Claim-link assistant</button>
+          </div>
+          <pre class="admin-note" data-claim-link-assistant-output></pre>
+          <form class="admin-form" data-claim-link-form novalidate>
+            <label>
+              Expires in days
+              <input name="expires_in_days" type="number" min="1" max="90" value="14" />
+            </label>
+            <label>
+              Max uses
+              <input name="max_uses" type="number" min="1" max="10" value="1" />
+            </label>
+            <label class="full">
+              Reason
+              <input name="reason" autocomplete="off" maxlength="500" placeholder="Owner visit follow-up" />
+            </label>
+            <button type="submit" class="button button-small">Create Claim Link</button>
+            <p class="status full" data-claim-link-status role="status" aria-live="polite"></p>
+          </form>
+        </article>
+
+        <article class="admin-panel">
+          <h2>Create Trial</h2>
+          <div class="admin-inline-actions">
+            <button type="button" class="button button-small button-secondary" data-trial-conversion-assistant-button>Trial conversion assistant</button>
+          </div>
+          <pre class="admin-note" data-trial-conversion-output></pre>
+          <form class="admin-form" data-trial-from-prospect-form novalidate>
+            <label>
+              Contact name
+              <input name="contact_name" autocomplete="name" maxlength="120" required />
+            </label>
+            <label>
+              Owner email
+              <input name="email" type="email" autocomplete="email" maxlength="254" required />
+            </label>
+            <label>
+              Phone
+              <input name="phone" autocomplete="tel" maxlength="40" />
+            </label>
+            <label>
+              Trial type
+              <select name="decision">
+                <option value="approve_limited">90-day limited trial</option>
+                <option value="approve_full">90-day full trial</option>
+              </select>
+            </label>
+            <label class="full">
+              Reason
+              <input name="reason" autocomplete="off" maxlength="500" />
+            </label>
+            <button type="submit" class="button button-small">Create Trial Application</button>
+            <p class="status full" data-trial-status role="status" aria-live="polite"></p>
+          </form>
+        </article>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header"><h2>Private Contact Data</h2></div>
+        <pre class="admin-note" data-prospect-private-contact>{}</pre>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Sources</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Provider</th><th>URL</th><th>Hash</th><th>Confidence</th><th>Fetched</th><th>Stale</th></tr></thead><tbody data-sources-body></tbody></table></div>
+        </article>
+        <article class="admin-panel">
+          <h2>Enrichments</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Provider</th><th>Model</th><th>Review</th><th>Confidence</th><th>Created</th></tr></thead><tbody data-enrichments-body></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Scores</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Score</th><th>Version</th><th>Next Action</th><th>Created</th></tr></thead><tbody data-scores-body></tbody></table></div>
+        </article>
+        <article class="admin-panel">
+          <h2>Demand</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Date</th><th>Requests</th><th>Favorites</th><th>Views</th><th>Unique</th></tr></thead><tbody data-demand-body></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Claim Links</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Created</th><th>Expires</th><th>Uses</th><th>Accepted</th><th>Revoked</th></tr></thead><tbody data-claim-links-body></tbody></table></div>
+        </article>
+        <article class="admin-panel">
+          <h2>Conversion History</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Type</th><th>Application</th><th>Business</th><th>Created</th></tr></thead><tbody data-conversions-body></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Sales Activity</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Type</th><th>Summary</th><th>Outcome</th><th>Created</th></tr></thead><tbody data-activities-body></tbody></table></div>
+        </article>
+        <article class="admin-panel">
+          <h2>Audit Trail</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Admin</th><th>Action</th><th>Reason</th><th>Created</th></tr></thead><tbody data-audit-body></tbody></table></div>
+        </article>
+      </section>
+    </main>
+    <script src="/admin/prospects.js?v=20260802-prospects"></script>
+  </body>
+</html>

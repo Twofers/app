@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 109 migration files and the latest is `20260801121000_profiles_app_locale.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 112 migration files and the latest is `20260802140000_admin_ai_prompt_registry.sql`.
 
 Read-only compare:
 
@@ -44,6 +44,9 @@ High-signal dependencies:
 - **Admin AI spend and quota resets:** `20260730128000_admin_ai_quota_resets.sql`. This adds the admin-only monthly AI quota reset ledger and updates the compose quota RPC fallback to honor reset boundaries without deleting AI usage history. Applying it is production-changing and requires explicit approval.
 - **Admin onboarding invite gate:** `20260730129000_admin_onboarding_service_role_invite_gate.sql`. This keeps normal client business signups behind the pilot invite gate while allowing reviewed website/admin onboarding to materialize businesses through audited service-role Edge Functions. Applying it is production-changing and requires explicit approval.
 - **Saved customers / repeat visits / app locale:** `20260731120000_business_saved_customers_rpc.sql`, `20260801120000_business_repeat_visit_stats.sql`, and `20260801121000_profiles_app_locale.sql`. These add owner-facing saved-customer and repeat-visit helpers plus `profiles.app_locale` for server-originated localized copy. Applying them is production-changing and requires explicit approval.
+- **Website prospect command center:** `20260802120000_business_prospect_command_center.sql`. This adds unclaimed prospect, source, enrichment, demand, score, sales, claim-link, and conversion-history tables plus safe public projection/demand RPCs. Applying it is production-changing and requires explicit approval.
+- **Website admin AI operating layer:** `20260802130000_admin_ai_operating_layer.sql`. This extends `ai_generation_logs` for admin/prospect AI output metadata and related prospect IDs, and updates prospect score tiers. Applying it is production-changing and requires explicit approval.
+- **Admin AI prompt registry:** `20260802140000_admin_ai_prompt_registry.sql`. This adds the RLS-closed `admin_ai_prompts` table and seeded active prompt versions used server-side by admin AI functions. Applying it is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -71,6 +74,22 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `admin-dashboard-summary` | Internal admin dashboard summary, active-admin checked |
 | `admin-ai-usage` | Internal admin AI spend/usage lookup and audited monthly quota reset |
 | `admin-business-applications` | Internal admin business trial request listing and audited approval/waitlist/reject decisions |
+| `public-local-businesses` | Public-safe projection for active businesses and reviewed prospects |
+| `request-business-on-twofer` | Authenticated customer demand capture for prospect/business requests |
+| `admin-prospect-import` | Admin-only prospect import with source provenance and duplicate checks |
+| `admin-prospect-enrich` | Admin-only structured prospect enrichment records |
+| `admin-prospect-score` | Admin-only prospect score/tier and next-action calculation |
+| `admin-demand-proof` | Admin-only thresholded merchant-safe demand report |
+| `admin-sales-script` | Admin-only sales outreach script generation |
+| `admin-onboarding-review-ai` | Admin-only AI recommendation support for business application/onboarding review |
+| `admin-prospect-sales` | Admin-only field-sales CRM updates and activity logging |
+| `admin-claim-link-create` | Admin-only claim link creation, listing, and revocation |
+| `admin-claim-link-assistant` | Admin-only claim-link copy/instruction assistant that does not create tokens |
+| `business-claim-link` | Public claim-link preview and verified onboarding start |
+| `admin-trial-create-from-prospect` | Admin-only reviewed prospect-to-trial application flow |
+| `admin-trial-conversion-assistant` | Admin-only trial setup checklist and conversion recommendation assistant |
+| `admin-ai-operating-report` | Internal admin AI/prospect operating report |
+| `admin-ai-prompts` | Internal admin prompt registry list/save/activate endpoint |
 | `get-business-onboarding-context` | App-safe imported business onboarding context |
 | `update-business-profile-section` | App-safe canonical business profile edits |
 | `send-deal-push` | Push notifications when a deal goes live |

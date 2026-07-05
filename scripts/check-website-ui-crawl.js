@@ -9,7 +9,7 @@ const SUPABASE_FUNCTIONS_HOST = "https://kvodhiqhdqnptqovovia.supabase.co/**";
 const SCREENSHOT_DIR = process.env.WEBSITE_UI_SCREENSHOT_DIR
   ? path.resolve(process.env.WEBSITE_UI_SCREENSHOT_DIR)
   : "";
-const SCREENSHOT_ROUTES = new Set(["/", "/business/start-trial/", "/admin/", "/admin/trial-requests/"]);
+const SCREENSHOT_ROUTES = new Set(["/", "/business/start-trial/", "/admin/", "/admin/trial-requests/", "/admin/prospects/"]);
 
 const MIME = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -28,6 +28,7 @@ const ROUTES = [
   "/business/",
   "/business/start-trial/",
   "/business/thanks/",
+  "/business/claim/mock-claim-token",
   "/business/waitlist/",
   "/business/review-pending/",
   "/business-terms/",
@@ -44,6 +45,9 @@ const ROUTES = [
   "/s/smoke-deal",
   "/admin/login/",
   "/admin/",
+  "/admin/prospects/",
+  "/admin/prospects/import/",
+  "/admin/prospects/11111111-1111-4111-8111-111111111111/",
   "/admin/trial-requests/",
   "/admin/businesses/",
   "/admin/businesses/new/",
@@ -52,6 +56,8 @@ const ROUTES = [
   "/admin/billing/events/",
   "/admin/audit-log/",
   "/admin/settings/",
+  "/admin/ai-operating-report/",
+  "/admin/ai-prompts/",
 ];
 
 const VIEWPORTS = [
@@ -62,10 +68,16 @@ const VIEWPORTS = [
 function routeToFile(pathname) {
   if (pathname === "/") return path.join(SITE_ROOT, "index.html");
   if (pathname.startsWith("/s/") && !path.extname(pathname)) return path.join(SITE_ROOT, "s", "index.html");
+  if (path.extname(pathname)) return path.join(SITE_ROOT, pathname);
+  if (/^\/business\/claim\/[^/]+\/?$/i.test(pathname)) {
+    return path.join(SITE_ROOT, "business", "claim", "index.html");
+  }
+  if (/^\/admin\/prospects\/[0-9a-f-]+(?:\/(?:demand|sales|claim-links))?\/?$/i.test(pathname)) {
+    return path.join(SITE_ROOT, "admin", "prospects", "detail", "index.html");
+  }
   if (/^\/admin\/businesses\/[0-9a-f-]{36}\/?$/i.test(pathname)) {
     return path.join(SITE_ROOT, "admin", "businesses", "detail", "index.html");
   }
-  if (path.extname(pathname)) return path.join(SITE_ROOT, pathname);
   return path.join(SITE_ROOT, pathname, "index.html");
 }
 
@@ -135,6 +147,59 @@ function mockPayload(pathname, requestBody) {
       };
     }
 
+    if (requestBody?.section === "prospects") {
+      return {
+        ok: true,
+        admin: { role: "owner" },
+        prospects: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            display_name: "Sample Cafe Prospect",
+            city: "Irving",
+            state: "TX",
+            category: "Cafe",
+            public_label_state: "not_on_twofer_yet",
+            demand_count: 14,
+            status: "ready_to_contact",
+            review_status: "approved",
+            score: { total_score: 84, tier: "A", recommended_next_action: "Prepare demand proof and send a claim link" },
+            sales_account: { stage: "ready_to_contact", next_action: "Visit owner", last_contact_at: null },
+            linked_business: null,
+          },
+        ],
+      };
+    }
+
+    if (requestBody?.section === "prospect_detail") {
+      return {
+        ok: true,
+        admin: { role: "owner" },
+        prospect: {
+          id: requestBody.prospect_id || "11111111-1111-4111-8111-111111111111",
+          display_name: "Sample Cafe Prospect",
+          city: "Irving",
+          state: "TX",
+          postal_code: "75039",
+          category: "Cafe",
+          public_label_state: "not_on_twofer_yet",
+          status: "ready_to_contact",
+          review_status: "approved",
+          private_contact_json: {},
+        },
+        linked_business: null,
+        billing: null,
+        sources: [{ provider: "manual", source_payload_hash: "abc123", confidence: 0.8, fetched_at: "2026-07-02T12:00:00.000Z" }],
+        enrichments: [{ provider: "twofer_rules", model: "deterministic-v1", review_status: "needs_review", confidence: 0.65, created_at: "2026-07-02T12:05:00.000Z" }],
+        scores: [{ total_score: 84, tier: "A", score_version: "prospect-score-v1", recommended_next_action: "Prepare demand proof and send a claim link", created_at: "2026-07-02T12:10:00.000Z" }],
+        demand_rollups: [{ rollup_date: "2026-07-02", requests_count: 8, favorites_count: 4, views_count: 2, unique_users_count: 7 }],
+        sales_account: { stage: "ready_to_contact", priority: "high", next_action: "Visit owner", notes: "" },
+        sales_activities: [{ activity_type: "note", summary: "Seeded prospect", outcome: "", created_at: "2026-07-02T12:12:00.000Z" }],
+        claim_links: [{ created_at: "2026-07-02T12:15:00.000Z", expires_at: "2026-07-16T12:15:00.000Z", uses_count: 0, max_uses: 1 }],
+        conversions: [],
+        audit_log: [{ admin_email: "admin@example.com", action: "admin_prospect_imported", reason: "qa", created_at: "2026-07-02T12:00:00.000Z" }],
+      };
+    }
+
     if (requestBody?.section === "business_detail") {
       return {
         ok: true,
@@ -175,7 +240,7 @@ function mockPayload(pathname, requestBody) {
         offers: [
           {
             id: "offer-1",
-            title: "2-for-1 croissants",
+            title: "Morning pastry offer",
             business_name: "Sample Bakery",
             is_active: true,
             start_time: "2026-07-02T13:00:00.000Z",
@@ -298,10 +363,80 @@ function mockPayload(pathname, requestBody) {
           business_type: "bakery",
           address: "123 Main",
           slow_hours: "2-4 PM",
-          offer_interests: "BOGO pastries",
+          offer_interests: "Limited-time pastry offer",
           risk_reasons: ["new domain"],
         },
       ],
+    };
+  }
+
+  if (pathname.endsWith("/admin-prospect-import")) {
+    return {
+      ok: true,
+      prospects: [{ id: "11111111-1111-4111-8111-111111111111", display_name: "Sample Cafe Prospect" }],
+    };
+  }
+
+  if (pathname.endsWith("/admin-prospect-enrich")) return { ok: true, enrichment: { id: "enrich-1" } };
+  if (pathname.endsWith("/admin-prospect-score")) return { ok: true, score: { total_score: 84, tier: "A" } };
+  if (pathname.endsWith("/admin-demand-proof")) {
+    return { ok: true, report: { merchant_safe_lines: ["14 locals have requested updates from Sample Cafe Prospect."] } };
+  }
+  if (pathname.endsWith("/admin-sales-script")) return { ok: true, script: "Call script ready." };
+  if (pathname.endsWith("/admin-prospect-sales")) return { ok: true, account: { stage: "contacted" } };
+  if (pathname.endsWith("/admin-claim-link-create")) {
+    return { ok: true, claim_url: "https://www.twoferapp.com/business/claim/mock-claim-token", claim_link: { id: "claim-1" } };
+  }
+  if (pathname.endsWith("/admin-trial-create-from-prospect")) {
+    return { ok: true, application: { id: "app-1" }, business_onboarding_request_id: "request-1" };
+  }
+
+  if (pathname.endsWith("/admin-ai-operating-report")) {
+    return {
+      ok: true,
+      admin: { role: "owner" },
+      report: {
+        ai: { enrichment_volume: 3, cost_by_feature_model: [{ feature: "prospect_enrichment", model: "deterministic-v1", endpoint: "admin", total_ai_cost_usd: 0, call_count: 3, failed_or_retried_calls: 0 }], circuit_breakers: [] },
+        prospects: { needing_review: 2, stale_source_count: 1, score_distribution: { A: 1, B: 2, C: 0, D: 0 } },
+        demand_and_sales: { demand_proof_generated: 2, sales_activity_count: 4 },
+        claim_links: { sent: 3, accepted: 1, expired: 0 },
+        conversions: { prospect_to_trial: 1, trial_to_active: 0 },
+        recent_admin_activity: [{ action: "admin_prospect_imported", target_type: "business_prospect", reason: "qa", created_at: "2026-07-02T12:00:00.000Z" }],
+      },
+    };
+  }
+
+  if (pathname.endsWith("/admin-ai-prompts")) {
+    return {
+      ok: true,
+      defaults: { operating_report: "admin-operating-report-v1" },
+      prompts: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          prompt_name: "operating_report",
+          feature: "operating_report",
+          prompt_version: "admin-operating-report-v1",
+          system_prompt: "You help run Twofer operations from the internal website/admin dashboard only. Return only strict JSON matching the schema.",
+          output_schema: {},
+          is_active: true,
+          last_used_at: "2026-08-02T12:00:00.000Z",
+        },
+      ],
+    };
+  }
+
+  if (pathname.endsWith("/business-claim-link")) {
+    return {
+      ok: true,
+      preview: {
+        business_name: "Sample Cafe Prospect",
+        city: "Irving",
+        state: "TX",
+        category: "Cafe",
+        public_label_state: "Not on Twofer yet",
+        statement: "This profile is not active on Twofer until you claim and complete setup.",
+      },
+      next_step: "Check your email and sign in with this business email to finish setup before the profile can become active.",
     };
   }
 

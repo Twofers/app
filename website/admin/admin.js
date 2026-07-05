@@ -356,6 +356,9 @@
       setMetric("billing.pastDueBusinesses", s.billing?.pastDueBusinesses ?? 0);
       setMetric("billing.missingCustomers", s.billing?.missingStripeCustomers ?? 0);
       setMetric("security.failedActions", s.security?.failedAdminActions ?? 0);
+      setMetric("prospects.open", s.prospects?.open ?? 0);
+      setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
+      setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
 
       fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
       fillRows("[data-audit-body]", payload.recentAudit || [], "No recent audit events.");

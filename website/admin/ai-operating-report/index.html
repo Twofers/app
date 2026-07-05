@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Operating Report | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-ai-operating-report-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-ai-operating-report"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Operating report</p>
+          <h1>AI & Prospect Operations</h1>
+          <p class="lede">Review enrichment volume, AI spend, provider health, prospect score distribution, sales work, claim links, and conversions.</p>
+        </div>
+        <div class="admin-actions">
+          <button type="button" class="button button-small" data-refresh-report>Refresh report</button>
+          <button type="button" class="button button-small button-secondary" data-export-report>Export CSV</button>
+          <button type="button" class="button button-small button-secondary" data-export-failed-ai>Export failures</button>
+          <button type="button" class="button button-small button-secondary" data-export-prospect-ops>Export ops</button>
+          <button type="button" class="button button-small button-secondary" data-copy-founder-summary>Copy founder summary</button>
+        </div>
+      </div>
+
+      <section class="admin-section">
+        <form class="admin-form admin-trial-toolbar" data-report-filter-form novalidate>
+          <label>Date from <input name="date_from" type="date" /></label>
+          <label>Date to <input name="date_to" type="date" /></label>
+          <label>City <input name="city" type="search" autocomplete="off" /></label>
+          <label>Launch area <input name="launch_area" type="search" autocomplete="off" /></label>
+          <label>Feature <input name="feature" type="search" autocomplete="off" /></label>
+          <label>Provider <input name="provider" type="search" autocomplete="off" /></label>
+          <label>Model <input name="model" type="search" autocomplete="off" /></label>
+          <label>Admin user <input name="admin_user" type="search" autocomplete="off" /></label>
+          <label>Prospect status <input name="prospect_status" type="search" autocomplete="off" /></label>
+          <label>Sales stage <input name="sales_stage" type="search" autocomplete="off" /></label>
+        </form>
+      </section>
+
+      <section class="admin-grid">
+        <article class="admin-card"><span>Enrichments this month</span><strong data-report-metric="ai.enrichment">0</strong></article>
+        <article class="admin-card"><span>Prospects needing review</span><strong data-report-metric="prospects.review">0</strong></article>
+        <article class="admin-card"><span>Stale source rows</span><strong data-report-metric="prospects.stale">0</strong></article>
+        <article class="admin-card"><span>Tier A</span><strong data-report-metric="score.a">0</strong></article>
+        <article class="admin-card"><span>Tier B</span><strong data-report-metric="score.b">0</strong></article>
+        <article class="admin-card"><span>Tier C</span><strong data-report-metric="score.c">0</strong></article>
+        <article class="admin-card"><span>Do Not Contact</span><strong data-report-metric="score.doNotContact">0</strong></article>
+        <article class="admin-card"><span>Demand proofs</span><strong data-report-metric="demand.proof">0</strong></article>
+        <article class="admin-card"><span>Sales activities</span><strong data-report-metric="sales.activity">0</strong></article>
+        <article class="admin-card"><span>Claim links sent</span><strong data-report-metric="claim.sent">0</strong></article>
+        <article class="admin-card"><span>Claim links accepted</span><strong data-report-metric="claim.accepted">0</strong></article>
+        <article class="admin-card"><span>Claim links expired</span><strong data-report-metric="claim.expired">0</strong></article>
+        <article class="admin-card"><span>Prospect trials</span><strong data-report-metric="conversion.trial">0</strong></article>
+        <article class="admin-card"><span>Trial to active</span><strong data-report-metric="conversion.active">0</strong></article>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <h2>Founder Summary</h2>
+        </div>
+        <pre class="admin-note" data-founder-summary></pre>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>AI Cost by Feature</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Feature</th><th>Model</th><th>Endpoint</th><th>Cost</th><th>Calls</th><th>Failures</th></tr></thead><tbody data-cost-body></tbody></table></div>
+        </article>
+        <article class="admin-panel">
+          <h2>Provider Health</h2>
+          <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Provider</th><th>Capability</th><th>State</th><th>Failures</th><th>Disabled Until</th></tr></thead><tbody data-provider-body></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <h2>Failed AI Calls</h2>
+        </div>
+        <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Feature</th><th>Provider</th><th>Model</th><th>Error</th><th>Created</th></tr></thead><tbody data-failed-ai-body></tbody></table></div>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <h2>Recent Prospect Operations</h2>
+        </div>
+        <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Action</th><th>Target</th><th>Reason</th><th>Created</th></tr></thead><tbody data-audit-body></tbody></table></div>
+      </section>
+    </main>
+    <script src="/admin/ai-operating-report.js?v=20260802-ai-report"></script>
+  </body>
+</html>

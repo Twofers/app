@@ -79,6 +79,18 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/admon",
+      "destination": "/admin",
+      "permanent": false
+    },
+    {
+      "source": "/admon/:path*",
+      "destination": "/admin/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/s/:path*",
@@ -123,6 +135,14 @@
     {
       "source": "/business/thanks/",
       "destination": "/business/thanks/index.html"
+    },
+    {
+      "source": "/business/claim/:token",
+      "destination": "/business/claim/index.html"
+    },
+    {
+      "source": "/business/claim/:token/",
+      "destination": "/business/claim/index.html"
     },
     {
       "source": "/business/billing/start",
@@ -193,6 +213,62 @@
       "destination": "/admin/businesses/index.html"
     },
     {
+      "source": "/admin/prospects",
+      "destination": "/admin/prospects/index.html"
+    },
+    {
+      "source": "/admin/prospects/",
+      "destination": "/admin/prospects/index.html"
+    },
+    {
+      "source": "/admin/prospects/import",
+      "destination": "/admin/prospects/import/index.html"
+    },
+    {
+      "source": "/admin/prospects/import/",
+      "destination": "/admin/prospects/import/index.html"
+    },
+    {
+      "source": "/admin/sales-ai",
+      "destination": "/admin/sales-ai/index.html"
+    },
+    {
+      "source": "/admin/sales-ai/",
+      "destination": "/admin/sales-ai/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/demand",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/demand/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/sales",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/sales/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/claim-links",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/claim-links/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
       "source": "/admin/businesses/",
       "destination": "/admin/businesses/index.html"
     },
@@ -251,6 +327,22 @@
     {
       "source": "/admin/settings/",
       "destination": "/admin/settings/index.html"
+    },
+    {
+      "source": "/admin/ai-operating-report",
+      "destination": "/admin/ai-operating-report/index.html"
+    },
+    {
+      "source": "/admin/ai-operating-report/",
+      "destination": "/admin/ai-operating-report/index.html"
+    },
+    {
+      "source": "/admin/ai-prompts",
+      "destination": "/admin/ai-prompts/index.html"
+    },
+    {
+      "source": "/admin/ai-prompts/",
+      "destination": "/admin/ai-prompts/index.html"
     },
     {
       "source": "/business-terms",

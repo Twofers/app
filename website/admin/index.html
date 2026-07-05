@@ -26,9 +26,13 @@
         </a>
         <div class="nav-links">
           <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
           <a href="/admin/trial-requests">Trial Requests</a>
           <a href="/admin/offers">Offers</a>
           <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
           <a href="/admin/audit-log">Audit</a>
         </div>
         <div class="nav-actions">
@@ -48,6 +52,9 @@
         </div>
         <div class="admin-actions">
           <a class="button" href="/admin/businesses/new">Create Field Trial</a>
+          <a class="button button-small" href="/admin/prospects">Prospects</a>
+          <a class="button button-small" href="/admin/sales-ai">Sales AI</a>
+          <a class="button button-small button-secondary" href="/admin/ai-prompts">Prompts</a>
           <a class="button button-small" href="/admin/trial-requests">Review Requests</a>
         </div>
       </div>
@@ -69,6 +76,9 @@
         <article class="admin-card"><span>Past due businesses</span><strong data-metric="billing.pastDueBusinesses">0</strong></article>
         <article class="admin-card"><span>Missing Stripe customers</span><strong data-metric="billing.missingCustomers">0</strong></article>
         <article class="admin-card"><span>Failed admin actions</span><strong data-metric="security.failedActions">0</strong></article>
+        <article class="admin-card"><span>Open prospects</span><strong data-metric="prospects.open">0</strong></article>
+        <article class="admin-card"><span>Ready to contact</span><strong data-metric="prospects.readyToContact">0</strong></article>
+        <article class="admin-card"><span>Accepted claim links</span><strong data-metric="prospects.acceptedClaimLinks">0</strong></article>
       </section>
 
       <section class="admin-section">

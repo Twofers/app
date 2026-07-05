@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prospects | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-section="prospects"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Prospect command center</p>
+          <h1>Local Business Prospects</h1>
+          <p class="lede">Track unclaimed local businesses, demand signals, scoring, and sales next steps without presenting them as active partners.</p>
+        </div>
+        <div class="admin-actions">
+          <a class="button" href="/admin/prospects/import">Import Prospects</a>
+        </div>
+      </div>
+
+      <section class="admin-section">
+        <form class="admin-form admin-trial-toolbar" data-prospect-filter-form novalidate>
+          <label>
+            Search
+            <input name="search" type="search" autocomplete="off" placeholder="Business name" />
+          </label>
+          <label>
+            City
+            <input name="city" type="search" autocomplete="off" placeholder="Irving" />
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="">Any</option>
+              <option value="new">New</option>
+              <option value="imported">Imported</option>
+              <option value="enriched">Enriched</option>
+              <option value="ready_to_contact">Ready to contact</option>
+              <option value="contacted">Contacted</option>
+              <option value="claim_link_sent">Claim link sent</option>
+              <option value="trial_created">Trial created</option>
+              <option value="not_interested">Not interested</option>
+              <option value="duplicate">Duplicate</option>
+              <option value="stale">Stale</option>
+            </select>
+          </label>
+          <label>
+            Review
+            <select name="review_status">
+              <option value="">Any</option>
+              <option value="needs_review">Needs review</option>
+              <option value="approved">Approved</option>
+              <option value="verified">Verified</option>
+              <option value="duplicate">Duplicate</option>
+              <option value="stale">Stale</option>
+            </select>
+          </label>
+          <label>
+            Tier
+            <select name="score_tier">
+              <option value="">Any</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="Do Not Contact">Do Not Contact</option>
+            </select>
+          </label>
+          <div class="admin-ai-actions">
+            <button type="submit" class="button button-small">Apply Filters</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead>
+              <tr><th>Business</th><th>City</th><th>Category</th><th>Public State</th><th>Demand</th><th>Score</th><th>Stage</th><th>Next Action</th><th>Last Contact</th><th>Linked</th></tr>
+            </thead>
+            <tbody data-prospects-body>
+              <tr><td class="admin-row-detail" colspan="10">Connect an active admin session to load prospects.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/prospects.js?v=20260802-prospects"></script>
+  </body>
+</html>

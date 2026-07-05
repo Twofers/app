@@ -544,6 +544,86 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-business-applications/index.ts"
 
+[functions.public-local-businesses]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/public-local-businesses/index.ts"
+
+[functions.request-business-on-twofer]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/request-business-on-twofer/index.ts"
+
+[functions.admin-prospect-import]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-import/index.ts"
+
+[functions.admin-prospect-enrich]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-enrich/index.ts"
+
+[functions.admin-prospect-score]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-score/index.ts"
+
+[functions.admin-demand-proof]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-demand-proof/index.ts"
+
+[functions.admin-sales-script]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-sales-script/index.ts"
+
+[functions.admin-onboarding-review-ai]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-onboarding-review-ai/index.ts"
+
+[functions.admin-prospect-sales]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-sales/index.ts"
+
+[functions.admin-claim-link-create]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-claim-link-create/index.ts"
+
+[functions.admin-claim-link-assistant]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-claim-link-assistant/index.ts"
+
+[functions.business-claim-link]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/business-claim-link/index.ts"
+
+[functions.admin-trial-create-from-prospect]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-trial-create-from-prospect/index.ts"
+
+[functions.admin-trial-conversion-assistant]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-trial-conversion-assistant/index.ts"
+
+[functions.admin-ai-operating-report]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-operating-report/index.ts"
+
+[functions.admin-ai-prompts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-prompts/index.ts"
+
 [functions.get-business-onboarding-context]
 enabled = true
 verify_jwt = false

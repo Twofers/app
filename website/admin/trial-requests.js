@@ -1,6 +1,7 @@
 (() => {
   const authEndpoint = document.body.dataset.adminAuthEndpoint;
   const applicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
+  const onboardingReviewAiEndpoint = document.body.dataset.adminOnboardingReviewAiEndpoint;
   const tokenKey = "twofer_admin_access_token";
   const refreshTokenKey = "twofer_admin_refresh_token";
   const expiresAtKey = "twofer_admin_expires_at";
@@ -167,6 +168,51 @@
     return payload;
   }
 
+  async function postOnboardingAi(body) {
+    if (!onboardingReviewAiEndpoint) throw new Error("Onboarding AI review endpoint is not configured.");
+    const token = await getAccessToken();
+    if (!token) throw new Error("Admin session not connected.");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 25000);
+    let response;
+    try {
+      response = await fetch(onboardingReviewAiEndpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      throw new Error(networkFailureMessage("review", error));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    const payload = await readJson(response);
+    if (response.status === 401 || response.status === 403) {
+      clearSession();
+      throw new Error(response.status === 401 ? "Admin session expired. Sign in again." : payload.error || "Forbidden.");
+    }
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "AI review request failed.");
+    return payload;
+  }
+
+  function stringifyRecommendation(value) {
+    if (!value || typeof value !== "object") return "";
+    return [
+      value.application_summary,
+      value.recommended_approval_path ? `Recommended path: ${value.recommended_approval_path}` : "",
+      Array.isArray(value.missing_fields) && value.missing_fields.length ? `Missing: ${value.missing_fields.join(", ")}` : "",
+      Array.isArray(value.risk_flags) && value.risk_flags.length ? `Risk flags: ${value.risk_flags.join(", ")}` : "",
+      value.possible_duplicate_business ? `Duplicate check: ${value.possible_duplicate_business}` : "",
+      value.suggested_admin_note ? `Admin note: ${value.suggested_admin_note}` : "",
+      value.suggested_next_email ? `Next email: ${value.suggested_next_email}` : "",
+      value.suggested_follow_up ? `Follow-up: ${value.suggested_follow_up}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
   function renderEmpty(message) {
     if (!tbody) return;
     tbody.innerHTML = "";
@@ -219,6 +265,7 @@
       const actions = document.createElement("div");
       actions.className = "admin-inline-actions";
       for (const [decision, label] of [
+        ["ai_review", "AI Review"],
         ["approve_limited", "Limited"],
         ["approve_full", "Full"],
         ["waitlist", "Waitlist"],
@@ -247,6 +294,7 @@
         app.offer_interests ? `Offers: ${app.offer_interests}` : "",
         Array.isArray(app.risk_reasons) && app.risk_reasons.length ? `Signals: ${app.risk_reasons.join(", ")}` : "",
       ].filter(Boolean).join(" | ") || "No extra request details.";
+      detailTd.dataset.applicationDetail = app.id;
       detailTr.appendChild(detailTd);
       tbody.appendChild(detailTr);
     }
@@ -261,6 +309,19 @@
   }
 
   async function decide(applicationId, decision, button) {
+    if (decision === "ai_review") {
+      button.disabled = true;
+      setTrialStatus("Generating onboarding review...");
+      try {
+        const payload = await postOnboardingAi({ application_id: applicationId });
+        const detail = document.querySelector(`[data-application-detail="${applicationId}"]`);
+        if (detail) detail.textContent = stringifyRecommendation(payload.recommendation);
+        setTrialStatus("AI review drafted. Admin decision still requires an explicit click.");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
     if (decision === "reject" && !window.confirm("Reject this business request?")) return;
     button.disabled = true;
     setTrialStatus("Saving decision...");

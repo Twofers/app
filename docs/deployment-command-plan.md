@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (109 files, strict filename / timestamp order)
+### 2.1 Full local set (112 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -147,10 +147,13 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 107. `20260731120000_business_saved_customers_rpc.sql`
 108. `20260801120000_business_repeat_visit_stats.sql`
 109. `20260801121000_profiles_app_locale.sql`
+110. `20260802120000_business_prospect_command_center.sql`
+111. `20260802130000_admin_ai_operating_layer.sql`
+112. `20260802140000_admin_ai_prompt_registry.sql`
 
 ### 2.2 Latest migration
 
-**`20260801121000_profiles_app_locale.sql`**
+**`20260802140000_admin_ai_prompt_registry.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -203,11 +206,21 @@ The current local chain also includes:
 
 These add owner-facing saved-customer and repeat-visit helpers plus `profiles.app_locale` for server-originated localized copy. Applying any of these migrations is production-changing and requires explicit approval.
 
-### 2.8 Duplicate timestamp check
+### 2.8 Prospect command center and admin AI operations
+
+The current local chain also includes:
+
+- `20260802120000_business_prospect_command_center.sql`
+- `20260802130000_admin_ai_operating_layer.sql`
+- `20260802140000_admin_ai_prompt_registry.sql`
+
+These add website/admin prospect operations, claim-link support, admin AI output metadata, and the editable admin-only prompt registry. Applying any of these migrations is production-changing and requires explicit approval.
+
+### 2.9 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.9 Command to apply migrations (do not run without explicit approval)
+### 2.10 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
@@ -263,9 +276,22 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | Function |
 |----------|
 | `activate-redemption-mode` |
+| `admin-ai-operating-report` |
+| `admin-ai-prompts` |
 | `admin-dashboard-summary` |
 | `admin-ai-usage` |
 | `admin-business-applications` |
+| `admin-claim-link-assistant` |
+| `admin-claim-link-create` |
+| `admin-demand-proof` |
+| `admin-onboarding-review-ai` |
+| `admin-prospect-enrich` |
+| `admin-prospect-import` |
+| `admin-prospect-sales` |
+| `admin-prospect-score` |
+| `admin-sales-script` |
+| `admin-trial-conversion-assistant` |
+| `admin-trial-create-from-prospect` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |

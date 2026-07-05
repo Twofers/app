@@ -30,7 +30,8 @@
     "gate:rls": "node scripts/probe-rls-inventory.mjs",
     "gate:rls-smoke": "node scripts/probe-rls-smoke.mjs",
     "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
-    "screenshots:pages": "node scripts/screenshot-pages.mjs"
+    "screenshots:pages": "node scripts/screenshot-pages.mjs",
+    "smoke:admin-ai-staging": "node scripts/smoke-admin-ai-staging.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",
