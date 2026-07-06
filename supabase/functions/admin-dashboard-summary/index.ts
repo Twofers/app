@@ -153,6 +153,22 @@ function daysUntil(toIso: string | null, now: Date): number | null {
   return Math.ceil((to.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
 }
 
+type OfferEffectiveStatus = "live" | "scheduled" | "expired" | "inactive";
+
+// Deals have no separate status enum -- only is_active plus start/end timestamps.
+// A stored is_active=true never means "live" on its own: an end_time in the past
+// always wins (expired), and a start_time in the future always wins (scheduled).
+function offerEffectiveStatus(
+  deal: { is_active?: unknown; start_time?: unknown; end_time?: unknown },
+  now: Date,
+): OfferEffectiveStatus {
+  const start = dateOrNull(deal.start_time);
+  const end = dateOrNull(deal.end_time);
+  if (end && end.getTime() <= now.getTime()) return "expired";
+  if (start && start.getTime() > now.getTime()) return "scheduled";
+  return deal.is_active === true ? "live" : "inactive";
+}
+
 function rate(numerator: number, denominator: number): number {
   if (!denominator) return 0;
   return Number((numerator / denominator).toFixed(4));
@@ -386,10 +402,9 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
     if (!businessId || !stats.has(businessId)) continue;
     if (dealId) dealToBusiness.set(dealId, businessId);
     const row = stats.get(businessId)!;
-    const end = dateOrNull(deal.end_time);
-    const start = dateOrNull(deal.start_time);
-    const isCurrent = deal.is_active === true && (!end || end.getTime() > now.getTime());
-    const isScheduled = deal.is_active === true && start !== null && start.getTime() > now.getTime();
+    const effectiveStatus = offerEffectiveStatus(deal, now);
+    const isCurrent = effectiveStatus === "live";
+    const isScheduled = effectiveStatus === "scheduled";
     if (isCurrent) row.liveOfferCount += 1;
     if (isCurrent || isScheduled) row.activeOrScheduledOfferCount += 1;
     row.lastOfferAt = latestIso(row.lastOfferAt, deal.created_at || deal.start_time);
@@ -609,10 +624,9 @@ async function loadBusinessHealthDetail(
   const offerRows: Array<Record<string, unknown>> = [];
   for (const deal of deals) {
     const dealId = String(deal.id ?? "");
-    const end = dateOrNull(deal.end_time);
-    const start = dateOrNull(deal.start_time);
-    const isCurrent = deal.is_active === true && (!end || end.getTime() > now.getTime());
-    const isScheduled = deal.is_active === true && start !== null && start.getTime() > now.getTime();
+    const effectiveStatus = offerEffectiveStatus(deal, now);
+    const isCurrent = effectiveStatus === "live";
+    const isScheduled = effectiveStatus === "scheduled";
     if (isCurrent) liveOfferCount += 1;
     if (isCurrent || isScheduled) activeOrScheduledOfferCount += 1;
     lastOfferAt = latestIso(lastOfferAt, deal.created_at || deal.start_time);
@@ -752,8 +766,13 @@ async function loadSection(
         names.set(business.id, business.name ?? business.id);
       }
     }
+    const now = new Date();
     return {
-      offers: rows.map((row) => ({ ...row, business_name: names.get(String(row.business_id)) ?? null })),
+      offers: rows.map((row) => ({
+        ...row,
+        business_name: names.get(String(row.business_id)) ?? null,
+        effective_status: offerEffectiveStatus(row, now),
+      })),
     };
   }
 

@@ -143,4 +143,34 @@ describe("admin dashboard foundation", () => {
     expect(directoryScript).toMatch(/clearSession/);
     expect(directoryScript).toMatch(/401.*403|403.*401|status === 401 \|\| response\.status === 403/);
   });
+
+  it("computes offer status from start/end timestamps, not stored is_active alone", () => {
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+
+    // A single effective-status helper must exist so the offers list, the
+    // aggregate Business Health list, and the Business Detail drilldown can
+    // never disagree with each other about what "live" means.
+    expect(source).toMatch(/function offerEffectiveStatus\(/);
+    expect(source).toMatch(/end && end\.getTime\(\) <= now\.getTime\(\)\) return "expired"/);
+    expect(source).toMatch(/start && start\.getTime\(\) > now\.getTime\(\)\) return "scheduled"/);
+
+    // The raw offers-section query must no longer be trusted as-is; it has to
+    // run every row through the shared helper before returning it.
+    expect(source).toMatch(/effective_status: offerEffectiveStatus\(row, now\)/);
+
+    // The aggregate and per-business health calculators must derive
+    // isCurrent/isScheduled from the same helper instead of duplicating
+    // is_active-only date math.
+    const offerStatusUses = source.match(/offerEffectiveStatus\(deal, now\)/g) ?? [];
+    expect(offerStatusUses.length).toBeGreaterThanOrEqual(2);
+    expect(source).not.toMatch(/deal\.is_active === true && \(!end \|\| end\.getTime\(\)/);
+
+    const directoryScript = read("website/admin/admin-directory.js");
+    // The Offers page must filter and render effective status, not raw is_active,
+    // so an expired offer can never display or filter as Live.
+    expect(directoryScript).toMatch(/getValue: \(r\) => r\.effective_status \|\| "inactive"/);
+    expect(directoryScript).toMatch(/value: "expired", label: "Expired"/);
+    expect(directoryScript).toMatch(/offerStatusBadge\(r\.effective_status\)/);
+    expect(directoryScript).not.toMatch(/r\.is_active \? "Live" : "Inactive"/);
+  });
 });

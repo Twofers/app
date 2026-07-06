@@ -121,6 +121,17 @@
     return { high: "High", watch: "Watch", normal: "Normal" }[value] || "";
   }
 
+  const OFFER_STATUS_BADGES = {
+    live: { badge: "Live", tone: "success" },
+    scheduled: { badge: "Scheduled", tone: "info" },
+    expired: { badge: "Expired", tone: "" },
+    inactive: { badge: "Inactive", tone: "" },
+  };
+
+  function offerStatusBadge(value) {
+    return OFFER_STATUS_BADGES[value] || { badge: "Unknown", tone: "" };
+  }
+
   function setText(selector, value) {
     const el = document.querySelector(selector);
     if (el) el.textContent = value;
@@ -517,9 +528,11 @@
         {
           key: "status",
           label: "Status",
-          getValue: (r) => (r.is_active ? "live" : "inactive"),
+          getValue: (r) => r.effective_status || "inactive",
           options: [
             { value: "live", label: "Live" },
+            { value: "scheduled", label: "Scheduled" },
+            { value: "expired", label: "Expired" },
             { value: "inactive", label: "Inactive" },
           ],
         },
@@ -528,12 +541,12 @@
         { key: "created_at", label: "Created", type: "date" },
         { key: "start_time", label: "Starts", type: "date" },
         { key: "end_time", label: "Ends", type: "date" },
-        { key: "status", label: "Status", type: "number", getValue: (r) => (r.is_active ? 1 : 0) },
+        { key: "status", label: "Status", type: "text", getValue: (r) => r.effective_status || "inactive" },
       ],
       columns: [
         { label: "Offer", value: (r) => r.title || r.id },
         { label: "Business", value: (r) => r.business_name || r.business_id || "" },
-        { label: "Status", value: (r) => ({ badge: r.is_active ? "Live" : "Inactive", tone: r.is_active ? "success" : "" }) },
+        { label: "Status", value: (r) => offerStatusBadge(r.effective_status) },
         { label: "Starts", value: (r) => formatDateTime(r.start_time) },
         { label: "Ends", value: (r) => formatDateTime(r.end_time) },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
