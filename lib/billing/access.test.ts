@@ -35,7 +35,7 @@ describe("isTrialExpired", () => {
 describe("canCreateDeal", () => {
   it("keeps backend paid billing enabled while mobile billing defaults off", () => {
     expect(PAID_BILLING_ENABLED).toBe(true);
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
     expect(isMobileStripeEnabled()).toBe(false);
     expect(isMobileSubscriptionCtaEnabled()).toBe(false);
     expect(isBusinessSelfServeMobileEnabled()).toBe(false);
@@ -84,26 +84,26 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("allows past_due while the testing billing bypass is enabled", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  it("blocks past_due now that the testing billing bypass is disabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "past_due",
         trialEndsAt: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("allows expired trials while the testing billing bypass is enabled", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  it("blocks expired trials now that the testing billing bypass is disabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: "2000-01-01T00:00:00.000Z",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

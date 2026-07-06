@@ -14,7 +14,14 @@ import {
   normalizePhone,
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
+import {
+  billingProfileFromOnboarding,
+  ensureStripeCustomerForBusiness,
+} from "../_shared/stripe-business-billing.ts";
 
+// Trial length matches admin-business-applications' approve_full (30 days)
+// and approve_limited (14 days) decisions. This path previously used a
+// separate 90-day value, which drifted from the rest of the codebase.
 function decisionConfig(value: unknown) {
   const decision = cleanString(value, 40);
   if (decision === "approve_full") {
@@ -22,24 +29,26 @@ function decisionConfig(value: unknown) {
       applicationStatus: "trial_active",
       accessTier: "trialing",
       verificationStatus: "verified_low_risk",
-      trialDays: 90,
+      trialDays: 30,
       trialOfferLimit: 3,
       trialClaimLimit: 50,
       businessStatus: "trialing",
       businessAccessLevel: "full_trial",
       businessVerificationStatus: "manual_verified",
+      subscriptionAccessStatus: "trialing",
     };
   }
   return {
     applicationStatus: "trial_limited",
     accessTier: "trial_limited",
     verificationStatus: "verified_low_risk",
-    trialDays: 90,
+    trialDays: 14,
     trialOfferLimit: 1,
     trialClaimLimit: 25,
     businessStatus: "limited_trial",
     businessAccessLevel: "limited_trial",
     businessVerificationStatus: "basic_verified",
+    subscriptionAccessStatus: "trial_limited",
   };
 }
 
@@ -154,6 +163,33 @@ Deno.serve(async (req) => {
         first_approved_at: new Date().toISOString(),
         approved_by: ctx.user.id,
       }).eq("id", prospect.linked_business_id);
+
+      // Business already exists (re-approval / already materialized) — seed
+      // business_subscriptions (and its location_entitlements mirror) now
+      // instead of waiting on a login that may never re-trigger materialization.
+      const { data: existingBusiness, error: existingBusinessError } = await ctx.supabaseAdmin
+        .from("businesses")
+        .select("owner_id")
+        .eq("id", prospect.linked_business_id)
+        .maybeSingle();
+      if (existingBusinessError) throw existingBusinessError;
+      const ownerUserId = existingBusiness?.owner_id ? String(existingBusiness.owner_id) : null;
+      if (ownerUserId) {
+        await ensureStripeCustomerForBusiness({
+          supabase: ctx.supabaseAdmin,
+          stripe: null,
+          input: billingProfileFromOnboarding({
+            businessId: prospect.linked_business_id,
+            ownerUserId,
+            normalized,
+            source: "prospect_admin_trial",
+            sourceRecordId: String(application.id),
+          }),
+          source: "prospect_admin_trial",
+          trialDays: config.trialDays,
+          accessStatus: config.subscriptionAccessStatus,
+        });
+      }
     }
 
     await ctx.supabaseAdmin.from("prospect_to_business_links").insert({

@@ -493,6 +493,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/send-trial-ending-reminders/index.ts"
 
+# Cron-triggered; authorizes via x-cron-secret (env CRON_SECRET or Vault), not JWT.
+[functions.expire-billing-access]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/expire-billing-access/index.ts"
+
 [functions.begin-visual-redeem]
 enabled = true
 verify_jwt = false

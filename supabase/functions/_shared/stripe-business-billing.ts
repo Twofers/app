@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { cleanString, normalizePhone, type NormalizedBusinessOnboarding } from "./business-onboarding-sync.ts";
+import { applyBusinessBillingAccessState } from "./business-location-entitlement-sync.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -172,14 +173,17 @@ export async function seedBusinessSubscription(
       : "pending";
   const billingStatus = accessStatus === "trial_limited" || accessStatus === "trialing" ? "trialing" : "none";
 
+  const trialType = accessStatus === "trial_limited" ? "remote_limited" : accessStatus === "trialing" ? "remote_full" : null;
+  const trialStart = trialEnd ? now.toISOString() : null;
+
   const { error } = await supabase.from("business_subscriptions").upsert(
     {
       business_id: args.businessId,
       stripe_customer_id: args.stripeCustomerId ?? null,
       billing_status: billingStatus,
       app_access_status: accessStatus,
-      trial_type: accessStatus === "trial_limited" ? "remote_limited" : accessStatus === "trialing" ? "remote_full" : null,
-      trial_start: trialEnd ? now.toISOString() : null,
+      trial_type: trialType,
+      trial_start: trialStart,
       trial_end: trialEnd,
       source: args.source,
       updated_at: now.toISOString(),
@@ -187,6 +191,19 @@ export async function seedBusinessSubscription(
     { onConflict: "business_id" },
   );
   if (error) throw error;
+
+  await applyBusinessBillingAccessState({
+    supabase,
+    businessId: args.businessId,
+    provider: "admin",
+    appAccessStatus: accessStatus,
+    trialType,
+    trialStart,
+    trialEnd,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+  });
 }
 
 export async function enqueueStripeCustomerSync(

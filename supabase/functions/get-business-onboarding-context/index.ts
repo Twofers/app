@@ -109,6 +109,7 @@ async function ensureLinkedBusiness(
     access_tier?: string | null;
     verification_status?: string | null;
     risk_score?: number | null;
+    trial_days?: number | null;
   } = {
     status: requestRow.status as string | null,
     risk_score: requestRow.risk_score as number | null,
@@ -116,7 +117,7 @@ async function ensureLinkedBusiness(
   if (requestRow.application_id) {
     const { data: application, error: applicationError } = await supabase
       .from("business_applications")
-      .select("status,access_tier,verification_status,risk_score")
+      .select("status,access_tier,verification_status,risk_score,trial_days")
       .eq("id", requestRow.application_id as string)
       .maybeSingle();
     if (applicationError) throw applicationError;
@@ -126,6 +127,7 @@ async function ensureLinkedBusiness(
         access_tier: (application as Record<string, unknown>).access_tier as string | null,
         verification_status: (application as Record<string, unknown>).verification_status as string | null,
         risk_score: (application as Record<string, unknown>).risk_score as number | null,
+        trial_days: (application as Record<string, unknown>).trial_days as number | null,
       };
     }
   }
@@ -152,7 +154,10 @@ async function ensureLinkedBusiness(
   await seedBusinessSubscription(supabase, {
     businessId: materialized.businessId,
     source: "app_login",
-    trialDays: null,
+    // Trial length was decided at admin approval time (business_applications.trial_days);
+    // read it here so the trial clock actually has an end date once the owner
+    // finishes onboarding, instead of an eternal trial with no expiration.
+    trialDays: typeof decision.trial_days === "number" ? decision.trial_days : null,
     accessStatus: decision.access_tier === "trialing" || decision.status === "trial_active"
       ? "trialing"
       : decision.access_tier === "trial_limited" || decision.status === "trial_limited"

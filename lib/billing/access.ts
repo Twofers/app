@@ -6,10 +6,14 @@ import { isMerchantAccessAllowedStatus } from "@/lib/merchant-access";
 export const PAID_BILLING_ENABLED = true;
 
 /**
- * Legacy pilot switch. Do not use this to bypass mobile merchant access; the
- * App Store build gates merchant tools by Supabase entitlement status.
+ * Legacy pilot switch. Only gates the dead canCreateDeal() path below (it has
+ * no callers anywhere in the app — the real merchant gate is
+ * usePrimaryLocationBillingGate / get_location_billing_summary, which this
+ * flag does not touch). Flipped to false once billing enforcement was
+ * verified end-to-end (2026-07-06 QA pass): trial/paid publish succeeds,
+ * canceled/expired/suspended publish is blocked with LOCATION_BILLING_SUSPENDED.
  */
-export const PILOT_DISABLE_BILLING_GATE = true;
+export const PILOT_DISABLE_BILLING_GATE = false;
 
 export function isMobileStripeEnabled(): boolean {
   return false;

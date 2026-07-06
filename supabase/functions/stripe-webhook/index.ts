@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadRuntimeBillingConfig, safeGetString, type RuntimeBillingConfig } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 
 type Metadata = Record<string, string>;
 
@@ -689,9 +690,23 @@ async function syncBusinessSubscriptionFromStripe(params: {
 
   const { data: previous } = await supabase
     .from("business_subscriptions")
-    .select("billing_status,app_access_status")
+    .select("billing_status,app_access_status,trial_type")
     .eq("business_id", businessId)
     .maybeSingle();
+
+  // Preserve "was this ever a paying/trialing subscription" across terminal
+  // events: Stripe's own status on a canceled subscription no longer says
+  // "active" or "trialing", so trial_type would otherwise collapse to null
+  // right when the downgrade path needs it most.
+  const trialType = status === "trialing"
+    ? "stripe_trial"
+    : status === "active"
+      ? "paid"
+      : safeGetString(previous?.trial_type);
+  const trialStartIso = unixSecondsToIso(subscription?.trial_start);
+  const trialEndIso = unixSecondsToIso(subscription?.trial_end);
+  const currentPeriodStartIso = unixSecondsToIso(subscription?.current_period_start);
+  const currentPeriodEndIso = unixSecondsToIso(subscription?.current_period_end);
 
   await supabase.from("business_subscriptions").upsert(
     {
@@ -703,11 +718,11 @@ async function syncBusinessSubscriptionFromStripe(params: {
       billing_mode: "web_stripe",
       billing_status: access.billingStatus,
       app_access_status: access.appAccessStatus,
-      trial_type: status === "trialing" ? "stripe_trial" : status === "active" ? "paid" : null,
-      trial_start: unixSecondsToIso(subscription?.trial_start),
-      trial_end: unixSecondsToIso(subscription?.trial_end),
-      current_period_start: unixSecondsToIso(subscription?.current_period_start),
-      current_period_end: unixSecondsToIso(subscription?.current_period_end),
+      trial_type: trialType,
+      trial_start: trialStartIso,
+      trial_end: trialEndIso,
+      current_period_start: currentPeriodStartIso,
+      current_period_end: currentPeriodEndIso,
       cancel_at_period_end: cancelAtPeriodEnd,
       canceled_at: unixSecondsToIso(subscription?.canceled_at),
       ended_at: unixSecondsToIso(subscription?.ended_at),
@@ -774,19 +789,22 @@ async function syncBusinessSubscriptionFromStripe(params: {
     { onConflict: "stripe_event_id" },
   );
 
-  const nextAccessLevel = access.appAccessStatus === "active"
-    ? "paid"
-    : access.appAccessStatus === "trialing"
-      ? "full_trial"
-      : access.appAccessStatus === "trial_limited"
-        ? "limited_trial"
-        : null;
-  if (nextAccessLevel) {
-    await supabase.from("businesses").update({
-      access_level: nextAccessLevel,
-      updated_at: now.toISOString(),
-    }).eq("id", businessId);
-  }
+  // Keeps businesses.access_level, businesses.status, and location_entitlements
+  // (what the app gate and publish checks actually read) in sync with the
+  // business_subscriptions row just written above. Canceled/expired/past-due
+  // statuses now explicitly downgrade instead of being skipped.
+  await applyBusinessBillingAccessState({
+    supabase,
+    businessId,
+    provider: "stripe",
+    appAccessStatus: access.appAccessStatus,
+    trialType,
+    trialStart: trialStartIso,
+    trialEnd: trialEndIso,
+    currentPeriodStart: currentPeriodStartIso,
+    currentPeriodEnd: currentPeriodEndIso,
+    cancelAtPeriodEnd,
+  });
 }
 
 async function syncBusinessCustomerProfileFromStripe(params: {
