@@ -16,6 +16,7 @@
     class="admin-shell"
     data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
     data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-business-applications-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-applications"
     data-admin-section="business_detail"
   >
     <header class="site-header">
@@ -57,6 +58,23 @@
         <a class="button button-small button-secondary" data-view-offers-link href="/admin/offers">View offers</a>
         <a class="button button-small button-secondary" href="#business-record">Open read-only business record</a>
       </div>
+
+      <section class="admin-section" aria-label="Verification">
+        <div class="admin-section-header">
+          <div>
+            <h2>Verification</h2>
+            <p>Manually verify or reject this business, independent of the trial request queue.</p>
+          </div>
+        </div>
+        <div class="admin-grid two">
+          <article class="admin-card"><span>Verification status</span><span class="admin-badge" data-verification-status>&mdash;</span></article>
+        </div>
+        <div class="admin-inline-actions">
+          <button type="button" class="button button-small" data-verify-decision="verify">Mark verified</button>
+          <button type="button" class="button button-small button-secondary" data-verify-decision="reject">Reject verification</button>
+        </div>
+        <p class="status" data-verify-status role="status" aria-live="polite"></p>
+      </section>
 
       <section class="admin-section" aria-label="Business health drilldown">
         <div class="admin-section-header">
@@ -122,15 +140,17 @@
         <div class="admin-section-header">
           <div>
             <h2>Trial &amp; Access Timing</h2>
+            <p>Current app access is canonical. Trial request fields below are historical context, not live access.</p>
           </div>
         </div>
+        <p class="status warning" data-access-mismatch-warning hidden></p>
         <p class="admin-note" data-trial-empty hidden>No trial timing data found.</p>
         <div class="admin-grid three">
-          <article class="admin-card"><span>Trial request status</span><span class="admin-badge" data-trial-request-status>&mdash;</span></article>
+          <article class="admin-card"><span>Current app access status</span><span class="admin-badge" data-app-access-status>&mdash;</span></article>
+          <article class="admin-card"><span>Trial ends (if currently trialing)</span><span class="admin-badge" data-trial-ends>&mdash;</span></article>
+          <article class="admin-card"><span>Trial days remaining (if currently trialing)</span><span class="admin-badge" data-trial-days-remaining>&mdash;</span></article>
+          <article class="admin-card"><span>Trial request status (history)</span><span class="admin-badge" data-trial-request-status>&mdash;</span></article>
           <article class="admin-card"><span>Trial request created</span><span class="admin-badge" data-trial-request-created>&mdash;</span></article>
-          <article class="admin-card"><span>App access status</span><span class="admin-badge" data-app-access-status>&mdash;</span></article>
-          <article class="admin-card"><span>Trial ends</span><span class="admin-badge" data-trial-ends>&mdash;</span></article>
-          <article class="admin-card"><span>Trial days remaining</span><span class="admin-badge" data-trial-days-remaining>&mdash;</span></article>
         </div>
       </section>
 
@@ -150,10 +170,10 @@
 
       <section class="admin-section" id="business-record">
         <h2>Applications</h2>
-        <p class="admin-note">Trial requests and field invites linked to this business. Decisions are made on the Trial Requests page.</p>
+        <p class="admin-note">Trial requests and field invites linked to this business. These are historical application records and do not change after a decision is made &mdash; they can go stale if access is later canceled or expired. Current app access is shown above under Trial &amp; Access Timing. Decisions are made on the Trial Requests page.</p>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
-            <thead><tr><th>Contact</th><th>Email</th><th>Status</th><th>Access</th><th>Trial days</th><th>Created</th></tr></thead>
+            <thead><tr><th>Contact</th><th>Email</th><th>Request status</th><th>Requested access</th><th>Approved trial days</th><th>Created</th></tr></thead>
             <tbody data-applications>
               <tr><td colspan="6" class="admin-row-detail">Sign in to load applications.</td></tr>
             </tbody>
@@ -172,6 +192,6 @@
         </div>
       </section>
     </main>
-    <script src="/admin/admin-directory.js?v=20260705-offer-status"></script>
+    <script src="/admin/admin-directory.js?v=20260706-business-verify-action"></script>
   </body>
 </html>

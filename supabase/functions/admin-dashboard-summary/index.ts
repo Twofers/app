@@ -656,11 +656,26 @@ async function loadBusinessHealthDetail(
   const subscription = subscriptionResult.data as Record<string, unknown> | null;
   const trialEnd = latestIso(null, subscription?.trial_end || subscription?.current_period_end);
   const trialDaysRemaining = daysUntil(trialEnd, now);
-  const activeTrial = subscription?.app_access_status === "trialing" || subscription?.app_access_status === "trial_limited";
+  const canonicalAppAccessStatus = (subscription?.app_access_status as string | undefined) ?? null;
+  const activeTrial = canonicalAppAccessStatus === "trialing" || canonicalAppAccessStatus === "trial_limited";
 
   const pendingStatuses = ["pending_review", "pending_verification", "review_required"];
   const hasPendingApplication = applications.some((application) => pendingStatuses.includes(String(application.status ?? "")));
   const latestApplication = applications[0] ?? null;
+
+  // The application/trial-request row is a point-in-time decision record and is never
+  // rewritten when billing later cancels or expires access, so it can go stale (e.g. it
+  // still reads "trial_active" after app_access_status moves to "canceled"). Canonical
+  // current access always comes from business_subscriptions.app_access_status, so flag
+  // this as a display-only mismatch rather than treating the application row as live state.
+  const NON_CURRENT_ACCESS_STATUSES = new Set(["canceled", "expired", "suspended", "none", "blocked"]);
+  const accessIsNonCurrent = canonicalAppAccessStatus
+    ? NON_CURRENT_ACCESS_STATUSES.has(canonicalAppAccessStatus)
+    : true;
+  const applicationStatus = latestApplication?.status ? String(latestApplication.status) : null;
+  const ACTIVE_LOOKING_APPLICATION_STATUSES = new Set(["trial_active", "trial_limited", "approved_not_billed", "active"]);
+  const accessMismatch = accessIsNonCurrent && Boolean(applicationStatus) &&
+    ACTIVE_LOOKING_APPLICATION_STATUSES.has(applicationStatus as string);
 
   const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
 
@@ -707,9 +722,15 @@ async function loadBusinessHealthDetail(
     trial_and_access: {
       trial_request_status: latestApplication?.status ?? null,
       trial_request_created_at: latestApplication?.created_at ?? null,
-      app_access_status: subscription?.app_access_status ?? null,
-      trial_ends_at: trialEnd,
-      trial_days_remaining: trialDaysRemaining,
+      app_access_status: canonicalAppAccessStatus,
+      // Only surface trial timing when the canonical status is actually trialing;
+      // otherwise a canceled business would still show "N days left" from a stale trial.
+      trial_ends_at: activeTrial ? trialEnd : null,
+      trial_days_remaining: activeTrial ? trialDaysRemaining : null,
+      access_mismatch: accessMismatch,
+      access_mismatch_note: accessMismatch
+        ? `Current app access is ${canonicalAppAccessStatus ?? "none"}. This business's application record still shows "${applicationStatus}", which reflects the original trial request, not current access.`
+        : null,
     },
     ai_usage: {
       ai_month_used_max: quota.used,

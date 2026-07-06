@@ -1,6 +1,7 @@
 (() => {
   const authEndpoint = document.body.dataset.adminAuthEndpoint;
   const summaryEndpoint = document.body.dataset.adminSummaryEndpoint;
+  const businessApplicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
   const section = document.body.dataset.adminSection;
   const tokenKey = "twofer_admin_access_token";
   const refreshTokenKey = "twofer_admin_refresh_token";
@@ -653,9 +654,9 @@
       fillTable("[data-applications]", payload.applications || [], [
         { label: "Contact", value: (r) => r.contact_name || "" },
         { label: "Email", value: (r) => r.email || "" },
-        { label: "Status", value: (r) => statusCell(r.status) },
-        { label: "Access", value: (r) => r.access_tier || "" },
-        { label: "Trial days", value: (r) => r.trial_days ?? "" },
+        { label: "Request status", value: (r) => statusCell(r.status) },
+        { label: "Requested access", value: (r) => r.access_tier || "" },
+        { label: "Approved trial days", value: (r) => r.trial_days ?? "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ], "No applications linked to this business.");
       fillTable("[data-audit]", payload.audit_log || [], [
@@ -673,6 +674,13 @@
   }
 
   function renderBusinessDrilldown(payload) {
+    const verificationBadgeEl = document.querySelector("[data-verification-status]");
+    if (verificationBadgeEl) {
+      const cell = statusCell(payload.business?.verification_status || "not_started");
+      verificationBadgeEl.textContent = cell.badge || "Not started";
+      verificationBadgeEl.className = `admin-badge${cell.tone ? ` ${cell.tone}` : ""}`;
+    }
+
     const warningEl = document.querySelector("[data-drilldown-warning]");
     const hasError = Boolean(payload.business_health_error);
     if (warningEl) {
@@ -736,6 +744,14 @@
       (!trialAndAccess.trial_request_status && !trialAndAccess.app_access_status && !trialAndAccess.trial_ends_at);
     const trialEmptyEl = document.querySelector("[data-trial-empty]");
     if (trialEmptyEl) trialEmptyEl.hidden = !noTrialData;
+    const mismatchEl = document.querySelector("[data-access-mismatch-warning]");
+    if (mismatchEl) {
+      const hasMismatch = Boolean(trialAndAccess?.access_mismatch);
+      mismatchEl.hidden = !hasMismatch;
+      mismatchEl.textContent = hasMismatch
+        ? `Access mismatch: ${trialAndAccess.access_mismatch_note || "the application record does not match current app access."} Current app access controls what the owner can do.`
+        : "";
+    }
     setText("[data-trial-request-status]", trialAndAccess?.trial_request_status || "—");
     setText(
       "[data-trial-request-created]",
@@ -812,7 +828,58 @@
     }
   }
 
+  function initVerificationActions() {
+    const verifyButtons = document.querySelectorAll("[data-verify-decision]");
+    if (!verifyButtons.length) return;
+    const verifyStatusEl = document.querySelector("[data-verify-status]");
+    const setVerifyStatus = (message, tone = "info") => {
+      if (!verifyStatusEl) return;
+      verifyStatusEl.textContent = message;
+      verifyStatusEl.className = `status${tone === "danger" ? " error" : tone === "warning" ? " warning" : ""}`;
+    };
+
+    for (const button of verifyButtons) {
+      button.addEventListener("click", async () => {
+        const decision = button.dataset.verifyDecision;
+        if (decision === "reject" && !window.confirm("Reject verification for this business?")) return;
+        const businessId = detailBusinessId();
+        if (!businessId) {
+          setVerifyStatus("Could not determine which business to update.", "danger");
+          return;
+        }
+        for (const b of verifyButtons) b.disabled = true;
+        setVerifyStatus(decision === "verify" ? "Marking verified..." : "Rejecting verification...");
+        try {
+          if (!businessApplicationsEndpoint) throw new Error("Verification endpoint is not configured.");
+          const token = await getAccessToken();
+          if (!token) throw new Error("Admin session not connected.");
+          const response = await fetch(businessApplicationsEndpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action: "verify_business", business_id: businessId, decision }),
+          });
+          const payload = await readJson(response);
+          if (response.status === 401 || response.status === 403) {
+            clearSession();
+            throw new Error(response.status === 401 ? "Admin session expired. Sign in again." : payload.error || "Forbidden.");
+          }
+          if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
+          setVerifyStatus(decision === "verify" ? "Business marked verified." : "Business verification rejected.");
+          await loadSection();
+        } catch (error) {
+          setVerifyStatus(error instanceof Error ? error.message : "Could not update verification.", "danger");
+        } finally {
+          for (const b of verifyButtons) b.disabled = false;
+        }
+      });
+    }
+  }
+
   syncNavForSession();
   initBackToCommandCenterLink();
+  initVerificationActions();
   loadSection();
 })();

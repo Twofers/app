@@ -173,4 +173,39 @@ describe("admin dashboard foundation", () => {
     expect(directoryScript).toMatch(/offerStatusBadge\(r\.effective_status\)/);
     expect(directoryScript).not.toMatch(/r\.is_active \? "Live" : "Inactive"/);
   });
+
+  it("treats current app access as canonical and flags stale trial-request records on the business detail page", () => {
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+
+    // Current access must be read from business_subscriptions.app_access_status, never
+    // from the business_applications decision record, which is written once and never
+    // updated after a later cancellation/expiration.
+    expect(source).toMatch(/const canonicalAppAccessStatus = \(subscription\?\.app_access_status as string \| undefined\) \?\? null/);
+    expect(source).toMatch(/const activeTrial = canonicalAppAccessStatus === "trialing" \|\| canonicalAppAccessStatus === "trial_limited"/);
+
+    // Trial timing must only be surfaced while the canonical status is actually trialing,
+    // so a canceled business can never show a stale "N days left".
+    expect(source).toMatch(/trial_ends_at: activeTrial \? trialEnd : null/);
+    expect(source).toMatch(/trial_days_remaining: activeTrial \? trialDaysRemaining : null/);
+
+    // A mismatch between the (stale) application record and canonical access must be
+    // surfaced explicitly rather than silently trusting the application row.
+    expect(source).toMatch(/const accessMismatch = accessIsNonCurrent && Boolean\(applicationStatus\)/);
+    expect(source).toMatch(/access_mismatch: accessMismatch/);
+    expect(source).toMatch(/access_mismatch_note: accessMismatch/);
+
+    const detailPage = read("website/admin/businesses/detail/index.html");
+    expect(detailPage).toMatch(/data-access-mismatch-warning/);
+    expect(detailPage).toMatch(/Current app access status/);
+    expect(detailPage).toMatch(/Trial request status \(history\)/);
+
+    const directoryScript = read("website/admin/admin-directory.js");
+    // The Applications table must be relabeled so a stale request-level status
+    // (e.g. "trial_active") is never confused with current access.
+    expect(directoryScript).toMatch(/label: "Request status"/);
+    expect(directoryScript).toMatch(/label: "Requested access"/);
+    expect(directoryScript).toMatch(/label: "Approved trial days"/);
+    expect(directoryScript).toMatch(/data-access-mismatch-warning/);
+    expect(directoryScript).toMatch(/access_mismatch_note/);
+  });
 });
