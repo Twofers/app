@@ -27,6 +27,7 @@ The dashboard is not a merchant-facing mobile surface. Stripe billing, portal, a
 - `supabase/migrations/20260730126000_website_app_onboarding_sync.sql`
 - `supabase/migrations/20260730128000_admin_ai_quota_resets.sql`
 - `supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql`
+- `supabase/migrations/20260802142000_admin_redemption_facts_view.sql`
 - `supabase/functions/admin-auth-session/index.ts`
 - `supabase/functions/admin-dashboard-summary/index.ts`
 - `supabase/functions/admin-ai-usage/index.ts`
@@ -58,6 +59,10 @@ The Edge Function:
 
 The Trial Requests page now has a live server-backed admin workflow for list, limited approval, full approval, waitlist, and reject decisions. Business detail pages still include placeholders for onboarding source, website submitted data, current app profile, field source/last edited state, sensitive changes needing review, AI suggestions, and owner app activity; those deeper business-detail actions still need audited admin Edge Functions before production use.
 
+## Redemption Reporting Note
+
+Admin redemption reporting should use `public.admin_redemption_facts_v1` as the canonical read-only source for redeemed deals. The view is backed by `public.deal_claims` and includes only rows where `redeemed_at IS NOT NULL` and `claim_status = 'redeemed'`. Do not use the `redemptions` table for North Star counts yet; it is a staff Redemption Mode audit table and does not cover every redemption path.
+
 ## Deployment Notes
 
-No hosted migration or Edge Function deployment is performed by committing these files. Applying `20260730125000_admin_dashboard_foundation.sql`, `20260730126000_website_app_onboarding_sync.sql`, or `20260730129000_admin_onboarding_service_role_invite_gate.sql`, deploying any Edge Function, and deploying `website/` are production-changing operations and require explicit approval.
+No hosted migration or Edge Function deployment is performed by committing these files. Applying `20260730125000_admin_dashboard_foundation.sql`, `20260730126000_website_app_onboarding_sync.sql`, `20260730129000_admin_onboarding_service_role_invite_gate.sql`, or `20260802142000_admin_redemption_facts_view.sql`, deploying any Edge Function, and deploying `website/` are production-changing operations and require explicit approval.
