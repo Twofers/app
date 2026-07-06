@@ -22,6 +22,8 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
+import { BusinessTermsGate } from "@/components/business-terms-gate";
+import { getBusinessOnboardingContext } from "@/lib/functions";
 
 type TemplateRow = {
   id: string;
@@ -46,6 +48,8 @@ export default function CreateDeal() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
+  const [termsRequired, setTermsRequired] = useState(false);
+  const [termsCheckLoading, setTermsCheckLoading] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -82,6 +86,31 @@ export default function CreateDeal() {
       cancelled = true;
     };
   }, [isLoggedIn, params.skipSetup, params.e2e, bypass]);
+
+  const checkTermsGate = useCallback(async () => {
+    if (!isLoggedIn || bypass || !businessId) {
+      setTermsRequired(false);
+      return;
+    }
+    setTermsCheckLoading(true);
+    try {
+      const context = await getBusinessOnboardingContext();
+      const reasonCode = context.access_state?.reason_code;
+      setTermsRequired(reasonCode === "terms_required");
+    } catch {
+      // Non-fatal: if the check itself fails, don't block the create hub on it —
+      // the server-side publish gate still enforces terms at publish time.
+      setTermsRequired(false);
+    } finally {
+      setTermsCheckLoading(false);
+    }
+  }, [isLoggedIn, bypass, businessId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void checkTermsGate();
+    }, [checkTermsGate]),
+  );
 
   const loadTemplates = useCallback(async () => {
     if (!businessId) {
@@ -290,7 +319,7 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ color: theme.mutedText }}>{t("createHub.loginPrompt")}</Text>
         </View>
-      ) : loading || profileCheckLoading || billingLoading ? (
+      ) : loading || profileCheckLoading || billingLoading || termsCheckLoading ? (
         <View style={{ marginTop: Spacing.lg }}>
           <ActivityIndicator color={theme.primary} />
           <Text style={{ color: theme.mutedText, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>
@@ -307,6 +336,10 @@ export default function CreateDeal() {
       ) : blockedSubscription ? (
         <View style={{ marginTop: Spacing.lg }}>
           <MerchantAccessBlockedCard />
+        </View>
+      ) : termsRequired && businessId ? (
+        <View style={{ marginTop: Spacing.lg }}>
+          <BusinessTermsGate businessId={businessId} onAccepted={() => setTermsRequired(false)} />
         </View>
       ) : !businessId ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>

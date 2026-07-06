@@ -53,6 +53,17 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/MISSING_LOCALIZATION_APPROVAL/);
   });
 
+  it("blocks publishing when the owner has not accepted business terms, independent of billing", () => {
+    expect(source).toMatch(/from\("terms_acceptances"\)/);
+    expect(source).toMatch(/\.eq\("document_type", "business_terms"\)/);
+    expect(source).toMatch(/TERMS_REQUIRED/);
+    // The terms check must not replace or short-circuit the existing billing
+    // suspension / verification checks — it runs before them and returns its
+    // own error_code, leaving getSuspendedLocationFromDealRows untouched.
+    expect(source).toMatch(/getSuspendedLocationFromDealRows/);
+    expect(source).toMatch(/getUnverifiedLocationFromDealRows/);
+  });
+
   it("uses the atomic publish rpc and exposes a migration-unavailable rollback error", () => {
     expect(source).toMatch(/publish_offer_versioned_deal/);
     expect(source).toMatch(/PUBLISH_OFFER_VERSION_UNAVAILABLE/);

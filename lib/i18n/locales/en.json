@@ -2053,6 +2053,15 @@
     "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
     "contactSupport": "Contact support"
   },
+  "businessTerms": {
+    "gateTitle": "Accept the business terms to publish",
+    "gateBody": "Before you can publish offers, you need to review and accept the Twofer Business Terms.",
+    "viewFullTerms": "Read the Twofer Business Terms",
+    "checkboxLabel": "I have read and accept the Twofer Business Terms.",
+    "acceptCta": "Accept and continue",
+    "accepting": "Saving...",
+    "acceptFailed": "Couldn't confirm terms acceptance. Please try again."
+  },
   "billing": {
     "currentStatus": "Status",
     "retryLoadPricing": "Retry",

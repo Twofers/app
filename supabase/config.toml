@@ -640,6 +640,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/update-business-profile-section/index.ts"
 
+[functions.accept-business-terms]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/accept-business-terms/index.ts"
+
 [functions.send-deal-push]
 enabled = true
 verify_jwt = false

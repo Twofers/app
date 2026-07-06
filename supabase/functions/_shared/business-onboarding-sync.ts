@@ -2,6 +2,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
+export const CURRENT_BUSINESS_TERMS_VERSION = "2026-07-01";
+export const CURRENT_PRIVACY_POLICY_VERSION = "2026-07-01";
+
 export type NormalizedBusinessOnboarding = {
   businessName: string;
   contactName: string;
@@ -284,7 +287,7 @@ async function syncDerivedRows(
         business_id: businessId,
         user_id: actorUserId ?? null,
         document_type: "business_terms",
-        document_version: "2026-07-01",
+        document_version: CURRENT_BUSINESS_TERMS_VERSION,
         source,
       },
       { onConflict: "business_id,document_type,document_version,source" },
@@ -297,7 +300,7 @@ async function syncDerivedRows(
         business_id: businessId,
         user_id: actorUserId ?? null,
         document_type: "privacy_policy",
-        document_version: "2026-07-01",
+        document_version: CURRENT_PRIVACY_POLICY_VERSION,
         source,
       },
       { onConflict: "business_id,document_type,document_version,source" },

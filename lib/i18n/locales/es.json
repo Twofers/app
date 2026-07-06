@@ -2058,6 +2058,15 @@
     "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
     "contactSupport": "Contactar soporte"
   },
+  "businessTerms": {
+    "gateTitle": "Acepta los términos comerciales para publicar",
+    "gateBody": "Antes de publicar ofertas, debes revisar y aceptar los Términos Comerciales de Twofer.",
+    "viewFullTerms": "Leer los Términos Comerciales de Twofer",
+    "checkboxLabel": "He leído y acepto los Términos Comerciales de Twofer.",
+    "acceptCta": "Aceptar y continuar",
+    "accepting": "Guardando...",
+    "acceptFailed": "No se pudo confirmar la aceptación de los términos. Inténtalo de nuevo."
+  },
   "billing": {
     "currentStatus": "Estado",
     "retryLoadPricing": "Reintentar",

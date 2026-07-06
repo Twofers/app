@@ -2058,6 +2058,15 @@
     "inactiveBody": "비즈니스 계정이 활성 상태가 아닙니다. 계정을 활성화하려면 Twofer 지원팀에 문의하세요.",
     "contactSupport": "지원팀에 문의"
   },
+  "businessTerms": {
+    "gateTitle": "게시하려면 비즈니스 약관에 동의하세요",
+    "gateBody": "오퍼를 게시하기 전에 Twofer 비즈니스 약관을 검토하고 동의해야 합니다.",
+    "viewFullTerms": "Twofer 비즈니스 약관 읽기",
+    "checkboxLabel": "Twofer 비즈니스 약관을 읽었으며 이에 동의합니다.",
+    "acceptCta": "동의하고 계속하기",
+    "accepting": "저장 중...",
+    "acceptFailed": "약관 동의를 확인하지 못했습니다. 다시 시도하세요."
+  },
   "billing": {
     "currentStatus": "현재 상태",
     "retryLoadPricing": "다시 불러오기",

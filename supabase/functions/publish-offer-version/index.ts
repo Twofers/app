@@ -440,6 +440,29 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Business not found for owner" }, 403);
     }
 
+    // Independent of billing/verification: publishing requires the owner to have
+    // explicitly accepted the business terms at least once (any document_version),
+    // same rule can_business_publish() applies. Accepting terms never bypasses the
+    // billing or verification checks below, and vice versa.
+    const { data: termsAcceptance, error: termsError } = await admin
+      .from("terms_acceptances")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("document_type", "business_terms")
+      .limit(1)
+      .maybeSingle();
+    if (termsError) throw termsError;
+    if (!termsAcceptance) {
+      return jsonResponse(
+        req,
+        {
+          error: "Business terms must be accepted before publishing offers.",
+          error_code: "TERMS_REQUIRED",
+        },
+        403,
+      );
+    }
+
     const suspendedLocation = await getSuspendedLocationFromDealRows(admin as any, businessId, dealRows);
     if (suspendedLocation) {
       return jsonResponse(req, suspendedLocationResponseBody("publish or schedule deals"), 403);
