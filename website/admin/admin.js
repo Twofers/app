@@ -98,9 +98,39 @@
     aiResetButton.disabled = !selectedAiBusinessId();
   }
 
+  function numericMetricValue(value) {
+    if (typeof value === "number") return value;
+    const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function syncMetricTone(key, value) {
+    const count = numericMetricValue(value);
+    for (const node of document.querySelectorAll(`[data-metric="${key}"]`)) {
+      const container = node.closest(".admin-card, .admin-next-action");
+      if (!container) continue;
+      container.classList.toggle("is-zero", count === 0);
+      container.classList.toggle("has-attention", count > 0 && container.hasAttribute("data-action-count"));
+    }
+  }
+
   function setMetric(key, value) {
-    const node = document.querySelector(`[data-metric="${key}"]`);
-    if (node) node.textContent = String(value);
+    const nodes = document.querySelectorAll(`[data-metric="${key}"]`);
+    for (const node of nodes) node.textContent = String(value);
+    syncMetricTone(key, value);
+  }
+
+  function initializeMetricTones() {
+    const keys = new Set(
+      [...document.querySelectorAll("[data-metric]")]
+        .map((node) => node.getAttribute("data-metric"))
+        .filter(Boolean),
+    );
+    for (const key of keys) {
+      const node = document.querySelector(`[data-metric="${key}"]`);
+      syncMetricTone(key, node?.textContent || "0");
+    }
   }
 
   function formatUsd(value) {
@@ -116,6 +146,13 @@
     if (!value) return "";
     const date = new Date(value);
     return Number.isFinite(date.getTime()) ? date.toLocaleString() : "";
+  }
+
+  function formatRate(numerator, denominator) {
+    const top = Number(numerator || 0);
+    const bottom = Number(denominator || 0);
+    if (!bottom) return "0%";
+    return `${Math.round((top / bottom) * 100)}%`;
   }
 
   function quotaLabel(scope) {
@@ -352,6 +389,10 @@
       setMetric("apiSpend.updatedAt", s.apiSpend?.updatedAt ? `Updated ${formatDateTime(s.apiSpend.updatedAt)}` : "Not loaded");
       setMetric("activity.claimsToday", s.activity?.claimsToday ?? 0);
       setMetric("activity.redemptionsToday", s.activity?.redemptionsToday ?? 0);
+      setMetric(
+        "activity.claimRedemptionRate",
+        formatRate(s.activity?.redemptionsToday ?? 0, s.activity?.claimsToday ?? 0),
+      );
       setMetric("billing.pastDue", s.billing?.pastDueLocations ?? 0);
       setMetric("billing.pastDueBusinesses", s.billing?.pastDueBusinesses ?? 0);
       setMetric("billing.missingCustomers", s.billing?.missingStripeCustomers ?? 0);
@@ -360,6 +401,13 @@
       setMetric("prospects.open", s.prospects?.open ?? 0);
       setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
       setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
+      setMetric(
+        "businesses.needingAttention",
+        (s.businesses?.pendingVerification ?? 0) +
+          (s.businesses?.trialsEndingSoon ?? 0) +
+          (s.billing?.pastDueBusinesses ?? 0) +
+          (s.offers?.needsReview ?? 0),
+      );
 
       fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
       fillRows("[data-audit-body]", payload.recentAudit || [], "No recent audit events.");
@@ -403,5 +451,6 @@
 
   syncNavForSession();
   syncAiResetState();
+  initializeMetricTones();
   loadSummary();
 })();

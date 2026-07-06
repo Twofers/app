@@ -49,30 +49,153 @@
       <div class="admin-title-row">
         <div>
           <p class="admin-kicker">Internal command center</p>
-          <h1>Admin Dashboard</h1>
-          <p class="lede">Manage reviewed business onboarding, trials, offers, billing signals, and audit activity from one web-only surface.</p>
+          <h1>Admin Command Center</h1>
+          <p class="lede">Run daily support around business owners, reviewed onboarding, live offers, and the North Star: deals redeemed.</p>
         </div>
         <div class="admin-actions">
-          <a class="button" href="/admin/businesses/new">Create Field Trial</a>
-          <a class="button button-small" href="/admin/prospects">Prospects</a>
-          <a class="button button-small" href="/admin/sales-ai">Sales AI</a>
-          <a class="button button-small button-secondary" href="/admin/ai-prompts">Prompts</a>
-          <a class="button button-small" href="/admin/trial-requests">Review Requests</a>
+          <a class="button button-small" href="/admin/trial-requests">Trial Requests</a>
+          <a class="button button-small" href="/admin/businesses">Businesses</a>
+          <a class="button button-small button-secondary" href="/admin/audit-log">Audit</a>
         </div>
       </div>
 
-      <section class="admin-section" aria-label="Businesses and trials">
-        <h2 class="admin-group-title">Businesses &amp; trials</h2>
-        <div class="admin-grid">
-          <a class="admin-card admin-card-link" href="/admin/businesses?status=active">
-            <span>Active businesses</span>
-            <strong data-metric="businesses.active">0</strong>
-            <span class="visually-hidden">View filtered businesses list</span>
+      <section class="admin-section admin-command-section" aria-label="Today's next actions">
+        <div class="admin-section-header">
+          <div>
+            <h2>Today's Next Actions</h2>
+            <p>Read-only queues for the issues most likely to need operator attention today.</p>
+          </div>
+        </div>
+        <div class="admin-action-list">
+          <a class="admin-next-action" href="/admin/trial-requests" data-action-count="trialRequests.open">
+            <span class="admin-action-copy"><strong>Open trial requests</strong><small>Business owners waiting for review.</small></span>
+            <span class="admin-action-count" data-metric="trialRequests.open">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/businesses?status=pending_verification" data-action-count="businesses.pending">
+            <span class="admin-action-copy"><strong>Pending verification</strong><small>Owners blocked before full confidence.</small></span>
+            <span class="admin-action-count" data-metric="businesses.pending">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/trial-requests?risk=high" data-action-count="trialRequests.highRisk">
+            <span class="admin-action-copy"><strong>High-risk requests</strong><small>Requests that deserve careful handling.</small></span>
+            <span class="admin-action-count" data-metric="trialRequests.highRisk">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/businesses?status=trialing" data-action-count="businesses.trialsEndingSoon">
+            <span class="admin-action-copy"><strong>Trials ending soon</strong><small>Owners near a billing or access decision.</small></span>
+            <span class="admin-action-count" data-metric="businesses.trialsEndingSoon">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/billing/events?status=failed" data-action-count="billing.failedEvents">
+            <span class="admin-action-copy"><strong>Failed billing events</strong><small>Stripe or billing sync events needing review.</small></span>
+            <span class="admin-action-count" data-metric="billing.failedEvents">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/audit-log?q=failed" data-action-count="security.failedActions">
+            <span class="admin-action-copy"><strong>Failed admin actions</strong><small>Audit activity from the last seven days.</small></span>
+            <span class="admin-action-count" data-metric="security.failedActions">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/offers?status=review" data-action-count="offers.needsReview">
+            <span class="admin-action-copy"><strong>Offers needing review</strong><small>Owner work that may need moderation or support.</small></span>
+            <span class="admin-action-count" data-metric="offers.needsReview">0</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="North Star customer value">
+        <div class="admin-section-header">
+          <div>
+            <h2>North Star Customer Value</h2>
+            <p>Customers are app signups excluding business users. Redemption counts use the canonical admin redemption metric.</p>
+          </div>
+        </div>
+        <div class="admin-grid admin-value-grid">
+          <article class="admin-card admin-north-star"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
+          <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
+          <article class="admin-card"><span>Claim-to-redemption rate</span><strong data-metric="activity.claimRedemptionRate">0%</strong></article>
+          <a class="admin-card admin-card-link" href="/admin/offers?status=live">
+            <span>Live offers</span>
+            <strong data-metric="offers.live">0</strong>
+            <span class="visually-hidden">View filtered offers list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/businesses?attention=1">
+            <span>Businesses needing attention</span>
+            <strong data-metric="businesses.needingAttention">0</strong>
+            <span class="visually-hidden">View businesses needing attention</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <div>
+            <h2>Business Owner Service</h2>
+            <p>Recent business-owner requests and businesses waiting on review, placed ahead of internal spend tools.</p>
+          </div>
+          <a class="button button-small" href="/admin/trial-requests">Open queue</a>
+        </div>
+        <div class="admin-grid three admin-service-grid">
+          <a class="admin-card admin-card-link" href="/admin/trial-requests">
+            <span>Open trial requests</span>
+            <strong data-metric="trialRequests.open">0</strong>
+            <span class="visually-hidden">View trial requests queue</span>
             <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
           </a>
           <a class="admin-card admin-card-link" href="/admin/businesses?status=pending_verification">
             <span>Pending verification</span>
             <strong data-metric="businesses.pending">0</strong>
+            <span class="visually-hidden">View filtered businesses list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/trial-requests?risk=high">
+            <span>High-risk requests</span>
+            <strong data-metric="trialRequests.highRisk">0</strong>
+            <span class="visually-hidden">View high-risk trial requests</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+        <div class="admin-table-wrap admin-service-table">
+          <table class="admin-table" data-mobile-cards>
+            <thead>
+              <tr><th>Business</th><th>Email</th><th>Status</th><th>Access</th><th>Created</th></tr>
+            </thead>
+            <tbody data-applications-body>
+              <tr><td class="admin-row-detail" colspan="5">Connect an active admin session to load requests.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Business health preview">
+        <div class="admin-section-header">
+          <div>
+            <h2>Business Health Preview</h2>
+            <p>A read-only operating table belongs here once the summary endpoint exposes per-business activity rows.</p>
+          </div>
+        </div>
+        <div class="admin-health-placeholder">
+          <div class="admin-table-wrap">
+            <table class="admin-table" data-mobile-cards>
+              <thead>
+                <tr><th>Business</th><th>Status</th><th>Live deals</th><th>Last published</th><th>Claims</th><th>Redemptions</th><th>Health</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="admin-row-detail" colspan="8">
+                    Not available in the current read-only summary payload. Needed fields: per-business live deal count, last published time, claim count, canonical redemption count, and a server-defined health label.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <a class="button button-small button-secondary" href="/admin/businesses">Open businesses</a>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Preserved dashboard metrics">
+        <h2 class="admin-group-title">Dashboard metrics</h2>
+        <div class="admin-grid">
+          <a class="admin-card admin-card-link" href="/admin/businesses?status=active">
+            <span>Active businesses</span>
+            <strong data-metric="businesses.active">0</strong>
             <span class="visually-hidden">View filtered businesses list</span>
             <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
           </a>
@@ -82,49 +205,19 @@
             <span class="visually-hidden">View filtered businesses list</span>
             <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
           </a>
-          <a class="admin-card admin-card-link" href="/admin/businesses?status=trialing">
-            <span>Trials ending soon</span>
-            <strong data-metric="businesses.trialsEndingSoon">0</strong>
-            <span class="visually-hidden">View filtered businesses list</span>
-            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a class="admin-card admin-card-link" href="/admin/trial-requests">
-            <span>Open trial requests</span>
-            <strong data-metric="trialRequests.open">0</strong>
-            <span class="visually-hidden">View trial requests queue</span>
-            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a class="admin-card admin-card-link" href="/admin/trial-requests">
-            <span>High-risk requests</span>
-            <strong data-metric="trialRequests.highRisk">0</strong>
-            <span class="visually-hidden">View trial requests queue</span>
-            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-        </div>
-      </section>
-
-      <section class="admin-section" aria-label="Offers and activity">
-        <h2 class="admin-group-title">Offers &amp; activity</h2>
-        <div class="admin-grid">
-          <a class="admin-card admin-card-link" href="/admin/offers?status=live">
-            <span>Live offers</span>
-            <strong data-metric="offers.live">0</strong>
-            <span class="visually-hidden">View filtered offers list</span>
-            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a class="admin-card admin-card-link" href="/admin/offers">
-            <span>Needs offer review</span>
-            <strong data-metric="offers.needsReview">0</strong>
-            <span class="visually-hidden">View offers list</span>
-            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
-          <article class="admin-card"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
+          <article class="admin-card"><span>Past due locations</span><strong data-metric="billing.pastDue">0</strong></article>
+          <article class="admin-card"><span>Past due businesses</span><strong data-metric="billing.pastDueBusinesses">0</strong></article>
+          <article class="admin-card"><span>Missing Stripe customers</span><strong data-metric="billing.missingCustomers">0</strong></article>
+          <article class="admin-card"><span>API spend this month</span><strong data-metric="apiSpend.currentMonthUsd">$0.00</strong></article>
+          <article class="admin-card"><span>API spend prior month</span><strong data-metric="apiSpend.priorMonthUsd">$0.00</strong></article>
+          <article class="admin-card"><span>Open prospects</span><strong data-metric="prospects.open">0</strong></article>
+          <article class="admin-card"><span>Ready to contact</span><strong data-metric="prospects.readyToContact">0</strong></article>
+          <article class="admin-card"><span>Accepted claim links</span><strong data-metric="prospects.acceptedClaimLinks">0</strong></article>
         </div>
       </section>
 
       <section class="admin-section" aria-label="Billing and spend">
-        <h2 class="admin-group-title">Billing &amp; spend</h2>
+        <h2 class="admin-group-title">Billing &amp; spend watchlist</h2>
         <div class="admin-grid">
           <article class="admin-card"><span>Past due locations</span><strong data-metric="billing.pastDue">0</strong></article>
           <article class="admin-card"><span>Past due businesses</span><strong data-metric="billing.pastDueBusinesses">0</strong></article>
@@ -135,35 +228,22 @@
             <span class="visually-hidden">View filtered billing events list</span>
             <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
           </a>
-          <article class="admin-card"><span>API spend this month</span><strong data-metric="apiSpend.currentMonthUsd">$0.00</strong></article>
-          <article class="admin-card"><span>API spend prior month</span><strong data-metric="apiSpend.priorMonthUsd">$0.00</strong></article>
-        </div>
-      </section>
-
-      <section class="admin-section" aria-label="Prospects and security">
-        <h2 class="admin-group-title">Prospects &amp; security</h2>
-        <div class="admin-grid">
-          <article class="admin-card"><span>Open prospects</span><strong data-metric="prospects.open">0</strong></article>
-          <article class="admin-card"><span>Ready to contact</span><strong data-metric="prospects.readyToContact">0</strong></article>
-          <article class="admin-card"><span>Accepted claim links</span><strong data-metric="prospects.acceptedClaimLinks">0</strong></article>
-          <a class="admin-card admin-card-link" href="/admin/audit-log?q=failed">
-            <span>Failed admin actions</span>
-            <strong data-metric="security.failedActions">0</strong>
-            <span class="visually-hidden">Search audit log</span>
+          <a class="admin-card admin-card-link" href="/admin/offers?status=review">
+            <span>Needs offer review</span>
+            <strong data-metric="offers.needsReview">0</strong>
+            <span class="visually-hidden">View offers list</span>
             <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
           </a>
         </div>
       </section>
 
       <section class="admin-section">
-        <div class="admin-section-header">
-          <div>
-            <h2>AI Spend & Quotas</h2>
-            <p>Search a business owner, review monthly AI usage, and reset a selected monthly quota without deleting history.</p>
-          </div>
-          <span class="admin-badge" data-metric="apiSpend.updatedAt">Not loaded</span>
-        </div>
-        <div class="admin-panel">
+        <details class="admin-panel admin-manage-panel" open>
+          <summary>
+            <span>Manage AI Usage</span>
+            <span class="admin-badge" data-metric="apiSpend.updatedAt">Not loaded</span>
+          </summary>
+          <p>Search a business owner, review monthly AI usage, and reset a selected monthly quota without deleting history.</p>
           <form class="admin-form admin-ai-form" data-ai-quota-form novalidate>
             <label>
               Owner email or user ID
@@ -217,27 +297,7 @@
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
-
-      <section class="admin-section">
-        <div class="admin-section-header">
-          <div>
-            <h2>Recent Trial Requests</h2>
-            <p>Remote requests are routed through deterministic risk scoring before admin review.</p>
-          </div>
-          <a class="button button-small" href="/admin/trial-requests">Open queue</a>
-        </div>
-        <div class="admin-table-wrap">
-            <table class="admin-table" data-mobile-cards>
-            <thead>
-              <tr><th>Business</th><th>Email</th><th>Status</th><th>Access</th><th>Created</th></tr>
-            </thead>
-            <tbody data-applications-body>
-              <tr><td class="admin-row-detail" colspan="5">Connect an active admin session to load requests.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        </details>
       </section>
 
       <section class="admin-section">

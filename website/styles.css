@@ -1246,6 +1246,10 @@ main.content-page {
   margin-top: 28px;
 }
 
+.admin-command-section {
+  margin-top: 10px;
+}
+
 .admin-section-header {
   margin-bottom: 14px;
 }
@@ -1263,6 +1267,156 @@ main.content-page {
   font-weight: 900;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.admin-action-list {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-next-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--admin-card-shadow);
+  transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.admin-next-action:hover,
+.admin-next-action:focus-visible {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.admin-next-action.has-attention {
+  border-color: #f2b487;
+  background: #fffaf6;
+  box-shadow: 0 1px 2px rgb(15 23 20 / 5%), 0 14px 30px rgb(221 116 64 / 10%);
+}
+
+.admin-next-action.is-zero {
+  background: #fbfcfa;
+  box-shadow: none;
+}
+
+.admin-action-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-action-copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.admin-action-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.admin-action-count {
+  display: inline-flex;
+  min-width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-next-action.has-attention .admin-action-count {
+  border-color: #f2b487;
+  background: #fff1e9;
+  color: var(--accent-dark);
+}
+
+.admin-value-grid {
+  grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr));
+}
+
+.admin-north-star {
+  border-color: var(--dark-2);
+  background: var(--dark);
+}
+
+.admin-north-star span,
+.admin-north-star strong {
+  color: #fff;
+}
+
+.admin-card.is-zero:not(.admin-north-star) {
+  background: #fbfcfa;
+  box-shadow: none;
+}
+
+.admin-card.is-zero:not(.admin-north-star) strong {
+  color: #7f8984;
+}
+
+.admin-service-grid {
+  margin-bottom: 14px;
+}
+
+.admin-service-table {
+  margin-top: 14px;
+}
+
+.admin-health-placeholder {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-health-placeholder .button {
+  justify-self: start;
+}
+
+.admin-manage-panel {
+  padding: 0;
+}
+
+.admin-manage-panel summary {
+  min-height: 64px;
+  padding: 18px 20px;
+}
+
+.admin-manage-panel summary span:first-child {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.admin-manage-panel > p,
+.admin-manage-panel > form,
+.admin-manage-panel > .admin-table-wrap {
+  margin-right: 20px;
+  margin-left: 20px;
+}
+
+.admin-manage-panel > p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.admin-manage-panel > .admin-table-wrap {
+  margin-bottom: 20px;
 }
 
 .admin-table-wrap {
@@ -1570,6 +1724,7 @@ main.content-page {
 
 @media (prefers-reduced-motion: reduce) {
   .admin-card,
+  .admin-next-action,
   .admin-table tbody tr,
   .admin-form input,
   .admin-form select,
@@ -1580,6 +1735,11 @@ main.content-page {
   }
 
   .admin-card:hover {
+    transform: none;
+  }
+
+  .admin-next-action:hover,
+  .admin-next-action:focus-visible {
     transform: none;
   }
 
@@ -1633,6 +1793,8 @@ main.content-page {
   .admin-grid,
   .admin-grid.two,
   .admin-grid.three,
+  .admin-action-list,
+  .admin-value-grid,
   .admin-ai-form,
   .admin-trial-toolbar,
   .admin-form {
@@ -1879,6 +2041,16 @@ main.content-page {
 
   .admin-table-wrap:has(.admin-table[data-mobile-cards]) {
     overflow-x: visible;
+  }
+
+  .admin-next-action {
+    min-height: 0;
+  }
+
+  .admin-manage-panel summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
   }
 
   .admin-table[data-mobile-cards] {
