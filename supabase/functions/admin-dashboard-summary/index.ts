@@ -265,7 +265,7 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
     redemptions30d: number;
     lastRedeemedAt: string | null;
     firstRedeemedAt: string | null;
-    aiMonthCostUsd: number;
+    aiMonthCostUsd: number | null;
   }>();
   for (const id of businessIds) {
     stats.set(id, {
@@ -279,7 +279,7 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
       redemptions30d: 0,
       lastRedeemedAt: null,
       firstRedeemedAt: null,
-      aiMonthCostUsd: 0,
+      aiMonthCostUsd: costResult.error ? null : 0,
     });
   }
 
@@ -326,7 +326,8 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
     for (const cost of (costResult.data ?? []) as Array<Record<string, unknown>>) {
       const businessId = String(cost.business_id ?? "");
       if (!businessId || !stats.has(businessId)) continue;
-      stats.get(businessId)!.aiMonthCostUsd += Number(cost.estimated_cost_usd) || 0;
+      const businessStats = stats.get(businessId)!;
+      businessStats.aiMonthCostUsd = (businessStats.aiMonthCostUsd ?? 0) + (Number(cost.estimated_cost_usd) || 0);
     }
   }
 
@@ -371,7 +372,9 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
       attentionScore += 20;
       reasonCodes.push("ai_quota_high");
     }
-    if (row.aiMonthCostUsd >= 10) {
+    const aiMonthCostUsd = row.aiMonthCostUsd;
+    const aiCostAvailable = aiMonthCostUsd !== null;
+    if (aiCostAvailable && aiMonthCostUsd >= 10) {
       attentionScore += 15;
       reasonCodes.push("ai_cost_high");
     }
@@ -430,7 +433,8 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
       ai_month_used_max: quota.used,
       ai_month_limit_for_max: quota.limit,
       ai_quota_risk: quota.risk,
-      ai_month_cost_usd: Number(row.aiMonthCostUsd.toFixed(6)),
+      ai_month_cost_usd: aiCostAvailable ? Number(aiMonthCostUsd.toFixed(6)) : null,
+      ai_cost_available: aiCostAvailable,
       health_label: healthLabel,
       primary_reason: primaryReason,
       reason_codes: reasonCodes,

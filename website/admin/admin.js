@@ -103,8 +103,9 @@
   function numericMetricValue(value) {
     if (typeof value === "number") return value;
     const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
+    if (!cleaned) return null;
     const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   function syncMetricTone(key, value) {
@@ -112,8 +113,8 @@
     for (const node of document.querySelectorAll(`[data-metric="${key}"]`)) {
       const container = node.closest(".admin-card, .admin-next-action");
       if (!container) continue;
-      container.classList.toggle("is-zero", count === 0);
-      container.classList.toggle("has-attention", count > 0 && container.hasAttribute("data-action-count"));
+      container.classList.toggle("is-zero", count !== null && count === 0);
+      container.classList.toggle("has-attention", count !== null && count > 0 && container.hasAttribute("data-action-count"));
     }
   }
 
@@ -502,14 +503,13 @@
       setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
       setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
       const businessHealthRows = payload.businessHealth || [];
-      const businessHealthAttention = businessHealthRows.filter((row) => row.health_label === "needs_attention").length;
+      const businessHealthLoaded = !payload.businessHealthError && Array.isArray(payload.businessHealth);
+      const businessHealthAttention = businessHealthLoaded
+        ? businessHealthRows.filter((row) => Number(row.attention_score || 0) > 0).length
+        : 0;
       setMetric(
         "businesses.needingAttention",
-        businessHealthAttention ||
-          ((s.businesses?.pendingVerification ?? 0) +
-            (s.businesses?.trialsEndingSoon ?? 0) +
-            (s.billing?.pastDueBusinesses ?? 0) +
-            (s.offers?.needsReview ?? 0)),
+        businessHealthLoaded ? businessHealthAttention : "N/A",
       );
 
       fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
