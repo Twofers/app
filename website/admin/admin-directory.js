@@ -81,6 +81,50 @@
     return Number.isFinite(date.getTime()) ? date.toLocaleString() : "";
   }
 
+  function formatUsd(value) {
+    return Number(value || 0).toLocaleString(undefined, {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function healthLabel(value) {
+    return {
+      needs_attention: "Needs attention",
+      watch: "Watch",
+      healthy: "Healthy",
+      celebrate: "Celebrate",
+    }[value] || "Unknown";
+  }
+
+  function healthTone(value) {
+    return {
+      needs_attention: "danger",
+      watch: "warning",
+      healthy: "success",
+      celebrate: "success",
+    }[value] || "info";
+  }
+
+  function formatTrialDays(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "";
+    if (number < 0) return "Expired";
+    if (number === 0) return "Ends today";
+    return `${number}d left`;
+  }
+
+  function formatAiRisk(value) {
+    return { high: "High", watch: "Watch", normal: "Normal" }[value] || "";
+  }
+
+  function setText(selector, value) {
+    const el = document.querySelector(selector);
+    if (el) el.textContent = value;
+  }
+
   function toneForStatus(raw) {
     const value = String(raw ?? "").toLowerCase();
     if (!value) return "";
@@ -589,7 +633,7 @@
       if (nameEl) nameEl.textContent = business ? business.name || business.id : "Business not found";
       if (metaEl) {
         metaEl.textContent = business
-          ? `Status ${business.status || "unknown"} | Access ${business.access_level || "unknown"} | Verification ${business.verification_status || "unknown"} | Risk ${business.risk_level || "unknown"}`
+          ? `Owner ${business.owner_email || "unknown"} | Status ${business.status || "unknown"} | Access ${business.access_level || "unknown"} | Verification ${business.verification_status || "unknown"} | Risk ${business.risk_level || "unknown"}`
           : "Check the link from the Businesses page and try again.";
       }
       fillTable("[data-applications]", payload.applications || [], [
@@ -606,7 +650,98 @@
         { label: "Reason", value: (r) => r.reason || "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ], "No audit events for this business.");
+      renderBusinessDrilldown(payload);
+      const viewOffersLink = document.querySelector("[data-view-offers-link]");
+      if (viewOffersLink) {
+        viewOffersLink.href = business?.name ? `/admin/offers?q=${encodeURIComponent(business.name)}` : "/admin/offers";
+      }
     }
+  }
+
+  function renderBusinessDrilldown(payload) {
+    const warningEl = document.querySelector("[data-drilldown-warning]");
+    const hasError = Boolean(payload.business_health_error);
+    if (warningEl) {
+      warningEl.hidden = !hasError;
+      warningEl.textContent = hasError
+        ? "Business health details are temporarily unavailable. The rest of this business's record is still shown below."
+        : "";
+    }
+
+    const health = payload.health || null;
+    const healthLabelEl = document.querySelector("[data-health-label]");
+    if (healthLabelEl) {
+      healthLabelEl.textContent = health ? healthLabel(health.health_label) : "Unavailable";
+      healthLabelEl.className = `admin-badge${health ? ` ${healthTone(health.health_label)}` : ""}`;
+    }
+    setText("[data-health-score]", health ? String(health.attention_score ?? 0) : "—");
+    setText("[data-health-reason]", health?.primary_reason || "No health summary available.");
+    const codesEl = document.querySelector("[data-health-codes]");
+    if (codesEl) {
+      const codes = health?.reason_codes || [];
+      codesEl.hidden = !codes.length;
+      codesEl.textContent = codes.length ? `Reason codes: ${codes.map(formatOptionLabel).join(", ")}` : "";
+    }
+    const nextStepEl = document.querySelector("[data-health-next-step]");
+    if (nextStepEl) {
+      nextStepEl.hidden = !health?.suggested_read_only_action;
+      nextStepEl.textContent = health?.suggested_read_only_action
+        ? `Suggested next step: ${health.suggested_read_only_action}`
+        : "";
+    }
+
+    const offerActivity = payload.offer_activity || null;
+    setText("[data-offer-live-count]", String(offerActivity?.live_offer_count ?? 0));
+    setText("[data-offer-active-count]", String(offerActivity?.active_or_scheduled_offer_count ?? 0));
+    const daysSince = offerActivity?.days_since_last_offer;
+    setText("[data-offer-days-since]", daysSince === null || daysSince === undefined ? "—" : `${daysSince}d`);
+    fillTable("[data-offer-rows]", offerActivity?.offers || [], [
+      { label: "Offer", value: (r) => r.title || r.id || "" },
+      { label: "Starts", value: (r) => formatDateTime(r.start_time) },
+      { label: "Ends", value: (r) => formatDateTime(r.end_time) },
+      { label: "Status", value: (r) => ({ badge: r.status === "live" ? "Live" : "Scheduled", tone: r.status === "live" ? "success" : "info" }) },
+      { label: "Claims", value: (r) => r.claim_count ?? 0 },
+      { label: "Redemptions", value: (r) => r.redemption_count ?? 0 },
+    ], "No recent offers found.");
+
+    const claimsAndRedemptions = payload.claims_and_redemptions || null;
+    setText("[data-claims-7d]", String(claimsAndRedemptions?.claims_7d ?? 0));
+    setText("[data-claims-30d]", String(claimsAndRedemptions?.claims_30d ?? 0));
+    setText("[data-claims-unredeemed]", String(claimsAndRedemptions?.unredeemed_claims_30d ?? 0));
+    setText("[data-redemptions-7d]", String(claimsAndRedemptions?.redemptions_7d ?? 0));
+    setText("[data-redemptions-30d]", String(claimsAndRedemptions?.redemptions_30d ?? 0));
+    setText(
+      "[data-last-redeemed]",
+      claimsAndRedemptions?.last_redeemed_at
+        ? formatDateTime(claimsAndRedemptions.last_redeemed_at)
+        : "No redemptions found in the current window.",
+    );
+
+    const trialAndAccess = payload.trial_and_access || null;
+    const noTrialData = !trialAndAccess ||
+      (!trialAndAccess.trial_request_status && !trialAndAccess.app_access_status && !trialAndAccess.trial_ends_at);
+    const trialEmptyEl = document.querySelector("[data-trial-empty]");
+    if (trialEmptyEl) trialEmptyEl.hidden = !noTrialData;
+    setText("[data-trial-request-status]", trialAndAccess?.trial_request_status || "—");
+    setText(
+      "[data-trial-request-created]",
+      trialAndAccess?.trial_request_created_at ? formatDateTime(trialAndAccess.trial_request_created_at) : "—",
+    );
+    setText("[data-app-access-status]", trialAndAccess?.app_access_status || "—");
+    setText("[data-trial-ends]", trialAndAccess?.trial_ends_at ? formatDateTime(trialAndAccess.trial_ends_at) : "—");
+    setText(
+      "[data-trial-days-remaining]",
+      trialAndAccess ? (formatTrialDays(trialAndAccess.trial_days_remaining) || "—") : "—",
+    );
+
+    const aiUsage = payload.ai_usage || null;
+    setText("[data-ai-used]", String(aiUsage?.ai_month_used_max ?? 0));
+    setText("[data-ai-limit]", String(aiUsage?.ai_month_limit_for_max ?? 0));
+    setText("[data-ai-risk]", aiUsage ? formatAiRisk(aiUsage.ai_quota_risk) || "Normal" : "—");
+    setText(
+      "[data-ai-cost]",
+      aiUsage?.ai_cost_available === true ? formatUsd(aiUsage.ai_month_cost_usd ?? 0) : "AI cost unavailable.",
+    );
   }
 
   async function loadSection() {
@@ -654,6 +789,16 @@
     });
   }
 
+  function initBackToCommandCenterLink() {
+    const backLink = document.querySelector("[data-back-to-command-center]");
+    if (!backLink) return;
+    const returnPath = new URLSearchParams(window.location.search).get("return");
+    if (returnPath && returnPath.startsWith("/") && !returnPath.startsWith("//")) {
+      backLink.href = returnPath;
+    }
+  }
+
   syncNavForSession();
+  initBackToCommandCenterLink();
   loadSection();
 })();

@@ -190,12 +190,108 @@ async function aiQuotaSummaryForBusiness(supabaseAdmin: any, businessId: string)
   };
 }
 
+type HealthSignalInputs = {
+  liveOfferCount: number;
+  redemptions30d: number;
+  redemptions7d: number;
+  claims30d: number;
+  lastOfferAt: string | null;
+  lastRedeemedAt: string | null;
+  firstRedeemedAt: string | null;
+  hasPendingApplication: boolean;
+  businessStatus: string;
+  activeTrial: boolean;
+  trialDaysRemaining: number | null;
+  aiQuotaRisk: "high" | "watch" | "normal";
+  aiCostAvailable: boolean;
+  aiMonthCostUsd: number | null;
+};
+
+// Single source of truth for the health/attention-score formula, shared by the
+// aggregate Business Health list and the single-business detail drilldown so the
+// two views can never silently drift apart.
+function deriveHealthSignals(input: HealthSignalInputs, now: Date) {
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const reasonCodes: string[] = [];
+  let attentionScore = 0;
+  if (input.liveOfferCount > 0 && input.redemptions30d === 0) {
+    attentionScore += 45;
+    reasonCodes.push("live_offers_no_redemptions");
+  }
+  if (input.claims30d > 0 && input.redemptions30d === 0) {
+    attentionScore += 40;
+    reasonCodes.push("claims_no_redemptions");
+  }
+  if (input.hasPendingApplication) {
+    attentionScore += 35;
+    reasonCodes.push("pending_trial_request");
+  }
+  if (input.activeTrial && input.trialDaysRemaining !== null && input.trialDaysRemaining >= 0 && input.trialDaysRemaining <= 7) {
+    attentionScore += 30;
+    reasonCodes.push("trial_ending_soon");
+  }
+  const noRecentOffers = (input.businessStatus === "active" || input.businessStatus === "trialing" || input.businessStatus === "limited_trial") &&
+    (!input.lastOfferAt || (dateOrNull(input.lastOfferAt)?.getTime() ?? 0) < fourteenDaysAgo.getTime());
+  if (noRecentOffers) {
+    attentionScore += 25;
+    reasonCodes.push("no_recent_offers");
+  }
+  if (input.aiQuotaRisk === "high") {
+    attentionScore += 20;
+    reasonCodes.push("ai_quota_high");
+  }
+  if (input.aiCostAvailable && (input.aiMonthCostUsd ?? 0) >= 10) {
+    attentionScore += 15;
+    reasonCodes.push("ai_cost_high");
+  }
+  const recentRedemption = (dateOrNull(input.lastRedeemedAt)?.getTime() ?? 0) >= fortyEightHoursAgo.getTime();
+  if (recentRedemption) attentionScore = Math.max(0, attentionScore - 20);
+
+  const firstRedemptionRecent = (dateOrNull(input.firstRedeemedAt)?.getTime() ?? 0) >= sevenDaysAgo.getTime();
+  const isCelebrate = input.redemptions7d >= 3 || firstRedemptionRecent;
+  const healthLabel = isCelebrate
+    ? "celebrate"
+    : attentionScore >= 45
+      ? "needs_attention"
+      : attentionScore > 0
+        ? "watch"
+        : "healthy";
+  const primaryReason = reasonCodes.includes("live_offers_no_redemptions")
+    ? "Live offers have no recent redemptions"
+    : reasonCodes.includes("claims_no_redemptions")
+      ? "Claims are not turning into redemptions"
+      : reasonCodes.includes("pending_trial_request")
+        ? "Trial request is waiting for review"
+        : reasonCodes.includes("trial_ending_soon")
+          ? "Active trial is nearing expiration"
+          : reasonCodes.includes("no_recent_offers")
+            ? "No recent offers are available"
+            : reasonCodes.includes("ai_quota_high")
+              ? "AI usage is close to quota"
+              : isCelebrate
+                ? "Recent redemption activity is worth celebrating"
+                : "No business health issues found";
+
+  return {
+    reasonCodes,
+    attentionScore,
+    healthLabel,
+    primaryReason,
+    suggestedReadOnlyAction: isCelebrate
+      ? "Celebrate recent redemption momentum"
+      : attentionScore > 0
+        ? "Review offer performance and merchant setup"
+        : "Monitor current business activity",
+  };
+}
+
 async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<string, unknown>>> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
   const [
     businessesResult,
@@ -342,69 +438,26 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
     const trialDaysRemaining = daysUntil(trialEnd, now);
     const activeTrial = subscription?.app_access_status === "trialing" || subscription?.app_access_status === "trial_limited";
     const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
-
-    const reasonCodes: string[] = [];
-    let attentionScore = 0;
-    if (row.liveOfferCount > 0 && row.redemptions30d === 0) {
-      attentionScore += 45;
-      reasonCodes.push("live_offers_no_redemptions");
-    }
-    if (row.claims30d > 0 && row.redemptions30d === 0) {
-      attentionScore += 40;
-      reasonCodes.push("claims_no_redemptions");
-    }
-    if (application) {
-      attentionScore += 35;
-      reasonCodes.push("pending_trial_request");
-    }
-    if (activeTrial && trialDaysRemaining !== null && trialDaysRemaining >= 0 && trialDaysRemaining <= 7) {
-      attentionScore += 30;
-      reasonCodes.push("trial_ending_soon");
-    }
     const status = String(business.status ?? "");
-    const noRecentOffers = (status === "active" || status === "trialing" || status === "limited_trial") &&
-      (!row.lastOfferAt || (dateOrNull(row.lastOfferAt)?.getTime() ?? 0) < fourteenDaysAgo.getTime());
-    if (noRecentOffers) {
-      attentionScore += 25;
-      reasonCodes.push("no_recent_offers");
-    }
-    if (quota.risk === "high") {
-      attentionScore += 20;
-      reasonCodes.push("ai_quota_high");
-    }
     const aiMonthCostUsd = row.aiMonthCostUsd;
     const aiCostAvailable = aiMonthCostUsd !== null;
-    if (aiCostAvailable && aiMonthCostUsd >= 10) {
-      attentionScore += 15;
-      reasonCodes.push("ai_cost_high");
-    }
-    const recentRedemption = (dateOrNull(row.lastRedeemedAt)?.getTime() ?? 0) >= fortyEightHoursAgo.getTime();
-    if (recentRedemption) attentionScore = Math.max(0, attentionScore - 20);
 
-    const firstRedemptionRecent = (dateOrNull(row.firstRedeemedAt)?.getTime() ?? 0) >= sevenDaysAgo.getTime();
-    const isCelebrate = row.redemptions7d >= 3 || firstRedemptionRecent;
-    const healthLabel = isCelebrate
-      ? "celebrate"
-      : attentionScore >= 45
-        ? "needs_attention"
-        : attentionScore > 0
-          ? "watch"
-          : "healthy";
-    const primaryReason = reasonCodes.includes("live_offers_no_redemptions")
-      ? "Live offers have no recent redemptions"
-      : reasonCodes.includes("claims_no_redemptions")
-        ? "Claims are not turning into redemptions"
-        : reasonCodes.includes("pending_trial_request")
-          ? "Trial request is waiting for review"
-          : reasonCodes.includes("trial_ending_soon")
-            ? "Active trial is nearing expiration"
-            : reasonCodes.includes("no_recent_offers")
-              ? "No recent offers are available"
-              : reasonCodes.includes("ai_quota_high")
-                ? "AI usage is close to quota"
-                : isCelebrate
-                  ? "Recent redemption activity is worth celebrating"
-                  : "No business health issues found";
+    const signals = deriveHealthSignals({
+      liveOfferCount: row.liveOfferCount,
+      redemptions30d: row.redemptions30d,
+      redemptions7d: row.redemptions7d,
+      claims30d: row.claims30d,
+      lastOfferAt: row.lastOfferAt,
+      lastRedeemedAt: row.lastRedeemedAt,
+      firstRedeemedAt: row.firstRedeemedAt,
+      hasPendingApplication: Boolean(application),
+      businessStatus: status,
+      activeTrial,
+      trialDaysRemaining,
+      aiQuotaRisk: quota.risk as "high" | "watch" | "normal",
+      aiCostAvailable,
+      aiMonthCostUsd,
+    }, now);
 
     return {
       business_id: businessId,
@@ -435,15 +488,11 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
       ai_quota_risk: quota.risk,
       ai_month_cost_usd: aiCostAvailable ? Number(aiMonthCostUsd.toFixed(6)) : null,
       ai_cost_available: aiCostAvailable,
-      health_label: healthLabel,
-      primary_reason: primaryReason,
-      reason_codes: reasonCodes,
-      attention_score: attentionScore,
-      suggested_read_only_action: isCelebrate
-        ? "Celebrate recent redemption momentum"
-        : attentionScore > 0
-          ? "Review offer performance and merchant setup"
-          : "Monitor current business activity",
+      health_label: signals.healthLabel,
+      primary_reason: signals.primaryReason,
+      reason_codes: signals.reasonCodes,
+      attention_score: signals.attentionScore,
+      suggested_read_only_action: signals.suggestedReadOnlyAction,
     };
   }));
 
@@ -463,6 +512,199 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
         (dateOrNull(left.last_redeemed_at)?.getTime() ?? 0);
     })
     .slice(0, 50);
+}
+
+// Per-business version of the health signal computation used by the Business Health
+// Detail Drilldown. Scoped entirely to one business_id so it stays cheap regardless of
+// how many businesses exist, and reuses deriveHealthSignals so the drilldown numbers can
+// never disagree with the aggregate Business Health list above.
+async function loadBusinessHealthDetail(
+  supabaseAdmin: any,
+  businessId: string,
+  businessStatus: string,
+  applications: Array<Record<string, unknown>>,
+): Promise<{
+  health: Record<string, unknown>;
+  offer_activity: Record<string, unknown>;
+  claims_and_redemptions: Record<string, unknown>;
+  trial_and_access: Record<string, unknown>;
+  ai_usage: Record<string, unknown>;
+}> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+
+  const [dealsResult, subscriptionResult] = await Promise.all([
+    supabaseAdmin
+      .from("deals")
+      .select("id,title,is_active,start_time,end_time,created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("app_access_status,trial_end,current_period_end,updated_at")
+      .eq("business_id", businessId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (dealsResult.error) throw dealsResult.error;
+  if (subscriptionResult.error) throw subscriptionResult.error;
+
+  const deals = (dealsResult.data ?? []) as Array<Record<string, unknown>>;
+  const dealIds = deals.map((deal) => String(deal.id ?? "")).filter(Boolean);
+
+  const [claimsResult, redemptionsResult, costResult] = await Promise.all([
+    dealIds.length
+      ? supabaseAdmin.from("deal_claims").select("id,deal_id,claim_status,created_at").in("deal_id", dealIds).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
+    dealIds.length
+      ? supabaseAdmin.from("admin_redemption_facts_v1").select("claim_id,deal_id,redeemed_at").in("deal_id", dealIds).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseAdmin
+      .from("ai_generation_costs")
+      .select("estimated_cost_usd")
+      .eq("business_id", businessId)
+      .gte("created_at", monthStart.toISOString())
+      .limit(5000),
+  ]);
+  if (claimsResult.error) throw claimsResult.error;
+  if (redemptionsResult.error) throw redemptionsResult.error;
+
+  const claimsByDeal = new Map<string, number>();
+  let claims7d = 0;
+  let claims30d = 0;
+  let unredeemedClaims30d = 0;
+  for (const claim of (claimsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(claim.deal_id ?? "");
+    if (dealId) claimsByDeal.set(dealId, (claimsByDeal.get(dealId) ?? 0) + 1);
+    const createdAt = dateOrNull(claim.created_at);
+    if (!createdAt || createdAt.getTime() < thirtyDaysAgo.getTime()) continue;
+    claims30d += 1;
+    if (createdAt.getTime() >= sevenDaysAgo.getTime()) claims7d += 1;
+    if (claim.claim_status !== "redeemed") unredeemedClaims30d += 1;
+  }
+
+  const redemptionsByDeal = new Map<string, number>();
+  let redemptions7d = 0;
+  let redemptions30d = 0;
+  let lastRedeemedAt: string | null = null;
+  let firstRedeemedAt: string | null = null;
+  for (const redemption of (redemptionsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(redemption.deal_id ?? "");
+    if (dealId) redemptionsByDeal.set(dealId, (redemptionsByDeal.get(dealId) ?? 0) + 1);
+    lastRedeemedAt = latestIso(lastRedeemedAt, redemption.redeemed_at);
+    firstRedeemedAt = earliestIso(firstRedeemedAt, redemption.redeemed_at);
+    const redeemedAt = dateOrNull(redemption.redeemed_at);
+    if (!redeemedAt) continue;
+    if (redeemedAt.getTime() >= thirtyDaysAgo.getTime()) redemptions30d += 1;
+    if (redeemedAt.getTime() >= sevenDaysAgo.getTime()) redemptions7d += 1;
+  }
+
+  let liveOfferCount = 0;
+  let activeOrScheduledOfferCount = 0;
+  let lastOfferAt: string | null = null;
+  const offerRows: Array<Record<string, unknown>> = [];
+  for (const deal of deals) {
+    const dealId = String(deal.id ?? "");
+    const end = dateOrNull(deal.end_time);
+    const start = dateOrNull(deal.start_time);
+    const isCurrent = deal.is_active === true && (!end || end.getTime() > now.getTime());
+    const isScheduled = deal.is_active === true && start !== null && start.getTime() > now.getTime();
+    if (isCurrent) liveOfferCount += 1;
+    if (isCurrent || isScheduled) activeOrScheduledOfferCount += 1;
+    lastOfferAt = latestIso(lastOfferAt, deal.created_at || deal.start_time);
+    if (isCurrent || isScheduled) {
+      offerRows.push({
+        id: dealId,
+        title: deal.title ?? "",
+        start_time: deal.start_time ?? null,
+        end_time: deal.end_time ?? null,
+        status: isCurrent ? "live" : "scheduled",
+        claim_count: claimsByDeal.get(dealId) ?? 0,
+        redemption_count: redemptionsByDeal.get(dealId) ?? 0,
+      });
+    }
+  }
+  offerRows.sort((a, b) =>
+    (dateOrNull(b.start_time as string)?.getTime() ?? 0) - (dateOrNull(a.start_time as string)?.getTime() ?? 0));
+
+  const aiCostAvailable = !costResult.error;
+  const aiMonthCostUsd = aiCostAvailable
+    ? ((costResult.data ?? []) as Array<Record<string, unknown>>).reduce(
+      (sum, costRow) => sum + (Number(costRow.estimated_cost_usd) || 0),
+      0,
+    )
+    : null;
+
+  const subscription = subscriptionResult.data as Record<string, unknown> | null;
+  const trialEnd = latestIso(null, subscription?.trial_end || subscription?.current_period_end);
+  const trialDaysRemaining = daysUntil(trialEnd, now);
+  const activeTrial = subscription?.app_access_status === "trialing" || subscription?.app_access_status === "trial_limited";
+
+  const pendingStatuses = ["pending_review", "pending_verification", "review_required"];
+  const hasPendingApplication = applications.some((application) => pendingStatuses.includes(String(application.status ?? "")));
+  const latestApplication = applications[0] ?? null;
+
+  const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
+
+  const signals = deriveHealthSignals({
+    liveOfferCount,
+    redemptions30d,
+    redemptions7d,
+    claims30d,
+    lastOfferAt,
+    lastRedeemedAt,
+    firstRedeemedAt,
+    hasPendingApplication,
+    businessStatus,
+    activeTrial,
+    trialDaysRemaining,
+    aiQuotaRisk: quota.risk as "high" | "watch" | "normal",
+    aiCostAvailable,
+    aiMonthCostUsd,
+  }, now);
+
+  return {
+    health: {
+      health_label: signals.healthLabel,
+      attention_score: signals.attentionScore,
+      primary_reason: signals.primaryReason,
+      reason_codes: signals.reasonCodes,
+      suggested_read_only_action: signals.suggestedReadOnlyAction,
+    },
+    offer_activity: {
+      live_offer_count: liveOfferCount,
+      active_or_scheduled_offer_count: activeOrScheduledOfferCount,
+      last_offer_at: lastOfferAt,
+      days_since_last_offer: daysBetween(lastOfferAt, now),
+      offers: offerRows.slice(0, 20),
+    },
+    claims_and_redemptions: {
+      claims_7d: claims7d,
+      claims_30d: claims30d,
+      unredeemed_claims_30d: unredeemedClaims30d,
+      redemptions_7d: redemptions7d,
+      redemptions_30d: redemptions30d,
+      last_redeemed_at: lastRedeemedAt,
+    },
+    trial_and_access: {
+      trial_request_status: latestApplication?.status ?? null,
+      trial_request_created_at: latestApplication?.created_at ?? null,
+      app_access_status: subscription?.app_access_status ?? null,
+      trial_ends_at: trialEnd,
+      trial_days_remaining: trialDaysRemaining,
+    },
+    ai_usage: {
+      ai_month_used_max: quota.used,
+      ai_month_limit_for_max: quota.limit,
+      ai_quota_risk: quota.risk,
+      ai_month_cost_usd: aiCostAvailable && aiMonthCostUsd !== null ? Number(aiMonthCostUsd.toFixed(6)) : null,
+      ai_cost_available: aiCostAvailable,
+    },
+  };
 }
 
 // Read-only per-tab data for the admin site. Every view is audited; mutations
@@ -784,7 +1026,17 @@ async function loadSection(
   // business_detail
   const businessId = typeof payload.business_id === "string" ? payload.business_id.trim() : "";
   if (!UUID_RE.test(businessId)) {
-    return { business: null, applications: [], audit_log: [] };
+    return {
+      business: null,
+      applications: [],
+      audit_log: [],
+      health: null,
+      offer_activity: null,
+      claims_and_redemptions: null,
+      trial_and_access: null,
+      ai_usage: null,
+      business_health_error: null,
+    };
   }
   const [business, applications, audit] = await Promise.all([
     supabaseAdmin
@@ -808,10 +1060,38 @@ async function loadSection(
   if (business.error) throw business.error;
   if (applications.error) throw applications.error;
   if (audit.error) throw audit.error;
+
+  const ownerEmails = await ownerEmailsForBusinesses(supabaseAdmin, [businessId]);
+  const businessRow = business.data
+    ? { ...business.data, owner_email: ownerEmails.get(businessId) ?? null }
+    : null;
+
+  let healthDetail: Awaited<ReturnType<typeof loadBusinessHealthDetail>> | null = null;
+  let businessHealthError: string | null = null;
+  if (businessRow) {
+    try {
+      healthDetail = await loadBusinessHealthDetail(
+        supabaseAdmin,
+        businessId,
+        String(businessRow.status ?? ""),
+        (applications.data ?? []) as Array<Record<string, unknown>>,
+      );
+    } catch (healthErr) {
+      businessHealthError = "Business health drilldown could not be loaded.";
+      console.warn("[admin-dashboard-summary] business_detail health error:", healthErr);
+    }
+  }
+
   return {
-    business: business.data ?? null,
+    business: businessRow,
     applications: applications.data ?? [],
     audit_log: audit.data ?? [],
+    health: healthDetail?.health ?? null,
+    offer_activity: healthDetail?.offer_activity ?? null,
+    claims_and_redemptions: healthDetail?.claims_and_redemptions ?? null,
+    trial_and_access: healthDetail?.trial_and_access ?? null,
+    ai_usage: healthDetail?.ai_usage ?? null,
+    business_health_error: businessHealthError,
   };
 }
 

@@ -51,7 +51,104 @@
           <span class="admin-badge" data-admin-status>Checking session</span>
         </div>
       </div>
-      <section class="admin-section">
+      <div class="admin-actions">
+        <a class="button button-small button-secondary" data-back-to-command-center href="/admin">Back to Command Center</a>
+        <a class="button button-small button-secondary" href="/admin/businesses">View business directory</a>
+        <a class="button button-small button-secondary" data-view-offers-link href="/admin/offers">View offers</a>
+        <a class="button button-small button-secondary" href="#business-record">Open read-only business record</a>
+      </div>
+
+      <section class="admin-section" aria-label="Business health drilldown">
+        <div class="admin-section-header">
+          <div>
+            <h2>Health Summary</h2>
+            <p>Read-only signal explaining why this business may need attention.</p>
+          </div>
+        </div>
+        <p class="status warning" data-drilldown-warning hidden></p>
+        <div class="admin-grid two">
+          <article class="admin-card"><span>Health</span><span class="admin-badge" data-health-label>&mdash;</span></article>
+          <article class="admin-card"><span>Attention score</span><strong data-health-score>&mdash;</strong></article>
+        </div>
+        <p class="admin-note" data-health-reason>No health summary available.</p>
+        <p class="admin-note" data-health-codes hidden></p>
+        <p class="admin-note" data-health-next-step hidden></p>
+      </section>
+
+      <section class="admin-section" aria-label="Offer activity">
+        <div class="admin-section-header">
+          <div>
+            <h2>Offer Activity</h2>
+            <p>Live and scheduled offers, and when this business last posted one.</p>
+          </div>
+        </div>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Live offers</span><strong data-offer-live-count>0</strong></article>
+          <article class="admin-card"><span>Active or scheduled</span><strong data-offer-active-count>0</strong></article>
+          <article class="admin-card"><span>Days since last offer</span><strong data-offer-days-since>&mdash;</strong></article>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Offer</th><th>Starts</th><th>Ends</th><th>Status</th><th>Claims</th><th>Redemptions</th></tr></thead>
+            <tbody data-offer-rows>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load offers.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Claim and redemption activity">
+        <div class="admin-section-header">
+          <div>
+            <h2>Claims &amp; Redemptions</h2>
+            <p>Claims and redemptions are tracked separately. Redemptions use the canonical admin_redemption_facts_v1 metric.</p>
+          </div>
+        </div>
+        <h3 class="admin-group-title">Claims</h3>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Claims 7d</span><strong data-claims-7d>0</strong></article>
+          <article class="admin-card"><span>Claims 30d</span><strong data-claims-30d>0</strong></article>
+          <article class="admin-card"><span>Unredeemed 30d</span><strong data-claims-unredeemed>0</strong></article>
+        </div>
+        <h3 class="admin-group-title">Redemptions</h3>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Redemptions 7d</span><strong data-redemptions-7d>0</strong></article>
+          <article class="admin-card"><span>Redemptions 30d</span><strong data-redemptions-30d>0</strong></article>
+          <article class="admin-card"><span>Last redeemed</span><span class="admin-badge" data-last-redeemed>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Trial and access timing">
+        <div class="admin-section-header">
+          <div>
+            <h2>Trial &amp; Access Timing</h2>
+          </div>
+        </div>
+        <p class="admin-note" data-trial-empty hidden>No trial timing data found.</p>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Trial request status</span><span class="admin-badge" data-trial-request-status>&mdash;</span></article>
+          <article class="admin-card"><span>Trial request created</span><span class="admin-badge" data-trial-request-created>&mdash;</span></article>
+          <article class="admin-card"><span>App access status</span><span class="admin-badge" data-app-access-status>&mdash;</span></article>
+          <article class="admin-card"><span>Trial ends</span><span class="admin-badge" data-trial-ends>&mdash;</span></article>
+          <article class="admin-card"><span>Trial days remaining</span><span class="admin-badge" data-trial-days-remaining>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="AI usage">
+        <div class="admin-section-header">
+          <div>
+            <h2>AI Usage</h2>
+          </div>
+        </div>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>AI month used (max scope)</span><strong data-ai-used>0</strong></article>
+          <article class="admin-card"><span>AI month limit (max scope)</span><strong data-ai-limit>0</strong></article>
+          <article class="admin-card"><span>AI quota risk</span><span class="admin-badge" data-ai-risk>&mdash;</span></article>
+          <article class="admin-card"><span>AI month cost</span><span class="admin-badge" data-ai-cost>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" id="business-record">
         <h2>Applications</h2>
         <p class="admin-note">Trial requests and field invites linked to this business. Decisions are made on the Trial Requests page.</p>
         <div class="admin-table-wrap">

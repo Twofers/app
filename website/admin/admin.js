@@ -328,8 +328,13 @@
     const labels = ["Business", "Health", "Reason", "Live offers", "Claims 30d", "Redemptions 30d", "Trial", "AI", "Action"];
     for (const row of rows) {
       const tr = document.createElement("tr");
+      const detailHref = row.business_id
+        ? `/admin/businesses/${row.business_id}?return=${encodeURIComponent("/admin")}`
+        : "";
       const cells = [
-        row.business_name || row.business_id || "Unknown",
+        detailHref
+          ? { href: detailHref, text: row.business_name || row.business_id || "Unknown" }
+          : row.business_name || row.business_id || "Unknown",
         { badge: healthLabel(row.health_label), tone: healthTone(row.health_label) },
         row.primary_reason || "",
         formatNullableNumber(row.live_offer_count, "0"),
@@ -337,7 +342,7 @@
         formatNullableNumber(row.redemptions_30d, "0"),
         formatTrialDays(row.trial_days_remaining),
         formatAiRisk(row.ai_quota_risk),
-        { href: row.business_id ? `/admin/businesses/${row.business_id}` : "/admin/businesses", text: row.suggested_read_only_action || "View business" },
+        { href: detailHref || "/admin/businesses", text: row.suggested_read_only_action || "View business" },
       ];
       for (const [index, value] of cells.entries()) {
         const td = document.createElement("td");

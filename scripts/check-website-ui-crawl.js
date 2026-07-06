@@ -207,6 +207,7 @@ function mockPayload(pathname, requestBody) {
         business: {
           id: requestBody.business_id || "11111111-1111-4111-8111-111111111111",
           name: "Sample Coffee",
+          owner_email: "owner@example.com",
           status: "trialing",
           access_level: "full_trial",
           verification_status: "manual_verified",
@@ -230,6 +231,53 @@ function mockPayload(pathname, requestBody) {
             created_at: "2026-07-02T12:01:00.000Z",
           },
         ],
+        health: {
+          health_label: "watch",
+          attention_score: 25,
+          primary_reason: "No recent offers are available",
+          reason_codes: ["no_recent_offers"],
+          suggested_read_only_action: "Review offer performance and merchant setup",
+        },
+        offer_activity: {
+          live_offer_count: 1,
+          active_or_scheduled_offer_count: 2,
+          last_offer_at: "2026-06-20T12:00:00.000Z",
+          days_since_last_offer: 15,
+          offers: [
+            {
+              id: "deal-1",
+              title: "Morning pastry offer",
+              start_time: "2026-07-02T13:00:00.000Z",
+              end_time: "2026-07-09T13:00:00.000Z",
+              status: "live",
+              claim_count: 4,
+              redemption_count: 1,
+            },
+          ],
+        },
+        claims_and_redemptions: {
+          claims_7d: 1,
+          claims_30d: 4,
+          unredeemed_claims_30d: 3,
+          redemptions_7d: 0,
+          redemptions_30d: 1,
+          last_redeemed_at: "2026-06-15T12:00:00.000Z",
+        },
+        trial_and_access: {
+          trial_request_status: "trial_active",
+          trial_request_created_at: "2026-06-01T12:00:00.000Z",
+          app_access_status: "trialing",
+          trial_ends_at: "2026-07-15T12:00:00.000Z",
+          trial_days_remaining: 10,
+        },
+        ai_usage: {
+          ai_month_used_max: 4,
+          ai_month_limit_for_max: 25,
+          ai_quota_risk: "normal",
+          ai_month_cost_usd: 0.42,
+          ai_cost_available: true,
+        },
+        business_health_error: null,
       };
     }
 
