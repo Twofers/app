@@ -37,6 +37,7 @@ type DealRow = {
   price: number | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
+  start_time: string;
   end_time: string;
   is_recurring: boolean | null;
   days_of_week: number[] | null;
@@ -56,7 +57,7 @@ type DealRow = {
 };
 
 const REUSE_DEALS_BASE_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,title_en,title_es,title_ko,price,poster_url,poster_storage_path,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
 const REUSE_DEALS_ENRICHED_SELECT =
   `${REUSE_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
 const OPTIONAL_REUSE_DEAL_COLUMNS = [

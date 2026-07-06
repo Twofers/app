@@ -46,7 +46,39 @@ describe("reuse deal prefill params", () => {
     });
   });
 
-  it("can reset schedule metadata for duplicated deal drafts", () => {
+  it("can reset one-time schedule metadata for duplicated deal drafts while preserving duration", () => {
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "BOGO latte",
+        description: "Buy one iced latte, get one free.",
+        price: 5,
+        poster_storage_path: "biz-1/latte.jpg",
+        start_time: "2026-06-30T20:00:00.000Z",
+        end_time: "2026-06-30T22:30:00.000Z",
+        is_recurring: false,
+        max_claims: 25,
+        claim_cutoff_buffer_minutes: 10,
+      },
+      { resetSchedule: true, now: new Date("2026-07-01T17:00:00.000Z") },
+    );
+
+    expect(params).toMatchObject({
+      fromReuse: "1",
+      prefillTitle: "Buy one latte and get one free",
+      prefillPosterPath: "biz-1/latte.jpg",
+      prefillIsRecurring: "0",
+      prefillStartTime: "2026-07-01T17:05:00.000Z",
+      prefillEndTime: "2026-07-01T19:35:00.000Z",
+      prefillMaxClaims: "25",
+      prefillCutoffMins: "10",
+    });
+    expect(params).not.toHaveProperty("prefillDaysOfWeek");
+    expect(params).not.toHaveProperty("prefillWindowStartMin");
+    expect(params).not.toHaveProperty("prefillWindowEndMin");
+    expect(params).not.toHaveProperty("prefillTimezone");
+  });
+
+  it("keeps recurring schedule metadata when duplicated", () => {
     const params = buildReuseDealPrefillParams(
       {
         title: "BOGO latte",
@@ -65,19 +97,16 @@ describe("reuse deal prefill params", () => {
     );
 
     expect(params).toMatchObject({
-      fromReuse: "1",
-      prefillTitle: "Buy one latte and get one free",
-      prefillPosterPath: "biz-1/latte.jpg",
-      prefillIsRecurring: "0",
-      prefillStartTime: "2026-07-01T17:05:00.000Z",
-      prefillEndTime: "2026-07-01T18:05:00.000Z",
+      prefillIsRecurring: "1",
+      prefillDaysOfWeek: "1,5",
+      prefillWindowStartMin: "540",
+      prefillWindowEndMin: "660",
+      prefillTimezone: "America/Chicago",
       prefillMaxClaims: "25",
       prefillCutoffMins: "10",
     });
-    expect(params).not.toHaveProperty("prefillDaysOfWeek");
-    expect(params).not.toHaveProperty("prefillWindowStartMin");
-    expect(params).not.toHaveProperty("prefillWindowEndMin");
-    expect(params).not.toHaveProperty("prefillTimezone");
+    expect(params).not.toHaveProperty("prefillStartTime");
+    expect(params).not.toHaveProperty("prefillEndTime");
   });
 
   it("strips stale generated disclosure text when resetting duplicated deal drafts", () => {

@@ -4,7 +4,11 @@ import {
   type DealEligibilityFormState,
 } from "./deal-eligibility-form";
 import { getDealDisplayTitle } from "./deal-display-copy";
-import { createDefaultOneTimeDealSchedule } from "./deal-schedule-defaults";
+import {
+  createDefaultOneTimeDealSchedule,
+  createOneTimeDealScheduleFromStart,
+  MAX_DEAL_DURATION_MINUTES,
+} from "./deal-schedule-defaults";
 
 export type ReusableDeal = {
   title?: string | null;
@@ -13,6 +17,8 @@ export type ReusableDeal = {
   price?: number | string | null;
   poster_url?: string | null;
   poster_storage_path?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   is_recurring?: boolean | null;
   days_of_week?: number[] | null;
   window_start_minutes?: number | null;
@@ -119,6 +125,24 @@ function splitStoredDescription(description: string): { promoLine: string; detai
   };
 }
 
+function originalOneTimeDurationMinutes(deal: ReusableDeal): number | null {
+  if (!deal.start_time || !deal.end_time) return null;
+  const startMs = new Date(deal.start_time).getTime();
+  const endMs = new Date(deal.end_time).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  const durationMinutes = Math.round((endMs - startMs) / (60 * 1000));
+  if (durationMinutes <= 0 || durationMinutes > MAX_DEAL_DURATION_MINUTES) return null;
+  return durationMinutes;
+}
+
+function applyRecurringScheduleParams(params: Record<string, string>, deal: ReusableDeal) {
+  if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
+  if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");
+  if (deal.window_start_minutes != null) params.prefillWindowStartMin = String(deal.window_start_minutes);
+  if (deal.window_end_minutes != null) params.prefillWindowEndMin = String(deal.window_end_minutes);
+  if (clean(deal.timezone)) params.prefillTimezone = clean(deal.timezone);
+}
+
 function isReusableOperationalDisclosure(sentence: string): boolean {
   return /^(?:Redeem (?:only )?at\b|Limited to \d+\b|Offer window:|Claims close\b|Limit (?:one|\d+) claims? per customer\b)/i.test(
     sentence.trim(),
@@ -182,17 +206,19 @@ export function buildReuseDealPrefillParams(
     params.prefillPosterUrl = posterUrl;
   }
 
-  if (options.resetSchedule) {
+  if (options.resetSchedule && deal.is_recurring) {
+    applyRecurringScheduleParams(params, deal);
+  } else if (options.resetSchedule) {
     const freshSchedule = createDefaultOneTimeDealSchedule(options.now);
+    const durationMinutes = originalOneTimeDurationMinutes(deal);
+    const schedule = durationMinutes
+      ? createOneTimeDealScheduleFromStart(freshSchedule.startTime, durationMinutes)
+      : freshSchedule;
     params.prefillIsRecurring = "0";
-    params.prefillStartTime = freshSchedule.startTime.toISOString();
-    params.prefillEndTime = freshSchedule.endTime.toISOString();
+    params.prefillStartTime = schedule.startTime.toISOString();
+    params.prefillEndTime = schedule.endTime.toISOString();
   } else {
-    if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
-    if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");
-    if (deal.window_start_minutes != null) params.prefillWindowStartMin = String(deal.window_start_minutes);
-    if (deal.window_end_minutes != null) params.prefillWindowEndMin = String(deal.window_end_minutes);
-    if (clean(deal.timezone)) params.prefillTimezone = clean(deal.timezone);
+    applyRecurringScheduleParams(params, deal);
   }
   if (deal.max_claims != null) params.prefillMaxClaims = String(deal.max_claims);
   if (deal.claim_cutoff_buffer_minutes != null) params.prefillCutoffMins = String(deal.claim_cutoff_buffer_minutes);
