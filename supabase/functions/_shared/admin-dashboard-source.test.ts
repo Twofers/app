@@ -35,6 +35,14 @@ describe("admin dashboard foundation", () => {
     expect(source).not.toMatch(/OPENAI_API_KEY/);
   });
 
+  it("uses the canonical admin redemption facts view for redemption metrics", () => {
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+    expect(source).toMatch(/redemptionsToday/);
+    expect(source).toMatch(/from\("admin_redemption_facts_v1"\)[\s\S]+select\("claim_id", \{ count: "exact", head: true \}\)[\s\S]+gte\("redeemed_at"/);
+    expect(source).toMatch(/from\("deal_claims"\)[\s\S]+select\("id", \{ count: "exact", head: true \}\)[\s\S]+gte\("created_at"/);
+    expect(source).not.toMatch(/from\("deal_claims"\)[\s\S]+not\("redeemed_at", "is", null\)/);
+  });
+
   it("registers the admin summary edge function", () => {
     const config = read("supabase/config.toml");
     expect(config).toMatch(

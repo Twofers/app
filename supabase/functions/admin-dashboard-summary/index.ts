@@ -680,9 +680,8 @@ serve(async (req) => {
       ),
       countRows(
         supabaseAdmin
-          .from("deal_claims")
-          .select("id", { count: "exact", head: true })
-          .not("redeemed_at", "is", null)
+          .from("admin_redemption_facts_v1")
+          .select("claim_id", { count: "exact", head: true })
           .gte("redeemed_at", dayStart.toISOString()),
       ),
       countRows(
