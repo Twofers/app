@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health-2" />
   </head>
   <body
     class="admin-shell"
@@ -94,6 +94,10 @@
           <a class="admin-next-action" href="/admin/offers?status=review" data-action-count="offers.needsReview">
             <span class="admin-action-copy"><strong>Offers needing review</strong><small>Owner work that may need moderation or support.</small></span>
             <span class="admin-action-count" data-metric="offers.needsReview">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/businesses?attention=1" data-action-count="businesses.needingAttention">
+            <span class="admin-action-copy"><strong>Business health reviews</strong><small>Businesses with live offers, claims, trial timing, or AI usage signals needing review.</small></span>
+            <span class="admin-action-count" data-metric="businesses.needingAttention">0</span>
           </a>
         </div>
       </section>
@@ -321,6 +325,6 @@
         </div>
       </section>
     </main>
-    <script src="/admin/admin.js?v=20260705-admin-health"></script>
+    <script src="/admin/admin.js?v=20260705-admin-health-2"></script>
   </body>
 </html>

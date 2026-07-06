@@ -82,7 +82,9 @@
   function setStatus(message, tone = "info") {
     if (!statusEl) return;
     statusEl.textContent = message;
-    statusEl.className = `admin-badge${tone === "danger" ? " danger" : tone === "warning" ? " warning" : ""}`;
+    const toneClass =
+      tone === "danger" ? " danger" : tone === "warning" ? " warning" : tone === "success" ? " success" : "";
+    statusEl.className = `admin-badge${toneClass}`;
   }
 
   function setAiStatus(message, tone = "info") {
@@ -452,6 +454,7 @@
 
   async function loadSummary() {
     if (!endpoint) return;
+    setStatus("Checking admin session");
     const token = await getAccessToken();
     if (!token) {
       setStatus("Admin session not connected", "warning");
@@ -475,46 +478,52 @@
       }
       if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed");
 
-      setStatus(`Signed in as ${payload.admin?.role || "admin"}`);
-      const s = payload.summary || {};
-      setMetric("businesses.active", s.businesses?.active ?? 0);
-      setMetric("businesses.pending", s.businesses?.pendingVerification ?? 0);
-      setMetric("businesses.trialing", s.businesses?.trialingLocations ?? 0);
-      setMetric("businesses.trialsEndingSoon", s.businesses?.trialsEndingSoon ?? 0);
-      setMetric("trialRequests.open", s.trialRequests?.open ?? 0);
-      setMetric("trialRequests.highRisk", s.trialRequests?.highRisk ?? 0);
-      setMetric("offers.live", s.offers?.live ?? 0);
-      setMetric("offers.needsReview", s.offers?.needsReview ?? 0);
-      setMetric("apiSpend.currentMonthUsd", formatUsd(s.apiSpend?.currentMonthUsd ?? 0));
-      setMetric("apiSpend.priorMonthUsd", formatUsd(s.apiSpend?.priorMonthUsd ?? 0));
-      setMetric("apiSpend.updatedAt", s.apiSpend?.updatedAt ? `Updated ${formatDateTime(s.apiSpend.updatedAt)}` : "Not loaded");
-      setMetric("activity.claimsToday", s.activity?.claimsToday ?? 0);
-      setMetric("activity.redemptionsToday", s.activity?.redemptionsToday ?? 0);
-      setMetric(
-        "activity.claimRedemptionRate",
-        formatRate(s.activity?.redemptionsToday ?? 0, s.activity?.claimsToday ?? 0),
-      );
-      setMetric("billing.pastDue", s.billing?.pastDueLocations ?? 0);
-      setMetric("billing.pastDueBusinesses", s.billing?.pastDueBusinesses ?? 0);
-      setMetric("billing.missingCustomers", s.billing?.missingStripeCustomers ?? 0);
-      setMetric("billing.failedEvents", s.billing?.stripeWebhookErrors ?? 0);
-      setMetric("security.failedActions", s.security?.failedAdminActions ?? 0);
-      setMetric("prospects.open", s.prospects?.open ?? 0);
-      setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
-      setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
-      const businessHealthRows = payload.businessHealth || [];
-      const businessHealthLoaded = !payload.businessHealthError && Array.isArray(payload.businessHealth);
-      const businessHealthAttention = businessHealthLoaded
-        ? businessHealthRows.filter((row) => Number(row.attention_score || 0) > 0).length
-        : 0;
-      setMetric(
-        "businesses.needingAttention",
-        businessHealthLoaded ? businessHealthAttention : "N/A",
-      );
+      setStatus(`Signed in as ${payload.admin?.role || "admin"}`, "success");
 
-      fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
-      fillRows("[data-audit-body]", payload.recentAudit || [], "No recent audit events.");
-      fillBusinessHealthRows(businessHealthRows, payload.businessHealthError || "");
+      try {
+        const s = payload.summary || {};
+        setMetric("businesses.active", s.businesses?.active ?? 0);
+        setMetric("businesses.pending", s.businesses?.pendingVerification ?? 0);
+        setMetric("businesses.trialing", s.businesses?.trialingLocations ?? 0);
+        setMetric("businesses.trialsEndingSoon", s.businesses?.trialsEndingSoon ?? 0);
+        setMetric("trialRequests.open", s.trialRequests?.open ?? 0);
+        setMetric("trialRequests.highRisk", s.trialRequests?.highRisk ?? 0);
+        setMetric("offers.live", s.offers?.live ?? 0);
+        setMetric("offers.needsReview", s.offers?.needsReview ?? 0);
+        setMetric("apiSpend.currentMonthUsd", formatUsd(s.apiSpend?.currentMonthUsd ?? 0));
+        setMetric("apiSpend.priorMonthUsd", formatUsd(s.apiSpend?.priorMonthUsd ?? 0));
+        setMetric("apiSpend.updatedAt", s.apiSpend?.updatedAt ? `Updated ${formatDateTime(s.apiSpend.updatedAt)}` : "Not loaded");
+        setMetric("activity.claimsToday", s.activity?.claimsToday ?? 0);
+        setMetric("activity.redemptionsToday", s.activity?.redemptionsToday ?? 0);
+        setMetric(
+          "activity.claimRedemptionRate",
+          formatRate(s.activity?.redemptionsToday ?? 0, s.activity?.claimsToday ?? 0),
+        );
+        setMetric("billing.pastDue", s.billing?.pastDueLocations ?? 0);
+        setMetric("billing.pastDueBusinesses", s.billing?.pastDueBusinesses ?? 0);
+        setMetric("billing.missingCustomers", s.billing?.missingStripeCustomers ?? 0);
+        setMetric("billing.failedEvents", s.billing?.stripeWebhookErrors ?? 0);
+        setMetric("security.failedActions", s.security?.failedAdminActions ?? 0);
+        setMetric("prospects.open", s.prospects?.open ?? 0);
+        setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
+        setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
+        const businessHealthRows = payload.businessHealth || [];
+        const businessHealthLoaded = !payload.businessHealthError && Array.isArray(payload.businessHealth);
+        const businessHealthAttention = businessHealthLoaded
+          ? businessHealthRows.filter((row) => Number(row.attention_score || 0) > 0).length
+          : 0;
+        setMetric(
+          "businesses.needingAttention",
+          businessHealthLoaded ? businessHealthAttention : "N/A",
+        );
+
+        fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
+        fillRows("[data-audit-body]", payload.recentAudit || [], "No recent audit events.");
+        fillBusinessHealthRows(businessHealthRows, payload.businessHealthError || "");
+      } catch {
+        setMetric("businesses.needingAttention", "N/A");
+        fillBusinessHealthRows([], "Business health could not be loaded.");
+      }
     } catch {
       setStatus("Could not load admin summary", "danger");
       fillBusinessHealthRows([], "Business health could not be loaded.");

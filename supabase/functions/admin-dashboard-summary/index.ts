@@ -1013,7 +1013,7 @@ serve(async (req) => {
           .from("deals")
           .select("id", { count: "exact", head: true })
           .eq("is_active", true)
-          .gt("end_time", nowIso),
+          .or(`end_time.is.null,end_time.gt.${nowIso}`),
       ),
       countRows(
         supabaseAdmin
