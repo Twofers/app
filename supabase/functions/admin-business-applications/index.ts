@@ -68,6 +68,7 @@ type BusinessDecisionSyncResult = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPEN_STATUSES = ["pending_review", "pending_verification", "review_required"];
+const KNOWN_ACTIONS = new Set(["list", "decide", "create", "verify_business"]);
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -727,6 +728,9 @@ Deno.serve(async (req) => {
     if (adminContext instanceof Response) return adminContext;
 
     action = cleanString(payload.action || "list", 40);
+    if (!KNOWN_ACTIONS.has(action)) {
+      return json(req, { ok: false, error: "Unknown action.", request_id: requestId }, 400);
+    }
     if (action === "decide") {
       return decideApplication(req, adminContext, payload);
     }

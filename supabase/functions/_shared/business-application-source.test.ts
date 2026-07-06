@@ -128,6 +128,12 @@ describe("business application intake", () => {
     expect(source).toMatch(/privacy_acknowledged:\s*false/);
   });
 
+  it("rejects an unrecognized action with a clear 400 instead of silently falling through to listApplications", () => {
+    const source = read("supabase/functions/admin-business-applications/index.ts");
+    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business"\]\)/);
+    expect(source).toMatch(/if \(!KNOWN_ACTIONS\.has\(action\)\) \{\s*\n\s*return json\(req, \{ ok: false, error: "Unknown action\.", request_id: requestId \}, 400\);/);
+  });
+
   it("wires the founder field-invite page to the create action", () => {
     const page = read("website/admin/businesses/new/index.html");
     const script = read("website/admin/admin-new-trial.js");
