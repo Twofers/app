@@ -171,16 +171,17 @@
             <p>A read-only operating table belongs here once the summary endpoint exposes per-business activity rows.</p>
           </div>
         </div>
-        <div class="admin-health-placeholder">
+        <div class="admin-health-placeholder" data-business-health-panel>
+          <p class="status warning" data-business-health-warning hidden></p>
           <div class="admin-table-wrap">
             <table class="admin-table" data-mobile-cards>
               <thead>
-                <tr><th>Business</th><th>Status</th><th>Live deals</th><th>Last published</th><th>Claims</th><th>Redemptions</th><th>Health</th><th>Action</th></tr>
+                <tr><th>Business</th><th>Health</th><th>Reason</th><th>Live offers</th><th>Claims 30d</th><th>Redemptions 30d</th><th>Trial</th><th>AI</th><th>Action</th></tr>
               </thead>
-              <tbody>
+              <tbody data-business-health-body>
                 <tr>
-                  <td class="admin-row-detail" colspan="8">
-                    Not available in the current read-only summary payload. Needed fields: per-business live deal count, last published time, claim count, canonical redemption count, and a server-defined health label.
+                  <td class="admin-row-detail" colspan="9">
+                    Connect an active admin session to load business health.
                   </td>
                 </tr>
               </tbody>
@@ -240,7 +241,7 @@
       <section class="admin-section">
         <details class="admin-panel admin-manage-panel" open>
           <summary>
-            <span>Manage AI Usage</span>
+            <span>AI Spend & Quotas</span>
             <span class="admin-badge" data-metric="apiSpend.updatedAt">Not loaded</span>
           </summary>
           <p>Search a business owner, review monthly AI usage, and reset a selected monthly quota without deleting history.</p>

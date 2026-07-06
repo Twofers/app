@@ -4,6 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { isAal2 } from "../_shared/admin-mfa.ts";
+import {
+  AI_QUOTA_SCOPES,
+  countAiQuotaUsage,
+  type AiQuotaScope,
+} from "../_shared/ai-quota-resets.ts";
+import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
 
 type AdminRole =
   | "owner"
@@ -113,6 +119,346 @@ function sumDemandByTarget(rows: Array<Record<string, unknown>>, key: "prospect_
     map.set(id, current);
   }
   return map;
+}
+
+function dateOrNull(value: unknown): Date | null {
+  if (typeof value !== "string" || !value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function latestIso(current: string | null, candidate: unknown): string | null {
+  const candidateDate = dateOrNull(candidate);
+  if (!candidateDate) return current;
+  const currentDate = dateOrNull(current);
+  return !currentDate || candidateDate.getTime() > currentDate.getTime() ? candidateDate.toISOString() : current;
+}
+
+function earliestIso(current: string | null, candidate: unknown): string | null {
+  const candidateDate = dateOrNull(candidate);
+  if (!candidateDate) return current;
+  const currentDate = dateOrNull(current);
+  return !currentDate || candidateDate.getTime() < currentDate.getTime() ? candidateDate.toISOString() : current;
+}
+
+function daysBetween(fromIso: string | null, to: Date): number | null {
+  const from = dateOrNull(fromIso);
+  if (!from) return null;
+  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function daysUntil(toIso: string | null, now: Date): number | null {
+  const to = dateOrNull(toIso);
+  if (!to) return null;
+  return Math.ceil((to.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function rate(numerator: number, denominator: number): number {
+  if (!denominator) return 0;
+  return Number((numerator / denominator).toFixed(4));
+}
+
+function quotaLimitForScope(scope: AiQuotaScope, supabaseAdmin: any, businessId: string): Promise<number> | number {
+  if (scope === "deal_translate") return resolveDealTranslateMonthlyLimit(supabaseAdmin, businessId);
+  const envName = {
+    ad_generation: "AI_MONTHLY_LIMIT",
+    compose_offer: "AI_MONTHLY_LIMIT",
+    deal_copy: "AI_COPY_MONTHLY_LIMIT",
+    deal_suggestions: "AI_INSIGHTS_MONTHLY_LIMIT",
+    deal_translate: "AI_TRANSLATE_MONTHLY_LIMIT",
+  }[scope];
+  const value = Number(Deno.env.get(envName) ?? "30");
+  return Number.isFinite(value) && value > 0 ? value : 30;
+}
+
+async function aiQuotaSummaryForBusiness(supabaseAdmin: any, businessId: string) {
+  let maxUsed = 0;
+  let limitForMax = 0;
+  for (const scope of AI_QUOTA_SCOPES) {
+    const counted = await countAiQuotaUsage(supabaseAdmin, { businessId, scope });
+    const limit = await quotaLimitForScope(scope, supabaseAdmin, businessId);
+    if (counted.used > maxUsed || (counted.used === maxUsed && limit > limitForMax)) {
+      maxUsed = counted.used;
+      limitForMax = limit;
+    }
+  }
+  const ratio = limitForMax > 0 ? maxUsed / limitForMax : 0;
+  return {
+    used: maxUsed,
+    limit: limitForMax,
+    risk: ratio >= 0.8 ? "high" : ratio >= 0.6 ? "watch" : "normal",
+  };
+}
+
+async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<string, unknown>>> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const [
+    businessesResult,
+    dealsResult,
+    claimsResult,
+    redemptionsResult,
+    applicationsResult,
+    subscriptionsResult,
+    costResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("businesses")
+      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabaseAdmin
+      .from("deals")
+      .select("id,business_id,is_active,start_time,end_time,created_at")
+      .gte("created_at", new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString())
+      .limit(10000),
+    supabaseAdmin
+      .from("deal_claims")
+      .select("id,business_id,deal_id,claim_status,created_at")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .limit(10000),
+    supabaseAdmin
+      .from("admin_redemption_facts_v1")
+      .select("claim_id,business_id,deal_id,redeemed_at")
+      .limit(10000),
+    supabaseAdmin
+      .from("business_applications")
+      .select("business_id,status,created_at,email")
+      .in("status", ["pending_review", "pending_verification", "review_required"])
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("business_id,app_access_status,trial_end,current_period_end,updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(1000),
+    supabaseAdmin
+      .from("ai_generation_costs")
+      .select("business_id,estimated_cost_usd")
+      .gte("created_at", new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString())
+      .limit(10000),
+  ]);
+
+  if (businessesResult.error) throw businessesResult.error;
+  if (dealsResult.error) throw dealsResult.error;
+  if (claimsResult.error) throw claimsResult.error;
+  if (redemptionsResult.error) throw redemptionsResult.error;
+  if (applicationsResult.error) throw applicationsResult.error;
+  if (subscriptionsResult.error) throw subscriptionsResult.error;
+
+  const businesses = (businessesResult.data ?? []) as Array<Record<string, unknown>>;
+  const businessIds = businesses.map((row) => String(row.id)).filter(Boolean);
+  const ownerEmails = await ownerEmailsForBusinesses(supabaseAdmin, businessIds);
+
+  const stats = new Map<string, {
+    liveOfferCount: number;
+    activeOrScheduledOfferCount: number;
+    lastOfferAt: string | null;
+    claims7d: number;
+    claims30d: number;
+    unredeemedClaims30d: number;
+    redemptions7d: number;
+    redemptions30d: number;
+    lastRedeemedAt: string | null;
+    firstRedeemedAt: string | null;
+    aiMonthCostUsd: number;
+  }>();
+  for (const id of businessIds) {
+    stats.set(id, {
+      liveOfferCount: 0,
+      activeOrScheduledOfferCount: 0,
+      lastOfferAt: null,
+      claims7d: 0,
+      claims30d: 0,
+      unredeemedClaims30d: 0,
+      redemptions7d: 0,
+      redemptions30d: 0,
+      lastRedeemedAt: null,
+      firstRedeemedAt: null,
+      aiMonthCostUsd: 0,
+    });
+  }
+
+  const dealToBusiness = new Map<string, string>();
+  for (const deal of (dealsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(deal.business_id ?? "");
+    const dealId = String(deal.id ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    if (dealId) dealToBusiness.set(dealId, businessId);
+    const row = stats.get(businessId)!;
+    const end = dateOrNull(deal.end_time);
+    const start = dateOrNull(deal.start_time);
+    const isCurrent = deal.is_active === true && (!end || end.getTime() > now.getTime());
+    const isScheduled = deal.is_active === true && start !== null && start.getTime() > now.getTime();
+    if (isCurrent) row.liveOfferCount += 1;
+    if (isCurrent || isScheduled) row.activeOrScheduledOfferCount += 1;
+    row.lastOfferAt = latestIso(row.lastOfferAt, deal.created_at || deal.start_time);
+  }
+
+  for (const claim of (claimsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(claim.business_id ?? dealToBusiness.get(String(claim.deal_id ?? "")) ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    const createdAt = dateOrNull(claim.created_at);
+    if (!createdAt) continue;
+    const row = stats.get(businessId)!;
+    row.claims30d += 1;
+    if (createdAt.getTime() >= sevenDaysAgo.getTime()) row.claims7d += 1;
+    if (claim.claim_status !== "redeemed") row.unredeemedClaims30d += 1;
+  }
+
+  for (const redemption of (redemptionsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(redemption.business_id ?? dealToBusiness.get(String(redemption.deal_id ?? "")) ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    const redeemedAt = dateOrNull(redemption.redeemed_at);
+    if (!redeemedAt) continue;
+    const row = stats.get(businessId)!;
+    row.firstRedeemedAt = earliestIso(row.firstRedeemedAt, redemption.redeemed_at);
+    row.lastRedeemedAt = latestIso(row.lastRedeemedAt, redemption.redeemed_at);
+    if (redeemedAt.getTime() >= thirtyDaysAgo.getTime()) row.redemptions30d += 1;
+    if (redeemedAt.getTime() >= sevenDaysAgo.getTime()) row.redemptions7d += 1;
+  }
+
+  if (!costResult.error) {
+    for (const cost of (costResult.data ?? []) as Array<Record<string, unknown>>) {
+      const businessId = String(cost.business_id ?? "");
+      if (!businessId || !stats.has(businessId)) continue;
+      stats.get(businessId)!.aiMonthCostUsd += Number(cost.estimated_cost_usd) || 0;
+    }
+  }
+
+  const applicationByBusiness = latestById((applicationsResult.data ?? []) as Array<Record<string, unknown>>, "business_id");
+  const subscriptionByBusiness = latestById((subscriptionsResult.data ?? []) as Array<Record<string, unknown>>, "business_id");
+  const rows = await Promise.all(businesses.map(async (business) => {
+    const businessId = String(business.id);
+    const row = stats.get(businessId)!;
+    const application = applicationByBusiness.get(businessId) ?? null;
+    const subscription = subscriptionByBusiness.get(businessId) ?? null;
+    const trialEnd = latestIso(null, subscription?.trial_end || subscription?.current_period_end);
+    const trialDaysRemaining = daysUntil(trialEnd, now);
+    const activeTrial = subscription?.app_access_status === "trialing" || subscription?.app_access_status === "trial_limited";
+    const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
+
+    const reasonCodes: string[] = [];
+    let attentionScore = 0;
+    if (row.liveOfferCount > 0 && row.redemptions30d === 0) {
+      attentionScore += 45;
+      reasonCodes.push("live_offers_no_redemptions");
+    }
+    if (row.claims30d > 0 && row.redemptions30d === 0) {
+      attentionScore += 40;
+      reasonCodes.push("claims_no_redemptions");
+    }
+    if (application) {
+      attentionScore += 35;
+      reasonCodes.push("pending_trial_request");
+    }
+    if (activeTrial && trialDaysRemaining !== null && trialDaysRemaining >= 0 && trialDaysRemaining <= 7) {
+      attentionScore += 30;
+      reasonCodes.push("trial_ending_soon");
+    }
+    const status = String(business.status ?? "");
+    const noRecentOffers = (status === "active" || status === "trialing" || status === "limited_trial") &&
+      (!row.lastOfferAt || (dateOrNull(row.lastOfferAt)?.getTime() ?? 0) < fourteenDaysAgo.getTime());
+    if (noRecentOffers) {
+      attentionScore += 25;
+      reasonCodes.push("no_recent_offers");
+    }
+    if (quota.risk === "high") {
+      attentionScore += 20;
+      reasonCodes.push("ai_quota_high");
+    }
+    if (row.aiMonthCostUsd >= 10) {
+      attentionScore += 15;
+      reasonCodes.push("ai_cost_high");
+    }
+    const recentRedemption = (dateOrNull(row.lastRedeemedAt)?.getTime() ?? 0) >= fortyEightHoursAgo.getTime();
+    if (recentRedemption) attentionScore = Math.max(0, attentionScore - 20);
+
+    const firstRedemptionRecent = (dateOrNull(row.firstRedeemedAt)?.getTime() ?? 0) >= sevenDaysAgo.getTime();
+    const isCelebrate = row.redemptions7d >= 3 || firstRedemptionRecent;
+    const healthLabel = isCelebrate
+      ? "celebrate"
+      : attentionScore >= 45
+        ? "needs_attention"
+        : attentionScore > 0
+          ? "watch"
+          : "healthy";
+    const primaryReason = reasonCodes.includes("live_offers_no_redemptions")
+      ? "Live offers have no recent redemptions"
+      : reasonCodes.includes("claims_no_redemptions")
+        ? "Claims are not turning into redemptions"
+        : reasonCodes.includes("pending_trial_request")
+          ? "Trial request is waiting for review"
+          : reasonCodes.includes("trial_ending_soon")
+            ? "Active trial is nearing expiration"
+            : reasonCodes.includes("no_recent_offers")
+              ? "No recent offers are available"
+              : reasonCodes.includes("ai_quota_high")
+                ? "AI usage is close to quota"
+                : isCelebrate
+                  ? "Recent redemption activity is worth celebrating"
+                  : "No business health issues found";
+
+    return {
+      business_id: businessId,
+      business_name: business.name ?? businessId,
+      owner_email: ownerEmails.get(businessId) ?? null,
+      status: business.status ?? null,
+      access_level: business.access_level ?? null,
+      verification_status: business.verification_status ?? null,
+      risk_level: business.risk_level ?? null,
+      live_offer_count: row.liveOfferCount,
+      active_or_scheduled_offer_count: row.activeOrScheduledOfferCount,
+      last_offer_at: row.lastOfferAt,
+      days_since_last_offer: daysBetween(row.lastOfferAt, now),
+      claims_7d: row.claims7d,
+      claims_30d: row.claims30d,
+      unredeemed_claims_30d: row.unredeemedClaims30d,
+      redemptions_7d: row.redemptions7d,
+      redemptions_30d: row.redemptions30d,
+      last_redeemed_at: row.lastRedeemedAt,
+      claim_to_redemption_rate_30d: rate(row.redemptions30d, row.claims30d),
+      trial_request_status: application?.status ?? null,
+      trial_request_created_at: application?.created_at ?? null,
+      trial_app_access_status: subscription?.app_access_status ?? null,
+      trial_ends_at: trialEnd,
+      trial_days_remaining: trialDaysRemaining,
+      ai_month_used_max: quota.used,
+      ai_month_limit_for_max: quota.limit,
+      ai_quota_risk: quota.risk,
+      ai_month_cost_usd: Number(row.aiMonthCostUsd.toFixed(6)),
+      health_label: healthLabel,
+      primary_reason: primaryReason,
+      reason_codes: reasonCodes,
+      attention_score: attentionScore,
+      suggested_read_only_action: isCelebrate
+        ? "Celebrate recent redemption momentum"
+        : attentionScore > 0
+          ? "Review offer performance and merchant setup"
+          : "Monitor current business activity",
+    };
+  }));
+
+  return rows
+    .filter((row) => row.health_label !== "healthy" || Number(row.attention_score) > 0)
+    .sort((left, right) => {
+      const scoreDiff = Number(right.attention_score) - Number(left.attention_score);
+      if (scoreDiff) return scoreDiff;
+      const leftTrial = left.trial_days_remaining === null || left.trial_days_remaining === undefined
+        ? Number.POSITIVE_INFINITY
+        : Number(left.trial_days_remaining);
+      const rightTrial = right.trial_days_remaining === null || right.trial_days_remaining === undefined
+        ? Number.POSITIVE_INFINITY
+        : Number(right.trial_days_remaining);
+      if (leftTrial !== rightTrial) return leftTrial - rightTrial;
+      return (dateOrNull(right.last_redeemed_at)?.getTime() ?? 0) -
+        (dateOrNull(left.last_redeemed_at)?.getTime() ?? 0);
+    })
+    .slice(0, 50);
 }
 
 // Read-only per-tab data for the admin site. Every view is audited; mutations
@@ -772,6 +1118,15 @@ serve(async (req) => {
       .limit(8);
     if (auditError) throw auditError;
 
+    let businessHealth: Array<Record<string, unknown>> = [];
+    let businessHealthError: string | null = null;
+    try {
+      businessHealth = await loadBusinessHealthRows(supabaseAdmin);
+    } catch (healthErr) {
+      businessHealthError = "Business health could not be loaded.";
+      console.warn("[admin-dashboard-summary] business health error:", healthErr);
+    }
+
     await supabaseAdmin.from("admin_audit_log").insert({
       admin_user_id: user.id,
       admin_email: adminUser.email ?? user.email ?? null,
@@ -835,6 +1190,8 @@ serve(async (req) => {
           acceptedClaimLinksThisMonth: acceptedClaimLinks,
         },
       },
+      businessHealth,
+      businessHealthError,
       recentApplications: recentApplications ?? [],
       recentAudit: recentAudit ?? [],
     });

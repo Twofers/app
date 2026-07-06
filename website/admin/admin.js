@@ -13,6 +13,8 @@
   const aiBusinessSelect = document.querySelector("[data-ai-business-select]");
   const aiUsageBody = document.querySelector("[data-ai-usage-body]");
   const aiResetButton = document.querySelector("[data-ai-reset-button]");
+  const businessHealthBody = document.querySelector("[data-business-health-body]");
+  const businessHealthWarning = document.querySelector("[data-business-health-warning]");
   let latestAiUsage = null;
 
   function sessionStorageSource() {
@@ -155,6 +157,41 @@
     return `${Math.round((top / bottom) * 100)}%`;
   }
 
+  function healthLabel(value) {
+    return {
+      needs_attention: "Needs attention",
+      watch: "Watch",
+      healthy: "Healthy",
+      celebrate: "Celebrate",
+    }[value] || "Watch";
+  }
+
+  function healthTone(value) {
+    return {
+      needs_attention: "danger",
+      watch: "warning",
+      healthy: "success",
+      celebrate: "success",
+    }[value] || "info";
+  }
+
+  function formatNullableNumber(value, fallback = "") {
+    const number = Number(value);
+    return Number.isFinite(number) ? String(number) : fallback;
+  }
+
+  function formatTrialDays(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "";
+    if (number < 0) return "Expired";
+    if (number === 0) return "Ends today";
+    return `${number}d left`;
+  }
+
+  function formatAiRisk(value) {
+    return value === "high" ? "High" : value === "watch" ? "Watch" : "";
+  }
+
   function quotaLabel(scope) {
     return {
       ad_generation: "AI ad generation",
@@ -255,6 +292,69 @@
         }
         aiUsageBody.appendChild(tr);
       }
+    }
+  }
+
+  function fillBusinessHealthRows(rows, errorMessage) {
+    if (businessHealthWarning) {
+      businessHealthWarning.hidden = !errorMessage;
+      businessHealthWarning.textContent = errorMessage || "";
+    }
+    if (!businessHealthBody) return;
+    businessHealthBody.innerHTML = "";
+    if (errorMessage) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 9;
+      td.className = "admin-row-detail";
+      td.textContent = "Business health is temporarily unavailable. The rest of the dashboard is still loaded.";
+      tr.appendChild(td);
+      businessHealthBody.appendChild(tr);
+      return;
+    }
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 9;
+      td.className = "admin-row-detail";
+      td.textContent = "No business health issues found from current data.";
+      tr.appendChild(td);
+      businessHealthBody.appendChild(tr);
+      return;
+    }
+    const labels = ["Business", "Health", "Reason", "Live offers", "Claims 30d", "Redemptions 30d", "Trial", "AI", "Action"];
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+      const cells = [
+        row.business_name || row.business_id || "Unknown",
+        { badge: healthLabel(row.health_label), tone: healthTone(row.health_label) },
+        row.primary_reason || "",
+        formatNullableNumber(row.live_offer_count, "0"),
+        formatNullableNumber(row.claims_30d, "0"),
+        formatNullableNumber(row.redemptions_30d, "0"),
+        formatTrialDays(row.trial_days_remaining),
+        formatAiRisk(row.ai_quota_risk),
+        { href: row.business_id ? `/admin/businesses/${row.business_id}` : "/admin/businesses", text: row.suggested_read_only_action || "View business" },
+      ];
+      for (const [index, value] of cells.entries()) {
+        const td = document.createElement("td");
+        td.dataset.label = labels[index] || "";
+        if (value && typeof value === "object" && "badge" in value) {
+          const badge = document.createElement("span");
+          badge.className = `admin-badge ${value.tone || "info"}`;
+          badge.textContent = value.badge;
+          td.appendChild(badge);
+        } else if (value && typeof value === "object" && value.href) {
+          const link = document.createElement("a");
+          link.href = value.href;
+          link.textContent = value.text;
+          td.appendChild(link);
+        } else {
+          td.textContent = String(value ?? "");
+        }
+        tr.appendChild(td);
+      }
+      businessHealthBody.appendChild(tr);
     }
   }
 
@@ -401,18 +501,23 @@
       setMetric("prospects.open", s.prospects?.open ?? 0);
       setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
       setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
+      const businessHealthRows = payload.businessHealth || [];
+      const businessHealthAttention = businessHealthRows.filter((row) => row.health_label === "needs_attention").length;
       setMetric(
         "businesses.needingAttention",
-        (s.businesses?.pendingVerification ?? 0) +
-          (s.businesses?.trialsEndingSoon ?? 0) +
-          (s.billing?.pastDueBusinesses ?? 0) +
-          (s.offers?.needsReview ?? 0),
+        businessHealthAttention ||
+          ((s.businesses?.pendingVerification ?? 0) +
+            (s.businesses?.trialsEndingSoon ?? 0) +
+            (s.billing?.pastDueBusinesses ?? 0) +
+            (s.offers?.needsReview ?? 0)),
       );
 
       fillRows("[data-applications-body]", payload.recentApplications || [], "No recent trial requests.");
       fillRows("[data-audit-body]", payload.recentAudit || [], "No recent audit events.");
+      fillBusinessHealthRows(businessHealthRows, payload.businessHealthError || "");
     } catch {
       setStatus("Could not load admin summary", "danger");
+      fillBusinessHealthRows([], "Business health could not be loaded.");
     }
   }
 

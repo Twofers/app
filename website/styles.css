@@ -1388,6 +1388,16 @@ main.content-page {
   justify-self: start;
 }
 
+.admin-health-placeholder .status {
+  margin: 0;
+}
+
+.admin-health-placeholder .admin-table td:nth-child(3),
+.admin-health-placeholder .admin-table td:nth-child(9) {
+  max-width: 220px;
+  white-space: normal;
+}
+
 .admin-manage-panel {
   padding: 0;
 }
