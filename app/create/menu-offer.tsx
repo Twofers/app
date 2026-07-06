@@ -298,16 +298,16 @@ export default function MenuOfferScreen() {
 
   if (bizLoading || locLoading) {
     return (
-      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
 
   if (!businessId) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal }}>
-        <Text>{t("menuScan.needBusiness")}</Text>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+        <Text style={{ color: theme.text }}>{t("menuScan.needBusiness")}</Text>
       </View>
     );
   }
@@ -317,6 +317,10 @@ export default function MenuOfferScreen() {
     { id: "bogo_pair", label: t("menuOffer.pairBogo") },
     { id: "percent_off", label: t("menuOffer.pairPercent") },
   ];
+  const headingTextStyle = { color: theme.text, fontWeight: "700" as const, fontSize: 16 };
+  const labelTextStyle = { color: theme.text, fontWeight: "600" as const };
+  const cardTitleTextStyle = { color: theme.text, fontWeight: "700" as const };
+  const mutedTextStyle = { color: theme.mutedText };
 
   function sizesFor(item: DbMenuItem): string[] {
     return Array.isArray(item.size_options) ? item.size_options.filter((s) => s.trim().length > 0) : [];
@@ -360,9 +364,9 @@ export default function MenuOfferScreen() {
   }
 
   return (
-    <KeyboardScreen>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={{
           paddingHorizontal: horizontal,
           paddingTop: Spacing.xxxl,
@@ -377,8 +381,8 @@ export default function MenuOfferScreen() {
 
       {step === "location" && locationFlow === "setup" ? (
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.locationSetupTitle")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("menuOffer.locationSetupBody")}</Text>
+          <Text style={headingTextStyle}>{t("menuOffer.locationSetupTitle")}</Text>
+          <Text style={[mutedTextStyle, { lineHeight: 20 }]}>{t("menuOffer.locationSetupBody")}</Text>
           <PrimaryButton
             title={t("menuOffer.locationSetupCta")}
             onPress={() => router.push("/business-setup" as Href)}
@@ -388,8 +392,8 @@ export default function MenuOfferScreen() {
 
       {step === "location" && locationFlow === "select" ? (
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepLocation")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("menuOffer.locationHelp")}</Text>
+          <Text style={headingTextStyle}>{t("menuOffer.stepLocation")}</Text>
+          <Text style={[mutedTextStyle, { lineHeight: 20 }]}>{t("menuOffer.locationHelp")}</Text>
           {visibleLocations.map((loc) => (
             <Pressable
               key={loc.id}
@@ -402,8 +406,8 @@ export default function MenuOfferScreen() {
                 backgroundColor: theme.surface,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>{loc.name}</Text>
-              <Text style={{ opacity: 0.65, marginTop: 4 }}>{loc.address}</Text>
+              <Text style={cardTitleTextStyle}>{loc.name}</Text>
+              <Text style={[mutedTextStyle, { marginTop: 4 }]}>{loc.address}</Text>
             </Pressable>
           ))}
           {subscriptionTier === "premium" && visibleLocations.length > 1 ? (
@@ -416,7 +420,7 @@ export default function MenuOfferScreen() {
                   gap: Spacing.md,
                 }}
               >
-                <Text style={{ flex: 1, fontWeight: "600" }}>{t("menuOffer.multiLocationToggle")}</Text>
+                <Text style={[labelTextStyle, { flex: 1 }]}>{t("menuOffer.multiLocationToggle")}</Text>
                 <BrandedSwitch
                   value={applyMultiLocation}
                   onValueChange={setApplyMultiLocation}
@@ -450,7 +454,7 @@ export default function MenuOfferScreen() {
                           backgroundColor: theme.surface,
                         }}
                       >
-                        <Text style={{ fontWeight: "600" }}>{loc.name}</Text>
+                        <Text style={labelTextStyle}>{loc.name}</Text>
                       </Pressable>
                     ))
                 : null}
@@ -474,7 +478,7 @@ export default function MenuOfferScreen() {
 
       {step === "main" && items.length > 0 ? (
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepMain")}</Text>
+          <Text style={headingTextStyle}>{t("menuOffer.stepMain")}</Text>
           {items.map((item) => (
               <Pressable
                 key={item.id}
@@ -494,9 +498,9 @@ export default function MenuOfferScreen() {
                   backgroundColor: theme.surface,
                 }}
               >
-                <Text style={{ fontWeight: "700" }}>{item.name}</Text>
+                <Text style={cardTitleTextStyle}>{item.name}</Text>
                 {item.price_text ? (
-                  <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
+                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{item.price_text}</Text>
                 ) : null}
                 {renderSizeChips({
                   item,
@@ -517,7 +521,7 @@ export default function MenuOfferScreen() {
 
       {step === "paired" && mainItem ? (
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepPaired")}</Text>
+          <Text style={headingTextStyle}>{t("menuOffer.stepPaired")}</Text>
           <SecondaryButton
             title={t("menuOffer.skipPaired")}
             onPress={() => {
@@ -552,9 +556,9 @@ export default function MenuOfferScreen() {
                   backgroundColor: theme.surface,
                 }}
               >
-                <Text style={{ fontWeight: "700" }}>{item.name}</Text>
+                <Text style={cardTitleTextStyle}>{item.name}</Text>
                 {item.price_text ? (
-                  <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
+                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{item.price_text}</Text>
                 ) : null}
                 {renderSizeChips({
                   item,
@@ -573,7 +577,7 @@ export default function MenuOfferScreen() {
 
       {step === "pairing" && mainItem ? (
         <View style={{ gap: Spacing.md }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepPairing")}</Text>
+          <Text style={headingTextStyle}>{t("menuOffer.stepPairing")}</Text>
           {pairingOptions.map((opt) => (
             <Pressable
               key={opt.id}
@@ -586,12 +590,12 @@ export default function MenuOfferScreen() {
                 backgroundColor: theme.surface,
               }}
             >
-              <Text style={{ fontWeight: "600" }}>{opt.label}</Text>
+              <Text style={labelTextStyle}>{opt.label}</Text>
             </Pressable>
           ))}
           {pairingType === "percent_off" ? (
             <View style={{ gap: Spacing.sm }}>
-              <Text style={{ fontWeight: "600" }}>{t("menuOffer.percentOffLabel")}</Text>
+              <Text style={labelTextStyle}>{t("menuOffer.percentOffLabel")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
                 {[40, 50, 75].map((p) => (
                   <Pressable
@@ -606,7 +610,7 @@ export default function MenuOfferScreen() {
                       backgroundColor: theme.surface,
                     }}
                   >
-                    <Text style={{ fontWeight: "600" }}>{p}%</Text>
+                    <Text style={labelTextStyle}>{p}%</Text>
                   </Pressable>
                 ))}
               </View>
@@ -614,7 +618,7 @@ export default function MenuOfferScreen() {
           ) : null}
           {pairingType === "fixed_price_special" ? (
             <View>
-              <Text style={{ fontWeight: "600" }}>{t("menuOffer.fixedPriceLabel")}</Text>
+              <Text style={labelTextStyle}>{t("menuOffer.fixedPriceLabel")}</Text>
               <TextInput
                 value={fixedPriceText}
                 onChangeText={(value) => setFixedPriceText(sanitizeDecimalInput(value))}
@@ -622,6 +626,7 @@ export default function MenuOfferScreen() {
                 inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                 returnKeyType="done"
                 placeholder={t("menuOffer.fixedPricePlaceholder")}
+                placeholderTextColor={theme.inputPlaceholder}
                 style={{
                   borderWidth: 1,
                   borderColor: theme.border,
@@ -630,6 +635,7 @@ export default function MenuOfferScreen() {
                   marginTop: 6,
                   fontSize: 16,
                   backgroundColor: theme.surface,
+                  color: theme.inputText,
                 }}
               />
             </View>
@@ -651,11 +657,11 @@ export default function MenuOfferScreen() {
               gap: Spacing.md,
             }}
           >
-            <Text style={{ fontSize: 20, fontWeight: "800" }}>{t("menuOffer.generateStrongHeadline")}</Text>
-            <Text style={{ opacity: 0.88, fontSize: 16, fontWeight: "600" }}>
+            <Text style={{ color: theme.text, fontSize: 20, fontWeight: "800" }}>{t("menuOffer.generateStrongHeadline")}</Text>
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600", lineHeight: 22 }}>
               {buildOfferHintText(structuredOffer)}
             </Text>
-            <Text style={{ opacity: 0.72, fontSize: 14 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
+            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
             <PrimaryButton
               title={t("menuOffer.generateStrongVariants")}
               onPress={goToAdCreation}
