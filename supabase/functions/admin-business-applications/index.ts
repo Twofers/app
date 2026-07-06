@@ -37,11 +37,14 @@ type Payload = {
   action?: unknown;
   status?: unknown;
   application_id?: unknown;
+  business_id?: unknown;
   decision?: unknown;
   reason?: unknown;
 };
 
 type DecisionKey = "approve_limited" | "approve_full" | "review_required" | "waitlist" | "reject";
+
+type VerificationDecision = "verify" | "reject" | "needs_more_info";
 
 type DecisionConfig = {
   status: string;
@@ -576,6 +579,71 @@ async function decideApplication(req: Request, ctx: AdminContext, payload: Paylo
   return applyDecision(req, ctx, applicationData as Record<string, unknown>, payload.decision, payload.reason);
 }
 
+function isVerificationDecision(value: unknown): value is VerificationDecision {
+  return value === "verify" || value === "reject" || value === "needs_more_info";
+}
+
+function verificationStatusFor(decision: VerificationDecision): string {
+  return {
+    verify: "manual_verified",
+    reject: "failed",
+    needs_more_info: "needs_more_info",
+  }[decision];
+}
+
+// Manual verification independent of the trial-request pipeline: lets an admin
+// flip a business's verification_status directly from the Businesses page,
+// for businesses that already exist outside an open application decision.
+async function verifyBusiness(req: Request, ctx: AdminContext, payload: Payload) {
+  if (!canDecideApplications(ctx.adminUser.role)) {
+    return json(req, { error: "This admin role cannot change business verification." }, 403);
+  }
+
+  const businessId = cleanString(payload.business_id, 80);
+  if (!UUID_RE.test(businessId) || !isVerificationDecision(payload.decision)) {
+    return json(req, { error: "Business and decision are required." }, 400);
+  }
+
+  const { data: business, error: businessError } = await ctx.supabaseAdmin
+    .from("businesses")
+    .select("id,verification_status")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (businessError) throw businessError;
+  if (!business) return json(req, { error: "Business not found." }, 404);
+
+  const nextStatus = verificationStatusFor(payload.decision);
+  const reason = cleanBusinessString(payload.reason, 500) ?? "";
+  const adminEmail = ctx.adminUser.email ?? ctx.user.email ?? null;
+
+  const { data: updated, error: updateError } = await ctx.supabaseAdmin
+    .from("businesses")
+    .update({ verification_status: nextStatus })
+    .eq("id", businessId)
+    .select("id,verification_status")
+    .single();
+  if (updateError) throw updateError;
+
+  await ctx.supabaseAdmin.from("admin_audit_log").insert({
+    admin_user_id: ctx.user.id,
+    admin_email: adminEmail,
+    action: `admin_business_verification_${payload.decision}`,
+    target_type: "business",
+    target_id: businessId,
+    business_id: businessId,
+    before_value: { verification_status: business.verification_status },
+    after_value: { verification_status: nextStatus },
+    reason: reason || payload.decision,
+    request_id: ctx.requestId,
+  });
+
+  return json(req, {
+    ok: true,
+    request_id: ctx.requestId,
+    business: updated,
+  });
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // Founder field invite: Dan signs a business up in person from /admin/businesses/new.
@@ -665,6 +733,9 @@ Deno.serve(async (req) => {
     if (action === "create") {
       return createApplication(req, adminContext, payload);
     }
+    if (action === "verify_business") {
+      return verifyBusiness(req, adminContext, payload);
+    }
     return listApplications(req, adminContext, payload);
   } catch (err) {
     console.error("[admin-business-applications] error:", err);
@@ -672,6 +743,8 @@ Deno.serve(async (req) => {
       ? "Failed to save trial decision."
       : action === "create"
       ? "Failed to create business trial."
+      : action === "verify_business"
+      ? "Failed to save verification decision."
       : "Failed to load trial requests.";
     return json(req, { error, request_id: requestId }, 500);
   }

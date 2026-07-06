@@ -323,6 +323,8 @@
       return;
     }
     if (decision === "reject" && !window.confirm("Reject this business request?")) return;
+    if (decision === "approve_limited" && !window.confirm("Approve this business for limited trial access?")) return;
+    if (decision === "approve_full" && !window.confirm("Approve this business for full trial access?")) return;
     button.disabled = true;
     setTrialStatus("Saving decision...");
     try {

@@ -546,7 +546,12 @@
       ],
       columns: [
         { label: "Offer", value: (r) => r.title || r.id },
-        { label: "Business", value: (r) => r.business_name || r.business_id || "" },
+        {
+          label: "Business",
+          value: (r) => r.business_id
+            ? { href: `/admin/businesses/${r.business_id}`, text: r.business_name || r.business_id }
+            : (r.business_name || ""),
+        },
         { label: "Status", value: (r) => offerStatusBadge(r.effective_status) },
         { label: "Starts", value: (r) => formatDateTime(r.start_time) },
         { label: "Ends", value: (r) => formatDateTime(r.end_time) },

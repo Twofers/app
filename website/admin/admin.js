@@ -445,6 +445,9 @@
       setAiStatus("Load an owner and choose a business/quota first.", "danger");
       return;
     }
+    if (!window.confirm(`Reset ${quotaLabel(quotaScope)} for the selected business? This clears this month's counted usage and cannot be undone.`)) {
+      return;
+    }
 
     setAiStatus("Resetting selected quota...");
     const payload = await adminPost(aiUsageEndpoint, {
