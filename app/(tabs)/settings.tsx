@@ -785,10 +785,10 @@ export default function SettingsScreen() {
         ) : null}
 
         {isDebugPanelEnabled() ? (
-          <PrimaryButton
+          <SecondaryButton
             title="Diagnostics (build / env)"
             onPress={() => router.push("/debug-diagnostics")}
-            style={{ marginTop: Spacing.md, backgroundColor: "#222" }}
+            style={{ marginTop: Spacing.md }}
           />
         ) : null}
         </>

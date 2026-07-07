@@ -1,6 +1,7 @@
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Modal,
   Platform,
   ScrollView,
@@ -1738,10 +1739,42 @@ export default function AiDealScreen() {
   );
   const dealDraftDirty = dealIdFromRoute ? editFormDirty : composeDirty;
 
+  // Android hardware back bypasses usePreventRemove on this screen, so it could
+  // silently drop a dirty draft. Mirror the same discard guard for the hardware
+  // button; the ref lets a confirmed leave pass through usePreventRemove without
+  // showing the dialog a second time.
+  const hardwareBackConfirmedRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!dealDraftDirty || allowPostPublishNavigation || hardwareBackConfirmedRef.current) {
+        return false;
+      }
+      confirm({
+        iconName: "edit-off",
+        title: t("dealDraft.unsavedTitle"),
+        message: t("dealDraft.unsavedBody"),
+        confirmLabel: t("dealDraft.discard"),
+        onConfirm: () => {
+          hardwareBackConfirmedRef.current = true;
+          navigation.goBack();
+        },
+        cancelLabel: t("dealDraft.keepEditing"),
+      });
+      return true;
+    });
+    return () => subscription.remove();
+  }, [dealDraftDirty, allowPostPublishNavigation, confirm, navigation, t]);
+
   usePreventRemove(
     dealDraftDirty && !allowPostPublishNavigation,
     useCallback(
       ({ data }) => {
+        if (hardwareBackConfirmedRef.current) {
+          hardwareBackConfirmedRef.current = false;
+          navigation.dispatch(data.action);
+          return;
+        }
         confirm({
           iconName: "edit-off",
           title: t("dealDraft.unsavedTitle"),
@@ -5330,6 +5363,9 @@ export default function AiDealScreen() {
                             }, 80);
                           }}
                         />
+                        {/* The poster look is fixed to one template, so cycling composed
+                            presentations changes nothing visible — hide the button there. */}
+                        {showPosterPreview ? null : (
                         <SecondaryButton
                           title={t("createAi.composedTryAnotherStyle", { defaultValue: "Try another style" })}
                           onPress={() => {
@@ -5359,6 +5395,7 @@ export default function AiDealScreen() {
                           }}
                           disabled={!canTryComposedStyle}
                         />
+                        )}
                       </View>
                     ) : null}
                   </>

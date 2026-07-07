@@ -40,6 +40,7 @@ import {
 } from "@/lib/consumer-feed-visibility";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
+import { compactLocationLabel } from "@/lib/display-format";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import {
@@ -1351,7 +1352,7 @@ export default function HomeScreen() {
       return (
         <BusinessRowCard
           name={b.name}
-          address={b.location}
+          address={compactLocationLabel(b.location)}
           hasLiveDeal={liveDealIds.has(b.id)}
           isFavorite={favoriteBusinessIds.includes(b.id)}
           distanceLabel={distanceLabel}

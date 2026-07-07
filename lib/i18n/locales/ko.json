@@ -12,9 +12,6 @@
     "billing": "결제",
     "account": "계정"
   },
-  "emptyState": {
-    "encouragement": "걱정 마세요. 곧 더 많은 딜이 올라올 거예요."
-  },
   "profileCompleteness": {
     "incomplete": "{{percentage}}% 완료",
     "complete": "100% 완료"
@@ -231,7 +228,8 @@
     "phone": "전화",
     "notProvided": "없음",
     "liveDeal": "현재 라이브 딜",
-    "noLiveDeal": "지금 라이브 딜이 없습니다. 나중에 다시 보거나 즐겨찾기로 알림을 받아 보세요."
+    "noLiveDeal": "지금 라이브 딜이 없습니다. 나중에 다시 보거나 즐겨찾기로 알림을 받아 보세요.",
+    "noLiveDealSaved": "지금 라이브 딜이 없습니다. 새 딜이 올라오면 알려 드릴게요."
   },
   "pushTemplates": {
     "weeklyDigestTitle": "주변 새 딜",
@@ -475,7 +473,7 @@
     "errLngNumber": "경도는 숫자여야 합니다.",
     "errLatRange": "위도는 -90에서 90 사이여야 합니다.",
     "errLngRange": "경도는 -180에서 180 사이여야 합니다.",
-    "bizCardTitle": "나의 카페",
+    "bizCardTitle": "내 비즈니스",
     "bizSignInToContinue": "로그인하여 초기 설정을 완료하고 첫 딜을 시작하세요.",
     "bizYourBusiness": "내 비즈니스",
     "bizNoAddress": "아직 주소가 없습니다.",

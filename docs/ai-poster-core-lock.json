@@ -21,10 +21,10 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "ca548909b5e6b460462a458c35e9a3d91187606051854c1f2e2b4ca941a99f38",
+      "sha256": "53a1d1e313e10c493b43d1df37906a324ddf2ba82d9115a4552d045974460bcf",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on."
+      "approvalRef": "2026-07-07 chat approval: hide the no-op Try another style button for poster previews and route Android hardware back through the existing discard guard",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently; no generation, template, copy, or publish logic changed."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",

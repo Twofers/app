@@ -12,9 +12,6 @@
     "billing": "Billing",
     "account": "Account"
   },
-  "emptyState": {
-    "encouragement": "No worries — more deals will pop up soon."
-  },
   "profileCompleteness": {
     "incomplete": "{{percentage}}% complete",
     "complete": "100% complete"
@@ -231,7 +228,8 @@
     "phone": "Phone",
     "notProvided": "Not listed",
     "liveDeal": "Current live deal",
-    "noLiveDeal": "No live deal right now. Save this shop to hear when one posts."
+    "noLiveDeal": "No live deal right now. Save this shop to hear when one posts.",
+    "noLiveDealSaved": "No live deal right now. You'll hear when one posts."
   },
   "pushTemplates": {
     "weeklyDigestTitle": "New deals near you",
@@ -478,7 +476,7 @@
     "errLngNumber": "Longitude must be a number.",
     "errLatRange": "Latitude must be between -90 and 90.",
     "errLngRange": "Longitude must be between -180 and 180.",
-    "bizCardTitle": "Your coffee shop",
+    "bizCardTitle": "Your business",
     "bizSignInToContinue": "Sign in to continue your one-time setup and launch your first deal.",
     "bizYourBusiness": "Your business",
     "bizNoAddress": "No address on file yet.",

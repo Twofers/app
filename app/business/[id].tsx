@@ -15,6 +15,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { formatPhoneLabel } from "@/lib/display-format";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
@@ -537,7 +538,7 @@ export default function BusinessProfileScreen() {
             <InfoRow
               icon="call"
               label={t("businessProfile.phone")}
-              value={biz.phone?.trim() ? biz.phone : t("businessProfile.notProvided")}
+              value={biz.phone?.trim() ? formatPhoneLabel(biz.phone) : t("businessProfile.notProvided")}
               theme={theme}
               onPress={biz.phone?.trim() ? dialPhone : undefined}
               emphasize={!!biz.phone?.trim()}
@@ -652,7 +653,7 @@ export default function BusinessProfileScreen() {
                 {t("dealStatus.noLiveDeal")}
               </Text>
               <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21, textAlign: "center" }}>
-                {t("businessProfile.noLiveDeal")}
+                {isFavorite ? t("businessProfile.noLiveDealSaved") : t("businessProfile.noLiveDeal")}
               </Text>
             </View>
           )}

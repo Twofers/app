@@ -67,6 +67,10 @@ if (__DEV__) {
     'Non-serializable values were found in the navigation state',
     'Each child in a list should have a unique "key" prop',
     '[billing-pricing]',
+    // supabase auth-js console.errors this internally when a stored refresh
+    // token has expired; AuthSessionProvider already signs out and routes to
+    // login, so the LogBox pill is pure noise on the login screen.
+    'Invalid Refresh Token',
   ]);
 }
 

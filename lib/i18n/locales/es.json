@@ -12,9 +12,6 @@
     "billing": "Facturación",
     "account": "Cuenta"
   },
-  "emptyState": {
-    "encouragement": "Sin preocupaciones: aparecerán más ofertas pronto."
-  },
   "profileCompleteness": {
     "incomplete": "{{percentage}}% completo",
     "complete": "100% completo"
@@ -231,7 +228,8 @@
     "phone": "Teléfono",
     "notProvided": "No indicado",
     "liveDeal": "Oferta en vivo actual",
-    "noLiveDeal": "Sin oferta en vivo ahora. Vuelve luego o guarda el negocio para alertas."
+    "noLiveDeal": "Sin oferta en vivo ahora. Vuelve luego o guarda el negocio para alertas.",
+    "noLiveDealSaved": "Sin oferta en vivo ahora. Te avisaremos cuando publique una."
   },
   "pushTemplates": {
     "weeklyDigestTitle": "Nuevas ofertas cerca de ti",
@@ -475,7 +473,7 @@
     "errLngNumber": "La longitud debe ser un número.",
     "errLatRange": "La latitud debe estar entre -90 y 90.",
     "errLngRange": "La longitud debe estar entre -180 y 180.",
-    "bizCardTitle": "Tu cafetería",
+    "bizCardTitle": "Tu negocio",
     "bizSignInToContinue": "Inicia sesión para completar tu configuración y lanzar tu primera oferta.",
     "bizYourBusiness": "Tu negocio",
     "bizNoAddress": "Aún no hay dirección.",

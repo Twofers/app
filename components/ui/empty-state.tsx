@@ -1,5 +1,4 @@
 import { Image, Pressable, Text, View } from "react-native";
-import { useTranslation } from "react-i18next";
 import { Colors, Controls, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -12,7 +11,6 @@ type EmptyStateProps = {
 };
 
 export function EmptyState({ title, message, actionLabel, onAction }: EmptyStateProps) {
-  const { t } = useTranslation();
   const colorScheme = useColorScheme() ?? "light";
   const c = Colors[colorScheme];
 
@@ -90,14 +88,6 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
             </Text>
           </Pressable>
         ) : null}
-
-        <Text
-          style={{ marginTop: 2, maxWidth: "100%", fontSize: 13, color: c.primary, opacity: 0.95, lineHeight: 18, textAlign: "center" }}
-          numberOfLines={2}
-          maxFontSizeMultiplier={1.15}
-        >
-          {t("emptyState.encouragement")}
-        </Text>
       </View>
     </View>
   );
