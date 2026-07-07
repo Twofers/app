@@ -507,6 +507,48 @@ li {
   font-weight: 760;
 }
 
+.launch-signup {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.launch-signup input[type="email"] {
+  min-height: 44px;
+  min-width: 0;
+  flex: 1 1 200px;
+  max-width: 320px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.launch-signup input[type="email"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(240 138 84 / 16%);
+  outline: none;
+}
+
+.launch-signup .status {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 14px;
+}
+
+.hero .launch-signup .status {
+  color: rgb(255 255 255 / 85%);
+}
+
+.hero .launch-signup .status.error {
+  color: #ffb4a8;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

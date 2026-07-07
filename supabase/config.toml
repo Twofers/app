@@ -530,6 +530,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/submit-business-application/index.ts"
 
+# Public pre-launch email capture from the website; no auth by design, guarded
+# by honeypot + per-IP rate limit inside the function.
+[functions.submit-launch-signup]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/submit-launch-signup/index.ts"
+
 [functions.admin-dashboard-summary]
 enabled = true
 verify_jwt = false

@@ -26,7 +26,7 @@
       ]
     },
     {
-      "source": "/admin/(.*)",
+      "source": "/admin(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -84,6 +84,16 @@
     }
   ],
   "redirects": [
+    {
+      "source": "/business",
+      "destination": "/business/start-trial",
+      "permanent": false
+    },
+    {
+      "source": "/business/",
+      "destination": "/business/start-trial",
+      "permanent": false
+    },
     {
       "source": "/admon",
       "destination": "/admin",

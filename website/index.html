@@ -6,7 +6,7 @@
     <title data-i18n="home.title">Twofer - Live Local Specials</title>
     <meta
       name="description"
-      content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Live now in DFW."
+      content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Launching in DFW."
       data-i18n-content="home.meta"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -18,16 +18,54 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Twofer" />
     <meta property="og:title" content="Twofer - Live Local Specials" />
-    <meta property="og:description" content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Live now in DFW." />
+    <meta property="og:description" content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Launching in DFW." />
     <meta property="og:url" content="https://www.twoferapp.com/" />
     <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
-    <script src="/store-links.js?v=20260702-store2"></script>
+    <link rel="stylesheet" href="/styles.css?v=20260707-launch-copy" />
+    <script src="/store-links.js?v=20260707-store3"></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Twofer?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Twofer is a live local specials app for customers and an AI-assisted promotion tool for local businesses." }
+        },
+        {
+          "@type": "Question",
+          "name": "Are the specials real?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The cards on this page are illustrated samples. When the app launches, you will see real specials from approved local businesses near you." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do businesses need to be approved?",
+          "acceptedAnswer": { "@type": "Answer", "text": "New business accounts are reviewed to keep published specials tied to real local businesses." }
+        },
+        {
+          "@type": "Question",
+          "name": "What kinds of promotions can businesses create?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Businesses can create local offers, bonus item offers, and limited-time specials with controlled time windows and quantities." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Twofer free for customers?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Twofer is free for customers." }
+        },
+        {
+          "@type": "Question",
+          "name": "Where is Twofer available?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Twofer is launching first in the Dallas-Fort Worth area, with more cities planned." }
+        }
+      ]
+    }
+    </script>
   </head>
-  <body id="top">
+  <body id="top" data-launch-signup-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/submit-launch-signup">
     <header class="site-header">
       <nav class="nav" aria-label="Main navigation">
         <a class="brand" href="/" aria-label="Twofer home">
@@ -67,14 +105,14 @@
       <section id="get-the-app" class="hero-band">
         <div class="hero container">
           <div class="hero-copy">
-            <p class="status-pill" data-i18n="home.status">Live now in Dallas-Fort Worth</p>
+            <p class="status-pill" data-i18n="home.status">Launching in Dallas-Fort Worth</p>
             <h1 data-i18n-html="home.hero">Live local <span>specials</span> for slow hours.</h1>
             <p class="lede" data-i18n="home.lede">
               Twofer is like an on-demand happy hour engine for local businesses: create a limited-time
               local offer with AI, publish it nearby, and redeem customers in store by QR code.
             </p>
             <p class="availability-note" data-i18n="home.availability">
-              Free for iPhone and Android. New business accounts are reviewed before they can publish.
+              Coming soon to iPhone and Android. New business accounts are reviewed before they can publish.
             </p>
             <div class="cta-row">
               <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">
@@ -86,10 +124,29 @@
               <a class="button button-dark" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="android">
                 Get Twofer for Android
               </a>
+              <form class="launch-signup" data-launch-signup data-signup-source="website-hero" hidden novalidate>
+                <label class="visually-hidden" aria-hidden="true">
+                  <span>Company website</span>
+                  <input name="company_website" tabindex="-1" autocomplete="off" />
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  placeholder="you@email.com"
+                  data-i18n-placeholder="home.signupPlaceholder"
+                  aria-label="Email address"
+                  data-i18n-aria-label="home.signupAria"
+                />
+                <button class="button button-dark" type="submit" data-i18n="home.signupButton">Email me launch updates</button>
+                <p class="status" data-signup-status role="status" aria-live="polite"></p>
+              </form>
             </div>
             <div class="flow-note">
               <strong data-i18n="home.flowTitle">See how it works</strong>
-              <span data-i18n="home.flowText">Browse a sample special below, then open the app to claim real offers nearby, share with a friend, and redeem in store with a QR code.</span>
+              <span data-i18n="home.flowText">Browse a sample special below. When the app launches, claim real offers nearby, share with a friend, and redeem in store with a QR code.</span>
             </div>
           </div>
 
@@ -116,7 +173,7 @@
                   <strong>Sunrise Bakery</strong>
                   <span>0.3 mi</span>
                 </div>
-                <p data-i18n="home.offerCroissants">Morning pastry offer</p>
+                <p data-i18n="home.offerCroissants">Buy 1 croissant, get 1 free</p>
                 <small>7:00 - 10:00 AM  |  DFW</small>
               </article>
 
@@ -157,14 +214,25 @@
               <a class="button button-secondary" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="android">
                 Get Twofer for Android
               </a>
-              <a
-                class="button"
-                href="mailto:support@twoferapp.com?subject=Twofer%20launch%20updates"
-                data-store-fallback
-                hidden
-              >
-                Email me launch updates
-              </a>
+              <form class="launch-signup" data-launch-signup data-signup-source="website-customers" hidden novalidate>
+                <label class="visually-hidden" aria-hidden="true">
+                  <span>Company website</span>
+                  <input name="company_website" tabindex="-1" autocomplete="off" />
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  placeholder="you@email.com"
+                  data-i18n-placeholder="home.signupPlaceholder"
+                  aria-label="Email address"
+                  data-i18n-aria-label="home.signupAria"
+                />
+                <button class="button" type="submit" data-i18n="home.signupButton">Email me launch updates</button>
+                <p class="status" data-signup-status role="status" aria-live="polite"></p>
+              </form>
               <span data-i18n="home.freeCustomers">Free for customers.</span>
             </div>
           </div>
@@ -203,22 +271,22 @@
 
             <div class="business-feature-grid">
               <article class="feature-card">
-                <span class="icon-chip" aria-hidden="true">AI</span>
+                <span class="icon-chip" aria-hidden="true">1</span>
                 <h3 data-i18n="home.generateTitle">Generate the Ad</h3>
                 <p data-i18n="home.generateBody">Upload a photo or describe the item; AI drafts clear promotion copy you can edit.</p>
               </article>
               <article class="feature-card">
-                <span class="icon-chip" aria-hidden="true">NC</span>
+                <span class="icon-chip" aria-hidden="true">2</span>
                 <h3 data-i18n="home.reachTitle">Reach Nearby Customers</h3>
                 <p data-i18n="home.reachBody">Show timely specials to people already looking nearby.</p>
               </article>
               <article class="feature-card">
-                <span class="icon-chip" aria-hidden="true">CO</span>
+                <span class="icon-chip" aria-hidden="true">3</span>
                 <h3 data-i18n="home.controlTitle">Control the Offer</h3>
                 <p data-i18n="home.controlBody">Set the time window, quantity, terms, and pause or publish status.</p>
               </article>
               <article class="feature-card">
-                <span class="icon-chip" aria-hidden="true">AC</span>
+                <span class="icon-chip" aria-hidden="true">4</span>
                 <h3 data-i18n="home.accessTitle">Reviewed Before You Publish</h3>
                 <p data-i18n="home.accessBody">New business accounts are reviewed before publishing goes live.</p>
               </article>
@@ -281,7 +349,7 @@
           </details>
           <details>
             <summary data-i18n="home.faqQ2">Are the specials real?</summary>
-            <p data-i18n="home.faqA2">Yes. The two cards on this page are illustrated samples; open the app to see live specials near you.</p>
+            <p data-i18n="home.faqA2">The cards on this page are illustrated samples. When the app launches, you will see real specials from approved local businesses near you.</p>
           </details>
           <details>
             <summary data-i18n="home.faqQ3">Why do businesses need to be approved?</summary>
@@ -297,7 +365,7 @@
           </details>
           <details>
             <summary data-i18n="home.faqQ6">Where is Twofer available?</summary>
-            <p data-i18n="home.faqA6">Twofer is live in the Dallas-Fort Worth area, with more cities planned.</p>
+            <p data-i18n="home.faqA6">Twofer is launching first in the Dallas-Fort Worth area, with more cities planned.</p>
           </details>
         </div>
       </section>
@@ -310,7 +378,7 @@
           <span>Twofer</span>
         </a>
         <p data-i18n="home.footerBody1">Live local specials for customers, with AI promotion tools and QR redemption controls for local businesses.</p>
-        <p data-i18n="home.footerBody2">Live now in DFW. Customer access is open; new business accounts are reviewed before they publish.</p>
+        <p data-i18n="home.footerBody2">Launching in DFW. New business accounts are reviewed before they publish.</p>
         <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>
         <div class="footer-links">
           <a href="/privacy" data-i18n="site.privacy">Privacy Policy</a>
@@ -321,6 +389,7 @@
       </div>
     </footer>
     <a class="back-to-top" href="#top" aria-label="Back to top">^</a>
-    <script src="/localization.js?v=20260702-site-i18n"></script>
+    <script src="/localization.js?v=20260707-launch-copy"></script>
+    <script src="/launch-signup.js?v=20260707-launch-signup"></script>
   </body>
 </html>

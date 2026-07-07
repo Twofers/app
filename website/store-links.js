@@ -73,6 +73,12 @@ window.TWOFER_STORE_LINKS = {
       node.hidden = anyLinkReady;
       node.textContent = FALLBACK_TEXT[locale] || FALLBACK_TEXT.en;
     });
+
+    // The launch-signup email forms (launch-signup.js) follow the same rule:
+    // visible only while no store link is live.
+    document.querySelectorAll("[data-store-fallback-note], [data-launch-signup]").forEach((node) => {
+      node.hidden = anyLinkReady;
+    });
   }
 
   function boot() {

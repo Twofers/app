@@ -828,7 +828,15 @@
     const backLink = document.querySelector("[data-back-to-command-center]");
     if (!backLink) return;
     const returnPath = new URLSearchParams(window.location.search).get("return");
-    if (returnPath && returnPath.startsWith("/") && !returnPath.startsWith("//")) {
+    // Only allow same-site admin paths. Reject "//" and "\" forms because
+    // browsers normalize backslashes to slashes, which would turn a crafted
+    // "/\evil.com" value into an off-site protocol-relative URL.
+    if (
+      returnPath &&
+      returnPath.startsWith("/admin") &&
+      !returnPath.startsWith("//") &&
+      !returnPath.includes("\\")
+    ) {
       backLink.href = returnPath;
     }
   }
