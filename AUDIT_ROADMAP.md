@@ -118,6 +118,27 @@ So the implementer doesn't waste credits or introduce regressions:
 - **`deal_claim_visible_to_business_owner`** is correctly scoped to
   `owner_id = auth.uid()`; no cross-merchant claim access.
 
+## DEPLOYED to production 2026-07-07
+
+Dan ran the full sequence against project `kvodhiqhdqnptqovovia`:
+- All 6 edge functions deployed **first** (begin/complete-visual-redeem,
+  release-claim, redeem-token, stripe-webhook, stripe-create-checkout-session).
+- All 4 migrations applied via `supabase db push` (dry-run confirmed only these
+  4 pending). The `DROP TRIGGER/POLICY IF EXISTS` guards no-op'd cleanly; notably
+  the hypothesized `deal_claims` "Users can update their own claims" drift policy
+  did **not** exist — the `REVOKE` from anon/authenticated is the hard stop
+  regardless.
+- `node scripts/probe-rls-smoke.mjs` → **all checks passed** (no RLS lockout;
+  `deal_claims own SELECT` still green because only writes were revoked).
+
+Still open (manual):
+- **Stripe Dashboard** — subscribe the webhook endpoint to
+  `charge.dispute.created` (Finding 03 handler is deployed but inert until the
+  endpoint receives the event).
+- `app_runtime_config.require_card_for_trial` is at its `false` default, so
+  **no-card self-serve trials are now live**; flip to `true` when you want to
+  require a card. No admin UI for minting exemption codes yet.
+
 ## Deploy sequence (Dan-only — hard-gated; agent cannot run these)
 
 Everything below is written and validated locally (typecheck, typecheck:functions,
