@@ -615,6 +615,12 @@ async function checkAdminDashboard(page) {
       timeout: 5000,
     })
     .catch(() => issues.push("/admin/: summary did not load signed-in state"));
+  // AI Spend & Quotas now starts collapsed by default (north-star redesign) --
+  // open it before interacting with the form inside.
+  const aiSpendPanel = page.locator("details.admin-manage-panel").first();
+  if ((await aiSpendPanel.count()) && !(await aiSpendPanel.evaluate((el) => el.open))) {
+    await aiSpendPanel.locator("summary").click();
+  }
   await page.locator('input[name="query"]').fill("owner@example.com");
   await page.locator('[data-ai-quota-form] button[type="submit"]').click();
   await page
@@ -679,6 +685,10 @@ async function crawlRoute(browser, baseUrl, route, viewport) {
   await installMocks(page);
 
   const issues = [];
+  // Headless Playwright auto-dismisses native dialogs unless handled, which
+  // silently cancels window.confirm()-gated actions (e.g. the AI quota reset
+  // confirmation) and looks like the app never responded.
+  page.on("dialog", (dialog) => dialog.accept());
   page.on("pageerror", (error) => issues.push(`${route} ${viewport.name}: page error ${error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") issues.push(`${route} ${viewport.name}: console error ${message.text()}`);

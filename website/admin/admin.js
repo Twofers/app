@@ -503,6 +503,7 @@
         setMetric("apiSpend.updatedAt", s.apiSpend?.updatedAt ? `Updated ${formatDateTime(s.apiSpend.updatedAt)}` : "Not loaded");
         setMetric("activity.claimsToday", s.activity?.claimsToday ?? 0);
         setMetric("activity.redemptionsToday", s.activity?.redemptionsToday ?? 0);
+        setMetric("activity.newConsumersThisWeek", s.activity?.newConsumersThisWeek ?? 0);
         setMetric(
           "activity.claimRedemptionRate",
           formatRate(s.activity?.redemptionsToday ?? 0, s.activity?.claimsToday ?? 0),

@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health-2" />
+    <link rel="stylesheet" href="/styles.css?v=20260706-admin-north-star" />
   </head>
   <body
     class="admin-shell"
@@ -113,6 +113,7 @@
           <article class="admin-card admin-north-star"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
           <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
           <article class="admin-card"><span>Claim-to-redemption rate</span><strong data-metric="activity.claimRedemptionRate">0%</strong></article>
+          <article class="admin-card"><span>New customers this week</span><strong data-metric="activity.newConsumersThisWeek">0</strong></article>
           <a class="admin-card admin-card-link" href="/admin/offers?status=live">
             <span>Live offers</span>
             <strong data-metric="offers.live">0</strong>
@@ -243,7 +244,7 @@
       </section>
 
       <section class="admin-section">
-        <details class="admin-panel admin-manage-panel" open>
+        <details class="admin-panel admin-manage-panel">
           <summary>
             <span>AI Spend & Quotas</span>
             <span class="admin-badge" data-metric="apiSpend.updatedAt">Not loaded</span>
@@ -325,6 +326,6 @@
         </div>
       </section>
     </main>
-    <script src="/admin/admin.js?v=20260705-admin-health-2"></script>
+    <script src="/admin/admin.js?v=20260706-admin-north-star"></script>
   </body>
 </html>
