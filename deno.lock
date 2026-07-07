@@ -34,6 +34,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@expo-google-fonts/black-han-sans@~0.4.1",
         "npm:@expo-google-fonts/outfit@~0.4.3",
         "npm:@expo/vector-icons@^15.0.3",
         "npm:@react-native-async-storage/async-storage@2.2.0",
