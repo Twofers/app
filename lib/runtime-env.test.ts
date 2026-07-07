@@ -37,6 +37,8 @@ import {
   isAiV5PersuasiveTranscreationEnabled,
   isAiV5SourceLocaleCreativeEnabled,
   isAiV5TranslationQaEnabled,
+  isPosterLookV2Enabled,
+  isPosterViewerLanguageEnabled,
 } from "./runtime-env";
 
 describe("runtime-env AI Studio dev production guard", () => {
@@ -214,6 +216,10 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED;
     delete process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
+    delete process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+    delete process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED;
+    delete process.env.POSTER_LOOK_V2_ENABLED;
+    delete process.env.EXPO_PUBLIC_POSTER_LOOK_V2;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -237,6 +243,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(false);
     expect(isAiV5LocaleScreenshotQaEnabled()).toBe(false);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(false);
+    expect(isPosterViewerLanguageEnabled()).toBe(false);
+    expect(isPosterLookV2Enabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -262,6 +270,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED = "true";
+    process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED = "true";
+    process.env.EXPO_PUBLIC_POSTER_LOOK_V2 = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -285,5 +295,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(true);
     expect(isAiV5LocaleScreenshotQaEnabled()).toBe(true);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(true);
+    expect(isPosterViewerLanguageEnabled()).toBe(true);
+    expect(isPosterLookV2Enabled()).toBe(true);
   });
 });

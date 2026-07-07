@@ -862,6 +862,7 @@ export default function DealDetail() {
           <ComposedAdCard
             imageUri={posterUri}
             posterSpec={customerDealPosterSpec?.posterSpec ?? null}
+            contentLocale={resolvedDisplayLocale.locale}
             offerFacts={composedOfferFacts}
             merchant={composedMerchant}
             copy={composedCopy}

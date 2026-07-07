@@ -187,6 +187,10 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
     AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
+    POSTER_VIEWER_LANGUAGE_ENABLED: process.env.POSTER_VIEWER_LANGUAGE_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED: process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED ?? "(unset)",
+    POSTER_LOOK_V2_ENABLED: process.env.POSTER_LOOK_V2_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_POSTER_LOOK_V2: process.env.EXPO_PUBLIC_POSTER_LOOK_V2 ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -303,6 +307,16 @@ export function isAiV5LocaleScreenshotQaEnabled(): boolean {
 
 export function isAiV5AutomaticVerifiedBundleApprovalEnabled(): boolean {
   return process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true";
+}
+
+/** Poster spec keeps all locales at publish and renders the viewer's locale. Off = English-only poster, unchanged. */
+export function isPosterViewerLanguageEnabled(): boolean {
+  return process.env.POSTER_VIEWER_LANGUAGE_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED === "true";
+}
+
+/** Poster Look v2 render path (typography/layout only). Off = current poster renderer, byte-identical. */
+export function isPosterLookV2Enabled(): boolean {
+  return process.env.POSTER_LOOK_V2_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_LOOK_V2 === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

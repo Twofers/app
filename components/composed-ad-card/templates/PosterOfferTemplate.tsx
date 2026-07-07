@@ -6,7 +6,7 @@ import { AdStatusBadges } from "../AdStatusBadges";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
-  const { copy, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
+  const { contentLocale, copy, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
   const scheduleLine = offerFacts.scheduleSummary || liveState.timeRemainingLabel || liveState.statusLabel;
   const showMerchantLine = surface !== "consumer_feed";
 
@@ -18,7 +18,7 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
       accessibilityLabel={props.accessibilityLabel}
       style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}
     >
-      <AdPosterCanvas spec={posterSpec} imageUri={imageUri} style={styles.poster} />
+      <AdPosterCanvas spec={posterSpec} imageUri={imageUri} contentLocale={contentLocale} style={styles.poster} />
       <View style={[styles.panel, { backgroundColor: tokens.panelBackground }]}>
         <AdStatusBadges
           liveState={liveState}

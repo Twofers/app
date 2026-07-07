@@ -314,10 +314,22 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
   };
 }
 
+/**
+ * Inlined rather than imported from `./runtime-env`: that module pulls in `expo-constants`
+ * (and transitively react-native), which breaks plain-Node vitest suites that import this
+ * pure-logic file without mocking expo-constants (e.g. offer-version-publish.test.ts).
+ */
+function posterViewerLanguageEnabled(): boolean {
+  return process.env.POSTER_VIEWER_LANGUAGE_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED === "true";
+}
+
 function posterSpecForAd(generatedAd?: GeneratedAd | null): PosterSpecV1 | null {
   if (!generatedAd?.poster?.enabled) return null;
   const parsed = parsePosterSpecV1(generatedAd.poster);
-  return parsed ? normalizePosterSpecForPublish(parsed) : null;
+  if (!parsed) return null;
+  // Flag on: keep every localized copy variant so consumers can see the poster in their own
+  // app language. Flag off: preserve the original English-only publish shape unchanged.
+  return posterViewerLanguageEnabled() ? parsed : normalizePosterSpecForPublish(parsed);
 }
 
 function buildSlot(params: {

@@ -1106,6 +1106,7 @@ export default function HomeScreen() {
             <ComposedAdCard
               imageUri={posterUri}
               posterSpec={posterSpec}
+              contentLocale={resolvedDisplayLocale.locale}
               offerFacts={offerFacts}
               merchant={merchant}
               copy={copy}

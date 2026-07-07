@@ -4301,6 +4301,7 @@ export default function AiDealScreen() {
           templateId={selectedPosterTemplateId}
           liveScheduleLabel={posterLiveScheduleLabel}
           eyebrowLabel={posterEyebrowLabel}
+          contentLocale={supportedLocaleOrDefault(i18n.language)}
         />
       </View>
     );

@@ -21,17 +21,17 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "836637e07d6636957fa6c3398ff21f771c7768a4e3028bee783b2da6143d6280",
+      "sha256": "ca548909b5e6b460462a458c35e9a3d91187606051854c1f2e2b4ca941a99f38",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-05 chat approval: use active business app language for localized-owner-UI AI Create source language",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, and ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language."
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",
-      "sha256": "4a25436f5401f3611a59eecebba673557b24f551d945342bc72be0b1d704fd2e",
+      "sha256": "c06e78f1264dd92807791adc4ea01e531b7cb494dfac9053d028760da865f33a",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement."
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
+      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement. 2026-07-06: added an optional contentLocale prop and a flag-gated locale-aware copy resolution path (posterCopyFromSpecForLocale, using the existing posterCopyForLocale helper) behind EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED; also added a sibling Poster Look v2 render path (PosterContentV2/TopCopyBlockV2/OfferBlockV2) behind EXPO_PUBLIC_POSTER_LOOK_V2 with Outfit_900Black/BlackHanSans_400Regular display typography, an offer-badge chip, and lighter top/bottom scrims. Both flags default off; the original PosterContent/TopCopyBlock/OfferBlock v1 components and constants are unmodified, so behavior is byte-identical with both flags off."
     },
     {
       "path": "components/poster/__tests__/AdPosterCanvas.test.ts",
@@ -56,10 +56,10 @@
     },
     {
       "path": "lib/ad-spec.ts",
-      "sha256": "7982af976d5e9270cb0f0a400d44233d7b9b1a92ee0514aa382f94bbd1e4f6b5",
+      "sha256": "b04b43699943f5efe0c3bc36af0c41b571af1c55715dfe97a9887373e5b47df3",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Builds and validates ad specs, including native poster specs used for publish."
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
+      "rationale": "Builds and validates ad specs, including native poster specs used for publish. 2026-07-06: posterSpecForAd now keeps every localized poster copy variant at publish when a poster viewer-language flag is on (checked inline, not by importing lib/runtime-env, to avoid pulling expo-constants into plain-Node vitest suites); flag off keeps the original English-only normalizePosterSpecForPublish behavior unchanged."
     },
     {
       "path": "lib/ad-variants.ts",
