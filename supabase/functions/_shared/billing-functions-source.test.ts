@@ -23,8 +23,10 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/\/business\/billing\/cancel\//);
     expect(source).toMatch(/STRIPE_TWOFER_BUSINESS_PRICE_ID/);
     expect(source).toMatch(/mode: "subscription"/);
-    expect(source).toMatch(/payment_method_collection: "always"/);
-    expect(source).not.toMatch(/payment_method_collection: "if_required"/);
+    // No-card trial toggle (Dan, 2026-07-06): card is required unless the
+    // global require_card_for_trial switch is off or a valid exemption code
+    // was used -- see the dedicated describe block below for the full check.
+    expect(source).toMatch(/payment_method_collection: skipCardCollection \? "if_required" : "always"/);
     expect(source).not.toMatch(/user_owns_business_location/);
     expect(source).not.toMatch(/trial_acknowledged/);
     expect(source).not.toMatch(/trial_checkout_intents/);
@@ -146,6 +148,59 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/introductory_refund/);
     expect(source).toMatch(/introductory_refund_used_at/);
     expect(source).toMatch(/const metadataLocationId = safeGetString\(mergedMetadata\.business_location_id\)/);
+  });
+
+  it("suspends access on chargebacks and never auto-restores on a won dispute", () => {
+    const source = readFunction("stripe-webhook");
+    // Finding 03: charge.dispute.created must be recognized and routed to an
+    // immediate forced suspension, with the customer id resolved from the
+    // Dispute's charge/payment_intent (Disputes have no .customer field).
+    expect(source).toMatch(/async function stripeCustomerIdForDispute/);
+    expect(source).toMatch(/event\.type === "charge\.dispute\.created"\s*\n\s*\? await stripeCustomerIdForDispute\(stripe, obj\)/);
+    expect(source).toMatch(/forceChargebackSuspend\?:\s*boolean/);
+    expect(source).toMatch(
+      /const access = params\.forceChargebackSuspend\s*\n\s*\? \{ billingStatus: "chargeback", appAccessStatus: "suspended" \}/,
+    );
+    expect(source).toMatch(/event\.type === "charge\.dispute\.created"\) \{/);
+    expect(source).toMatch(/forceChargebackSuspend: true/);
+    // Dan confirmed 2026-07-06: no restore-on-won branch. charge.dispute.closed
+    // must never be a handled dispatch condition that grants access back.
+    expect(source).not.toMatch(/event\.type === "charge\.dispute\.closed"/);
+  });
+
+  it("asserts the expected Stripe price and fails closed on an unknown status (Finding 07)", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(
+      /if \(subscription && \(access\.appAccessStatus === "active" \|\| access\.appAccessStatus === "trialing"\)\) \{/,
+    );
+    expect(source).toMatch(/assertExpectedPrice\(priceConfig, subscription\)/);
+    // The permissive `cancelAtPeriodEnd ? active : pending` fallback must be
+    // gone -- any unrecognized status now always returns pending.
+    expect(source).not.toMatch(/cancelAtPeriodEnd\s*\?\s*\{\s*billingStatus:\s*"active"/);
+  });
+
+  it("marks the location's trial as used once a trialing subscription is confirmed (Finding 05 bookkeeping)", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/if \(access\.appAccessStatus === "trialing"\) \{/);
+    expect(source).toMatch(/ensurePrimaryBusinessLocationId\(supabase, businessId\)/);
+    expect(source).toMatch(/from\("business_location_identity"\)\.upsert\(/);
+  });
+
+  it("gates the no-card trial on the exemption code or the global switch, and folds in the reuse guard", () => {
+    const source = readFunction("stripe-create-checkout-session");
+    expect(source).toMatch(/async function consumeTrialNoCardExemptionCode/);
+    expect(source).toMatch(/consume_trial_no_card_exemption_code/);
+    expect(source).toMatch(/async function isBusinessLocationTrialAlreadyUsed/);
+    expect(source).toMatch(/check_business_location_trial_reuse/);
+    expect(source).toMatch(
+      /const exemptionCodeValid = await consumeTrialNoCardExemptionCode\(supabaseAdmin, safeGetString\(body\.trial_no_card_code\)\)/,
+    );
+    expect(source).toMatch(/let skipCardCollection = exemptionCodeValid \|\| !config\.requireCardForTrial/);
+    // A valid exemption code is a manual override -- it must bypass the reuse
+    // guard entirely (mirrors admin_grant_location_trial's own override flag).
+    expect(source).toMatch(/if \(skipCardCollection && !exemptionCodeValid\) \{/);
+    expect(source).toMatch(/trial_period_days: config\.noCardTrialDays/);
+    expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
   });
 
   it("disables the old simulate subscribe helper", () => {

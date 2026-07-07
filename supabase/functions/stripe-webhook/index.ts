@@ -3,7 +3,10 @@ import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadRuntimeBillingConfig, safeGetString, type RuntimeBillingConfig } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
+import {
+  applyBusinessBillingAccessState,
+  ensurePrimaryBusinessLocationId,
+} from "../_shared/business-location-entitlement-sync.ts";
 
 type Metadata = Record<string, string>;
 
@@ -629,6 +632,42 @@ function stripeCustomerIdFrom(obj: any, subscription: any): string | null {
   return safeGetString(obj?.customer) ?? safeGetString(subscription?.customer) ?? safeGetString(obj?.id);
 }
 
+/**
+ * A Stripe Dispute object has no `.customer` field, unlike charges/invoices/
+ * subscriptions. Resolve it from the underlying charge (or, failing that, the
+ * payment intent) so `businessIdForStripeCustomer` can find the business for
+ * `charge.dispute.created`. See findings/03-chargeback-not-handled.md.
+ */
+async function stripeCustomerIdForDispute(stripe: Stripe, dispute: any): Promise<string | null> {
+  const direct = safeGetString(dispute?.customer);
+  if (direct) return direct;
+
+  const chargeId = typeof dispute?.charge === "string" ? dispute.charge : safeGetString(dispute?.charge?.id);
+  if (chargeId) {
+    try {
+      const charge = await stripe.charges.retrieve(chargeId);
+      const customerId = safeGetString(charge?.customer);
+      if (customerId) return customerId;
+    } catch (err) {
+      console.error("[stripe-webhook] dispute charge lookup failed:", err);
+    }
+  }
+
+  const paymentIntentId =
+    typeof dispute?.payment_intent === "string" ? dispute.payment_intent : safeGetString(dispute?.payment_intent?.id);
+  if (paymentIntentId) {
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const customerId = safeGetString(paymentIntent?.customer);
+      if (customerId) return customerId;
+    } catch (err) {
+      console.error("[stripe-webhook] dispute payment_intent lookup failed:", err);
+    }
+  }
+
+  return null;
+}
+
 async function businessIdForStripeCustomer(supabase: any, customerId: string | null): Promise<string | null> {
   if (!customerId) return null;
   const { data, error } = await supabase
@@ -651,7 +690,12 @@ function businessAccessForStripeStatus(status: string, cancelAtPeriodEnd: boolea
   if (status === "paused") return { billingStatus: "paused", appAccessStatus: "suspended" };
   if (status === "incomplete_expired") return { billingStatus: "incomplete_expired", appAccessStatus: "expired" };
   if (status === "incomplete") return { billingStatus: "incomplete", appAccessStatus: "pending" };
-  return cancelAtPeriodEnd ? { billingStatus: "active", appAccessStatus: "active" } : { billingStatus: "none", appAccessStatus: "pending" };
+  // Finding 07: fail closed on any status Stripe adds that we don't
+  // recognize yet -- never grant access on an unrecognized status, even with
+  // cancel_at_period_end true. A real active/trialing subscription with
+  // auto-renew off is already handled by the explicit branches above; this
+  // line is unreachable for any of Stripe's current subscription statuses.
+  return { billingStatus: "none", appAccessStatus: "pending" };
 }
 
 function invoiceSummary(invoice: any): Record<string, unknown> {
@@ -674,11 +718,25 @@ async function syncBusinessSubscriptionFromStripe(params: {
   invoice?: any | null;
   checkoutSession?: any | null;
   forcePaymentFailure?: boolean;
+  /** Chargeback (charge.dispute.created): force an immediate suspension regardless of Stripe subscription status. Never auto-restored — see findings/03-chargeback-not-handled.md. */
+  forceChargebackSuspend?: boolean;
 }) {
   const { supabase, businessId, event, subscription, invoice, checkoutSession } = params;
   const status = safeGetString(subscription?.status) ?? (params.forcePaymentFailure ? "past_due" : "none");
   const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
-  const access = businessAccessForStripeStatus(status, cancelAtPeriodEnd);
+  const access = params.forceChargebackSuspend
+    ? { billingStatus: "chargeback", appAccessStatus: "suspended" }
+    : businessAccessForStripeStatus(status, cancelAtPeriodEnd);
+
+  // Finding 07: only grantPaidPeriod/activateTrialFromCheckout (the location
+  // path) asserted the subscription is on the expected Twofer price before
+  // granting access. Do the same here before writing active/trialing for the
+  // business path -- a subscription on an unexpected price must not grant
+  // access. Throws (like the location path) so the event is recorded failed.
+  if (subscription && (access.appAccessStatus === "active" || access.appAccessStatus === "trialing")) {
+    const priceConfig = await loadRuntimeBillingConfig(supabase as any);
+    assertExpectedPrice(priceConfig, subscription);
+  }
   const customerId = stripeCustomerIdFrom(checkoutSession ?? invoice ?? {}, subscription);
   const subscriptionId = safeGetString(subscription?.id) ?? safeGetString(checkoutSession?.subscription);
   const priceId = firstSubscriptionPriceId(subscription);
@@ -805,6 +863,29 @@ async function syncBusinessSubscriptionFromStripe(params: {
     currentPeriodEnd: currentPeriodEndIso,
     cancelAtPeriodEnd,
   });
+
+  // No-card trial bookkeeping: mark this physical location's trial as used
+  // the moment a real trialing subscription is confirmed, mirroring what
+  // admin_grant_location_trial / activateTrialFromCheckout already do for
+  // their own paths. This is what stripe-create-checkout-session's reuse
+  // guard checks before granting a second no-card trial to the same
+  // storefront. (Unlike admin_grant_location_trial's raw SQL COALESCE, this
+  // upsert overwrites trial_used_at on every trialing event; harmless in
+  // practice since trial_start doesn't change mid-trial, and all the reuse
+  // guard needs is non-null.)
+  if (access.appAccessStatus === "trialing") {
+    const locationId = await ensurePrimaryBusinessLocationId(supabase, businessId);
+    if (locationId) {
+      await supabase.from("business_location_identity").upsert(
+        {
+          business_location_id: locationId,
+          trial_used_at: trialStartIso ?? now.toISOString(),
+          updated_at: now.toISOString(),
+        },
+        { onConflict: "business_location_id" },
+      );
+    }
+  }
 }
 
 async function syncBusinessCustomerProfileFromStripe(params: {
@@ -922,7 +1003,10 @@ serve(async (req) => {
   try {
     const metadataLocationId = safeGetString(mergedMetadata.business_location_id);
     const metadataBillingAccountId = safeGetString(mergedMetadata.billing_account_id);
-    const eventCustomerId = stripeCustomerIdFrom(obj, subscription);
+    const eventCustomerId =
+      event.type === "charge.dispute.created"
+        ? await stripeCustomerIdForDispute(stripe, obj)
+        : stripeCustomerIdFrom(obj, subscription);
     const metadataBusinessId = safeGetString(mergedMetadata.business_id);
     const businessId = metadataBusinessId ?? await businessIdForStripeCustomer(supabase, eventCustomerId);
 
@@ -970,6 +1054,18 @@ serve(async (req) => {
             stripe_invoice_id: safeGetString(obj?.id),
             stripe_subscription_id: safeGetString(subscription?.id),
           },
+        });
+      } else if (event.type === "charge.dispute.created") {
+        // Chargeback: suspend immediately. NO auto-restore on
+        // charge.dispute.closed (Dan confirmed 2026-07-06) -- that event type
+        // is intentionally not handled here, so it falls through to
+        // markProviderEvent below for audit logging only, with no state change.
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          forceChargebackSuspend: true,
         });
       }
 

@@ -14,6 +14,7 @@ import {
   ensureStripeCustomerForBusiness,
   type BusinessBillingProfileInput,
 } from "../_shared/stripe-business-billing.ts";
+import { ensurePrimaryBusinessLocationId } from "../_shared/business-location-entitlement-sync.ts";
 
 type BillingSource = "admin" | "website" | "email" | "test";
 
@@ -48,6 +49,52 @@ async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Manual override for the card requirement (and the trial-reuse guard below),
+ * e.g. for launch partners Dan wants into a no-card trial regardless of the
+ * global app_runtime_config.require_card_for_trial switch. Single atomic
+ * UPDATE...RETURNING so a popular/shared code can't be raced past max_uses.
+ */
+async function consumeTrialNoCardExemptionCode(supabaseAdmin: any, rawCode: string | null): Promise<boolean> {
+  const trimmed = typeof rawCode === "string" ? rawCode.trim() : "";
+  if (!trimmed) return false;
+  const codeHash = await sha256Hex(trimmed);
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .rpc("consume_trial_no_card_exemption_code", { p_code_hash: codeHash, p_now: nowIso })
+    .maybeSingle();
+  if (error) {
+    console.error("[stripe-create-checkout-session] exemption code check failed:", error);
+    return false;
+  }
+  return data === true;
+}
+
+/**
+ * Finding 05: the automatic (code-less) no-card path must still respect
+ * one-trial-per-physical-location. Mirrors admin_grant_location_trial's own
+ * two checks exactly so a merchant can't get a second free ride by starting a
+ * new business at the same storefront.
+ */
+async function isBusinessLocationTrialAlreadyUsed(supabaseAdmin: any, locationId: string): Promise<boolean> {
+  const { count } = await supabaseAdmin
+    .from("deal_credit_periods")
+    .select("id", { count: "exact", head: true })
+    .eq("business_location_id", locationId)
+    .in("source", ["trial", "admin_trial"]);
+  if (typeof count === "number" && count > 0) return true;
+
+  const { data, error } = await supabaseAdmin.rpc("check_business_location_trial_reuse", {
+    p_business_location_id: locationId,
+  });
+  if (error) {
+    console.error("[stripe-create-checkout-session] trial reuse check failed:", error);
+    return false;
+  }
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  return rows.some((row: { decision?: string }) => row.decision === "block" || row.decision === "review");
 }
 
 async function activeAdminRole(supabase: any, userId: string): Promise<string | null> {
@@ -236,6 +283,21 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Unable to prepare Stripe customer." }, 500);
     }
 
+    // No-card trial (Dan, 2026-07-06): a valid exemption code always waives
+    // both the card requirement and the trial-reuse guard (manual override,
+    // like admin_grant_location_trial's p_override_trial_reuse). Without a
+    // code, the global app_runtime_config.require_card_for_trial switch
+    // decides, and the automatic path still must respect one-trial-per-
+    // physical-location. See findings/05-trial-reuse-guard.md.
+    const exemptionCodeValid = await consumeTrialNoCardExemptionCode(supabaseAdmin, safeGetString(body.trial_no_card_code));
+    let skipCardCollection = exemptionCodeValid || !config.requireCardForTrial;
+    if (skipCardCollection && !exemptionCodeValid) {
+      const locationId = await ensurePrimaryBusinessLocationId(supabaseAdmin, businessId);
+      if (locationId && (await isBusinessLocationTrialAlreadyUsed(supabaseAdmin, locationId))) {
+        skipCardCollection = false;
+      }
+    }
+
     const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
     const successUrl = safeWebUrl(body.success_url, `${siteUrl}/business/billing/success/`);
     const cancelUrl = safeWebUrl(body.cancel_url, `${siteUrl}/business/billing/cancel/`);
@@ -244,7 +306,7 @@ serve(async (req) => {
       business_id: businessId,
       owner_user_id: billingInput.ownerUserId ?? "",
       billing_source: source,
-      checkout_purpose: "paid_conversion",
+      checkout_purpose: skipCardCollection ? "trial_start" : "paid_conversion",
       requested_by_user_id: userId ?? "",
       requested_by_admin_role: adminRole ?? "",
       environment: config.billingEnvironment,
@@ -259,10 +321,17 @@ serve(async (req) => {
       client_reference_id: businessId,
       locale,
       allow_promotion_codes: true,
-      payment_method_collection: "always",
+      payment_method_collection: skipCardCollection ? "if_required" : "always",
       automatic_tax: { enabled: config.automaticTaxEnabled || Deno.env.get("STRIPE_TAX_ENABLED") === "true" },
       metadata,
-      subscription_data: { metadata },
+      subscription_data: {
+        metadata,
+        // Guarantees $0 due today so Stripe actually skips card collection
+        // under payment_method_collection "if_required" -- without an
+        // explicit trial there is nothing to defer and a card is required
+        // regardless of the setting above.
+        ...(skipCardCollection ? { trial_period_days: config.noCardTrialDays } : {}),
+      },
     });
 
     if (!session.url) {

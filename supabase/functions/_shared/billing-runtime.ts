@@ -10,6 +10,10 @@ export type RuntimeBillingConfig = {
   automaticTaxEnabled: boolean;
   twoferBusinessMonthlyPriceIdTest: string | null;
   twoferBusinessMonthlyPriceIdLive: string | null;
+  /** false = self-serve checkout may skip card collection (payment_method_collection "if_required"). Dan-controlled toggle. */
+  requireCardForTrial: boolean;
+  /** Stripe subscription_data.trial_period_days granted when a checkout skips card collection. */
+  noCardTrialDays: number;
 };
 
 type SupabaseLike = {
@@ -43,7 +47,7 @@ export async function loadRuntimeBillingConfig(
 ): Promise<RuntimeBillingConfig> {
   const { data, error } = await supabase
     .from("app_runtime_config")
-    .select("purchase_surface,trial_deal_credit_allowance,paid_deal_credit_allowance,credit_reservation_ttl_minutes,billing_environment,entitlement_version,automatic_tax_enabled,twofer_business_monthly_price_id_test,twofer_business_monthly_price_id_live")
+    .select("purchase_surface,trial_deal_credit_allowance,paid_deal_credit_allowance,credit_reservation_ttl_minutes,billing_environment,entitlement_version,automatic_tax_enabled,twofer_business_monthly_price_id_test,twofer_business_monthly_price_id_live,require_card_for_trial,no_card_trial_days")
     .eq("id", 1)
     .maybeSingle();
 
@@ -58,6 +62,9 @@ export async function loadRuntimeBillingConfig(
       automaticTaxEnabled: false,
       twoferBusinessMonthlyPriceIdTest: null,
       twoferBusinessMonthlyPriceIdLive: null,
+      // Fail closed if the config row can't be read: require a card.
+      requireCardForTrial: true,
+      noCardTrialDays: 30,
     };
   }
 
@@ -71,6 +78,8 @@ export async function loadRuntimeBillingConfig(
     automaticTaxEnabled: data.automatic_tax_enabled === true,
     twoferBusinessMonthlyPriceIdTest: safeGetString(data.twofer_business_monthly_price_id_test),
     twoferBusinessMonthlyPriceIdLive: safeGetString(data.twofer_business_monthly_price_id_live),
+    requireCardForTrial: data.require_card_for_trial === true,
+    noCardTrialDays: nonNegativeInt(data.no_card_trial_days, 30) || 30,
   };
 }
 

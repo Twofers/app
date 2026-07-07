@@ -34,7 +34,28 @@ describe("billing runtime config", () => {
       automaticTaxEnabled: false,
       twoferBusinessMonthlyPriceIdTest: null,
       twoferBusinessMonthlyPriceIdLive: null,
+      // Fails closed on a config-load error: require a card even though the
+      // schema default (once the row loads normally) is false.
+      requireCardForTrial: true,
+      noCardTrialDays: 30,
     });
+  });
+
+  it("reads the no-card trial toggle and trial length from the config row", async () => {
+    const config = await loadRuntimeBillingConfig({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { require_card_for_trial: false, no_card_trial_days: 14 },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    expect(config.requireCardForTrial).toBe(false);
+    expect(config.noCardTrialDays).toBe(14);
   });
 
   it("normalizes supported Stripe Checkout locales", () => {

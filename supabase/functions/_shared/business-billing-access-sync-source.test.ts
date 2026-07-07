@@ -20,7 +20,7 @@ describe("business billing access state sync wiring", () => {
 
   it("replaces the null-skip access_level bug in the Stripe webhook with an explicit sync call", () => {
     const source = readFunction("stripe-webhook");
-    expect(source).toMatch(/import \{ applyBusinessBillingAccessState \} from "\.\.\/_shared\/business-location-entitlement-sync\.ts"/);
+    expect(source).toMatch(/import \{[\s\S]*applyBusinessBillingAccessState[\s\S]*\} from "\.\.\/_shared\/business-location-entitlement-sync\.ts"/);
     expect(source).toMatch(/await applyBusinessBillingAccessState\(/);
     expect(source).toMatch(/provider: "stripe"/);
     // The old ternary silently skipped the businesses.access_level update for
