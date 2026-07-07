@@ -23,6 +23,8 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
+    /** Service role — deal_claims writes must not depend on the client RLS grant. See findings/02-deal-claims-self-redeem.md. */
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const {
       data: { user },
@@ -88,7 +90,7 @@ serve(async (req) => {
     const now = new Date();
     const expiresAt = Date.parse(String(claim.expires_at ?? ""));
     if (Number.isFinite(expiresAt) && expiresAt <= now.getTime()) {
-      await supabase
+      await supabaseAdmin
         .from("deal_claims")
         .update({ claim_status: "expired", redeem_started_at: null })
         .eq("id", claimId)
@@ -100,7 +102,7 @@ serve(async (req) => {
       });
     }
 
-    const { data: released, error: releaseError } = await supabase
+    const { data: released, error: releaseError } = await supabaseAdmin
       .from("deal_claims")
       .update({
         claim_status: "released",

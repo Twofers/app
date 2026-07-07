@@ -407,7 +407,7 @@ serve(async (req) => {
       );
     }
 
-    await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+    await finalizeStaleVisualRedeemForClaim(supabaseAdmin, claimId, nowIso);
 
     const { data: freshRow } = await supabase
       .from("deal_claims")
@@ -454,7 +454,7 @@ serve(async (req) => {
         : 10;
     const expiresIso = (freshRow?.expires_at ?? claim.expires_at) as string;
     if (isPastRedeemDeadline(now.getTime(), expiresIso, grace)) {
-      await supabase.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
+      await supabaseAdmin.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
       await recordFailedAttempt("expired");
       return new Response(
         JSON.stringify({ error: "This token has expired" }),
@@ -477,7 +477,7 @@ serve(async (req) => {
       redeemed_at_business_id: deal.business_id ?? business.id,
       redeemed_at_location_id: dealLocationId ?? scannerLocationId,
     };
-    let updateResult = await supabase
+    let updateResult = await supabaseAdmin
       .from("deal_claims")
       .update(redeemUpdateRow)
       .eq("id", claimId)
@@ -485,7 +485,7 @@ serve(async (req) => {
       .select("redeemed_at")
       .single();
     if (isMissingNewRedeemColumn(updateResult.error)) {
-      updateResult = await supabase
+      updateResult = await supabaseAdmin
         .from("deal_claims")
         .update(omitNewRedeemUpdateColumns(redeemUpdateRow))
         .eq("id", claimId)
