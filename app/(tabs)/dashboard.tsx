@@ -32,7 +32,7 @@ import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-bill
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
-import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { useScreenInsets, getBottomSheetBottomPadding, Spacing } from "@/lib/screen-layout";
 import { useTabMode } from "@/lib/tab-mode";
 import {
   DEFAULT_CLAIM_GRACE_MINUTES,
@@ -477,9 +477,11 @@ function DealStatPill({
           fontWeight: "900",
           color: accent ? theme.accentText : theme.text,
         }}
-        numberOfLines={1}
+        // Wrap short word values ("No claims") to a second line so they stay at a
+        // legible size instead of shrinking to fit one line next to numeric pills.
+        numberOfLines={2}
         adjustsFontSizeToFit
-        minimumFontScale={0.68}
+        minimumFontScale={0.85}
         maxFontSizeMultiplier={1.05}
       >
         {value}
@@ -547,7 +549,8 @@ function ScrollFilterRow({
 export default function BusinessDashboard() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { top, horizontal, listBottom } = useScreenInsets("tab");
+  const { top, horizontal, listBottom, insets } = useScreenInsets("tab");
+  const sheetBottomPadding = getBottomSheetBottomPadding(insets);
   const { mode, ready: modeReady } = useTabMode();
   const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionTier } = useBusiness();
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -2159,7 +2162,7 @@ export default function BusinessDashboard() {
                 borderBottomWidth: 0,
                 borderColor: theme.border,
                 padding: Spacing.lg,
-                paddingBottom: Spacing.xl,
+                paddingBottom: sheetBottomPadding,
                 gap: Spacing.sm,
               }}
             >

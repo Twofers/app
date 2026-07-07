@@ -1,4 +1,5 @@
 import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -94,10 +95,17 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, [forceBypass, i18n.language, i18n.resolvedLanguage, session?.user]);
 
-  // Prevent Android back button from exiting the app while on a tab screen.
+  // Prevent Android back button from exiting the app while a *root* tab screen
+  // is focused. When a screen is pushed above the tabs (create/*, deal/[id],
+  // business/[id], deal-analytics/[id], etc.) this navigator is no longer
+  // focused, so we must let the event propagate to the root stack's default
+  // handler — otherwise system back is swallowed on every pushed screen.
+  const isTabsFocused = useIsFocused();
+  const isTabsFocusedRef = useRef(isTabsFocused);
+  isTabsFocusedRef.current = isTabsFocused;
   useEffect(() => {
     if (Platform.OS !== "android") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => isTabsFocusedRef.current);
     return () => sub.remove();
   }, []);
 

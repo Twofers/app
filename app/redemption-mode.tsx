@@ -145,7 +145,11 @@ export default function RedemptionModeScreen() {
   useEffect(() => {
     if (loading) return;
     if (!state && !isRedeemerSession(session)) {
-      router.replace("/auth-landing" as Href);
+      // A signed-in user (owner/consumer) who deep-links here with no armed staff
+      // device should land back in the app — routing them to auth-landing reads as
+      // "logged out". Tab-mode redirect then sends owners to their dashboard.
+      // Only truly unauthenticated devices go to auth-landing.
+      router.replace((session?.user ? "/(tabs)" : "/auth-landing") as Href);
     }
   }, [loading, router, session, state]);
 

@@ -10,13 +10,19 @@ type AdCallToActionProps = {
   disabled?: boolean;
   onPress?: () => void;
   secondaryAction?: ComposedAdSecondaryAction | null;
+  /**
+   * Stack the primary + secondary buttons vertically. Used by compact layouts
+   * (e.g. the poster template's narrow action column) where a side-by-side row
+   * would squeeze the primary label to nothing and clip it to an empty chip.
+   */
+  stacked?: boolean;
 };
 
-export function AdCallToAction({ label, tokens, disabled, onPress, secondaryAction }: AdCallToActionProps) {
+export function AdCallToAction({ label, tokens, disabled, onPress, secondaryAction, stacked }: AdCallToActionProps) {
   const primaryInteractionDisabled = disabled || !onPress;
 
   return (
-    <View style={styles.root}>
+    <View style={stacked ? styles.rootStacked : styles.root}>
       <Pressable
         onPress={onPress}
         disabled={primaryInteractionDisabled}
@@ -24,6 +30,7 @@ export function AdCallToAction({ label, tokens, disabled, onPress, secondaryActi
         accessibilityLabel={label}
         style={({ pressed }) => [
           styles.primary,
+          stacked ? styles.primaryStacked : null,
           {
             backgroundColor: disabled ? "rgba(156,163,175,0.45)" : tokens.ctaBackground,
             opacity: pressed && !primaryInteractionDisabled ? 0.88 : 1,
@@ -50,6 +57,7 @@ export function AdCallToAction({ label, tokens, disabled, onPress, secondaryActi
           accessibilityState={{ selected: secondaryAction.selected, disabled: secondaryAction.disabled }}
           style={({ pressed }) => [
             styles.secondary,
+            stacked ? styles.secondaryStacked : null,
             {
               borderColor: tokens.border,
               backgroundColor: pressed && !secondaryAction.disabled ? "rgba(255,159,28,0.12)" : "transparent",
@@ -76,6 +84,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  rootStacked: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+  },
+  secondaryStacked: {
+    maxWidth: undefined,
+  },
+  primaryStacked: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "auto",
+    alignSelf: "stretch",
   },
   primary: {
     flex: 1,

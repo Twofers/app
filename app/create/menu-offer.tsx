@@ -37,6 +37,7 @@ import {
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
+import { formatMenuPriceLabel } from "@/lib/display-format";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -500,7 +501,7 @@ export default function MenuOfferScreen() {
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
                 {item.price_text ? (
-                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{item.price_text}</Text>
+                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}
                 {renderSizeChips({
                   item,
@@ -558,7 +559,7 @@ export default function MenuOfferScreen() {
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
                 {item.price_text ? (
-                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{item.price_text}</Text>
+                  <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}
                 {renderSizeChips({
                   item,

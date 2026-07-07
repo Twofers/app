@@ -4,6 +4,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { MerchantInsightsRow, RepeatVisitStats } from "@/lib/merchant-insights";
 import { Spacing } from "@/lib/screen-layout";
+import { formatHourOfDayLabel } from "@/lib/deal-time";
 
 // Raw ids the server may emit that have no translation (demo_seed, future
 // sources, …) must never leak into the UI — they collapse into the localized
@@ -40,7 +41,7 @@ export function MerchantInsightsPanel({
   savedCustomersCount = null,
   repeatVisitStats = null,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   if (!insights || insights.claims < 1) return null;
@@ -152,7 +153,7 @@ export function MerchantInsightsPanel({
 
       {peakHour.c > 0 ? (
         <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
-          {t("merchantInsights.hourHeat")}: {t("merchantInsights.hourPeak", { hour: peakHour.h, count: peakHour.c })}
+          {t("merchantInsights.hourHeat")}: {t("merchantInsights.hourPeak", { time: formatHourOfDayLabel(peakHour.h, i18n.language), count: peakHour.c })}
         </Text>
       ) : (
         <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>{t("merchantInsights.hourHeatSparse")}</Text>

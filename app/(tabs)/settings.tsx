@@ -692,17 +692,17 @@ export default function SettingsScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#FECACA",
+              borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               gap: Spacing.sm,
-              backgroundColor: "#FEF2F2",
+              backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17, color: "#B91C1C" }}>
+            <Text style={{ fontWeight: "800", fontSize: 17, color: colorScheme === "dark" ? theme.dangerText : "#B91C1C" }}>
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: Gray[600] }}>
+            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }}>
               {t("deleteAccount.sectionBodyConsumer")}
             </Text>
             <PrimaryButton

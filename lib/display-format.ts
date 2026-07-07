@@ -35,6 +35,23 @@ export function compactLocationLabel(location: string | null | undefined): strin
 }
 
 /**
+ * Format a free-text menu price for display. Owners type prices however they
+ * like ("4.25", "1.5", "$3", "Market price", "Sm 4 / Lg 6"). When the value is
+ * a bare number — optionally with a leading "$" — we render it as US currency
+ * ("$1.50"). Anything carrying other text is returned untouched so ranges,
+ * notes, and hand-typed formats are safe. Display only; never mutates storage.
+ */
+export function formatMenuPriceLabel(price: string | null | undefined): string {
+  const raw = (price ?? "").trim();
+  if (!raw) return "";
+  const bare = raw.replace(/^\$\s*/, "");
+  if (!/^\d+(\.\d+)?$/.test(bare)) return raw;
+  const n = Number(bare);
+  if (!Number.isFinite(n)) return raw;
+  return `$${n.toFixed(2)}`;
+}
+
+/**
  * Format a stored phone number for display. Storage keeps whatever the owner
  * entered (often E.164 like "+12142366549"); screens show "(214) 236-6549".
  * Numbers that aren't 10-digit US numbers are returned untouched.

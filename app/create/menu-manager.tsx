@@ -15,6 +15,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
+import { formatMenuPriceLabel } from "@/lib/display-format";
 import { getMenuManagerViewState } from "@/lib/menu-manager-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -363,7 +364,7 @@ export default function MenuManagerScreen() {
                 <>
                   <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{r.name}</Text>
                   {r.category ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.category}</Text> : null}
-                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.price_text}</Text> : null}
+                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{formatMenuPriceLabel(r.price_text)}</Text> : null}
                   {r.description ? <Text style={{ opacity: 0.8, color: theme.text }}>{r.description}</Text> : null}
                   <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
                     <Pressable onPress={() => startEdit(r)}>

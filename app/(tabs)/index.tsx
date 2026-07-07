@@ -127,16 +127,21 @@ type BusinessRow = {
 };
 
 function dealStatusForUser(
-  dealId: string,
+  deal: Pick<Deal, "id" | "end_time">,
   map: Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>,
   now: number,
 ): ConsumerDealStatusKey {
-  const row = map.get(dealId);
-  if (!row) return "live";
-  if (row.redeemed_at) return "redeemed";
-  const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
-  if (isPastClaimRedeemDeadline(row.expires_at, now, g)) return "expired";
-  return "claimed";
+  const row = map.get(deal.id);
+  if (row?.redeemed_at) return "redeemed";
+  if (row) {
+    const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
+    // An unredeemed claim still inside its redeem window keeps the card "claimed".
+    if (!isPastClaimRedeemDeadline(row.expires_at, now, g)) return "claimed";
+    // Otherwise the prior claim lapsed. A lapsed claim does NOT consume the deal,
+    // so fall through and reflect the deal's own status — a live deal stays
+    // re-claimable ("live"), never "expired" just because an old claim timed out.
+  }
+  return new Date(deal.end_time).getTime() > now ? "live" : "expired";
 }
 
 async function fetchActiveDealsForFeed(nowIso: string, limit = 80) {
@@ -985,7 +990,7 @@ export default function HomeScreen() {
               distance: formattedDistance,
             })
           : undefined;
-      const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
+      const st = dealStatusForUser(item, userClaimsByDeal, nowTick);
       // Scarcity: "Only N left" when a capped deal is nearly gone (1-5 remaining).
       // Shows nothing when plentiful, sold out, or counts are unavailable.
       const cap = typeof item.max_claims === "number" && item.max_claims > 0 ? item.max_claims : null;

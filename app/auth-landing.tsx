@@ -140,8 +140,7 @@ function RoleCard({
         onBlur={() => setFocused(false)}
         onPressStateChange={setPressed}
         style={{
-          height: stacked ? 72 : 64,
-          minHeight: stacked ? 72 : 64,
+          minHeight: stacked ? 78 : 72,
           borderRadius: Radii.md,
           borderWidth: selected ? 2 : 1,
           borderColor: selected || focused || pressed ? theme.primary : theme.border,
@@ -185,7 +184,9 @@ function RoleCard({
         </View>
         <Text
           maxFontSizeMultiplier={1.15}
-          numberOfLines={1}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.9}
           style={{ fontSize: 11, lineHeight: 14, color: theme.mutedText }}
         >
           {hint}

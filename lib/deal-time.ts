@@ -57,6 +57,12 @@ function formatMinutesLocalized(minutes: number, locale: Locale) {
   return format(new Date(2000, 0, 1, h, m, 0, 0), "p", { locale });
 }
 
+/** Format an hour-of-day (0–23) as a locale-aware time label, e.g. "7:00 PM". */
+export function formatHourOfDayLabel(hour: number, lang?: string): string {
+  const h = ((Math.trunc(hour) % 24) + 24) % 24;
+  return formatMinutesLocalized(h * 60, dateFnsLocaleFor(lang));
+}
+
 function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
   const sorted = [...days].sort((a, b) => a - b);
   if (sorted.length === 7) return t?.("dealValidity.everyDay") ?? "Every day";
@@ -208,6 +214,28 @@ export function getMerchantDealScheduleStatus(
   return isDealActiveNow(deal) ? "live" : "ended";
 }
 
+/**
+ * Turn an IANA timezone id into a short, customer-friendly label. Uses the
+ * locale's short zone name ("CST"/"CDT") and collapses the US daylight/standard
+ * variants to one generic abbreviation ("CT"). Falls back to the short name, or
+ * the raw id, when no clean abbreviation is available.
+ */
+export function shortTimeZoneLabel(timeZone: string, lang?: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat(lang || "en", {
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(new Date());
+    const name = parts.find((p) => p.type === "timeZoneName")?.value;
+    if (!name) return timeZone;
+    // Collapse US "CST"/"CDT" → "CT" (X[S|D]T pattern); leave "GMT+9" etc. as-is.
+    const generic = name.match(/^([A-Z]{1,3})[SD]T$/);
+    return generic ? `${generic[1]}T` : name;
+  } catch {
+    return timeZone;
+  }
+}
+
 export function formatValiditySummary(deal: RecurringInfo, options?: FormatValiditySummaryOptions) {
   const lang = options?.lang;
   const endsVerb = options?.endsVerb ?? "Ends";
@@ -223,7 +251,7 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
     if (!days.length || windowStart == null || windowEnd == null) {
       return t?.("dealValidity.recurringWindow") ?? "Recurring window";
     }
-    const timeZoneSuffix = options?.showTimeZone === false ? "" : ` (${tz})`;
+    const timeZoneSuffix = options?.showTimeZone === false ? "" : ` (${shortTimeZoneLabel(tz, lang)})`;
     return `${formatDaysLocalized(days, loc, t)} · ${formatMinutesLocalized(windowStart, loc)}–${formatMinutesLocalized(windowEnd, loc)}${timeZoneSuffix}`;
   }
   const start = deal.start_time ? new Date(deal.start_time) : null;

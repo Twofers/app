@@ -45,6 +45,7 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
               disabled={!liveState.claimAvailable}
               onPress={onPrimaryAction}
               secondaryAction={secondaryAction}
+              stacked
             />
           </View>
         </View>
