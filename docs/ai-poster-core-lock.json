@@ -161,10 +161,10 @@
     },
     {
       "path": "supabase/functions/ai-generate-ad-variants/index.ts",
-      "sha256": "cd5b05a765dd6e45c66ddb9ae5eb6507de6dd32e5d6f5f7f990a998baafad7cf",
+      "sha256": "5db033396a1488a0c877b18c0123e99d43c76d0a11c3b6d134f44493169df24c",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior."
+      "approvalRef": "2026-07-07 chat approval: ad_copy reasoningLevel medium->low to fix OPENAI_FETCH_FAILED (gpt-5.4-mini exceeded the ~12s text timeout, dropping the AI image)",
+      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior. 2026-07-07: the ad copy call's reasoningLevel changed medium->low so gpt-5.4-mini returns the same validated 5-variant copy in ~10.5s instead of being aborted at ~16s; no prompt, schema, image, poster-spec, or publish logic changed."
     },
     {
       "path": "supabase/functions/ai-generate-ad-variants/prompt.ts",
@@ -203,17 +203,17 @@
     },
     {
       "path": "supabase/functions/_shared/dalle-image.ts",
-      "sha256": "eacdc1580f63a63e704347aa512fdd91fb46d7e77f14d362b5f519dfd5c1edec",
+      "sha256": "58606cc608841804a0398d7fa9978e8e2ff108b50786c5e932e53a3d94df471f",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "OpenAI image generation prompt and image handling for poster visuals."
+      "approvalRef": "2026-07-07 chat approval: remove gpt-image-2 from the image-model allowlist so the failing primary attempt is skipped (root cause of ai-generate-ad-variants exceeding the 150s edge worker limit)",
+      "rationale": "OpenAI image generation prompt and image handling for poster visuals. 2026-07-07: removed 'gpt-image-2' from OPENAI_IMAGE_MODEL_ALLOWLIST — in prod it fails every request with FETCH_ERROR (hangs to the per-call timeout) before falling back to gpt-image-1, burning the whole image budget and pushing the request past the ~150s worker limit (confirmed via ai_generation_costs: gpt-image-2 ok=false FETCH_ERROR, gpt-image-1 ok=true on every OpenAI image gen). The dashboard OPENAI_IMAGE_MODEL* secret points at gpt-image-2, so dropping it from the allowlist makes pickGenerateModel() fall through to gpt-image-1 directly. IMAGE_CALL_TIMEOUT_MS and all prompts/handling are unchanged from the initial lock."
     },
     {
       "path": "supabase/functions/_shared/dalle-image.test.ts",
-      "sha256": "d1656cefee4b0ba696556c5e179197c13b6c421f39e2ffd9a75041bc2307bcaa",
+      "sha256": "756c521b15f4a8ef5d14263e2786f69d31d1231f585432b13dd801b714a08a77",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Regression tests for OpenAI image generation prompt behavior."
+      "approvalRef": "2026-07-07 chat approval: update the model-selection regression test to assert gpt-image-2 is rejected and falls back to gpt-image-1",
+      "rationale": "Regression tests for OpenAI image generation prompt behavior. 2026-07-07: the model-secret test now asserts a gpt-image-2 generate-model secret falls back to gpt-image-1 (gpt-image-2 removed from the allowlist because it fails every prod request)."
     }
   ]
 }

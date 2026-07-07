@@ -46,23 +46,45 @@ export function isGpt5FamilyModel(model: string): boolean {
 }
 
 /**
+ * Reasoning-token headroom for the gpt-5 family, keyed by reasoning effort.
+ *
+ * `max_completion_tokens` caps reasoning tokens + visible output *combined*.
+ * Passing only the caller's visible-output budget lets reasoning consume the
+ * entire allowance and return empty content (finish_reason "length"), which
+ * surfaces as OPENAI_EMPTY_CONTENT. We reserve a separate reasoning allowance on
+ * top of the output budget so both fit. The reserve is a ceiling, not a target —
+ * it costs nothing unless the model actually spends those reasoning tokens.
+ */
+const GPT5_REASONING_RESERVE_TOKENS: Record<"none" | "low" | "medium" | "high", number> = {
+  none: 0,
+  low: 512,
+  medium: 2048,
+  high: 4096,
+};
+
+/**
  * Returns the chat-completions tuning params appropriate for `model`.
  *
  * gpt-5 family rejects `max_tokens` (HTTP 400 — requires `max_completion_tokens`)
  * and rejects any non-default `temperature`. Those models are also reasoning
- * models: with a tight completion budget the reasoning tokens can consume the
- * whole allowance and leave empty visible output, so callers choose the
- * reasoning effort and we keep a floor under the budget. gpt-4o-class models keep the
- * classic `max_tokens` + `temperature`.
+ * models, so `max_completion_tokens` must cover reasoning *and* the visible
+ * output: we take the caller's output budget and add a reasoning reserve sized to
+ * the chosen effort (see GPT5_REASONING_RESERVE_TOKENS). Without the reserve a
+ * complex call (e.g. the 5-variant ad copy) burns the whole budget on reasoning
+ * and returns empty content. gpt-4o-class models keep the classic
+ * `max_tokens` + `temperature`.
  */
 export function chatCompletionTuning(
   model: string,
   opts: { maxTokens: number; temperature?: number; reasoningEffort?: "none" | "low" | "medium" | "high" },
 ): Record<string, unknown> {
   if (isGpt5FamilyModel(model)) {
+    const effort = opts.reasoningEffort ?? "medium";
+    const outputBudget = Math.max(opts.maxTokens, 512);
+    const reasoningReserve = GPT5_REASONING_RESERVE_TOKENS[effort] ?? GPT5_REASONING_RESERVE_TOKENS.medium;
     return {
-      max_completion_tokens: Math.max(opts.maxTokens, 1024),
-      reasoning_effort: opts.reasoningEffort ?? "medium",
+      max_completion_tokens: outputBudget + reasoningReserve,
+      reasoning_effort: effort,
     };
   }
   const out: Record<string, unknown> = { max_tokens: opts.maxTokens };

@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "dalle-image.ts"), "utf8");
 
 describe("buildPhotoAdImagePrompt", () => {
-  it("allows the hosted generate model secret to select gpt-image-2", async () => {
+  it("rejects a gpt-image-2 generate-model secret and falls back to gpt-image-1", async () => {
+    // gpt-image-2 is intentionally NOT allowlisted: in prod it fails every
+    // request with FETCH_ERROR (hangs to the per-call timeout) and burns the
+    // image budget. When the dashboard secret points at it we must fall through
+    // to the known-good gpt-image-1 instead of selecting it.
     Object.defineProperty(globalThis, "Deno", {
       configurable: true,
       value: {
@@ -17,7 +21,7 @@ describe("buildPhotoAdImagePrompt", () => {
     const cacheBust = `./dalle-image.ts?model=${Date.now()}`;
     const { RESOLVED_IMAGE_GENERATE_MODEL } = await import(cacheBust);
 
-    expect(RESOLVED_IMAGE_GENERATE_MODEL).toBe("gpt-image-2");
+    expect(RESOLVED_IMAGE_GENERATE_MODEL).toBe("gpt-image-1");
   });
 
   it("includes every required visual item for mixed-item offers", async () => {

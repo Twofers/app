@@ -136,7 +136,10 @@ export function resolveAiTextProviderConfig(env: EnvReader = edgeEnv()): AiTextP
     circuitBreakerEnabled: routerEnabled && envFlag(env, "AI_CIRCUIT_BREAKER_ENABLED", false),
     openAiModel: resolveOpenAiChatModel(env),
     geminiTextModel: resolveGeminiTextModel(env, "GEMINI_TEXT_MODEL"),
-    primaryTimeoutMs: envNumber(env, "AI_TEXT_PRIMARY_TIMEOUT_MS", 12_000),
+    // 15s (was 12s): low-reasoning gpt-5.4-mini copy/transcreation returns in
+    // ~10.5s (cold ~11.6s); the extra margin prevents a cold-start abort. Env
+    // override still wins.
+    primaryTimeoutMs: envNumber(env, "AI_TEXT_PRIMARY_TIMEOUT_MS", 15_000),
     fallbackTimeoutMs: envNumber(env, "AI_TEXT_FALLBACK_TIMEOUT_MS", 14_000),
     transientRetryMax: Math.min(1, envNumber(env, "AI_TRANSIENT_RETRY_MAX", 1)),
     retryAfterFullTimeout: envFlag(env, "AI_RETRY_AFTER_FULL_TIMEOUT", false),

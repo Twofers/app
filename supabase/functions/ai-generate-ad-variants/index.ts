@@ -639,7 +639,10 @@ async function generateCopy(params: {
           timeoutMs: 12_000,
           generationRunId: costContext.requestGroupId,
           promptVersion: AD_COPY_PROMPT_VERSION,
-          reasoningLevel: "medium",
+          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call
+          // and is aborted by the ~12s text timeout (OPENAI_FETCH_FAILED). "low"
+          // reasoning returns the same validated 5 variants in ~10.5s, inside budget.
+          reasoningLevel: "low",
         }, {
           openAiApiKey: openAiKey,
           geminiApiKey,

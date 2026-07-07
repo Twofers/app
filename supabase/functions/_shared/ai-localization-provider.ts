@@ -826,7 +826,10 @@ export async function generateAdLocalizationTranscreations(
     timeoutMs: 12_000,
     generationRunId: request.generationRunId,
     promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
-    reasoningLevel: "medium",
+    // "medium" reasoning on gpt-5.4-mini exceeds the ~12s text timeout and is
+    // aborted (OPENAI_FETCH_FAILED), which drops the localized ad. "low" reasoning
+    // completes in-budget with equivalent transcreation quality.
+    reasoningLevel: "low",
   }, {
     ...deps,
     config: deps.config ?? resolveAiTextProviderConfig(deps.env),

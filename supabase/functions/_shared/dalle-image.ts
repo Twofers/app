@@ -7,13 +7,23 @@
  *   the headline above the image.
  */
 
-/** Allowlisted image model ids only — never accept model names from clients. */
+/**
+ * Allowlisted image model ids only — never accept model names from clients.
+ *
+ * gpt-image-2 is intentionally NOT allowlisted: in production it fails every
+ * request with FETCH_ERROR (it hangs until the per-call timeout), burning the
+ * whole image budget before falling back to gpt-image-1. Because the dashboard
+ * OPENAI_IMAGE_MODEL* secret currently points at gpt-image-2, dropping it here
+ * makes pickGenerateModel() fall through to gpt-image-1 directly, so the failing
+ * primary attempt is never made. (Re-added by mistake 2026-06-16; removed again
+ * 2026-07-07 after it caused ai-generate-ad-variants to exceed the ~150s edge
+ * worker limit and return no image. Confirmed via ai_generation_costs.)
+ */
 export const OPENAI_IMAGE_MODEL_ALLOWLIST = new Set([
   "chatgpt-image-latest",
   "gpt-image-1",
   "gpt-image-1-mini",
   "gpt-image-1.5",
-  "gpt-image-2",
 ]);
 
 const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-1";
@@ -23,7 +33,7 @@ const MIN_EDIT_IMAGE_BYTES = 64;
 
 /**
  * Per-call timeout for OpenAI image generate/edit requests. MUST stay safely below
- * the app's EDGE_FN_TIMEOUT_AI_MS (120s — see constants/timing.ts). The server runs
+ * the app's EDGE_FN_TIMEOUT_AI_MS (180s — see constants/timing.ts). The server runs
  * the research and copy stages BEFORE the image call, so if a slow or unavailable
  * image model lets the request hang near the full client budget, the app aborts the
  * whole invoke and shows "We couldn't generate ads right now." 60s leaves headroom
