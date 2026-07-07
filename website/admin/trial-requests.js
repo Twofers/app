@@ -11,6 +11,19 @@
   const loginLink = document.querySelector("[data-admin-login-link]");
   const form = document.querySelector("[data-trial-filter-form]");
   const tbody = document.querySelector("[data-trial-requests-body]");
+  // Dashboard triage links pass ?status= and ?risk=high; honor them on load.
+  const urlParams = new URLSearchParams(window.location.search);
+  const highRiskOnly = urlParams.get("risk") === "high";
+  const HIGH_RISK_MAX_SCORE = 39; // Mirrors admin-dashboard-summary's high-risk definition.
+
+  function applyRequestedQueue() {
+    if (!form) return;
+    const requested = String(urlParams.get("status") || "").trim();
+    if (!requested) return;
+    const select = form.querySelector('select[name="status"]');
+    if (!select) return;
+    if ([...select.options].some((option) => option.value === requested)) select.value = requested;
+  }
 
   function sessionStorageSource() {
     return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
@@ -289,6 +302,8 @@
       detailTd.className = "admin-row-detail";
       detailTd.textContent = [
         app.business_type ? `Type: ${app.business_type}` : "",
+        app.phone ? `Phone: ${app.phone}` : "",
+        app.website_or_instagram ? `Web/IG: ${app.website_or_instagram}` : "",
         app.address ? `Address: ${app.address}` : "",
         app.slow_hours ? `Slow hours: ${app.slow_hours}` : "",
         app.offer_interests ? `Offers: ${app.offer_interests}` : "",
@@ -303,9 +318,20 @@
   async function loadApplications() {
     setTrialStatus("Loading trial requests...");
     const payload = await postAdmin({ action: "list", status: selectedStatus() });
-    renderApplications(payload.applications || []);
+    let applications = payload.applications || [];
+    if (highRiskOnly) {
+      applications = applications.filter((app) => {
+        const score = Number(app.risk_score);
+        return Number.isFinite(score) && score <= HIGH_RISK_MAX_SCORE;
+      });
+    }
+    renderApplications(applications);
     setAdminStatus("Signed in");
-    setTrialStatus(`Loaded ${(payload.applications || []).length} request(s).`);
+    setTrialStatus(
+      highRiskOnly
+        ? `Loaded ${applications.length} high-risk request(s) (risk score ${HIGH_RISK_MAX_SCORE} or lower).`
+        : `Loaded ${applications.length} request(s).`,
+    );
   }
 
   async function decide(applicationId, decision, button) {
@@ -380,6 +406,7 @@
   }
 
   syncNavForSession();
+  applyRequestedQueue();
   loadApplications().catch((error) => {
     if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
     renderEmpty("Sign in to load trial requests.");

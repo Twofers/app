@@ -205,11 +205,23 @@
     }[scope] || scope;
   }
 
+  function humanizeEnum(value) {
+    return String(value || "").replaceAll("_", " ");
+  }
+
+  function applicationStatusTone(status) {
+    if (status === "rejected") return "danger";
+    if (status === "waitlisted" || status === "pending_review" || status === "review_required" || status === "pending_verification") return "warning";
+    if (status === "trial_limited" || status === "approved" || status === "trial_full") return "success";
+    return "info";
+  }
+
   function fillRows(selector, rows, emptyText) {
     const tbody = document.querySelector(selector);
     if (!tbody) return;
+    const isApplications = selector.includes("applications");
     tbody.innerHTML = "";
-    const labels = selector.includes("applications")
+    const labels = isApplications
       ? ["Business", "Email", "Status", "Access", "Created"]
       : ["Action", "Target", "Reason", "Type", "Created"];
     if (!rows.length) {
@@ -224,17 +236,37 @@
     }
     for (const row of rows) {
       const tr = document.createElement("tr");
-      const cells = [
-        row.business_name || row.action || "Unknown",
-        row.email || row.target_type || "",
-        row.status || row.reason || "",
-        row.access_tier || row.action || "",
-        row.created_at ? new Date(row.created_at).toLocaleString() : "",
-      ];
+      const cells = isApplications
+        ? [
+            { href: "/admin/trial-requests", text: row.business_name || "Unknown business" },
+            row.email || "",
+            { badge: humanizeEnum(row.status) || "unknown", tone: applicationStatusTone(row.status) },
+            humanizeEnum(row.access_tier),
+            row.created_at ? new Date(row.created_at).toLocaleString() : "",
+          ]
+        : [
+            humanizeEnum(row.action) || "Unknown",
+            row.target_type || "",
+            row.reason || "",
+            humanizeEnum(row.action),
+            row.created_at ? new Date(row.created_at).toLocaleString() : "",
+          ];
       for (const [index, value] of cells.entries()) {
         const td = document.createElement("td");
         td.dataset.label = labels[index] || "";
-        td.textContent = String(value ?? "");
+        if (value && typeof value === "object" && "badge" in value) {
+          const badge = document.createElement("span");
+          badge.className = `admin-badge ${value.tone || "info"}`;
+          badge.textContent = value.badge;
+          td.appendChild(badge);
+        } else if (value && typeof value === "object" && value.href) {
+          const link = document.createElement("a");
+          link.href = value.href;
+          link.textContent = value.text;
+          td.appendChild(link);
+        } else {
+          td.textContent = String(value ?? "");
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
@@ -460,12 +492,25 @@
     setAiStatus(`Reset ${quotaLabel(quotaScope)} for the selected business.`);
   }
 
+  function renderHealthPlaceholder(message) {
+    if (!businessHealthBody) return;
+    businessHealthBody.innerHTML = "";
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 9;
+    td.className = "admin-row-detail";
+    td.textContent = message;
+    tr.appendChild(td);
+    businessHealthBody.appendChild(tr);
+  }
+
   async function loadSummary() {
     if (!endpoint) return;
     setStatus("Checking admin session");
     const token = await getAccessToken();
     if (!token) {
       setStatus("Admin session not connected", "warning");
+      renderHealthPlaceholder("Connect an active admin session to load business health.");
       return;
     }
 
