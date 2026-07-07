@@ -192,7 +192,7 @@
       "home.flowText": "Explora una oferta de muestra abajo. Cuando la app se lance, reclama ofertas reales cercanas, comparte con un amigo y redime en tienda con codigo QR.",
       "home.nearbyNow": "Cerca ahora",
       "home.sample": "Muestra",
-      "home.offerCroissants": "2x1 en croissants",
+      "home.offerCroissants": "Compra 1 croissant y llevate 1 gratis",
       "home.offerColdBrew": "40% de descuento en cold brew",
       "home.customersEyebrow": "Para clientes",
       "home.customersTitle": "Descubre ofertas locales antes de que desaparezcan",
