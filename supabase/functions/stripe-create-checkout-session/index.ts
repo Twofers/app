@@ -62,9 +62,10 @@ async function consumeTrialNoCardExemptionCode(supabaseAdmin: any, rawCode: stri
   if (!trimmed) return false;
   const codeHash = await sha256Hex(trimmed);
   const nowIso = new Date().toISOString();
-  const { data, error } = await supabaseAdmin
-    .rpc("consume_trial_no_card_exemption_code", { p_code_hash: codeHash, p_now: nowIso })
-    .maybeSingle();
+  const { data, error } = await supabaseAdmin.rpc("consume_trial_no_card_exemption_code", {
+    p_code_hash: codeHash,
+    p_now: nowIso,
+  });
   if (error) {
     console.error("[stripe-create-checkout-session] exemption code check failed:", error);
     return false;
@@ -283,19 +284,25 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Unable to prepare Stripe customer." }, 500);
     }
 
-    // No-card trial (Dan, 2026-07-06): a valid exemption code always waives
-    // both the card requirement and the trial-reuse guard (manual override,
-    // like admin_grant_location_trial's p_override_trial_reuse). Without a
-    // code, the global app_runtime_config.require_card_for_trial switch
-    // decides, and the automatic path still must respect one-trial-per-
-    // physical-location. See findings/05-trial-reuse-guard.md.
-    const exemptionCodeValid = await consumeTrialNoCardExemptionCode(supabaseAdmin, safeGetString(body.trial_no_card_code));
-    let skipCardCollection = exemptionCodeValid || !config.requireCardForTrial;
-    if (skipCardCollection && !exemptionCodeValid) {
+    // No-card trial (Dan, 2026-07-06). First decide the automatic outcome: the
+    // global app_runtime_config.require_card_for_trial switch grants a no-card
+    // trial by default, but only for a storefront that has not already used one
+    // (one-trial-per-physical-location, per findings/05-trial-reuse-guard.md).
+    // Only if the card would otherwise be required do we fall back to a
+    // single-use exemption code, which overrides BOTH the switch and the reuse
+    // guard (a manual VIP override, like admin_grant_location_trial's
+    // p_override_trial_reuse). Consuming the code last avoids burning a
+    // limited-use code when no-card was already going to be granted anyway.
+    let skipCardCollection = false;
+    if (!config.requireCardForTrial) {
       const locationId = await ensurePrimaryBusinessLocationId(supabaseAdmin, businessId);
-      if (locationId && (await isBusinessLocationTrialAlreadyUsed(supabaseAdmin, locationId))) {
-        skipCardCollection = false;
-      }
+      skipCardCollection = !(locationId && (await isBusinessLocationTrialAlreadyUsed(supabaseAdmin, locationId)));
+    }
+    if (!skipCardCollection) {
+      skipCardCollection = await consumeTrialNoCardExemptionCode(
+        supabaseAdmin,
+        safeGetString(body.trial_no_card_code),
+      );
     }
 
     const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");

@@ -45,9 +45,15 @@ function normalizeBillingEnvironment(value: unknown): "test" | "production" {
 export async function loadRuntimeBillingConfig(
   supabase: SupabaseLike,
 ): Promise<RuntimeBillingConfig> {
+  // Select * (this is a single pinned row, id=1) so newly-added columns don't
+  // couple every billing function's config load to migration-vs-deploy order:
+  // an explicit column list would make the whole load ERROR (and fall back to
+  // purchaseSurface "disabled", breaking all checkout) if a function shipped
+  // before a migration that adds a listed column. With *, a not-yet-migrated
+  // column is simply absent and its field falls to the mapped default below.
   const { data, error } = await supabase
     .from("app_runtime_config")
-    .select("purchase_surface,trial_deal_credit_allowance,paid_deal_credit_allowance,credit_reservation_ttl_minutes,billing_environment,entitlement_version,automatic_tax_enabled,twofer_business_monthly_price_id_test,twofer_business_monthly_price_id_live,require_card_for_trial,no_card_trial_days")
+    .select("*")
     .eq("id", 1)
     .maybeSingle();
 

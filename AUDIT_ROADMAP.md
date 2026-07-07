@@ -118,6 +118,39 @@ So the implementer doesn't waste credits or introduce regressions:
 - **`deal_claim_visible_to_business_owner`** is correctly scoped to
   `owner_id = auth.uid()`; no cross-merchant claim access.
 
+## Deploy sequence (Dan-only — hard-gated; agent cannot run these)
+
+Everything below is written and validated locally (typecheck, typecheck:functions,
+lint, full test suite green) but **not applied**. Applying migrations and
+deploying edge functions are CLAUDE.md hard gates. Order matters and differs
+between the two subsystems:
+
+1. **Phase 0 recon first.** Run the `pg_policies` / `role_table_grants` dumps in
+   [00-recon-notes.md](findings/00-recon-notes.md) against prod to confirm the
+   `deal_claims` drift policy and the `businesses` grants before touching RLS.
+2. **Redemption (Findings 01/02/06) — functions BEFORE the migrations.** Deploy
+   `begin-visual-redeem`, `complete-visual-redeem`, `release-claim`,
+   `redeem-token` first, then apply `20260804120000`, `20260804121000`,
+   `20260804122000` in filename order. Applying the `deal_claims` REVOKE
+   (`121000`) before the functions ship would break live redemption.
+3. **Billing (Findings 03/07/05) — migration BEFORE the functions.** Apply
+   `20260804123000` first, then deploy `stripe-webhook` and
+   `stripe-create-checkout-session`. (`loadRuntimeBillingConfig` now uses
+   `select("*")` so a functions-first deploy no longer hard-breaks billing, but
+   migration-first keeps the exemption-code table/RPC present the moment the
+   functions read them.)
+4. **After each RLS migration:** `node scripts/probe-rls-smoke.mjs`.
+5. **Per-finding "How to verify" repros** — the direct-PATCH tests for 01/02
+   must now fail; the test-mode dispute repro for 03; the reuse repro for 05.
+6. **Stripe Dashboard:** subscribe the webhook endpoint to
+   `charge.dispute.created` (Finding 03).
+7. **Config to flip when ready:** `app_runtime_config.require_card_for_trial`
+   stays `false` for the no-card launch cohort; set it `true` later to require a
+   card for all new trials. Hand-issued no-card overrides go in
+   `trial_no_card_exemption_codes` (store the SHA-256 hex of the code in
+   `code_hash`; the raw code is what the owner enters at checkout). No admin UI
+   for minting codes yet — insert rows directly.
+
 ## Notes / things I could not read
 
 - I could not read the **live production RLS policy set** — only the migrations.

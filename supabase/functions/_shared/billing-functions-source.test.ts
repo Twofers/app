@@ -186,19 +186,19 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/from\("business_location_identity"\)\.upsert\(/);
   });
 
-  it("gates the no-card trial on the exemption code or the global switch, and folds in the reuse guard", () => {
+  it("gates the no-card trial on the global switch + reuse guard, then a code as a last-resort override", () => {
     const source = readFunction("stripe-create-checkout-session");
     expect(source).toMatch(/async function consumeTrialNoCardExemptionCode/);
     expect(source).toMatch(/consume_trial_no_card_exemption_code/);
     expect(source).toMatch(/async function isBusinessLocationTrialAlreadyUsed/);
     expect(source).toMatch(/check_business_location_trial_reuse/);
-    expect(source).toMatch(
-      /const exemptionCodeValid = await consumeTrialNoCardExemptionCode\(supabaseAdmin, safeGetString\(body\.trial_no_card_code\)\)/,
-    );
-    expect(source).toMatch(/let skipCardCollection = exemptionCodeValid \|\| !config\.requireCardForTrial/);
-    // A valid exemption code is a manual override -- it must bypass the reuse
-    // guard entirely (mirrors admin_grant_location_trial's own override flag).
-    expect(source).toMatch(/if \(skipCardCollection && !exemptionCodeValid\) \{/);
+    // The automatic no-card grant is gated on the switch AND the per-location
+    // reuse guard...
+    expect(source).toMatch(/if \(!config\.requireCardForTrial\) \{/);
+    expect(source).toMatch(/skipCardCollection = !\(locationId && \(await isBusinessLocationTrialAlreadyUsed\(/);
+    // ...and the code is only consumed when the card would otherwise be
+    // required, so a limited-use code is never burned needlessly.
+    expect(source).toMatch(/if \(!skipCardCollection\) \{\s*\n\s*skipCardCollection = await consumeTrialNoCardExemptionCode\(/);
     expect(source).toMatch(/trial_period_days: config\.noCardTrialDays/);
     expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
   });

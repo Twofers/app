@@ -43,23 +43,30 @@ COMMENT ON TABLE public.trial_no_card_exemption_codes IS
   'Hashed demo/exemption codes that waive the card requirement (and the trial-reuse guard) at self-serve Stripe checkout, regardless of app_runtime_config.require_card_for_trial. Service-role only -- checked/consumed by stripe-create-checkout-session.';
 
 -- Atomic check-and-increment so a shared/popular code can't be raced past
--- max_uses by concurrent checkouts.
+-- max_uses by concurrent checkouts. Always returns a concrete boolean (a bare
+-- `UPDATE ... RETURNING true` would return NULL, not false, when no row
+-- matches), so callers can safely test `data === true`.
 CREATE OR REPLACE FUNCTION public.consume_trial_no_card_exemption_code(
   p_code_hash text,
   p_now timestamptz DEFAULT now()
 )
 RETURNS boolean
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_updated integer;
+BEGIN
   UPDATE public.trial_no_card_exemption_codes
   SET use_count = use_count + 1
   WHERE code_hash = p_code_hash
     AND revoked_at IS NULL
     AND (expires_at IS NULL OR expires_at > p_now)
-    AND use_count < max_uses
-  RETURNING true;
+    AND use_count < max_uses;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.consume_trial_no_card_exemption_code(text, timestamptz) FROM PUBLIC;
