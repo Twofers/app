@@ -1,6 +1,7 @@
 (() => {
   const authEndpoint = document.body.dataset.adminAuthEndpoint;
   const reportEndpoint = document.body.dataset.adminAiOperatingReportEndpoint;
+  const resetLedgerEndpoint = document.body.dataset.adminAiCostLedgerResetEndpoint;
   const tokenKey = "twofer_admin_access_token";
   const refreshTokenKey = "twofer_admin_refresh_token";
   const expiresAtKey = "twofer_admin_expires_at";
@@ -253,6 +254,33 @@
     downloadCsv(reportFilename("prospect-ops"), opsRows(latestReport));
   }
 
+  async function resetCostLedger() {
+    if (!resetLedgerEndpoint) return;
+    const confirmed = window.confirm(
+      "Reset the AI Cost by Feature ledger?\n\nThe table will start counting from $0 as of now. Nothing is deleted — past cost rows stay in the database, so this can be undone.",
+    );
+    if (!confirmed) return;
+    const token = await getToken();
+    if (!token) {
+      setStatus("Admin session not connected", "warning");
+      return;
+    }
+    setStatus("Resetting cost ledger");
+    const response = await fetch(resetLedgerEndpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "Reset from AI Operating Report page." }),
+    });
+    const payload = await readJson(response);
+    if (response.status === 401 || response.status === 403) {
+      clearSession();
+      setStatus(payload.error || "Admin session expired", "warning");
+      return;
+    }
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not reset cost ledger.");
+    await loadReport();
+  }
+
   async function loadReport() {
     const token = await getToken();
     if (!token) {
@@ -335,6 +363,10 @@
   document.querySelector("[data-export-report]")?.addEventListener("click", exportCsv);
   document.querySelector("[data-export-failed-ai]")?.addEventListener("click", exportFailedAiCsv);
   document.querySelector("[data-export-prospect-ops]")?.addEventListener("click", exportProspectOpsCsv);
+
+  document.querySelector("[data-reset-cost-ledger]")?.addEventListener("click", () => {
+    resetCostLedger().catch((error) => setStatus(error instanceof Error ? error.message : "Could not reset cost ledger.", "danger"));
+  });
 
   document.querySelector("[data-copy-founder-summary]")?.addEventListener("click", () => {
     const text = document.querySelector("[data-founder-summary]")?.textContent || "";

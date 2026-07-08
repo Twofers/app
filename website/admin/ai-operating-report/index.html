@@ -12,6 +12,7 @@
     class="admin-shell"
     data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
     data-admin-ai-operating-report-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-ai-operating-report"
+    data-admin-ai-cost-ledger-reset-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-ai-cost-ledger-reset"
   >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
@@ -94,7 +95,10 @@
 
       <section class="admin-grid two">
         <article class="admin-panel">
-          <h2>AI Cost by Feature</h2>
+          <div class="admin-section-header">
+            <h2>AI Cost by Feature</h2>
+            <button type="button" class="button button-small button-secondary" data-reset-cost-ledger>Reset ledger</button>
+          </div>
           <div class="admin-table-wrap"><table class="admin-table" data-mobile-cards><thead><tr><th>Feature</th><th>Model</th><th>Endpoint</th><th>Cost</th><th>Calls</th><th>Failures</th></tr></thead><tbody data-cost-body></tbody></table></div>
         </article>
         <article class="admin-panel">

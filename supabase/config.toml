@@ -632,6 +632,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-ai-operating-report/index.ts"
 
+[functions.admin-ai-cost-ledger-reset]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-cost-ledger-reset/index.ts"
+
 [functions.admin-ai-prompts]
 enabled = true
 verify_jwt = false
