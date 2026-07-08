@@ -68,6 +68,22 @@ describe("deal eligibility inference", () => {
     });
   });
 
+  it("drops a leading duplicate-qualifier from the free item (F-025 regression)", () => {
+    // "get a second muffin free" named the free item "second muffin" -> the terms
+    // line read "receive one second muffin free" and failed the strong-deal BOGO
+    // match, blocking publish. The free item should just be "muffin".
+    expect(
+      inferDealEligibilityFormFromText("Buy any muffin and get a second muffin free today 3pm to 7pm"),
+    ).toMatchObject({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "any muffin",
+      freeItemDescription: "muffin",
+    });
+    expect(
+      inferDealEligibilityFormFromText("Buy a taco and get another taco free"),
+    ).toMatchObject({ freeItemDescription: "taco" });
+  });
+
   it("never seeds half-typed fragments as items (F-002 regression)", () => {
     // Mid-typing "buy one get o[ne free]" used to seed the single letter "o"
     // as both items; that garbage survived draft resume and made server-side
