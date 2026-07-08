@@ -1956,6 +1956,13 @@ main.content-page {
   color: var(--muted);
 }
 
+/* <pre> notes (founder summary, JSON dumps) must wrap instead of overflowing the page. */
+pre.admin-note {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* Loading / error utilities — ready for the JS batch (skeleton rows, inline errors). */
 .admin-skeleton {
   display: block;
