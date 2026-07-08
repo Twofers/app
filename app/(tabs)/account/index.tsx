@@ -1686,11 +1686,11 @@ export default function AccountScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#FECACA",
+              borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
               borderRadius: Radii.md,
               padding: Spacing.md,
               gap: Spacing.xs,
-              backgroundColor: "#FEF2F2",
+              backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
             }}
           >
             <Text
@@ -1698,13 +1698,13 @@ export default function AccountScreen() {
                 fontWeight: "800",
                 fontSize: 16,
                 lineHeight: 20,
-                color: "#B91C1C",
+                color: colorScheme === "dark" ? theme.dangerText : "#B91C1C",
               }}
               maxFontSizeMultiplier={1.08}
             >
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
+            <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
               {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
             </Text>
             <PrimaryButton
