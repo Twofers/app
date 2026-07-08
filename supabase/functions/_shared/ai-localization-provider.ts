@@ -905,7 +905,10 @@ export async function reviewAdLocalizationSemanticQa(
     timeoutMs: 9_000,
     generationRunId: input.request.generationRunId,
     promptVersion: AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION,
-    reasoningLevel: "medium",
+    // low (was medium): the multi-locale QA verdict JSON was getting truncated
+    // when thinking tokens shared the output budget (GEMINI_JSON_PARSE_FAILED,
+    // K-001); a verdict task doesn't need medium reasoning and low fits the 9s timeout.
+    reasoningLevel: "low",
   }, {
     ...deps,
     config: resolveAdLocalizationSemanticQaConfig(deps.env),

@@ -64,6 +64,29 @@ function geminiThinkingLevel(level: StructuredGenerationRequest<unknown>["reason
   return "medium";
 }
 
+/**
+ * Thinking-token headroom, keyed by resolved thinking level.
+ *
+ * Gemini's `maxOutputTokens` caps thought tokens + visible output *combined*
+ * (the same trap as the gpt-5 family's `max_completion_tokens`, see
+ * openai-chat-model.ts). Passing only the caller's visible-output budget lets
+ * thinking consume the whole allowance and truncate the JSON payload, which
+ * surfaces as GEMINI_JSON_PARSE_FAILED / GEMINI_EMPTY_CONTENT. We reserve a
+ * separate thinking allowance on top of the output budget so both fit. The
+ * reserve is a ceiling, not a target — it costs nothing unless spent.
+ */
+const GEMINI_THINKING_RESERVE_TOKENS: Record<string, number> = {
+  minimal: 256,
+  low: 1024,
+  medium: 4096,
+  high: 8192,
+};
+
+export function geminiMaxOutputTokens(outputBudget: number, thinkingLevel: string): number {
+  const reserve = GEMINI_THINKING_RESERVE_TOKENS[thinkingLevel] ?? GEMINI_THINKING_RESERVE_TOKENS.medium;
+  return Math.max(outputBudget, 256) + reserve;
+}
+
 function errorCodeFromGeminiJson(value: unknown): string | null {
   const error = value && typeof value === "object" ? (value as { error?: unknown }).error : null;
   if (!error || typeof error !== "object") return null;
@@ -79,6 +102,13 @@ function errorMessageFromGeminiJson(value: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   const message = (error as { message?: unknown }).message;
   return typeof message === "string" ? message.slice(0, 500) : null;
+}
+
+function geminiFinishReason(json: unknown): string {
+  const candidates = (json as { candidates?: unknown[] } | null)?.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) return "";
+  const finishReason = (candidates[0] as { finishReason?: unknown } | null)?.finishReason;
+  return typeof finishReason === "string" ? finishReason : "";
 }
 
 function extractGeminiText(json: unknown): string {
@@ -190,7 +220,10 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
           generationConfig: {
             responseMimeType: "application/json",
             responseSchema: geminiResponseSchema(params.request.jsonSchema),
-            maxOutputTokens: params.request.maxOutputTokens,
+            maxOutputTokens: geminiMaxOutputTokens(
+              params.request.maxOutputTokens,
+              geminiThinkingLevel(params.request.reasoningLevel),
+            ),
             thinkingConfig: {
               thinkingLevel: geminiThinkingLevel(params.request.reasoningLevel),
             },
@@ -225,13 +258,16 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
 
     const json = await res.json();
     const text = extractGeminiText(json);
+    const truncated = geminiFinishReason(json) === "MAX_TOKENS";
     if (!text) {
       throw new AiProviderError({
         provider: "gemini",
         model: params.model,
         errorClass: "provider_output_invalid",
         errorCode: "GEMINI_EMPTY_CONTENT",
-        message: "Gemini returned no structured content.",
+        message: truncated
+          ? "Gemini returned no structured content (output token budget exhausted)."
+          : "Gemini returned no structured content.",
       });
     }
     let value: unknown;
@@ -243,7 +279,9 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
         model: params.model,
         errorClass: "provider_output_invalid",
         errorCode: "GEMINI_JSON_PARSE_FAILED",
-        message: "Gemini returned invalid JSON.",
+        message: truncated
+          ? "Gemini returned truncated JSON (output token budget exhausted)."
+          : "Gemini returned invalid JSON.",
       });
     }
     const usage = geminiUsage(json);

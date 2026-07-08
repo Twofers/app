@@ -29,9 +29,33 @@ function looksLikePlainItem(value: string): boolean {
   return clean.split(/\s+/).length <= 7;
 }
 
+// Words that can never stand alone as a real menu item. Mid-typing fragments
+// ("buy one get o…") and offer keywords must not be committed to form fields —
+// a bad seed survives draft save/resume and poisons AI generation downstream.
+const NON_ITEM_WORDS = new Set([
+  "one",
+  "1",
+  "a",
+  "an",
+  "the",
+  "item",
+  "items",
+  "same",
+  "next",
+  "second",
+  "another",
+  "free",
+  "it",
+]);
+
+function isUsableItem(cleaned: string): boolean {
+  if (cleaned.length < 2) return false;
+  return !NON_ITEM_WORDS.has(cleaned.toLowerCase());
+}
+
 function withItemSeed(item: string): DealEligibilityFormState | null {
   const cleaned = cleanItem(item);
-  if (!cleaned) return null;
+  if (!cleaned || !isUsableItem(cleaned)) return null;
   return createDefaultDealEligibilityFormState({
     requiredItemDescription: cleaned,
     freeItemDescription: cleaned,
@@ -59,9 +83,16 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
     return seeded ? { ...seeded, dealType: "BUY_ONE_GET_ONE_FREE" } : null;
   }
 
+  // "free" must be explicit here: with it optional, a half-typed "buy one get o"
+  // matched and seeded the single letter "o" as both items (F-002 root cause).
   const buyOneGetOneFreeSuffix = source.match(
     new RegExp(
-      `\\bbuy\\s+${purchaseQuantity}\\s+get\\s+(?:${freeQuantity}\\s+)?(?:free\\s+)?([^.!?,;]+?)(?:\\s+(?:free|for\\s+free))?(?:\\s+[^.!?,;]*)?$`,
+      `\\bbuy\\s+${purchaseQuantity}\\s+get\\s+(?:${freeQuantity}\\s+)?free\\s+([^.!?,;]+)`,
+      "i",
+    ),
+  ) ?? source.match(
+    new RegExp(
+      `\\bbuy\\s+${purchaseQuantity}\\s+get\\s+(?:${freeQuantity}\\s+)?([^.!?,;]+?)\\s+(?:for\\s+)?free\\b`,
       "i",
     ),
   );
@@ -85,7 +116,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
     const requiredItem = cleanItem(buyOneGetFreeItem[1]);
     const freeItem = cleanItem(buyOneGetFreeItem[2]);
     const freeItemIsPronoun = /^(?:one|item|same|next|second|another)$/i.test(freeItem);
-    if (requiredItem && freeItem && !freeItemIsPronoun) {
+    if (requiredItem && freeItem && !freeItemIsPronoun && isUsableItem(requiredItem) && isUsableItem(freeItem)) {
       return {
         ...createDefaultDealEligibilityFormState({
           requiredItemDescription: requiredItem,
@@ -99,7 +130,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   const freeItemWithPurchase = source.match(
     /\b(?:free|complimentary)\s+(.+?)\s+(?:with|when\s+you\s+buy|after\s+buying|after\s+ordering)\s+(?:any\s+|a\s+|an\s+|one\s+|1\s+)?([^.!?,;]+)/i,
   ) ?? source.match(
-    /\b(?:buy|order|purchase)\s+(?:any\s+|a\s+|an\s+|one\s+|1\s+)?(.+?)\s+(?:and\s+)?(?:the\s+)?(.+?)\s+(?:is|are)\s+on\s+us\b/i,
+    /\b(?:buy|order|purchase)\s+(?:any\s+|a\s+|an\s+|one\s+|1\s+)?(.+?)\s+and\s+(?:the\s+)?(.+?)\s+(?:is|are)\s+on\s+us\b/i,
   );
   if (freeItemWithPurchase?.[1] && freeItemWithPurchase[2]) {
     const first = cleanItem(freeItemWithPurchase[1]);
@@ -107,7 +138,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
     const matchedOnUs = /\b(?:is|are)\s+on\s+us\b/i.test(source);
     const requiredItem = matchedOnUs ? first : second;
     const freeItem = matchedOnUs ? second : first;
-    if (requiredItem && freeItem) {
+    if (requiredItem && freeItem && isUsableItem(requiredItem) && isUsableItem(freeItem)) {
       return {
         ...createDefaultDealEligibilityFormState({
           requiredItemDescription: requiredItem,

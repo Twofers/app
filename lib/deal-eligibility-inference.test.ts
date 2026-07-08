@@ -68,6 +68,35 @@ describe("deal eligibility inference", () => {
     });
   });
 
+  it("never seeds half-typed fragments as items (F-002 regression)", () => {
+    // Mid-typing "buy one get o[ne free]" used to seed the single letter "o"
+    // as both items; that garbage survived draft resume and made server-side
+    // image QA unpassable (required visual item "o").
+    expect(inferDealEligibilityFormFromText("House vanilla latte, buy one get o")).toBeNull();
+    expect(inferDealEligibilityFormFromText("House vanilla latte, buy one get on")).toBeNull();
+    expect(inferDealEligibilityFormFromText("House vanilla latte, buy one get one fre")).toBeNull();
+    // No item in the offer clause at all -> stay empty instead of seeding "one"/"free".
+    expect(inferDealEligibilityFormFromText("House vanilla latte, buy one get one free, today only")).toBeNull();
+    expect(inferDealEligibilityFormFromText("Buy one get one free")).toBeNull();
+  });
+
+  it("does not split items across 'and the … is on us' garbage (F-002 regression)", () => {
+    expect(inferDealEligibilityFormFromText("Buy one vanilla latte and the o is on us.")).toBeNull();
+  });
+
+  it("still infers BOGO when the item precedes 'free' after get", () => {
+    expect(inferDealEligibilityFormFromText("Buy one get one latte free")).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "latte",
+      freeItemDescription: "latte",
+    });
+    expect(inferDealEligibilityFormFromText("Buy one get free coffee")).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "coffee",
+      freeItemDescription: "coffee",
+    });
+  });
+
   it("uses a plain item description to seed the default single-item discount", () => {
     expect(inferDealEligibilityFormFromText("Hot fudge sundae")).toMatchObject({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
