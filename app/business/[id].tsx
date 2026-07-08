@@ -33,6 +33,11 @@ import {
   isMissingStructuredDisplayColumnError,
   type DealStructuredDisplayFields,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+} from "@/lib/repeat-claim-visibility";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import {
   isAiV5CustomerLocaleResolutionEnabled,
@@ -168,7 +173,29 @@ export default function BusinessProfileScreen() {
     }
 
     const raw = (dealsData ?? []) as DealRow[];
-    setDeals(raw.filter((d) => isDealActiveNow(d)));
+    const activeDeals = raw.filter((d) => isDealActiveNow(d));
+    // Hide this business's deals when the customer is currently repeat-restricted here,
+    // so they don't see an offer they can't claim. Best-effort: on lookup failure nothing
+    // is hidden and the claim-deal edge function still enforces the limit.
+    if (activeDeals.length > 0) {
+      const [policies, redemptions] = await Promise.all([
+        loadBusinessRepeatPolicies([id]),
+        loadBusinessRedemptionMap(userId, [id]),
+      ]);
+      const nowMs = Date.now();
+      setDeals(
+        activeDeals.filter(
+          (d) =>
+            !isDealHiddenByRepeatPolicy({
+              policy: policies.get(d.business_id),
+              lastRedeemedAt: redemptions.get(d.business_id) ?? null,
+              nowMs,
+            }),
+        ),
+      );
+    } else {
+      setDeals(activeDeals);
+    }
 
     if (userId) {
       const { data: fav } = await supabase

@@ -81,6 +81,12 @@ import {
   isMissingStructuredDisplayColumnError,
   type Deal,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+  type RepeatPolicyFields,
+} from "@/lib/repeat-claim-visibility";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -233,6 +239,10 @@ export default function HomeScreen() {
   >(() => new Map());
   /** Total non-canceled claims per capped deal (deal_claim_counts RPC). Empty until the RPC is deployed. */
   const [claimCountsByDeal, setClaimCountsByDeal] = useState<Map<string, number>>(() => new Map());
+  /** Repeat-claim policy per business + this user's last redemption per business, used to hide
+   *  deals the customer is currently restricted from. Empty maps => nothing hidden. */
+  const [repeatPolicyByBusiness, setRepeatPolicyByBusiness] = useState<Map<string, RepeatPolicyFields>>(() => new Map());
+  const [lastRedeemedByBusiness, setLastRedeemedByBusiness] = useState<Map<string, string>>(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortMode, setSortMode] = useState<ConsumerDealSortMode>(DEFAULT_DEAL_SORT_MODE);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
@@ -422,6 +432,27 @@ export default function HomeScreen() {
     [userId],
   );
 
+  /** Load repeat-claim policy + this user's per-business redemption history for the visible
+   *  deal set, so restricted deals can be hidden. Best-effort: on any failure the maps stay
+   *  empty and nothing is hidden (the claim-deal edge function still enforces the limit). */
+  const loadRepeatVisibility = useCallback(
+    async (dealBusinessIds: string[]) => {
+      const ids = Array.from(new Set(dealBusinessIds.filter(Boolean)));
+      if (ids.length === 0) {
+        setRepeatPolicyByBusiness(new Map());
+        setLastRedeemedByBusiness(new Map());
+        return;
+      }
+      const [policies, redemptions] = await Promise.all([
+        loadBusinessRepeatPolicies(ids),
+        loadBusinessRedemptionMap(userId, ids),
+      ]);
+      setRepeatPolicyByBusiness(policies);
+      setLastRedeemedByBusiness(redemptions);
+    },
+    [userId],
+  );
+
   const loadDeals = useCallback(async () => {
     setLoadingDeals(true);
     const geo = geoRef.current;
@@ -472,7 +503,10 @@ export default function HomeScreen() {
       }
       const filtered = rows.filter((deal) => isDealActiveNow(deal));
       setDeals(filtered);
-      await loadUserClaims(filtered.map((d) => d.id));
+      await Promise.all([
+        loadUserClaims(filtered.map((d) => d.id)),
+        loadRepeatVisibility(filtered.map((d) => d.business_id)),
+      ]);
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown deals load error" };
       logPostgrestError("home screen deals", err);
@@ -481,7 +515,7 @@ export default function HomeScreen() {
     } finally {
       setLoadingDeals(false);
     }
-  }, [loadUserClaims, t]);
+  }, [loadUserClaims, loadRepeatVisibility, t]);
 
   // Re-fetch the nearby deal set when location changes (the user's own radius filter
   // is applied client-side over the fetched set, so radius changes don't need a reload).
@@ -821,9 +855,24 @@ export default function HomeScreen() {
     [t],
   );
 
+  // Hide deals the customer is currently repeat-restricted from, so they never see a deal
+  // they can't claim. Applied upstream of search/radius/sort (and any realtime-added deals).
+  // When no business in view has an active limit, the maps are empty and this is a no-op.
+  const repeatVisibleDeals = useMemo(() => {
+    if (repeatPolicyByBusiness.size === 0) return deals;
+    return deals.filter(
+      (d) =>
+        !isDealHiddenByRepeatPolicy({
+          policy: repeatPolicyByBusiness.get(d.business_id),
+          lastRedeemedAt: lastRedeemedByBusiness.get(d.business_id) ?? null,
+          nowMs: nowTick,
+        }),
+    );
+  }, [deals, repeatPolicyByBusiness, lastRedeemedByBusiness, nowTick]);
+
   const searchFilteredDeals = useMemo(
-    () => deals.filter((d) => dealMatchesSearch(d, searchQuery)),
-    [deals, searchQuery],
+    () => repeatVisibleDeals.filter((d) => dealMatchesSearch(d, searchQuery)),
+    [repeatVisibleDeals, searchQuery],
   );
 
   const dealsWithinRadius = useMemo(() => {

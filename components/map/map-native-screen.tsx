@@ -31,6 +31,11 @@ import {
   isMissingStructuredDisplayColumnError,
   type DealStructuredDisplayFields,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+} from "@/lib/repeat-claim-visibility";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
@@ -200,13 +205,42 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     devWarn("[map] deals fetch failed; preserving previous deals", t("consumerMap.dataError"));
   }
 
+  // Hide deals from businesses that currently repeat-restrict this customer, so a restricted
+  // business loses its live-dot / preview instead of dead-ending at a claim they can't make.
+  // Best-effort: on any lookup failure all deals stay and the claim-deal edge function still
+  // enforces the limit.
+  let visibleDeals = deals;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const businessIds = deals.map((d) => d.business_id);
+    const [policies, redemptions] = await Promise.all([
+      loadBusinessRepeatPolicies(businessIds),
+      loadBusinessRedemptionMap(user?.id ?? null, businessIds),
+    ]);
+    if (policies.size > 0) {
+      const nowMs = Date.now();
+      visibleDeals = deals.filter(
+        (d) =>
+          !isDealHiddenByRepeatPolicy({
+            policy: policies.get(d.business_id),
+            lastRedeemedAt: redemptions.get(d.business_id) ?? null,
+            nowMs,
+          }),
+      );
+    }
+  } catch {
+    // Non-fatal: keep all deals; the claim-deal edge function still enforces the limit.
+  }
+
   return {
     radiusMiles: prefs.radiusMiles,
     userPos,
     showDeviceBlueDot,
     usingDefaultArea: !coords,
     businesses,
-    deals,
+    deals: visibleDeals,
     dealsFetchFailed,
   };
 }
