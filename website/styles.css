@@ -214,6 +214,19 @@ button:hover {
   background: rgb(255 255 255 / 12%);
 }
 
+.button-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+  box-shadow: none;
+}
+
+.button-danger:hover {
+  border-color: #991b1b;
+  background: #991b1b;
+  color: #fff;
+}
+
 [data-store-cta] {
   display: none;
 }
