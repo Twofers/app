@@ -82,6 +82,39 @@ describe("deal eligibility inference", () => {
     expect(
       inferDealEligibilityFormFromText("Buy a taco and get another taco free"),
     ).toMatchObject({ freeItemDescription: "taco" });
+    // Plural purchase, singular referential free item.
+    expect(
+      inferDealEligibilityFormFromText("Buy two muffins and get a third muffin free"),
+    ).toMatchObject({ requiredItemDescription: "two muffins", freeItemDescription: "muffin" });
+    // "Free X with Y" phrasing goes through the same gate.
+    expect(
+      inferDealEligibilityFormFromText("Free second muffin when you buy any muffin"),
+    ).toMatchObject({ requiredItemDescription: "muffin", freeItemDescription: "muffin" });
+  });
+
+  it("keeps qualifier words that are part of a real item name (F-025 gating)", () => {
+    // The strip must only fire when the qualifier refers back to the purchased
+    // item. The first (unconditional) F-025 cut renamed real items.
+    expect(inferDealEligibilityFormFromText("Buy an extra shot latte and get a cookie free")).toMatchObject({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "extra shot latte",
+      freeItemDescription: "cookie",
+    });
+    expect(inferDealEligibilityFormFromText("Buy a burger and get an extra sauce free")).toMatchObject({
+      requiredItemDescription: "burger",
+      freeItemDescription: "extra sauce",
+    });
+  });
+
+  it("does not alter percent-off deal facts by stripping 'second' (F-025 gating)", () => {
+    // "50% off the second pizza" means the SECOND pizza is half price. The
+    // unconditional strip turned the item into "pizza" (50% off ANY pizza),
+    // silently widening the offer. The item must stay "second pizza".
+    expect(inferDealEligibilityFormFromText("50% off the second pizza")).toMatchObject({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      itemDescription: "second pizza",
+      discountPercent: "50",
+    });
   });
 
   it("never seeds half-typed fragments as items (F-002 regression)", () => {

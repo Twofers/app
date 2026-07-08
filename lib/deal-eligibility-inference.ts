@@ -17,24 +17,40 @@ function cleanItem(value: string): string {
     .replace(/\s+(?:for\s+)?free$/i, "")
     .replace(/^(a|an|the|one|1)\s+/i, "")
     .replace(/^(free|complimentary)\s+/i, "")
-    // FLAGGED FOR FUTURE REVIEW (F-025, 2026-07-07) — provisional fix, revisit.
-    // WHAT: strip a leading duplicate-qualifier word (second/2nd/another/next/
-    // extra/same/more/…) from an inferred item name.
-    // WHY: phrasings like "get a second muffin free" named the free item
-    // "second muffin". The canonical terms renderer then emits
-    // "Purchase any muffin to receive one second muffin free" ("one second
-    // muffin" is redundant/ungrammatical), and — because that copy no longer
-    // matches the strong-deal BOGO patterns ("get one <item> free") — the deal
-    // is also blocked at publish by the value-clarity guard (lib/deal-quality.ts).
-    // Dropping the ordinal makes the item just "muffin", so the offer reads
-    // "receive one free muffin" and publishes as a normal BOGO with no value.
-    // LIMITATION / revisit: this is a heuristic on the leading word only. It does
-    // not touch the canonical terms template ("receive one {item} free") in the
-    // LOCKED renderer (lib/authoritative-offer-renderer.ts), which is the deeper
-    // fix if we want "receive a free muffin" phrasing. A legitimate item whose
-    // real name starts with one of these words (rare for deals) would lose it.
-    .replace(/^(?:second|2nd|third|3rd|another|additional|extra|next|same|more)\s+/i, "")
     .trim();
+}
+
+// F-025 (2026-07-07, gated rework of the provisional fix — Dan review pending).
+// "Buy any muffin, get a second muffin free" named the free item "second muffin",
+// so the LOCKED canonical terms template "Purchase {buy} to receive one {free}
+// free" (lib/deal-offer-contract.ts) read "…receive one second muffin free".
+// Strip the leading duplicate-qualifier word, but ONLY from the free-item slot
+// and ONLY when the remainder names the purchased item again — the qualifier is
+// referential ("a second <muffin>" = one more of what you bought).
+// WHY GATED: the first cut stripped these words inside cleanItem for every
+// inferred field, which renamed real items ("extra shot latte" -> "shot latte")
+// and altered percent-off deal facts ("50% off the second pizza" -> "50% off
+// pizza"). When the gate does not fire we keep the merchant's wording; since
+// F-026 the publish guard accepts "receive one <item> free" copy either way, so
+// a kept qualifier is a style issue, not a publish blocker.
+// Deeper (LOCKED, needs Dan): have the terms template drop "one" when the free
+// item already carries a count/ordinal — deferred, purely stylistic post-F-026.
+const DUPLICATE_QUALIFIER_PREFIX =
+  /^(?:second|2nd|third|3rd|another|additional|extra|next|same|more)\s+/i;
+
+function normalizeForSameItemCheck(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^(?:any|a|an|the|one|1|two|2|three|3|your|our)\s+/, "")
+    .replace(/(?:es|s)$/, "");
+}
+
+function stripDuplicateQualifier(freeItem: string, requiredItem: string): string {
+  const remainder = freeItem.replace(DUPLICATE_QUALIFIER_PREFIX, "").trim();
+  if (remainder === freeItem || !remainder || !requiredItem) return freeItem;
+  return normalizeForSameItemCheck(remainder) === normalizeForSameItemCheck(requiredItem)
+    ? remainder
+    : freeItem;
 }
 
 function looksLikePlainItem(value: string): boolean {
@@ -131,7 +147,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   );
   if (buyOneGetFreeItem?.[1] && buyOneGetFreeItem[2]) {
     const requiredItem = cleanItem(buyOneGetFreeItem[1]);
-    const freeItem = cleanItem(buyOneGetFreeItem[2]);
+    const freeItem = stripDuplicateQualifier(cleanItem(buyOneGetFreeItem[2]), requiredItem);
     const freeItemIsPronoun = /^(?:one|item|same|next|second|another)$/i.test(freeItem);
     if (requiredItem && freeItem && !freeItemIsPronoun && isUsableItem(requiredItem) && isUsableItem(freeItem)) {
       return {
@@ -154,7 +170,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
     const second = cleanItem(freeItemWithPurchase[2]);
     const matchedOnUs = /\b(?:is|are)\s+on\s+us\b/i.test(source);
     const requiredItem = matchedOnUs ? first : second;
-    const freeItem = matchedOnUs ? second : first;
+    const freeItem = stripDuplicateQualifier(matchedOnUs ? second : first, requiredItem);
     if (requiredItem && freeItem && isUsableItem(requiredItem) && isUsableItem(freeItem)) {
       return {
         ...createDefaultDealEligibilityFormState({
