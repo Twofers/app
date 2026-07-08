@@ -737,3 +737,8 @@ entrypoint = "./functions/stripe-request-introductory-refund/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-webhook/index.ts"
+
+[functions.import-business-website]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/import-business-website/index.ts"
