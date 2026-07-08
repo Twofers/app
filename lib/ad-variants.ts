@@ -178,7 +178,15 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
   const rawLockedTermsLine = stripAppRenderedTimingMetadata(ad.locked_terms_line?.trim() ?? termsSummary);
   const lockedTermsLine = stripDuplicateLeadingLine(rawLockedTermsLine, lockedOfferLine);
-  const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
+  // F-010: when a persuasive promo line (short_description) is present it already
+  // states the offer, so also emitting the canonical offer line here restates the
+  // offer a third time (promo + offer line + terms) in the stored description.
+  // Drop the offer line in that case — but only when the precise terms line
+  // survives to carry the offer facts, so the offer is never stripped to nothing.
+  const dropOfferLine = Boolean(shortDescription) && Boolean(lockedTermsLine);
+  const offerDetails = [dropOfferLine ? "" : lockedOfferLine, lockedTermsLine]
+    .filter(Boolean)
+    .join("\n");
   const displayAd = normalizeGeneratedAdDisplayCopy(ad);
   return {
     title: displayAd.headline,

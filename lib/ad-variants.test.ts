@@ -4,6 +4,7 @@ import {
   adToDealDraft,
   buildFallbackTemplateAd,
   buildOfferDefinitionFallbackAd,
+  composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
   type GeneratedAd,
 } from "./ad-variants";
@@ -42,7 +43,9 @@ describe("adToDealDraft", () => {
 
     const draft = adToDealDraft(ad, "");
 
-    expect(draft.offer_details).toContain("Buy a large coffee drink and get a free cookie of your choice");
+    // F-010: the promo line already states the offer, so the canonical offer line
+    // is dropped from offer_details (kept only the precise terms).
+    expect(draft.offer_details).not.toContain("Buy a large coffee drink and get a free cookie of your choice");
     expect(draft.offer_details).toContain("Redeem only at 123 Dev Smoke St.");
     expect(draft.offer_details).toContain("Limited to 50 available.");
     expect(draft.offer_details).toContain("Limit one claim per customer.");
@@ -53,7 +56,7 @@ describe("adToDealDraft", () => {
     expect(draft.offer_details).not.toContain("5:47:46 PM");
   });
 
-  it("does not repeat the locked offer when locked terms already start with it", () => {
+  it("drops the offer line from details when a promo line already carries it (F-010)", () => {
     const ad: GeneratedAd = {
       headline: "Get 40% off one large ice tea",
       subheadline: "Save 40% on one large ice tea.",
@@ -64,9 +67,47 @@ describe("adToDealDraft", () => {
         "Get 40% off one large ice tea. Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
     };
 
+    // Previously offer_details led with the offer line, which then stacked onto the
+    // promo line in composeListingDescription and repeated the offer. Now only the
+    // precise terms remain.
     expect(adToDealDraft(ad, "").offer_details).toBe(
-      "Get 40% off one large ice tea\nRedeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
+      "Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
     );
+  });
+
+  it("keeps the offer line when there is no promo line to carry it", () => {
+    const ad: GeneratedAd = {
+      headline: "Get 40% off one large ice tea",
+      subheadline: "",
+      short_description: "",
+      cta: "Claim deal",
+      locked_offer_line: "Get 40% off one large ice tea",
+      locked_terms_line: "Redeem only at 9460 N MacArthur Blvd. Limited to 50 available.",
+    };
+
+    expect(adToDealDraft(ad, "").offer_details).toBe(
+      "Get 40% off one large ice tea\nRedeem only at 9460 N MacArthur Blvd. Limited to 50 available.",
+    );
+  });
+
+  it("stores the offer once, not three times, in the final listing description (F-010)", () => {
+    const ad: GeneratedAd = {
+      headline: "Coffee + cookie",
+      subheadline: "A large coffee drink comes with a free cookie.",
+      short_description: "Buy any large coffee drink and get a free cookie of your choice.",
+      cta: "Claim deal",
+      locked_offer_line: "Buy any large coffee drink and get a free cookie of your choice",
+      locked_terms_line:
+        "Purchase any large coffee drink to receive one free cookie. Redeem only at 12 Test St. Limited to 25 available.",
+    };
+
+    const draft = adToDealDraft(ad, "");
+    const stored = composeListingDescription(draft.promo_line, "", draft.offer_details);
+
+    // The offer headline phrase appears once (the promo line), and the precise
+    // restatement appears once (the terms line) — not the old promo+offer+terms 3×.
+    expect(stored.match(/get a free cookie of your choice/gi)?.length ?? 0).toBe(1);
+    expect(stored).toContain("Purchase any large coffee drink to receive one free cookie.");
   });
 
   it("keeps legacy subheadline behavior for older generated ads", () => {

@@ -63,10 +63,10 @@
     },
     {
       "path": "lib/ad-variants.ts",
-      "sha256": "a5978e0e327fbd1b12125d01dd836822a9005b43857a1e20fc028023dbb09d2a",
+      "sha256": "2226903e9c047889bf856350a49c3d0133550e9efcd5651bfdeb50724ab037a7",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation."
+      "approvalRef": "2026-07-07 F-010: drop canonical offer line from offer_details when a promo line is present",
+      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation. F-010: adToDealDraft no longer emits the locked offer line into offer_details when short_description already carries the offer, so the stored deal description states the offer twice (promo + terms) instead of three times."
     },
     {
       "path": "lib/ai-poster-core-lock.test.ts",
