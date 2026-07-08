@@ -1690,7 +1690,24 @@
     "infoFilled": "Detalles verificados agregados. Revísalos y edítalos si hace falta.",
     "estimatedInfo": "Info is estimated — please verify before saving.",
     "aiEstimate": "Estimated by AI",
-    "verifiedSource": "Verificado por Google Places"
+    "verifiedSource": "Verificado por Google Places",
+    "import": {
+      "title": "Importar desde tu sitio web",
+      "hint": "Tomamos tu logo y menú para que empieces más rápido.",
+      "scanButton": "Importar desde mi sitio web",
+      "loading": "Revisando tu sitio web — unos 20 segundos…",
+      "logoHeader": "Elige tu logo",
+      "menuHeader": "Encontrado en tu sitio web: quita lo que no corresponda.",
+      "removeItem": "Quitar",
+      "consent": "Este es el sitio web de mi negocio y tengo derecho a usar este contenido.",
+      "skip": "Omitir",
+      "failGeneric": "No pudimos leer tu sitio web. Puedes agregar todo manualmente.",
+      "menuNotFound": "No encontramos un menú. Puedes escanearlo más tarde.",
+      "menuPdf": "Encontramos tu menú en PDF: toma una foto de tu menú más tarde.",
+      "menuSaveFailed": "No se pudieron guardar los platillos: puedes escanear tu menú más tarde.",
+      "nothingFound": "No hay nada que importar de tu sitio. Agrega tus datos manualmente.",
+      "rateLimited": "Llegaste al límite de importaciones de hoy. Inténtalo mañana."
+    }
   },
   "settingsConsumer": {
     "editTitle": "Perfil de comprador",

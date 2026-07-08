@@ -4,6 +4,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
+import { File as ExpoFsFile, Paths } from "expo-file-system";
 
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -29,6 +30,13 @@ import {
   type BusinessOnboardingContext,
 } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { isSiteImportEnabled } from "@/lib/runtime-env";
+import {
+  importBusinessWebsite,
+  SiteImportError,
+  type SiteImportMenuItem,
+  type SiteImportResult,
+} from "@/lib/business-site-import";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import {
@@ -103,6 +111,15 @@ export default function BusinessSetupScreen() {
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
   const [onboardingContext, setOnboardingContext] = useState<BusinessOnboardingContext | null>(null);
   const [importedFromWebsite, setImportedFromWebsite] = useState(false);
+  // Website-import (flag-gated). `websiteUrl` is populated by applyLookupResult
+  // from the verified Google Places result; the card only shows once it's set.
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [siteImport, setSiteImport] = useState<null | "loading" | SiteImportResult | "error">(null);
+  const [siteImportError, setSiteImportError] = useState<string | null>(null);
+  const [selectedLogoCandidate, setSelectedLogoCandidate] = useState<number | null>(null);
+  const [importItems, setImportItems] = useState<SiteImportMenuItem[]>([]);
+  const [importConsent, setImportConsent] = useState(false);
+  const [logoFromImport, setLogoFromImport] = useState(false);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -309,7 +326,149 @@ export default function BusinessSetupScreen() {
       aspect: [1, 1],
     });
     if (!result.canceled && result.assets[0]) {
+      // A manual upload wins over any imported logo candidate.
       setLogoUri(result.assets[0].uri);
+      setLogoFromImport(false);
+      setSelectedLogoCandidate(null);
+    }
+  }
+
+  // Clear all website-import review state (new lookup, skip, or consent revoked).
+  const resetSiteImport = useCallback(() => {
+    setSiteImport(null);
+    setSiteImportError(null);
+    setSelectedLogoCandidate(null);
+    setImportItems([]);
+    setImportConsent(false);
+    setLogoFromImport((wasImport) => {
+      if (wasImport) setLogoUri(null);
+      return false;
+    });
+  }, []);
+
+  async function onImportWebsite() {
+    if (!websiteUrl) return;
+    setSiteImport("loading");
+    setSiteImportError(null);
+    setSelectedLogoCandidate(null);
+    setImportConsent(false);
+    try {
+      const result = await importBusinessWebsite({
+        website_url: websiteUrl,
+        business_id: onboardingContext?.business?.id,
+      });
+      setSiteImport(result);
+      setImportItems(result.menu?.items ?? []);
+    } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Website import error:", e);
+      const code = e instanceof SiteImportError ? e.code : "SERVER";
+      setSiteImport("error");
+      setSiteImportError(
+        code === "RATE_LIMITED"
+          ? t("businessSetup.import.rateLimited")
+          : t("businessSetup.import.failGeneric"),
+      );
+    }
+  }
+
+  function mimeToExt(mime: string): string {
+    if (/png/i.test(mime)) return "png";
+    if (/webp/i.test(mime)) return "webp";
+    if (/gif/i.test(mime)) return "gif";
+    return "jpg";
+  }
+
+  // Selecting a candidate applies it to the same `logoUri` the manual upload
+  // path uses (via a cache file), so uploadLogo() works unchanged. Gated on
+  // consent — the copyright confirmation must be checked first.
+  function selectLogoCandidate(index: number) {
+    if (!importConsent) return;
+    const result = siteImport;
+    if (!result || typeof result === "string") return;
+    if (selectedLogoCandidate === index) {
+      setSelectedLogoCandidate(null);
+      setLogoUri(null);
+      setLogoFromImport(false);
+      return;
+    }
+    const candidate = result.logo_candidates[index];
+    if (!candidate) return;
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(candidate.data_uri);
+    if (!match) return;
+    try {
+      // expo-file-system SDK 54 File API (the legacy writeAsStringAsync/cacheDirectory
+      // throws at runtime). Write the base64 payload to a cache file, then feed the
+      // resulting file:// URI through the existing logoUri → uploadLogo() path unchanged.
+      const file = new ExpoFsFile(Paths.cache, `import-logo-${Date.now()}.${mimeToExt(match[1])}`);
+      file.create({ overwrite: true, intermediates: true });
+      file.write(match[2], { encoding: "base64" });
+      setLogoUri(file.uri);
+      setLogoFromImport(true);
+      setSelectedLogoCandidate(index);
+    } catch (e) {
+      if (__DEV__) console.warn("[business-setup] Import logo cache write failed:", e);
+      setBanner({ message: t("businessSetup.errLogoUpload"), tone: "error" });
+    }
+  }
+
+  function toggleImportConsent() {
+    setImportConsent((prev) => {
+      const next = !prev;
+      // Revoking consent unwinds any imported logo (menu is gated at submit).
+      if (!next && logoFromImport) {
+        setLogoUri(null);
+        setLogoFromImport(false);
+        setSelectedLogoCandidate(null);
+      }
+      return next;
+    });
+  }
+
+  function removeImportItem(index: number) {
+    setImportItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const scheduleDashboardRedirect = useCallback(
+    (delayMs: number) => {
+      redirectTimerRef.current = setTimeout(async () => {
+        const pending = await consumePendingDeepLink();
+        router.replace((pending ?? "/(tabs)/dashboard") as Href);
+      }, delayMs);
+    },
+    [router],
+  );
+
+  // Persist kept menu items after the business row exists. Best-effort: never
+  // blocks the business save. Deduped against the existing library by name.
+  async function saveImportedMenuItems(businessId: string): Promise<boolean> {
+    if (!importConsent || importItems.length === 0) return true;
+    try {
+      const { data: existing } = await supabase
+        .from("business_menu_items")
+        .select("name")
+        .eq("business_id", businessId);
+      const existingNames = new Set(
+        (existing ?? [])
+          .map((r) => (typeof (r as { name?: unknown }).name === "string" ? (r as { name: string }).name.trim().toLowerCase() : ""))
+          .filter(Boolean),
+      );
+      const toInsert = importItems.filter((r) => !existingNames.has(r.name.trim().toLowerCase()));
+      if (toInsert.length === 0) return true;
+      const payload = toInsert.map((r, i) => ({
+        business_id: businessId,
+        name: r.name,
+        category: r.category?.trim() || null,
+        price_text: r.price_text?.trim() || null,
+        size_options: r.size_options.length > 0 ? r.size_options : null,
+        sort_order: i,
+        source: "import" as const,
+      }));
+      const { error } = await supabase.from("business_menu_items").insert(payload);
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      if (__DEV__) console.warn("[business-setup] Import menu save failed:", e);
+      return false;
     }
   }
 
@@ -399,6 +558,9 @@ export default function BusinessSetupScreen() {
         setHoursPreset("custom_prompt");
         setCustomHours(details.hours_text);
       }
+      // Enable the (flag-gated) website-import card and clear any prior import.
+      resetSiteImport();
+      setWebsiteUrl(details.website ?? "");
       setLookupResults(null);
       setBanner({ message: t("businessSetup.infoFilled"), tone: "success" });
     } catch (e: unknown) {
@@ -498,11 +660,14 @@ export default function BusinessSetupScreen() {
               .eq("id", onboardingContext.business.id);
           }
         }
-        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-        redirectTimerRef.current = setTimeout(async () => {
-          const pending = await consumePendingDeepLink();
-          router.replace((pending ?? "/(tabs)/dashboard") as Href);
-        }, 250);
+        const menuSaveOk = await saveImportedMenuItems(onboardingContext.business.id);
+        if (menuSaveOk) {
+          setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+          scheduleDashboardRedirect(250);
+        } else {
+          setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
+          scheduleDashboardRedirect(1500);
+        }
         return;
       }
       const { data: bizData, error } = existingBiz
@@ -554,11 +719,15 @@ export default function BusinessSetupScreen() {
         if (upsertByOwner.error) throw upsertByOwner.error;
       }
 
-      setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-      redirectTimerRef.current = setTimeout(async () => {
-        const pending = await consumePendingDeepLink();
-        router.replace((pending ?? "/(tabs)/dashboard") as Href);
-      }, 250);
+      const savedBizId = existingBiz?.id ?? bizData?.id;
+      const menuSaveOk = savedBizId ? await saveImportedMenuItems(savedBizId) : true;
+      if (menuSaveOk) {
+        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+        scheduleDashboardRedirect(250);
+      } else {
+        setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
+        scheduleDashboardRedirect(1500);
+      }
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);
       // Generic "couldn't save" leaves the owner stuck. Pass the raw message through
@@ -575,6 +744,14 @@ export default function BusinessSetupScreen() {
       setBusy(false);
     }
   }
+
+  const siteImportResult: SiteImportResult | null =
+    siteImport && typeof siteImport === "object" ? siteImport : null;
+  const siteImportEmpty =
+    siteImportResult != null &&
+    siteImportResult.logo_candidates.length === 0 &&
+    importItems.length === 0 &&
+    (!siteImportResult.menu || siteImportResult.menu.items.length === 0);
 
   return (
     <KeyboardScreen>
@@ -713,6 +890,9 @@ export default function BusinessSetupScreen() {
           onChangeText={(s) => {
             setBusinessName(s);
             setLookupResults(null);
+            // Editing the name invalidates a prior verified match + its import.
+            if (websiteUrl) setWebsiteUrl("");
+            resetSiteImport();
           }}
           theme={theme}
         />
@@ -761,6 +941,185 @@ export default function BusinessSetupScreen() {
             ))}
           </View>
         )}
+
+        {isSiteImportEnabled() && websiteUrl ? (
+          <View
+            style={{
+              backgroundColor: theme.surface,
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: theme.border,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
+              {t("businessSetup.import.title")}
+            </Text>
+
+            {siteImport === null ? (
+              <>
+                <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.7, color: theme.text }}>
+                  {t("businessSetup.import.hint")}
+                </Text>
+                <SecondaryButton
+                  title={t("businessSetup.import.scanButton")}
+                  onPress={() => void onImportWebsite()}
+                />
+              </>
+            ) : null}
+
+            {siteImport === "loading" ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                }}
+              >
+                <ActivityIndicator color={theme.primary} />
+                <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>
+                  {t("businessSetup.import.loading")}
+                </Text>
+              </View>
+            ) : null}
+
+            {siteImport === "error" ? (
+              <>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: theme.danger }}>
+                  {siteImportError}
+                </Text>
+                <SecondaryButton
+                  title={t("businessSetup.import.scanButton")}
+                  onPress={() => void onImportWebsite()}
+                />
+              </>
+            ) : null}
+
+            {siteImportResult ? (
+              <View style={{ gap: Spacing.sm }}>
+                {/* Copyright consent gate — must be checked before importing content. */}
+                <Pressable
+                  onPress={toggleImportConsent}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: importConsent }}
+                  style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.xs }}
+                >
+                  <MaterialIcons
+                    name={importConsent ? "check-box" : "check-box-outline-blank"}
+                    size={22}
+                    color={importConsent ? theme.primary : theme.icon}
+                  />
+                  <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: theme.text }}>
+                    {t("businessSetup.import.consent")}
+                  </Text>
+                </Pressable>
+
+                {siteImportResult.logo_candidates.length > 0 ? (
+                  <View style={{ gap: Spacing.xs, opacity: importConsent ? 1 : 0.4 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+                      {t("businessSetup.import.logoHeader")}
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
+                      {siteImportResult.logo_candidates.map((c, i) => {
+                        const active = selectedLogoCandidate === i;
+                        return (
+                          <Pressable
+                            key={i}
+                            onPress={() => void selectLogoCandidate(i)}
+                            disabled={!importConsent}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("businessSetup.import.logoHeader")}
+                            accessibilityState={{ selected: active, disabled: !importConsent }}
+                          >
+                            <Image
+                              source={{ uri: c.data_uri }}
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: Radii.md,
+                                borderWidth: active ? 3 : 1,
+                                borderColor: active ? theme.primary : theme.border,
+                                backgroundColor: theme.surfaceMuted,
+                              }}
+                            />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+
+                {importItems.length > 0 ? (
+                  <View style={{ gap: Spacing.xs }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+                      {t("businessSetup.import.menuHeader")}
+                    </Text>
+                    {importItems.map((item, i) => (
+                      <View
+                        key={`${item.name}-${i}`}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: Spacing.sm,
+                          backgroundColor: theme.surfaceMuted,
+                          borderRadius: Radii.md,
+                          paddingVertical: Spacing.xs,
+                          paddingHorizontal: Spacing.sm,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, color: theme.text }} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          {item.price_text ? (
+                            <Text style={{ fontSize: 12, opacity: 0.6, color: theme.text }}>
+                              {item.price_text}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          onPress={() => removeImportItem(i)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("businessSetup.import.removeItem")}
+                          hitSlop={8}
+                          style={{
+                            minWidth: 32,
+                            minHeight: 32,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <MaterialIcons name="close" size={18} color={theme.icon} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {!siteImportResult.menu ? (
+                  <Text style={{ fontSize: 12, opacity: 0.7, color: theme.text }}>
+                    {siteImportResult.warnings.includes("MENU_PDF_ONLY")
+                      ? t("businessSetup.import.menuPdf")
+                      : t("businessSetup.import.menuNotFound")}
+                  </Text>
+                ) : null}
+
+                {siteImportEmpty ? (
+                  <Text style={{ fontSize: 12, opacity: 0.7, color: theme.text }}>
+                    {t("businessSetup.import.nothingFound")}
+                  </Text>
+                ) : null}
+
+                <SecondaryButton
+                  title={t("businessSetup.import.skip")}
+                  onPress={resetSiteImport}
+                />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <Field
           label={t("businessSetup.address")}

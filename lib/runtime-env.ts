@@ -133,6 +133,7 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_SITE_IMPORT: process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT ?? "(unset)",
     EXPO_PUBLIC_ENABLE_MOBILE_STRIPE: process.env.EXPO_PUBLIC_ENABLE_MOBILE_STRIPE ?? "(unset)",
     EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA: process.env.EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA ?? "(unset)",
     EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE: process.env.EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE ?? "(unset)",
@@ -203,6 +204,11 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+/** Website-import at business onboarding (logo + menu prefill). Default off. */
+export function isSiteImportEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT === "true";
 }
 
 export function isAiDealStudioDevEnabled(): boolean {

@@ -1690,7 +1690,24 @@
     "infoFilled": "확인된 세부 정보가 추가되었습니다. 필요하면 검토하고 수정하세요.",
     "estimatedInfo": "Info is estimated — please verify before saving.",
     "aiEstimate": "Estimated by AI",
-    "verifiedSource": "Google Places에서 확인됨"
+    "verifiedSource": "Google Places에서 확인됨",
+    "import": {
+      "title": "웹사이트에서 가져오기",
+      "hint": "로고와 메뉴를 가져와 더 빠르게 시작할 수 있어요.",
+      "scanButton": "내 웹사이트에서 가져오기",
+      "loading": "웹사이트를 확인하는 중 — 약 20초…",
+      "logoHeader": "로고를 선택하세요",
+      "menuHeader": "웹사이트에서 찾았어요 — 잘못된 항목은 지워 주세요.",
+      "removeItem": "삭제",
+      "consent": "이 웹사이트는 제 사업체의 것이며, 이 콘텐츠를 사용할 권리가 있습니다.",
+      "skip": "건너뛰기",
+      "failGeneric": "웹사이트를 읽지 못했어요. 직접 입력할 수 있어요.",
+      "menuNotFound": "메뉴를 찾지 못했어요. 나중에 스캔할 수 있어요.",
+      "menuPdf": "메뉴 PDF를 찾았어요 — 나중에 메뉴 사진을 찍어 주세요.",
+      "menuSaveFailed": "메뉴 항목을 저장하지 못했어요. 나중에 스캔할 수 있어요.",
+      "nothingFound": "사이트에서 가져올 항목이 없어요. 직접 입력해 주세요.",
+      "rateLimited": "오늘의 가져오기 한도에 도달했어요. 내일 다시 시도해 주세요."
+    }
   },
   "settingsConsumer": {
     "editTitle": "쇼퍼 프로필",

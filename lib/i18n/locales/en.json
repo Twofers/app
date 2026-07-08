@@ -1999,6 +1999,23 @@
       "weekends": "Weekends",
       "late_night": "Late night",
       "custom_prompt": "Custom…"
+    },
+    "import": {
+      "title": "Import from your website",
+      "hint": "We'll grab your logo and menu so you can start faster.",
+      "scanButton": "Import from my website",
+      "loading": "Checking your website — about 20 seconds…",
+      "logoHeader": "Pick your logo",
+      "menuHeader": "Found on your website — remove anything that's wrong.",
+      "removeItem": "Remove item",
+      "consent": "This is my business's website and I have the right to use this content.",
+      "skip": "Skip",
+      "failGeneric": "We couldn't read your website. You can add everything manually.",
+      "menuNotFound": "We couldn't find a menu. You can scan it later.",
+      "menuPdf": "We found your menu PDF — snap a photo of your menu later.",
+      "menuSaveFailed": "Couldn't save menu items — you can scan your menu later.",
+      "nothingFound": "Nothing to import from your site. Add your details manually.",
+      "rateLimited": "You've hit today's import limit. Try again tomorrow."
     }
   },
   "settingsConsumer": {
