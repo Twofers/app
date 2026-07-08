@@ -21,24 +21,24 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "b829a2fe7f8081e57a1949fe53a73c3f9ea00e83ed9f65a41cc2060e4c8ba3b4",
+      "sha256": "e310cfd21d0bdc313de1358ebc36c585c145610b374b560b698262a16b300e3b",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-07 chat approval (final-launch-audit fix cycle): F-006 auto-bump a past one-time start time to now on draft resume and at publish; F-024 stop the empty AI poster kicker from falling back to a generic 'Try our' eyebrow (posterEyebrowLabel = null) so it never renders 'Try our any muffin'",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently. 2026-07-07 (F-006): for one-time deals only, a start time that has slipped into the past is clamped up to now — on draft load/resume (so the shown schedule is not stale) and again when building the publish payload (safety net if the draft sat open); recurring deals unchanged. 2026-07-07 (F-024): the empty-kicker eyebrow fallback constant posterEyebrowLabel is now null instead of 'Try our', so a poster whose AI kicker (copy.subline) is empty renders no eyebrow rather than the ungrammatical 'Try our <headline>'; the AdPosterCanvas 'copy.subline || eyebrowLabel' render logic is unchanged. No generation, template, copy, prompt, or poster-layout logic changed."
+      "approvalRef": "2026-07-07 chat approval (final-launch-audit fix cycle): F-006 auto-bump a past one-time start time to now on draft resume and at publish; F-024 stop the empty AI poster kicker from falling back to a generic 'Try our' eyebrow (posterEyebrowLabel = null) so it never renders 'Try our any muffin'; 2026-07-08 Dan chat directive: sync the poster spec headline to the selected copy option, remove the per-option Why-this-angle rationale box",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently. 2026-07-07 (F-006): for one-time deals only, a start time that has slipped into the past is clamped up to now — on draft load/resume (so the shown schedule is not stale) and again when building the publish payload (safety net if the draft sat open); recurring deals unchanged. 2026-07-07 (F-024): the empty-kicker eyebrow fallback constant posterEyebrowLabel is now null instead of 'Try our', so a poster whose AI kicker (copy.subline) is empty renders no eyebrow rather than the ungrammatical 'Try our <headline>'; the AdPosterCanvas 'copy.subline || eyebrowLabel' render logic is unchanged. No generation, template, copy, prompt, or poster-layout logic changed. 2026-07-08 (Dan directive): selectCopyOption now mirrors the chosen option headline into generatedAd.poster.copy.headline so the poster preview and the published spec follow the selection (deterministic offer lines and kicker untouched), and the per-option Why-this-angle rationale box was removed from the copy-option cards (strategy chip + CTA line stay; copyStrategyReasonKey retained per source-test contract)."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",
-      "sha256": "c06e78f1264dd92807791adc4ea01e531b7cb494dfac9053d028760da865f33a",
+      "sha256": "aaa1ec3fcb7574e979cdb9cc752fb914fea49875bbe095e4b39289f09f2d985c",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
-      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement. 2026-07-06: added an optional contentLocale prop and a flag-gated locale-aware copy resolution path (posterCopyFromSpecForLocale, using the existing posterCopyForLocale helper) behind EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED; also added a sibling Poster Look v2 render path (PosterContentV2/TopCopyBlockV2/OfferBlockV2) behind EXPO_PUBLIC_POSTER_LOOK_V2 with Outfit_900Black/BlackHanSans_400Regular display typography, an offer-badge chip, and lighter top/bottom scrims. Both flags default off; the original PosterContent/TopCopyBlock/OfferBlock v1 components and constants are unmodified, so behavior is byte-identical with both flags off."
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md); 2026-07-08 Dan chat directive (F-024 deterministic): blank generic AI kickers (Try our / Our deal / Special offer / Menu pick) at render",
+      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement. 2026-07-06: added an optional contentLocale prop and a flag-gated locale-aware copy resolution path (posterCopyFromSpecForLocale, using the existing posterCopyForLocale helper) behind EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED; also added a sibling Poster Look v2 render path (PosterContentV2/TopCopyBlockV2/OfferBlockV2) behind EXPO_PUBLIC_POSTER_LOOK_V2 with Outfit_900Black/BlackHanSans_400Regular display typography, an offer-badge chip, and lighter top/bottom scrims. Both flags default off; the original PosterContent/TopCopyBlock/OfferBlock v1 components and constants are unmodified, so behavior is byte-identical with both flags off. 2026-07-08 (F-024 deterministic enforcement): sanitizedPosterEyebrow blanks exactly the generic kickers the generation prompt already forbids (Try our, Our deal, Special offer, Menu pick) on both the v1 and v2 top blocks, covering owner previews and already-stored consumer specs; all other kickers render unchanged."
     },
     {
       "path": "components/poster/__tests__/AdPosterCanvas.test.ts",
-      "sha256": "18a236bf7315d35b4e2d6fd38ce7e25446377bd135e12d9b24a7a3e92a4d0573",
+      "sha256": "4d58e4f181b0049aaa221c7b3a261e10a3854faf26e774d50ba895e6f58d3aba",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Protects source-level expectations for the native poster canvas."
+      "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-08 Dan chat directive (F-024): assert the generic-kicker sanitizer exists on both top blocks",
+      "rationale": "Protects source-level expectations for the native poster canvas. 2026-07-08: added guards that sanitizedPosterEyebrow exists, is applied to both eyebrow computations, and covers the TRY OUR default."
     },
     {
       "path": "components/poster/posterTemplates.ts",
@@ -77,10 +77,10 @@
     },
     {
       "path": "lib/create-ai-ux-source.test.ts",
-      "sha256": "9f8574f19a89f513710f8150de95c1334bf560fe73ba1b6760cf0d165597dec9",
+      "sha256": "635de1b3bf71b271a1cd48b6df565df7e25f95463a618170d95e35895b7fc93a",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-04 chat approval: update source guards for preserved image format switching and Standard consumer-feed-style preview",
-      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior. Approved change guards the Standard image-led preview and ensures format switching does not discard the generated asset."
+      "approvalRef": "2026-07-04 chat approval: update source guards for preserved image format switching and Standard consumer-feed-style preview; 2026-07-08 Dan chat directive: guard flipped — the Why-this-angle box must stay removed",
+      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior. Approved change guards the Standard image-led preview and ensures format switching does not discard the generated asset. 2026-07-08: assertions updated to guard the approved removal of the Why-this-angle rationale box (not.toContain on copyOptionReasonLabel and strategy_reason render) while keeping the five-lane, facts-locked, and CTA-line guards."
     },
     {
       "path": "lib/deal-offer-contract.ts",

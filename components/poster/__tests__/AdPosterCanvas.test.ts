@@ -31,6 +31,14 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).toContain("liveScheduleLabel");
     expect(source).toContain("eyebrowLabel");
     expect(source).toContain("copy.subline || eyebrowLabel");
+    // F-024: generic AI kickers the prompt forbids ("Try our", "Our deal",
+    // "Special offer", "Menu pick") are blanked deterministically at render so
+    // they never stack over the headline as "TRY OUR ANY MUFFIN".
+    expect(source).toContain("function sanitizedPosterEyebrow");
+    expect(
+      source.split("sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel))").length - 1,
+    ).toBeGreaterThanOrEqual(2);
+    expect(source).toContain('"TRY OUR"');
     expect(source).toContain("posterText(copy.offer_line_1)");
     expect(source).toContain("posterText(copy.offer_line_2 || copy.headline)");
     expect(source).not.toContain("samePosterLine");

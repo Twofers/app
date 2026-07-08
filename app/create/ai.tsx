@@ -3150,6 +3150,13 @@ export default function AiDealScreen() {
       push_notification: option.push_notification || option.headline,
       social_caption: option.social_caption ?? generatedAd.social_caption,
       cta: option.cta || generatedAd.cta,
+      // Keep the poster spec's persuasive headline in step with the chosen copy
+      // option — otherwise the poster preview (and the published spec) keeps the
+      // originally selected variant's headline. Deterministic offer lines and the
+      // kicker are untouched; only the AI headline follows the selection.
+      poster: generatedAd.poster
+        ? { ...generatedAd.poster, copy: { ...generatedAd.poster.copy, headline: option.headline } }
+        : generatedAd.poster,
       selected_variant_index:
         option.variant_index ?? (
           selectedCopyAlternativeIndex != null && selectedCopyAlternativeIndex >= 0
@@ -5470,9 +5477,6 @@ export default function AiDealScreen() {
                     {copyAlternativeOptions.map((option, index) => {
                       const selected = copyOptionMatchesAd(option, generatedAd);
                       const strategyLabel = copyStrategyLabelKey(option.strategy_id);
-                      const fallbackReason = copyStrategyReasonKey(option.strategy_id);
-                      const strategyReason = compactReviewText(option.strategy_reason) ??
-                        t(fallbackReason.key, { defaultValue: fallbackReason.defaultValue });
                       const ctaLabel = compactReviewText(option.cta ?? generatedAd.cta, 34);
                       return (
                         <Pressable
@@ -5546,14 +5550,6 @@ export default function AiDealScreen() {
                           <Text numberOfLines={2} style={{ color: theme.mutedText, lineHeight: 18 }}>
                             {option.short_description}
                           </Text>
-                          <View style={{ padding: 10, borderRadius: 8, backgroundColor: selected ? theme.surface : theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 3 }}>
-                            <Text style={{ color: theme.mutedText, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0 }} numberOfLines={1}>
-                              {t("createAi.copyOptionReasonLabel", { defaultValue: "Why this angle" })}
-                            </Text>
-                            <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }} numberOfLines={3}>
-                              {strategyReason}
-                            </Text>
-                          </View>
                           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                             {ctaLabel ? (
                               <Text style={{ flex: 1, minWidth: 0, color: theme.mutedText, fontSize: 12, fontWeight: "800" }} numberOfLines={1}>

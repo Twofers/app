@@ -85,6 +85,20 @@ function posterText(value: string | null | undefined): string {
   return cleanText(value).toLocaleUpperCase();
 }
 
+// F-024 (2026-07-08, deterministic enforcement of the prompt's own rule): the
+// generation prompt forbids generic poster kickers ("Try our", "Our deal",
+// "Special offer", "Menu pick"), but nothing enforced it when the model emitted
+// one anyway — stacked above a quantifier headline it renders as the
+// ungrammatical "TRY OUR / ANY MUFFIN...". Blank exactly those documented
+// generic defaults at render time so both the owner preview and already-stored
+// consumer poster specs never show them. Values are compared after posterText
+// uppercasing; anything else passes through untouched.
+const GENERIC_POSTER_KICKERS = new Set(["TRY OUR", "OUR DEAL", "SPECIAL OFFER", "MENU PICK"]);
+
+function sanitizedPosterEyebrow(value: string): string {
+  return GENERIC_POSTER_KICKERS.has(value.trim()) ? "" : value;
+}
+
 function PosterLine({
   value,
   top,
@@ -204,7 +218,7 @@ function TopCopyBlock({
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const heroLine = posterText(copy.headline || copy.offer_line_2);
-  const eyebrow = posterText(copy.subline || eyebrowLabel);
+  const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
 
   return (
     <View
@@ -453,7 +467,7 @@ function TopCopyBlockV2({
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const heroLine = posterText(copy.headline || copy.offer_line_2);
-  const eyebrow = posterText(copy.subline || eyebrowLabel);
+  const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
 
   return (
     <View

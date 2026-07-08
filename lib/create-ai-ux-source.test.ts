@@ -331,10 +331,13 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.copyStrategyLocalDiscovery");
     expect(createAiSource).toContain("createAi.copyStrategyMerchantSpecific");
     expect(createAiSource).toContain("function copyStrategyReasonKey");
-    expect(createAiSource).toContain("compactReviewText(option.strategy_reason)");
     expect(createAiSource).toContain("createAi.copyOptionsCount");
     expect(createAiSource).toContain("createAi.copyOptionFactsLocked");
-    expect(createAiSource).toContain("createAi.copyOptionReasonLabel");
+    // Dan 2026-07-08: the per-option "Why this angle" rationale box was removed
+    // from the copy-option cards (merchants don't read it) — guard against it
+    // coming back. The strategy label chip and CTA line stay.
+    expect(createAiSource).not.toContain("createAi.copyOptionReasonLabel");
+    expect(createAiSource).not.toContain("compactReviewText(option.strategy_reason)");
     expect(createAiSource).toContain("createAi.copyOptionCtaLabel");
   });
 
