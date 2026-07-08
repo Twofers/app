@@ -10,6 +10,9 @@
       "twofer"
     ],
     "userInterfaceStyle": "automatic",
+    "androidNavigationBar": {
+      "enforceContrast": false
+    },
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.unvmex2.twoforone",

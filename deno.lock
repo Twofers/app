@@ -65,6 +65,7 @@
         "npm:expo-linking@~8.0.12",
         "npm:expo-localization@~17.0.9",
         "npm:expo-location@~19.0.8",
+        "npm:expo-navigation-bar@~5.0.10",
         "npm:expo-notifications@~0.32.17",
         "npm:expo-print@~15.0.8",
         "npm:expo-router@~6.0.24",

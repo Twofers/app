@@ -2028,7 +2028,12 @@ export default function AiDealScreen() {
         const loadedCutoffMins = String(row.claim_cutoff_buffer_minutes ?? 15);
         const loadedValidityMode = row.is_recurring ? "recurring" : "one-time";
         const now = new Date();
-        const loadedStartTime = row.start_time ? new Date(String(row.start_time)) : now;
+        const rawLoadedStartTime = row.start_time ? new Date(String(row.start_time)) : now;
+        // A resumed one-time draft can carry a start time that has since passed;
+        // show "now" so the schedule the merchant sees (and publishes) is valid,
+        // not stuck in the past. Recurring deals derive their start at publish.
+        const loadedStartTime =
+          !row.is_recurring && rawLoadedStartTime.getTime() < now.getTime() ? now : rawLoadedStartTime;
         const loadedEndTime = row.end_time ? new Date(String(row.end_time)) : new Date(now.getTime() + 2 * 60 * 60 * 1000);
         const loadedDaysOfWeek =
           Array.isArray(row.days_of_week) && row.days_of_week.length
@@ -3540,7 +3545,14 @@ export default function AiDealScreen() {
       const userPhotoStoragePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
-      const start = isRecurring ? new Date() : startTime;
+      // Clamp a one-time start that has slipped into the past (e.g. a draft
+      // resumed and left open) up to "now", so publish never records a start
+      // time before the deal actually goes live.
+      const start = isRecurring
+        ? new Date()
+        : startTime.getTime() < Date.now()
+          ? new Date()
+          : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
       const sourceLocaleForPublish = localizedOwnerUiEnabled
         ? dealOutputLang

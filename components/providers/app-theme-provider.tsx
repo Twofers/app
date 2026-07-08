@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Appearance, useColorScheme as useNativeColorScheme, View } from "react-native";
+import { ActivityIndicator, Appearance, Platform, useColorScheme as useNativeColorScheme, View } from "react-native";
 import * as SystemUI from "expo-system-ui";
+import * as NavigationBar from "expo-navigation-bar";
 
 import { Colors } from "@/constants/theme";
 import {
@@ -52,6 +53,21 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(theme.background).catch(() => {});
   }, [theme.background]);
+
+  // Android system navigation bar: with edge-to-edge the bar is transparent and
+  // the contrast scrim is disabled (app.json androidNavigationBar.enforceContrast
+  // = false), so it shows the window background set above. Set the foreground
+  // (button/icon) style to follow the APP theme instead of the phone's system
+  // theme — otherwise a dark app keeps a light system nav bar. `setStyle`:
+  // "dark" = dark bar with light icons, "light" = light bar with dark icons.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    try {
+      NavigationBar.setStyle(colorScheme === "dark" ? "dark" : "light");
+    } catch {
+      // No-op: unsupported on gesture-nav bars / older Android; harmless.
+    }
+  }, [colorScheme]);
 
   const setPreference = useCallback(async (nextPreference: ThemePreference) => {
     setPreferenceState(nextPreference);
