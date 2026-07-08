@@ -153,6 +153,14 @@ const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
+// Part B: hard cap on paid image generations per creation. Default 2 preserves
+// today's behavior (one QA-triggered regeneration on a missing-item verdict).
+// Set AI_IMAGE_MAX_GENERATIONS_PER_REQUEST=1 in prod so a QA miss never buys a
+// second image — the first image (or the existing safe fallback) is used instead.
+const MAX_IMAGE_GENERATIONS_PER_REQUEST = Math.max(
+  1,
+  Number.parseInt(Deno.env.get("AI_IMAGE_MAX_GENERATIONS_PER_REQUEST") ?? "2", 10) || 2,
+);
 const ITEM_RESEARCH_PROMPT_VERSION = "AI_ITEM_RESEARCH_V1";
 const ITEM_RESEARCH_SCHEMA = {
   name: "item_research",
@@ -2372,9 +2380,16 @@ async function produceImageOpenAiOnly(params: {
         requiredVisualItems,
         missingItems: firstQa.missing_items,
       });
-      const retryGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt);
-      await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
-      const retryPng = retryGeneration.bytes;
+      // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
+      // miss keeps the first image / existing fallback instead of a second image.
+      const retryGeneration =
+        MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
+          ? await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt)
+          : null;
+      if (retryGeneration) {
+        await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
+      }
+      const retryPng = retryGeneration?.bytes ?? null;
       if (retryPng) {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
@@ -2919,17 +2934,24 @@ async function produceImage(params: {
         requiredVisualItems,
         missingItems: firstQa.missing_items,
       });
-      const retryGeneration = await generateGeminiAdImageWithTelemetry({
-        apiKey: params.geminiApiKey,
-        model: params.imageProviderConfig.geminiModel,
-        prompt: retryPrompt,
-        aspectRatio: params.imageAspectRatio,
-        imageSize: "1K",
-        estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
-        retryOnFailure: false,
-      });
-      await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
-      if (retryGeneration.bytes) {
+      // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
+      // miss keeps the first image / existing fallback instead of a second image.
+      const retryGeneration =
+        MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
+          ? await generateGeminiAdImageWithTelemetry({
+              apiKey: params.geminiApiKey,
+              model: params.imageProviderConfig.geminiModel,
+              prompt: retryPrompt,
+              aspectRatio: params.imageAspectRatio,
+              imageSize: "1K",
+              estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+              retryOnFailure: false,
+            })
+          : null;
+      if (retryGeneration) {
+        await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
+      }
+      if (retryGeneration?.bytes) {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey: params.openAiKey,

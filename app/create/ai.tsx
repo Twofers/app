@@ -1294,7 +1294,12 @@ export default function AiDealScreen() {
       ),
     [t, validityMode, endTime, daysOfWeek, windowStart, windowEnd, i18n.language],
   );
-  const posterEyebrowLabel = t("createAi.posterEyebrowTryOur", { defaultValue: "Try our" });
+  // F-024: an empty AI poster kicker (copy.subline) must NOT fall back to a
+  // generic "Try our" eyebrow — stacked above a headline that begins with a
+  // quantifier ("Any muffin…") it reads as the ungrammatical "Try our any
+  // muffin". The AI leaves the kicker empty on purpose (prompt.ts forbids generic
+  // "Try our" kickers), so render no eyebrow instead of generic filler.
+  const posterEyebrowLabel = null;
   const eligibilityInput = useMemo(
     () => dealEligibilityFormToInput(eligibilityForm),
     [eligibilityForm],
@@ -1838,7 +1843,17 @@ export default function AiDealScreen() {
     setMaxClaims(draft.maxClaims);
     setCutoffMins(draft.cutoffMins);
     setValidityMode(draft.validityMode);
-    setStartTime(new Date(draft.startTime));
+    // F-006: a recovered one-time draft can carry a start time that has since
+    // passed; clamp it up to "now" so the schedule the merchant sees is valid,
+    // matching the edit-existing-deal path (publish already clamps as a net).
+    // Recurring deals derive their start at publish, so leave them untouched.
+    const recoveredStart = new Date(draft.startTime);
+    const recoveredNow = new Date();
+    setStartTime(
+      draft.validityMode !== "recurring" && recoveredStart.getTime() < recoveredNow.getTime()
+        ? recoveredNow
+        : recoveredStart,
+    );
     setEndTime(new Date(draft.endTime));
     setDaysOfWeek(draft.daysOfWeek.length ? draft.daysOfWeek : [1, 2, 3, 4, 5]);
     setWindowStart(dateFromMinutes(draft.windowStartMinutes));

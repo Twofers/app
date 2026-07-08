@@ -173,14 +173,29 @@ not only a frugality change.
   No migration, no deploy, no locked file. This is the fix for why some AI-created BOGOs silently
   refused to publish.
 
-### Ready, needs Dan (locked + hard-gated)
+### Done this session (LOCKED, Dan per-file approved; committed)
+
+- **Part B — one-image cap DONE (source).** `MAX_IMAGE_GENERATIONS_PER_REQUEST` (env
+  `AI_IMAGE_MAX_GENERATIONS_PER_REQUEST`, default 2) now gates the QA-triggered
+  `image_generation_retry` on **both** the OpenAI and Gemini paths in
+  `ai-generate-ad-variants/index.ts`; at `1` a missing-item QA verdict skips the paid
+  regeneration (first image / existing fallback used; QA still runs once). Lock sha bumped;
+  `gate:ai-poster-lock` + `typecheck:functions` + source test green. **Still needs the hard-gated
+  edge deploy (Dan) to take effect, plus the flag set to `1` if you want the cap on.**
+- **F-024 — poster "Try our any muffin" eyebrow DONE.** `posterEyebrowLabel` in `app/create/ai.tsx`
+  is now `null`, so an empty AI kicker (`copy.subline`) renders **no** eyebrow instead of the
+  generic "Try our" that produced "Try our any muffin". `AdPosterCanvas` render unchanged. Lock sha
+  bumped; rebuild to see it (no deploy).
+- **F-006 — recovered-draft past start DONE.** The local-draft-recovery path now clamps a past
+  one-time start up to "now" (matching the edit-existing-deal path), fixing the stale display. Lock
+  sha bumped; rebuild (no deploy).
+
+### Still needs Dan
 
 | Item | Where | Gate |
 |---|---|---|
 | **Part A** — Gemini primary image generation | Supabase Edge **secrets** (`AI_IMAGE_GEMINI_ENABLED=true`, `AI_IMAGE_PROVIDER=gemini`, `GEMINI_API_KEY`) + privacy-disclosure clear | Dan sets secrets; not an agent action. No code. |
-| **Part B** — one-image cap | LOCKED `supabase/functions/ai-generate-ad-variants/index.ts` (gate both `image_generation_retry` blocks behind `AI_IMAGE_MAX_GENERATIONS_PER_REQUEST>=2`, default preserved) | Per-file lock approval → edit + `docs/ai-poster-core-lock.json` sha bump + `gate:ai-poster-lock` + `typecheck:functions`; **hard-gated edge deploy** = Dan. |
-| **F-002 (deeper)** — erratic image item-QA verdicts + copy-only fallback | LOCKED `ai-generate-ad-variants/index.ts` (Stage 3) | Own investigation; Part A likely mitigates the flaky leg first. Per-file approval + deploy. |
-| **F-024** — poster "Try our any muffin" eyebrow | LOCKED `app/create/ai.tsx:1297` + `components/poster/AdPosterCanvas.tsx:207` | Per-file approval + lock sha bump + fixtures; rebuild (no deploy). |
-| **F-006** — recovered-draft past start shown | LOCKED `app/create/ai.tsx:1841` | Per-file approval + lock sha bump; rebuild (no deploy). |
+| **Part B deploy** | edge fn `ai-generate-ad-variants` | Source ready; **hard-gated edge deploy** = Dan (+ set the flag to `1` to enable the cap). |
+| **F-002 (deeper)** — erratic image item-QA verdicts + copy-only fallback | LOCKED `ai-generate-ad-variants/index.ts` (Stage 3) | Own investigation; **Part A is the recommended first-line mitigation** (moves off the flaky OpenAI leg). Per-file approval + deploy. |
 
-**Restore** for every locked item is the same as documented above (flags default to today's behavior).
+**Restore** for every item is the same as documented above (flags default to today's behavior).

@@ -21,10 +21,10 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "7f511ce8745ed5505434a81127b2b5322e768b81674977604ed136c3b8f10da6",
+      "sha256": "b829a2fe7f8081e57a1949fe53a73c3f9ea00e83ed9f65a41cc2060e4c8ba3b4",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-07 chat approval (final-launch-audit fix cycle, F-006): auto-bump a past one-time start time to now on draft resume and at publish",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently. 2026-07-07 (F-006): for one-time deals only, a start time that has slipped into the past is clamped up to now — on draft load/resume (so the shown schedule is not stale) and again when building the publish payload (safety net if the draft sat open); recurring deals unchanged. No generation, template, copy, prompt, or poster logic changed."
+      "approvalRef": "2026-07-07 chat approval (final-launch-audit fix cycle): F-006 auto-bump a past one-time start time to now on draft resume and at publish; F-024 stop the empty AI poster kicker from falling back to a generic 'Try our' eyebrow (posterEyebrowLabel = null) so it never renders 'Try our any muffin'",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently. 2026-07-07 (F-006): for one-time deals only, a start time that has slipped into the past is clamped up to now — on draft load/resume (so the shown schedule is not stale) and again when building the publish payload (safety net if the draft sat open); recurring deals unchanged. 2026-07-07 (F-024): the empty-kicker eyebrow fallback constant posterEyebrowLabel is now null instead of 'Try our', so a poster whose AI kicker (copy.subline) is empty renders no eyebrow rather than the ungrammatical 'Try our <headline>'; the AdPosterCanvas 'copy.subline || eyebrowLabel' render logic is unchanged. No generation, template, copy, prompt, or poster-layout logic changed."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",
@@ -161,10 +161,10 @@
     },
     {
       "path": "supabase/functions/ai-generate-ad-variants/index.ts",
-      "sha256": "5db033396a1488a0c877b18c0123e99d43c76d0a11c3b6d134f44493169df24c",
+      "sha256": "bd3eba1d149ec2f0df505d61a53f773caeaf46671d301d7abff8cbdb3cf8bdd7",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-07 chat approval: ad_copy reasoningLevel medium->low to fix OPENAI_FETCH_FAILED (gpt-5.4-mini exceeded the ~12s text timeout, dropping the AI image)",
-      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior. 2026-07-07: the ad copy call's reasoningLevel changed medium->low so gpt-5.4-mini returns the same validated 5-variant copy in ~10.5s instead of being aborted at ~16s; no prompt, schema, image, poster-spec, or publish logic changed."
+      "approvalRef": "2026-07-07 chat approval: ad_copy reasoningLevel medium->low to fix OPENAI_FETCH_FAILED (gpt-5.4-mini exceeded the ~12s text timeout, dropping the AI image); Part B add AI_IMAGE_MAX_GENERATIONS_PER_REQUEST cap so a missing-item QA verdict never buys a second image (default 2 preserves current behavior)",
+      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior. 2026-07-07: the ad copy call's reasoningLevel changed medium->low so gpt-5.4-mini returns the same validated 5-variant copy in ~10.5s instead of being aborted at ~16s. 2026-07-07 (Part B): a new MAX_IMAGE_GENERATIONS_PER_REQUEST constant (env AI_IMAGE_MAX_GENERATIONS_PER_REQUEST, default 2) gates the QA-triggered image_generation_retry on BOTH the OpenAI and Gemini paths; at 1 a missing-item QA verdict skips the paid regeneration and the first image or existing safe fallback is used, and QA still runs once. No prompt, schema, poster-spec, or publish logic changed; default preserves prior behavior."
     },
     {
       "path": "supabase/functions/ai-generate-ad-variants/prompt.ts",
