@@ -61,7 +61,6 @@ import {
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
   type GeneratedAd,
-  type GeneratedAdCopyAlternative,
   type PhotoTreatment,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
@@ -484,49 +483,6 @@ function sanitizeIntegerInput(raw: string): string {
 
 function cleanCustomImageEditInstruction(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").slice(0, 400);
-}
-
-function copyStrategyLabelKey(strategyId: string | null | undefined): { key: string; defaultValue: string } {
-  switch (strategyId) {
-    case "value_clarity":
-      return { key: "createAi.copyStrategyValueClarity", defaultValue: "Value clarity" };
-    case "social_or_occasion":
-      return { key: "createAi.copyStrategySocialOccasion", defaultValue: "Social moment" };
-    case "product_desire":
-      return { key: "createAi.copyStrategyProductDesire", defaultValue: "Product desire" };
-    case "local_discovery":
-      return { key: "createAi.copyStrategyLocalDiscovery", defaultValue: "Local discovery" };
-    case "merchant_specific":
-      return { key: "createAi.copyStrategyMerchantSpecific", defaultValue: "Shop-specific" };
-    default:
-      return { key: "createAi.copyStrategyDefault", defaultValue: "AI angle" };
-  }
-}
-
-function copyStrategyReasonKey(strategyId: string | null | undefined): { key: string; defaultValue: string } {
-  switch (strategyId) {
-    case "value_clarity":
-      return { key: "createAi.copyStrategyReasonValueClarity", defaultValue: "Leads with the deal so the value is obvious at a glance." };
-    case "social_or_occasion":
-      return { key: "createAi.copyStrategyReasonSocialOccasion", defaultValue: "Frames the offer around a real customer moment." };
-    case "product_desire":
-      return { key: "createAi.copyStrategyReasonProductDesire", defaultValue: "Makes the item feel worth choosing without changing the offer." };
-    case "local_discovery":
-      return { key: "createAi.copyStrategyReasonLocalDiscovery", defaultValue: "Gives nearby customers a simple reason to stop in." };
-    case "merchant_specific":
-      return { key: "createAi.copyStrategyReasonMerchantSpecific", defaultValue: "Uses what is known about this business without inventing facts." };
-    default:
-      return { key: "createAi.copyStrategyReasonDefault", defaultValue: "A distinct AI-written angle for the same locked offer." };
-  }
-}
-
-function compactReviewText(value: string | null | undefined, max = 150): string | null {
-  const clean = value?.replace(/\s+/g, " ").trim();
-  if (!clean) return null;
-  if (clean.length <= max) return clean;
-  const clipped = clean.slice(0, max + 1);
-  const lastSpace = clipped.lastIndexOf(" ");
-  return `${(lastSpace > Math.floor(max * 0.62) ? clipped.slice(0, lastSpace) : clean.slice(0, max)).trim()}...`;
 }
 
 function cleanPreviewText(value: string | null | undefined): string {
@@ -1133,7 +1089,9 @@ export default function AiDealScreen() {
   const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
   const [revisionFeedback, setRevisionFeedback] = useState("");
   const [composedStyleIndex, setComposedStyleIndex] = useState(0);
-  const [composedEditIntent, setComposedEditIntent] = useState<ComposedEditIntent>(null);
+  // Single-variant flow: the edit-intent no longer gates the (now always-visible)
+  // refine panel; the setter still runs as a harmless reset across the flow.
+  const [, setComposedEditIntent] = useState<ComposedEditIntent>(null);
   const [approvedComposedPresentationHash, setApprovedComposedPresentationHash] = useState<string | null>(null);
   const [approvedLocalizationApprovalHash, setApprovedLocalizationApprovalHash] = useState<string | null>(null);
   /**
@@ -3114,75 +3072,6 @@ export default function AiDealScreen() {
     setPublishStatusMessage(null);
   }
 
-  function copyOptionMatchesAd(option: GeneratedAdCopyAlternative, ad: GeneratedAd): boolean {
-    return option.headline.trim() === ad.headline.trim() &&
-      option.short_description.trim() === (ad.short_description ?? ad.subheadline).trim();
-  }
-
-  function copyOptionsRepresentSameCandidate(
-    candidate: GeneratedAdCopyAlternative,
-    selectedOption: GeneratedAdCopyAlternative,
-  ): boolean {
-    if (candidate.candidate_id && selectedOption.candidate_id) {
-      return candidate.candidate_id === selectedOption.candidate_id;
-    }
-    if (candidate.variant_index != null && selectedOption.variant_index != null) {
-      return candidate.variant_index === selectedOption.variant_index;
-    }
-    return copyOptionMatchesAd(candidate, {
-      headline: selectedOption.headline,
-      subheadline: selectedOption.short_description,
-      short_description: selectedOption.short_description,
-      cta: selectedOption.cta ?? "",
-    });
-  }
-
-  function selectCopyOption(option: GeneratedAdCopyAlternative, index: number) {
-    if (!generatedAd || copyOptionMatchesAd(option, generatedAd)) return;
-    const selectedCopyAlternativeIndex = generatedAd.copy_alternatives?.findIndex((candidate) =>
-      copyOptionsRepresentSameCandidate(candidate, option),
-    );
-    const next = normalizeGeneratedAdDisplayCopy({
-      ...generatedAd,
-      headline: option.headline,
-      subheadline: option.short_description,
-      short_description: option.short_description,
-      push_notification: option.push_notification || option.headline,
-      social_caption: option.social_caption ?? generatedAd.social_caption,
-      cta: option.cta || generatedAd.cta,
-      // Keep the poster spec's persuasive headline in step with the chosen copy
-      // option — otherwise the poster preview (and the published spec) keeps the
-      // originally selected variant's headline. Deterministic offer lines and the
-      // kicker are untouched; only the AI headline follows the selection.
-      poster: generatedAd.poster
-        ? { ...generatedAd.poster, copy: { ...generatedAd.poster.copy, headline: option.headline } }
-        : generatedAd.poster,
-      selected_variant_index:
-        option.variant_index ?? (
-          selectedCopyAlternativeIndex != null && selectedCopyAlternativeIndex >= 0
-            ? selectedCopyAlternativeIndex
-            : index
-        ),
-      copy_alternatives: generatedAd.copy_alternatives?.map((candidate) => ({
-        ...candidate,
-        selected: copyOptionsRepresentSameCandidate(candidate, option),
-      })),
-    });
-    setGeneratedAd(next);
-    applyAdToDraft(next);
-    setAdAccepted(false);
-    setApprovedComposedPresentationHash(null);
-    setApprovedLocalizationApprovalHash(null);
-    setPublishStatus("idle");
-    setPublishStatusMessage(null);
-    trackEvent(AiAdsEvents.COPY_OPTION_SELECTED, {
-      screen: "create_ai",
-      option_index: index,
-      strategy_id: option.strategy_id ?? "unknown",
-      revision_count: revisionsUsed,
-    });
-  }
-
   function acceptAd() {
     if (!generatedAd) return;
     if (!imageVersionStoragePath(generatedAd)) {
@@ -4194,10 +4083,6 @@ export default function AiDealScreen() {
     fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
     fallbackCtaLabel: ctaText,
   });
-  const copyAlternativeOptions = (generatedAd?.copy_alternatives ?? [])
-    .filter((option) => option.headline.trim().length > 0 && option.short_description.trim().length > 0)
-    .slice(0, 5);
-  const showCopyAlternatives = Boolean(generatedAd && copyAlternativeOptions.length > 1);
   const composedOfferFacts = ownerLanguagePreview.offerFacts;
   const composedCopy = ownerLanguagePreview.copy;
   const composedMerchant = buildMerchantIdentity({
@@ -4317,7 +4202,10 @@ export default function AiDealScreen() {
     selectedComposedCompositeQa.decision !== "unavailable" &&
     !selectedComposedScreenshotQaRequired;
   const canTryComposedStyle = composedInstantStyleAlternatesEnabled && composedPresentationOptions.length > 1;
-  const showComposedRevisePanel = !adAccepted && (!composedMinimalInputEnabled || composedEditIntent === "words");
+  // Single-variant flow (Dan 2026-07-08): the multi-variant copy picker is gone,
+  // so the "Ask AI for changes" refine panel is always visible under the preview
+  // (the merchant refines the one variant by comment instead of picking angles).
+  const showComposedRevisePanel = !adAccepted;
   const canCompareImages = Boolean(
     selectedPhotoUri &&
       adImageUri &&
@@ -5387,16 +5275,6 @@ export default function AiDealScreen() {
                             scrollRef.current?.scrollTo({ y: 0, animated: true });
                           }}
                         />
-                        <SecondaryButton
-                          title={t("createAi.composedChangeWords", { defaultValue: "Change words" })}
-                          onPress={() => {
-                            setComposedEditIntent("words");
-                            setRevisionTarget("copy");
-                            setTimeout(() => {
-                              scrollRef.current?.scrollToEnd({ animated: true });
-                            }, 80);
-                          }}
-                        />
                         {/* The poster look is fixed to one template, so cycling composed
                             presentations changes nothing visible — hide the button there. */}
                         {showPosterPreview ? null : (
@@ -5452,124 +5330,6 @@ export default function AiDealScreen() {
                     )}
                   </>
                 )}
-
-                {showCopyAlternatives && generatedAd ? (
-                  <View style={{ gap: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <Text style={{ fontWeight: "900", color: theme.text, fontSize: 16 }}>
-                        {t("createAi.copyOptionsTitle", { defaultValue: "Copy options" })}
-                      </Text>
-                      <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border }}>
-                        <Text style={{ color: theme.mutedText, fontSize: 12, fontWeight: "800" }} numberOfLines={1}>
-                          {t("createAi.copyOptionsCount", {
-                            count: copyAlternativeOptions.length,
-                            defaultValue: "{{count}} angles",
-                          })}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colorScheme === "dark" ? "rgba(34,197,94,0.12)" : "#ECFDF5", borderWidth: 1, borderColor: colorScheme === "dark" ? "rgba(34,197,94,0.30)" : "#BBF7D0" }}>
-                      <MaterialIcons name="verified" size={14} color={colorScheme === "dark" ? "#86EFAC" : "#15803D"} />
-                      <Text style={{ color: colorScheme === "dark" ? "#BBF7D0" : "#166534", fontSize: 12, fontWeight: "900" }} numberOfLines={1}>
-                        {t("createAi.copyOptionFactsLocked", { defaultValue: "Offer facts locked" })}
-                      </Text>
-                    </View>
-                    {copyAlternativeOptions.map((option, index) => {
-                      const selected = copyOptionMatchesAd(option, generatedAd);
-                      const strategyLabel = copyStrategyLabelKey(option.strategy_id);
-                      const ctaLabel = compactReviewText(option.cta ?? generatedAd.cta, 34);
-                      return (
-                        <Pressable
-                          key={`${option.candidate_id ?? "copy"}-${index}`}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          onPress={() => selectCopyOption(option, index)}
-                          style={{
-                            borderWidth: 1,
-                            borderColor: selected ? theme.primary : theme.border,
-                            backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-                            borderRadius: 8,
-                            padding: 12,
-                            gap: 9,
-                          }}
-                        >
-                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                            <Text
-                              numberOfLines={1}
-                              style={{
-                                color: selected ? theme.accentText : theme.mutedText,
-                                fontSize: 11,
-                                lineHeight: 14,
-                                fontWeight: "900",
-                                letterSpacing: 0,
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              {t("createAi.copyOptionNumber", {
-                                index: index + 1,
-                                count: copyAlternativeOptions.length,
-                                defaultValue: "Option {{index}}/{{count}}",
-                              })}
-                            </Text>
-                            {selected ? (
-                              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: theme.primary }}>
-                                <Text style={{ color: theme.primaryText, fontSize: 11, fontWeight: "900" }} numberOfLines={1}>
-                                  {t("createAi.copyOptionSelected", { defaultValue: "Selected" })}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </View>
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: selected ? theme.accentText : theme.mutedText,
-                              fontSize: 11,
-                              lineHeight: 14,
-                              fontWeight: "900",
-                              letterSpacing: 0,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {t(strategyLabel.key, { defaultValue: strategyLabel.defaultValue })}
-                          </Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <MaterialIcons
-                              name={selected ? "check-circle" : "radio-button-unchecked"}
-                              size={18}
-                              color={selected ? theme.primary : theme.mutedText}
-                            />
-                            <Text
-                              numberOfLines={2}
-                              adjustsFontSizeToFit
-                              minimumFontScale={0.82}
-                              style={{ flex: 1, minWidth: 0, color: theme.text, fontWeight: "800" }}
-                            >
-                              {option.headline}
-                            </Text>
-                          </View>
-                          <Text numberOfLines={2} style={{ color: theme.mutedText, lineHeight: 18 }}>
-                            {option.short_description}
-                          </Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                            {ctaLabel ? (
-                              <Text style={{ flex: 1, minWidth: 0, color: theme.mutedText, fontSize: 12, fontWeight: "800" }} numberOfLines={1}>
-                                {t("createAi.copyOptionCtaLabel", {
-                                  cta: ctaLabel,
-                                  defaultValue: "Button: {{cta}}",
-                                })}
-                              </Text>
-                            ) : <View style={{ flex: 1 }} />}
-                            <Text style={{ color: selected ? theme.accentText : theme.primary, fontWeight: "900", fontSize: 12 }} numberOfLines={1}>
-                            {selected
-                              ? t("createAi.copyOptionSelected", { defaultValue: "Selected" })
-                              : t("createAi.useThisCopy", { defaultValue: "Use this copy" })}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
 
                 {canCompareImages && originalImageVersion ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>

@@ -315,30 +315,24 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("image_source_mode: sourceModeForRevision");
   });
 
-  it("surfaces all five AI copy lanes for merchant review", () => {
-    const optionsStart = createAiSource.indexOf("const copyAlternativeOptions =");
-    const optionsEnd = createAiSource.indexOf("const showCopyAlternatives", optionsStart);
-    const optionsBlock = createAiSource.slice(optionsStart, optionsEnd);
-
-    expect(optionsStart).toBeGreaterThan(-1);
-    expect(optionsEnd).toBeGreaterThan(optionsStart);
-    expect(optionsBlock).toContain(".slice(0, 5)");
-    expect(optionsBlock).not.toContain(".slice(0, 3)");
-    expect(createAiSource).toContain("function copyStrategyLabelKey");
-    expect(createAiSource).toContain("createAi.copyStrategyValueClarity");
-    expect(createAiSource).toContain("createAi.copyStrategySocialOccasion");
-    expect(createAiSource).toContain("createAi.copyStrategyProductDesire");
-    expect(createAiSource).toContain("createAi.copyStrategyLocalDiscovery");
-    expect(createAiSource).toContain("createAi.copyStrategyMerchantSpecific");
-    expect(createAiSource).toContain("function copyStrategyReasonKey");
-    expect(createAiSource).toContain("createAi.copyOptionsCount");
-    expect(createAiSource).toContain("createAi.copyOptionFactsLocked");
-    // Dan 2026-07-08: the per-option "Why this angle" rationale box was removed
-    // from the copy-option cards (merchants don't read it) — guard against it
-    // coming back. The strategy label chip and CTA line stay.
+  it("shows one variant with an always-visible refine panel (no multi-variant picker)", () => {
+    // Dan 2026-07-08: replaced the multi-variant copy picker with a single
+    // variant + an always-on "Ask AI for changes" refine panel. The picker and
+    // its whole apparatus (strategy chips, "N angles" count, per-option select,
+    // "Offer facts locked" badge, "Why this angle" box) must stay removed.
+    expect(createAiSource).not.toContain("const copyAlternativeOptions =");
+    expect(createAiSource).not.toContain("const showCopyAlternatives");
+    expect(createAiSource).not.toContain("function selectCopyOption");
+    expect(createAiSource).not.toContain("function copyStrategyLabelKey");
+    expect(createAiSource).not.toContain("function copyStrategyReasonKey");
+    expect(createAiSource).not.toContain("createAi.copyOptionsCount");
+    expect(createAiSource).not.toContain("createAi.copyOptionFactsLocked");
     expect(createAiSource).not.toContain("createAi.copyOptionReasonLabel");
-    expect(createAiSource).not.toContain("compactReviewText(option.strategy_reason)");
-    expect(createAiSource).toContain("createAi.copyOptionCtaLabel");
+    expect(createAiSource).not.toContain("createAi.copyOptionNumber");
+    // The refine panel is no longer gated behind "Change words".
+    expect(createAiSource).toContain("const showComposedRevisePanel = !adAccepted;");
+    expect(createAiSource).not.toContain('composedEditIntent === "words"');
+    expect(createAiSource).not.toContain("createAi.composedChangeWords");
   });
 
   it("routes poster-format generated review to the native poster canvas", () => {
@@ -383,22 +377,9 @@ describe("AI create UX source guards", () => {
     expect(generatedReviewSource).not.toContain("generatedAd.item_research?.is_familiar");
   });
 
-  it("tracks selected copy alternatives by candidate identity", () => {
-    const selectStart = createAiSource.indexOf("function selectCopyOption");
-    const selectEnd = createAiSource.indexOf("setGeneratedAd(next);", selectStart);
-    const selectBlock = createAiSource.slice(selectStart, selectEnd);
-
-    expect(createAiSource).toContain("function copyOptionsRepresentSameCandidate");
-    expect(selectStart).toBeGreaterThan(-1);
-    expect(selectEnd).toBeGreaterThan(selectStart);
-    expect(selectBlock).toContain("selectedCopyAlternativeIndex");
-    expect(selectBlock).toContain("copyOptionsRepresentSameCandidate(candidate, option)");
-    expect(selectBlock).not.toContain("candidateIndex === index");
-  });
-
   it("syncs AI-generated copy into deal details immediately", () => {
+    // The single generated variant is pushed into the editable deal fields as
+    // soon as it comes back (no picker selection step in between).
     expect(createAiSource).toMatch(/setGeneratedAd\(normalizedAd\);\s+applyAdToDraft\(normalizedAd\);/);
-    expect(createAiSource).toMatch(/setGeneratedAd\(next\);\s+applyAdToDraft\(next\);/);
-    expect(createAiSource).not.toContain("setGeneratedAd(next);\n    setAdAccepted(false);");
   });
 });
