@@ -101,6 +101,9 @@ export default function BusinessSetupScreen() {
   const [hoursPreset, setHoursPreset] = useState("");
   const [customHours, setCustomHours] = useState("");
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  // Already-saved logo (remote public URL) shown in the circle on return so the
+  // owner sees their logo persisted. Display-only: uploadLogo runs off logoUri.
+  const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
@@ -120,6 +123,9 @@ export default function BusinessSetupScreen() {
   const [importItems, setImportItems] = useState<SiteImportMenuItem[]>([]);
   const [importConsent, setImportConsent] = useState(false);
   const [logoFromImport, setLogoFromImport] = useState(false);
+  // Shown inline when someone taps an imported logo before checking the
+  // copyright-consent box — otherwise the tap is a silent no-op.
+  const [showLogoConsentHint, setShowLogoConsentHint] = useState(false);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -210,6 +216,7 @@ export default function BusinessSetupScreen() {
             Boolean(context.field_sources?.some((source) => source.source === "website_signup" || source.source === "app_login")),
           );
           setInviteValidated(true);
+          setExistingLogoUrl((prev) => prev ?? (row.logo_url ?? null));
           setBusinessName((prev) => prev || (row.name ?? ""));
           setAddress((prev) => prev || (row.address ?? row.location ?? ""));
           setPhone((prev) => prev || (row.phone ?? ""));
@@ -251,6 +258,7 @@ export default function BusinessSetupScreen() {
         return;
       }
       setSetupMode("edit");
+      setExistingLogoUrl((prev) => prev ?? (row.logo_url ?? null));
       setBusinessName((prev) => prev || (row.name ?? ""));
       setAddress((prev) => prev || (row.address ?? ""));
       setPhone((prev) => prev || (row.phone ?? ""));
@@ -340,6 +348,7 @@ export default function BusinessSetupScreen() {
     setSelectedLogoCandidate(null);
     setImportItems([]);
     setImportConsent(false);
+    setShowLogoConsentHint(false);
     setLogoFromImport((wasImport) => {
       if (wasImport) setLogoUri(null);
       return false;
@@ -352,6 +361,7 @@ export default function BusinessSetupScreen() {
     setSiteImportError(null);
     setSelectedLogoCandidate(null);
     setImportConsent(false);
+    setShowLogoConsentHint(false);
     try {
       const result = await importBusinessWebsite({
         website_url: websiteUrl,
@@ -382,7 +392,11 @@ export default function BusinessSetupScreen() {
   // path uses (via a cache file), so uploadLogo() works unchanged. Gated on
   // consent — the copyright confirmation must be checked first.
   function selectLogoCandidate(index: number) {
-    if (!importConsent) return;
+    if (!importConsent) {
+      // Legal gate stays closed, but tell the user why nothing happened.
+      setShowLogoConsentHint(true);
+      return;
+    }
     const result = siteImport;
     if (!result || typeof result === "string") return;
     if (selectedLogoCandidate === index) {
@@ -476,13 +490,29 @@ export default function BusinessSetupScreen() {
     if (!logoUri) return null;
     setLogoUploading(true);
     try {
-      const ext = logoUri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const rawExt = logoUri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const ext = rawExt === "png" ? "png" : rawExt === "webp" ? "webp" : rawExt === "gif" ? "gif" : "jpg";
+      const mime =
+        ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
       const path = `${businessId}/logo_${Date.now()}.${ext}`;
-      const response = await fetch(logoUri);
-      const blob = await response.blob();
+      // fetch(file://).blob() returns an empty body on native RN, so the logo
+      // uploaded as a 0-byte object and never showed on the profile. Read the
+      // file as base64 and upload raw bytes instead — mirrors the proven path
+      // in lib/upload-deal-photo.ts. Web still uses fetch/blob.
+      let body: Blob | ArrayBuffer;
+      if (Platform.OS === "web") {
+        const response = await fetch(logoUri);
+        body = await response.blob();
+      } else {
+        const b64 = await new ExpoFsFile(logoUri).base64();
+        const raw = atob(b64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        body = bytes.buffer;
+      }
       const { error } = await supabase.storage
         .from("business-logos")
-        .upload(path, blob, { contentType: `image/${ext === "png" ? "png" : "jpeg"}`, upsert: true });
+        .upload(path, body, { contentType: mime, upsert: true });
       if (error) throw error;
       const { data: urlData } = supabase.storage.from("business-logos").getPublicUrl(path);
       return urlData.publicUrl;
@@ -745,6 +775,10 @@ export default function BusinessSetupScreen() {
     }
   }
 
+  // Circle preview: a freshly picked/imported logo (local file) wins; otherwise
+  // fall back to the already-saved logo so returning owners see it persisted.
+  const shownLogoUri = logoUri ?? existingLogoUrl;
+
   const siteImportResult: SiteImportResult | null =
     siteImport && typeof siteImport === "object" ? siteImport : null;
   const siteImportEmpty =
@@ -852,9 +886,9 @@ export default function BusinessSetupScreen() {
         {/* Logo upload */}
         <View style={{ alignItems: "center", marginBottom: Spacing.xs }}>
           <Pressable onPress={pickLogo} style={{ alignItems: "center" }}>
-            {logoUri ? (
+            {shownLogoUri ? (
               <Image
-                source={{ uri: logoUri }}
+                source={{ uri: shownLogoUri }}
                 style={{ width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: primary }}
               />
             ) : (
@@ -1017,21 +1051,20 @@ export default function BusinessSetupScreen() {
                 </Pressable>
 
                 {siteImportResult.logo_candidates.length > 0 ? (
-                  <View style={{ gap: Spacing.xs, opacity: importConsent ? 1 : 0.4 }}>
+                  <View style={{ gap: Spacing.xs }}>
                     <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
                       {t("businessSetup.import.logoHeader")}
                     </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, opacity: importConsent ? 1 : 0.4 }}>
                       {siteImportResult.logo_candidates.map((c, i) => {
                         const active = selectedLogoCandidate === i;
                         return (
                           <Pressable
                             key={i}
                             onPress={() => void selectLogoCandidate(i)}
-                            disabled={!importConsent}
                             accessibilityRole="button"
                             accessibilityLabel={t("businessSetup.import.logoHeader")}
-                            accessibilityState={{ selected: active, disabled: !importConsent }}
+                            accessibilityState={{ selected: active }}
                           >
                             <Image
                               source={{ uri: c.data_uri }}
@@ -1048,6 +1081,16 @@ export default function BusinessSetupScreen() {
                         );
                       })}
                     </View>
+                    {!importConsent && showLogoConsentHint ? (
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: theme.primary }}>
+                        {t("businessSetup.import.logoConsentHint")}
+                      </Text>
+                    ) : null}
+                    {importConsent && logoFromImport && selectedLogoCandidate !== null ? (
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: theme.primary }}>
+                        {t("businessSetup.import.logoApplied")}
+                      </Text>
+                    ) : null}
                   </View>
                 ) : null}
 

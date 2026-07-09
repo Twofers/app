@@ -2006,6 +2006,8 @@
       "scanButton": "Import from my website",
       "loading": "Checking your website — about 20 seconds…",
       "logoHeader": "Pick your logo",
+      "logoConsentHint": "Check the box above first.",
+      "logoApplied": "Added as your logo.",
       "menuHeader": "Found on your website — remove anything that's wrong.",
       "removeItem": "Remove item",
       "consent": "This is my business's website and I have the right to use this content.",

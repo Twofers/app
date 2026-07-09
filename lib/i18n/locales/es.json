@@ -1697,6 +1697,8 @@
       "scanButton": "Importar desde mi sitio web",
       "loading": "Revisando tu sitio web — unos 20 segundos…",
       "logoHeader": "Elige tu logo",
+      "logoConsentHint": "Primero marca la casilla de arriba.",
+      "logoApplied": "Agregado como tu logo.",
       "menuHeader": "Encontrado en tu sitio web: quita lo que no corresponda.",
       "removeItem": "Quitar",
       "consent": "Este es el sitio web de mi negocio y tengo derecho a usar este contenido.",
