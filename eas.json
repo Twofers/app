@@ -127,6 +127,7 @@
         "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
         "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
         "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+        "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
         "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
         "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
