@@ -1171,7 +1171,7 @@ export default function HomeScreen() {
               fallbackVisualLabel={t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
               onCardPress={() => router.push(`/deal/${item.id}`)}
               onPrimaryAction={() => void doClaim(item.id)}
-              secondaryAction={{
+              favoriteAction={{
                 label: isFavorite ? t("dealsBrowse.cardSaved") : t("dealsBrowse.cardSaveFavorite"),
                 selected: isFavorite,
                 onPress: () => void toggleFavorite(item.business_id),

@@ -2,12 +2,15 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { AdCallToAction } from "../AdCallToAction";
+import { AdFavoriteButton } from "../AdFavoriteButton";
 import { AdStatusBadges } from "../AdStatusBadges";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
-  const { contentLocale, copy, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
-  const scheduleLine = offerFacts.scheduleSummary || liveState.timeRemainingLabel || liveState.statusLabel;
+  const { contentLocale, copy, favoriteAction, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
+  // Only a real recurring schedule ("Weekdays 2–5 PM") belongs here; never fall back
+  // to the countdown, which the urgency line already carries.
+  const scheduleLine = offerFacts.scheduleSummary?.trim() || null;
   const showMerchantLine = surface !== "consumer_feed";
 
   return (
@@ -18,7 +21,10 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
       accessibilityLabel={props.accessibilityLabel}
       style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}
     >
-      <AdPosterCanvas spec={posterSpec} imageUri={imageUri} contentLocale={contentLocale} style={styles.poster} />
+      <View style={styles.posterWrap}>
+        <AdPosterCanvas spec={posterSpec} imageUri={imageUri} contentLocale={contentLocale} style={styles.poster} />
+        {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
+      </View>
       <View style={[styles.panel, { backgroundColor: tokens.panelBackground }]}>
         <AdStatusBadges
           liveState={liveState}
@@ -27,28 +33,23 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
           showQuantityRemaining={presentation.showQuantityRemaining}
           showTimeRemaining={presentation.showTimeRemaining}
         />
-        <View style={styles.liveRow}>
-          <View style={styles.liveCopy}>
-            {showMerchantLine ? (
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.merchant, { color: tokens.panelMutedText }]}>
-                {merchant.name}
-              </Text>
-            ) : null}
-            <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={[styles.schedule, { color: tokens.panelText }]}>
-              {scheduleLine}
-            </Text>
-          </View>
-          <View style={styles.action}>
-            <AdCallToAction
-              label={copy.ctaLabel}
-              tokens={tokens}
-              disabled={!liveState.claimAvailable}
-              onPress={onPrimaryAction}
-              secondaryAction={secondaryAction}
-              stacked
-            />
-          </View>
-        </View>
+        {showMerchantLine ? (
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.merchant, { color: tokens.panelMutedText }]}>
+            {merchant.name}
+          </Text>
+        ) : null}
+        {scheduleLine ? (
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={[styles.schedule, { color: tokens.panelText }]}>
+            {scheduleLine}
+          </Text>
+        ) : null}
+        <AdCallToAction
+          label={copy.ctaLabel}
+          tokens={tokens}
+          disabled={!liveState.claimAvailable}
+          onPress={onPrimaryAction}
+          secondaryAction={secondaryAction}
+        />
       </View>
     </Pressable>
   );
@@ -60,22 +61,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  posterWrap: {
+    position: "relative",
+  },
   poster: {
     borderRadius: 0,
   },
   panel: {
     padding: 14,
     gap: 9,
-  },
-  liveRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  liveCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
   },
   merchant: {
     fontSize: 11,
@@ -89,9 +83,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "900",
     letterSpacing: 0,
-  },
-  action: {
-    width: 154,
-    maxWidth: "44%",
   },
 });

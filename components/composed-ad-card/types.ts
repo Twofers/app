@@ -18,6 +18,19 @@ export type ComposedAdSecondaryAction = {
   accessibilityLabel?: string;
 };
 
+/**
+ * Save/favorite affinity action rendered as a heart overlay on the card image
+ * (not inside the claim button block). Browse-time action, kept visually distinct
+ * from the primary claim CTA.
+ */
+export type ComposedAdFavoriteAction = {
+  label: string;
+  onPress: () => void;
+  selected?: boolean;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+};
+
 export type ComposedAdCardProps = {
   offerFacts: ImmutableOfferFacts;
   merchant: MerchantDisplayIdentity;
@@ -33,6 +46,7 @@ export type ComposedAdCardProps = {
   onPrimaryAction?: () => void;
   onCardPress?: () => void;
   secondaryAction?: ComposedAdSecondaryAction | null;
+  favoriteAction?: ComposedAdFavoriteAction | null;
 };
 
 export type ComposedAdTemplateProps = ComposedAdCardProps & {
