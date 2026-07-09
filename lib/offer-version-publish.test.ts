@@ -16,11 +16,13 @@ import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
 } from "./deal-offer-contract";
+import { validateDealEligibility, type DealEligibilityInput } from "./deal-eligibility";
 import {
   buildAuthoritativeDealDisplayCopy,
   buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   buildPublishMechanicsValidationCopy,
+  checkMerchantDealTitleAgainstOffer,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
 import { buildAdImageSelection } from "./merchant-image-selection";
@@ -116,6 +118,111 @@ describe("offer version publish client helpers", () => {
       valid: true,
       reasonCodes: [],
     });
+  });
+
+  it("keeps a fact-safe merchant-edited title over the canonical offer line", () => {
+    const definition = buildDefinition();
+
+    expect(
+      buildAuthoritativeDealDisplayCopy(
+        definition,
+        { title: "Latte time with a friend", description: "Body." },
+        { factSafeMerchantTitle: "Latte time with a friend" },
+      ).title,
+    ).toBe("Latte time with a friend");
+
+    // Absent or blank merchant title keeps the canonical line (unedited publishes unchanged).
+    expect(
+      buildAuthoritativeDealDisplayCopy(
+        definition,
+        { title: "AI coffee hook", description: "Body." },
+        { factSafeMerchantTitle: "   " },
+      ).title,
+    ).toBe("Buy one latte and get one free");
+  });
+
+  it("allows merchant titles that omit facts but blocks titles that contradict them", () => {
+    const percentOffEligibility: DealEligibilityInput = {
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "agujjim",
+      itemRetailValueCents: 2500,
+    };
+    const contract = buildDealOfferContract({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Seoul Table",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Seoul Table",
+      dealEligibility: percentOffEligibility,
+      eligibilityResult: validateDealEligibility(percentOffEligibility),
+      activeWindowHumanReadable: "Today, 5:00 PM-9:00 PM",
+      quantityLimit: 25,
+    });
+    if (!contract) throw new Error("Expected valid contract");
+
+    // Creative titles that omit facts are fine — the locked offer line carries them.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Seoul Table dinner night" }, contract).ok).toBe(true);
+    // The canonical line itself always passes.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Get 40% off one agujjim" }, contract).ok).toBe(true);
+    // Empty input and missing contract are no-ops.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "" }, contract).ok).toBe(true);
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Free agujjim" }, null).ok).toBe(true);
+
+    // Contradictions block: "free" on a percent-off deal.
+    const freeCheck = checkMerchantDealTitleAgainstOffer({ title: "Free agujjim tonight" }, contract);
+    expect(freeCheck.ok).toBe(false);
+    expect(freeCheck.blockingCodes).toContain("FREE_OR_BOGO_LANGUAGE_NOT_ALLOWED");
+
+    // Wrong percent blocks.
+    const percentCheck = checkMerchantDealTitleAgainstOffer({ title: "50% off agujjim" }, contract);
+    expect(percentCheck.ok).toBe(false);
+    expect(percentCheck.blockingCodes).toContain("DISCOUNT_PERCENT_CHANGED");
+
+    // A contradicting subheadline blocks even when the title is clean.
+    const supportingCheck = checkMerchantDealTitleAgainstOffer(
+      { title: "Dinner night", supportingLine: "Buy one get one free agujjim" },
+      contract,
+    );
+    expect(supportingCheck.ok).toBe(false);
+
+    // Overlong merchant titles block instead of being silently clipped.
+    const longCheck = checkMerchantDealTitleAgainstOffer(
+      { title: `Agujjim night ${"very ".repeat(20)}special` },
+      contract,
+    );
+    expect(longCheck.ok).toBe(false);
+    expect(longCheck.blockingCodes).toContain("HEADLINE_TOO_LONG");
+  });
+
+  it("blocks merchant titles that change buy-one-get-something-free mechanics", () => {
+    const bogsfEligibility: DealEligibilityInput = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "egg sandwich",
+      requiredItemRetailValueCents: 700,
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    };
+    const contract = buildDealOfferContract({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Test Cafe",
+      dealEligibility: bogsfEligibility,
+      eligibilityResult: validateDealEligibility(bogsfEligibility),
+      activeWindowHumanReadable: "Today, 8:00 AM-10:00 AM",
+      quantityLimit: 50,
+    });
+    if (!contract) throw new Error("Expected valid contract");
+
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Morning sandwich run" }, contract).ok).toBe(true);
+    const buyBothCheck = checkMerchantDealTitleAgainstOffer({ title: "Buy both and save big" }, contract);
+    expect(buyBothCheck.ok).toBe(false);
+    expect(buyBothCheck.blockingCodes).toContain("BUYS_BOTH_ITEMS");
   });
 
   it("falls back to cleaned AI copy when no offer definition is available", () => {

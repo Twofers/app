@@ -1933,6 +1933,7 @@
     "errPublishDraft": "제목과 설명을 생성하거나 입력하세요.",
     "errPublishDraftFirst": "먼저 제목과 설명을 생성하거나 입력하세요.",
     "errPublishFailed": "게시하지 못했습니다.",
+    "errHeadlineContradictsOffer": "제목 또는 부제목이 이 딜의 고정된 혜택 내용과 일치하지 않습니다. 혜택에 맞게 문구를 수정한 후 다시 게시해 주세요.",
     "errPublishPermission": "권한이 없습니다. 이 비즈니스의 소유자 계정인지 확인해 주세요.",
     "errPublishDuplicate": "이 딜은 이미 있습니다.",
     "errPublishPhoto": "사진 업로드에 실패했습니다. 다른 사진을 선택해 주세요.",

@@ -1933,6 +1933,7 @@
     "errPublishDraft": "Genera o ingresa un título y una descripción.",
     "errPublishDraftFirst": "Genera o ingresa un título y una descripción primero.",
     "errPublishFailed": "No se pudo publicar.",
+    "errHeadlineContradictsOffer": "Tu título o subtítulo no coincide con los datos fijos de esta oferta. Ajusta el texto para que corresponda a la oferta y vuelve a publicar.",
     "errPublishPermission": "Permiso denegado. Asegúrate de ser propietario de este negocio.",
     "errPublishDuplicate": "Esta oferta ya existe.",
     "errPublishPhoto": "No se pudo subir la foto. Intenta elegir otra foto.",

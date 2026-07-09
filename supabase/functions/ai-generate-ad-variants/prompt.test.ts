@@ -171,6 +171,42 @@ describe("buildAdCopyPrompt", () => {
     expect(schema.properties.creativeBrief.required).toContain("targetCustomerMoment");
   });
 
+  it("keeps customer moments congruent with the actual item and category", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("40% off agujjim", "agujjim"),
+      businessName: "Seoul Table",
+      businessContext: {
+        category: "Korean restaurant",
+        location: "Carrollton",
+        tone: "warm and direct",
+        description: "Family-run Korean restaurant.",
+      },
+      offerContract: contractFor({
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 40,
+        itemDescription: "agujjim",
+        itemRetailValueCents: 2500,
+      }),
+    });
+
+    // Category playbook resolves to the actual business type, not a cafe default.
+    expect(prompt.system).toContain("restaurant_food");
+    // Congruence rules: occasion must match the item; kickers come from the
+    // business's own category playbook instead of a hardcoded coffee-first list.
+    expect(prompt.system).toContain("must fit the actual item");
+    expect(prompt.system).toContain("never use a moment that belongs to a different business category");
+    expect(prompt.system).toContain("Never borrow a moment from a different kind of business");
+    expect(prompt.system).not.toContain("Good examples: Coffee break");
+    // Regression: the percent-off example teaches the wrong-occasion failure directly.
+    expect(prompt.system).toContain("Bad posterKicker: Coffee break");
+  });
+
+  it("no longer frames every business as a coffee shop", () => {
+    expect(basePrompt.system).not.toContain("coffee shops, cafes, bakeries");
+    expect(basePrompt.system).toContain("local businesses publish limited local deals");
+  });
+
   it("tells the model not to invent missing facts", () => {
     expect(basePrompt.system).toContain("Do not invent missing products");
     expect(basePrompt.userText).toContain("write around it without inventing it");

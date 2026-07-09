@@ -182,6 +182,7 @@ import {
   buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   buildPublishMechanicsValidationCopy,
+  checkMerchantDealTitleAgainstOffer,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
   type PublishOfferVersionedDealResult,
@@ -704,8 +705,19 @@ function generatedAdForPublishSpec(params: {
   uploadedPhotoStoragePath: string | null;
   usePhotoAsFinal: boolean;
   merchantOriginalWarningAcknowledged: boolean;
+  // Fields the merchant actually changed in the draft editor (null = untouched).
+  // They override the AI copy so what the owner sees in the edit boxes is what
+  // publishes — the locked offer/terms lines still come from offer facts.
+  merchantEditedCopy?: {
+    title: string | null;
+    promoLine: string | null;
+    ctaText: string | null;
+  };
 }): GeneratedAd | null {
   if (!params.ad) return null;
+  const editedTitle = params.merchantEditedCopy?.title?.trim() || null;
+  const editedPromoLine = params.merchantEditedCopy?.promoLine?.trim() || null;
+  const editedCta = params.merchantEditedCopy?.ctaText?.trim() || null;
   const selectedStoragePath = params.finalStoragePath ?? params.ad.poster_storage_path ?? null;
   const usingUploadedPhoto =
     params.usePhotoAsFinal &&
@@ -724,6 +736,9 @@ function generatedAdForPublishSpec(params: {
 
   return {
     ...params.ad,
+    ...(editedTitle ? { headline: editedTitle } : {}),
+    ...(editedPromoLine ? { short_description: editedPromoLine, subheadline: editedPromoLine } : {}),
+    ...(editedCta ? { cta: editedCta } : {}),
     poster_storage_path: selectedStoragePath,
     photo_source: photoSource,
     photo_treatment: photoTreatment,
@@ -3480,12 +3495,49 @@ export default function AiDealScreen() {
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
+      // Fields the merchant changed in the draft editor (vs. the accepted AI
+      // draft baseline). With no baseline (manual draft, deal edit, restored
+      // recovery draft) the box content is wholly the merchant's, so it counts
+      // as edited. Unedited fields stay null so the AI copy flows unchanged.
+      const draftBaseline = aiDraftBaselineRef.current;
+      const merchantEditedCopy = {
+        title:
+          title.trim() && (!draftBaseline || title.trim() !== draftBaseline.title.trim())
+            ? title.trim()
+            : null,
+        promoLine:
+          promoLine.trim() && (!draftBaseline || promoLine.trim() !== draftBaseline.promo_line.trim())
+            ? promoLine.trim()
+            : null,
+        ctaText:
+          ctaText.trim() && (!draftBaseline || ctaText.trim() !== draftBaseline.cta_text.trim())
+            ? ctaText.trim()
+            : null,
+      };
+      // Merchant-typed copy may omit offer facts (the locked offer line carries
+      // them) but must never contradict them. Block with a clear message instead
+      // of silently replacing the merchant's words.
+      const merchantCopyCheck = checkMerchantDealTitleAgainstOffer(
+        { title: merchantEditedCopy.title, supportingLine: merchantEditedCopy.promoLine },
+        offerContract,
+      );
+      if (!merchantCopyCheck.ok) {
+        showPublishError(
+          t("createAi.errHeadlineContradictsOffer", {
+            defaultValue:
+              "Your headline or subheadline doesn't match this deal's locked offer facts. Update the wording so it fits the offer, then publish again.",
+          }),
+          "warning",
+        );
+        return;
+      }
       const baseAdForPublishSpec = generatedAdForPublishSpec({
         ad: generatedAd,
         finalStoragePath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         usePhotoAsFinal,
         merchantOriginalWarningAcknowledged,
+        merchantEditedCopy,
       }) ?? (offerDefinition
         ? manualDraftGeneratedAdForPublishSpec({
             offerDefinition,
@@ -3719,10 +3771,17 @@ export default function AiDealScreen() {
         return;
       }
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
-      const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinition, {
-        title: title.trim(),
-        description: listingDescription.trim(),
-      });
+      const displayCopy = buildAuthoritativeDealDisplayCopy(
+        offerDefinition,
+        {
+          title: title.trim(),
+          description: listingDescription.trim(),
+        },
+        // Validated above via checkMerchantDealTitleAgainstOffer; only set when
+        // the merchant actually edited the headline, so unedited publishes keep
+        // the canonical offer line as the stored title.
+        { factSafeMerchantTitle: merchantEditedCopy.title },
+      );
       let translationFallbackUsed = false;
       let translations: DealTranslationResult;
       try {

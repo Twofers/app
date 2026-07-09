@@ -1400,6 +1400,7 @@
     "errPublishDraft": "Please generate or enter title and description.",
     "errPublishDraftFirst": "Please generate or enter title and description first.",
     "errPublishFailed": "Couldn't publish this deal.",
+    "errHeadlineContradictsOffer": "Your headline or subheadline doesn't match this deal's locked offer facts. Update the wording so it fits the offer, then publish again.",
     "errPublishPermission": "Log in with the owner account for this business.",
     "errPublishDuplicate": "This deal already exists.",
     "errPublishPhoto": "Couldn't upload that photo. Try a new one.",

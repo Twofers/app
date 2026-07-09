@@ -1,5 +1,10 @@
 import type { GeneratedAd } from "./ad-variants";
-import type { AiDealCopyVariant } from "./deal-offer-contract";
+import {
+  buildDeterministicDealChannelCopy,
+  validateAiCopyAgainstOffer,
+  type AiDealCopyVariant,
+  type DealOfferContract,
+} from "./deal-offer-contract";
 import {
   buildOfferVersionLocalizationSnapshot,
   type OfferVersionPublishLocalizationSnapshot,
@@ -79,12 +84,21 @@ function cleanDisplayText(value: string | null | undefined): string {
 export function buildAuthoritativeDealDisplayCopy(
   offerDefinition: OfferDefinitionV1 | null | undefined,
   fallback: AuthoritativeDealDisplayCopy,
+  options?: {
+    // A merchant-typed title that has ALREADY passed
+    // checkMerchantDealTitleAgainstOffer. When present it wins over the
+    // canonical offer line so merchant edits survive publish; the canonical
+    // facts still ship in the description/locked offer line.
+    factSafeMerchantTitle?: string | null;
+  },
 ): AuthoritativeDealDisplayCopy {
   const fallbackTitle = cleanDisplayText(fallback.title);
   const fallbackDescription = cleanDisplayText(fallback.description);
-  if (!offerDefinition) return { title: fallbackTitle, description: fallbackDescription };
+  const merchantTitle = cleanDisplayText(options?.factSafeMerchantTitle);
+  if (!offerDefinition) return { title: merchantTitle || fallbackTitle, description: fallbackDescription };
 
   const title =
+    merchantTitle ||
     cleanDisplayText(offerDefinition.canonicalOfferLine) ||
     cleanDisplayText(offerDefinition.canonicalOfferSentence) ||
     fallbackTitle;
@@ -94,6 +108,64 @@ export function buildAuthoritativeDealDisplayCopy(
     fallbackDescription;
 
   return { title, description };
+}
+
+// Reason codes from validateAiCopyAgainstOffer that mean the text CONTRADICTS
+// the locked offer facts (wrong percent, "free" on a percent-off deal, changed
+// quantities/items, stale-able metadata) rather than merely omitting them or
+// tripping AI-style checks. Merchant-typed titles may omit facts — the locked
+// offer line carries them — but must never contradict them.
+const MERCHANT_TITLE_CONTRADICTION_CODES = new Set([
+  "GENERIC_BOGO_NOT_ALLOWED",
+  "GENERIC_BUY_ONE_GET_ONE_NOT_ALLOWED",
+  "BUYS_BOTH_ITEMS",
+  "FREE_ITEM_ADDED_TO_PURCHASE",
+  "REQUIRED_QUANTITY_CHANGED",
+  "FREE_QUANTITY_CHANGED",
+  "REQUIRES_TWO_PURCHASES",
+  "SECOND_ITEM_DISCOUNTED_NOT_FREE",
+  "CHANGES_FREE_ITEM",
+  "FREE_OR_BOGO_LANGUAGE_NOT_ALLOWED",
+  "SINGLE_ITEM_SCOPE_CHANGED",
+  "DISCOUNT_PERCENT_CHANGED",
+  "COPY_CONTAINS_METADATA",
+]);
+
+export type MerchantDealTitleCheck = {
+  ok: boolean;
+  blockingCodes: string[];
+};
+
+export function checkMerchantDealTitleAgainstOffer(
+  input: {
+    title?: string | null;
+    supportingLine?: string | null;
+  },
+  contract: DealOfferContract | null | undefined,
+): MerchantDealTitleCheck {
+  const cleanTitle = cleanDisplayText(input.title);
+  const cleanSupporting = cleanDisplayText(input.supportingLine);
+  if ((!cleanTitle && !cleanSupporting) || !contract) return { ok: true, blockingCodes: [] };
+  // Validate the merchant text alongside deterministic filler copy: the filler
+  // supplies the offer facts so omission codes (MISSING_*) stay quiet, while
+  // contradictions introduced by the merchant text still fire.
+  const deterministic = buildDeterministicDealChannelCopy(contract);
+  const result = validateAiCopyAgainstOffer(
+    {
+      headline: cleanTitle || deterministic.headline,
+      short_description: cleanSupporting || deterministic.description,
+      push_notification: deterministic.pushBody,
+    },
+    contract,
+  );
+  const blockingCodes = result.reasonCodes.filter((code) => {
+    // Length only blocks when the merchant actually typed the title; the
+    // deterministic filler headline may legitimately exceed the limit for
+    // long product names.
+    if (code === "HEADLINE_TOO_LONG") return Boolean(cleanTitle);
+    return MERCHANT_TITLE_CONTRADICTION_CODES.has(code);
+  });
+  return { ok: blockingCodes.length === 0, blockingCodes };
 }
 
 export function buildPublishMechanicsValidationCopy(
