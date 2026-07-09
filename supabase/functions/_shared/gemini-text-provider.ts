@@ -43,13 +43,20 @@ export function resolveGeminiTextModel(env: EnvReader, name: "GEMINI_TEXT_MODEL"
   });
 }
 
-function stripUnsupportedSchemaKeywords(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripUnsupportedSchemaKeywords);
+function stripUnsupportedSchemaKeywords(value: unknown, atRoot = true): unknown {
+  if (Array.isArray(value)) return value.map((v) => stripUnsupportedSchemaKeywords(v, false));
   if (!value || typeof value !== "object") return value;
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (key === "additionalProperties" || key === "strict" || key === "name") continue;
-    out[key] = stripUnsupportedSchemaKeywords(child);
+    // Gemini's responseSchema rejects `additionalProperties` at any depth.
+    if (key === "additionalProperties") continue;
+    // `name`/`strict` are OpenAI structured-output WRAPPER fields and only ever
+    // live at the schema root. Stripping them at ANY depth (the previous bug)
+    // deletes a legitimate `properties.name` field, leaving `name` listed in
+    // `required` with no matching property — which Gemini rejects outright with
+    // INVALID_ARGUMENT. Only strip them at the root.
+    if (atRoot && (key === "name" || key === "strict")) continue;
+    out[key] = stripUnsupportedSchemaKeywords(child, false);
   }
   return out;
 }

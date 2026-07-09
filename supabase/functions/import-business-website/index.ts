@@ -227,17 +227,13 @@ function menuTextConfig(): AiTextProviderConfig {
   return {
     ...base,
     routerEnabled: true,
-    // OpenAI-primary, Gemini-fallback (the reverse of the menu image scanner).
-    // Prod ai_generation_costs shows Gemini rejects THIS menu request with
-    // INVALID_ARGUMENT 3/3 (a deterministic bad-request unique to site_import;
-    // image_qa runs 122/122 OK on the same model), so every past success rode
-    // the OpenAI fallback. Leading with the provider that actually works removes
-    // a guaranteed-failing first attempt (latency + a failure ledger row) on the
-    // happy path; Gemini stays as fallback so an OpenAI blip still gets a shot.
-    // The underlying Gemini INVALID_ARGUMENT is tracked as a separate follow-up
-    // (needs the live provider message, which we don't persist).
-    primaryProvider: "openai",
-    fallbackProvider: "gemini",
+    // Gemini-primary, OpenAI-fallback (cheap flash-tier primary, same as the menu
+    // image scanner). Gemini used to reject this menu request with INVALID_ARGUMENT
+    // because the shared schema strip in gemini-text-provider.ts deleted the menu
+    // item's `name` field while leaving it in `required` — fixed there. With that
+    // fixed, the cheaper Gemini path works; OpenAI stays as fallback for redundancy.
+    primaryProvider: "gemini",
+    fallbackProvider: "openai",
     fallbackEnabled: true,
     // The router runs attempts with config.primaryTimeoutMs/fallbackTimeoutMs,
     // NOT the request's timeoutMs (env defaults are 15s/14s). Menu structuring

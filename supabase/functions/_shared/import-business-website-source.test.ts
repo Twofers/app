@@ -54,15 +54,16 @@ describe("import-business-website source guards", () => {
     expect(source).toMatch(/mimeType:\s*"application\/pdf"/);
   });
 
-  it("routes text menu extraction OpenAI-primary, Gemini-fallback (Gemini rejects this schema)", () => {
-    // Gemini returns INVALID_ARGUMENT for the site_import menu request in prod;
-    // lead with OpenAI so the happy path doesn't start with a guaranteed failure.
+  it("routes text menu extraction Gemini-primary, OpenAI-fallback (schema bug fixed)", () => {
+    // The Gemini INVALID_ARGUMENT root cause (nested `name` field stripped from
+    // the schema) is fixed in gemini-text-provider.ts, so the cheap Gemini path
+    // is the primary again with OpenAI as fallback for redundancy.
     const textCfg = source.slice(
       source.indexOf("function menuTextConfig"),
       source.indexOf("function menuPdfConfigGeminiOnly"),
     );
-    expect(textCfg).toMatch(/primaryProvider:\s*"openai"/);
-    expect(textCfg).toMatch(/fallbackProvider:\s*"gemini"/);
+    expect(textCfg).toMatch(/primaryProvider:\s*"gemini"/);
+    expect(textCfg).toMatch(/fallbackProvider:\s*"openai"/);
     expect(textCfg).toMatch(/fallbackEnabled:\s*true/);
   });
 
