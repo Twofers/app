@@ -874,7 +874,7 @@ export default function BusinessSetupScreen() {
                 {logoUploading ? (
                   <ActivityIndicator color={primary} />
                 ) : (
-                  <Text style={{ fontSize: 28, opacity: 0.4 }}>+</Text>
+                  <Text style={{ fontSize: 28, opacity: 0.4, color: theme.text }}>+</Text>
                 )}
               </View>
             )}
@@ -911,7 +911,7 @@ export default function BusinessSetupScreen() {
 
         {lookupResults && lookupResults.length > 0 && (
           <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6, color: theme.text }}>
               {t("businessSetup.selectResult")}
             </Text>
             {lookupResults.map((r, i) => (
