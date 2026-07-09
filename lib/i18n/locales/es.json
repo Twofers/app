@@ -1704,6 +1704,9 @@
       "failGeneric": "No pudimos leer tu sitio web. Puedes agregar todo manualmente.",
       "menuNotFound": "No encontramos un menú. Puedes escanearlo más tarde.",
       "menuPdf": "Encontramos tu menú en PDF: toma una foto de tu menú más tarde.",
+      "menuRetryNotice": "No pudimos leer el menú. Inténtalo de nuevo.",
+      "menuRetryButton": "Reintentar",
+      "menuBusy": "La lectura del menú está ocupada. Inténtalo en un minuto.",
       "menuSaveFailed": "No se pudieron guardar los platillos: puedes escanear tu menú más tarde.",
       "nothingFound": "No hay nada que importar de tu sitio. Agrega tus datos manualmente.",
       "rateLimited": "Llegaste al límite de importaciones de hoy. Inténtalo mañana."

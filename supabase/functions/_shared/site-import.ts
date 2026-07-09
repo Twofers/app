@@ -22,6 +22,7 @@ export const MAX_REDIRECTS = 3;
 export const MAX_LOGO_CANDIDATES = 4;
 export const DAILY_SCAN_LIMIT_DEFAULT = 10;
 export const MAX_MENU_TEXT_CHARS = 20_000;
+export const MAX_MENU_PROMPT_CHARS = 12_000;
 export const MAX_IMPORT_URL_LENGTH = 2048;
 
 export const AI_SITE_MENU_IMPORT_PROMPT_VERSION = "AI_SITE_MENU_IMPORT_V1";
@@ -80,6 +81,37 @@ export function validateImportUrl(raw: string): UrlValidationResult {
   if (hostnameIsBlockedName(url.hostname)) return { ok: false, code: "BLOCKED_HOST" };
 
   return { ok: true, url };
+}
+
+/**
+ * Google Places commonly returns http:// for a business whose site actually
+ * serves (or 301-redirects to) https. `validateImportUrl` is https-only for SSRF
+ * safety, so a bare http Places URL is rejected outright. This upgrades an
+ * http:// URL to https:// on the SAME host/port/path/query so the caller can
+ * retry it through the full fetch-time defense (validateImportUrl again + the
+ * DNS/IP check + per-redirect re-validation). It only rewrites the scheme and
+ * grants no trust — the returned string must still pass validateImportUrl.
+ *
+ * Returns null when the input is not http, is malformed, or carries embedded
+ * credentials (those keep the standard rejection path). A non-standard port is
+ * preserved so it still trips BAD_PORT downstream; an http-default :80 is dropped
+ * so the upgraded URL uses the https default (443).
+ */
+export function upgradeHttpToHttps(raw: string): string | null {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!value) return null;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:") return null;
+  if (url.username || url.password) return null;
+
+  const port = url.port && url.port !== "80" ? `:${url.port}` : "";
+  return `https://${url.hostname}${port}${url.pathname}${url.search}${url.hash}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -540,6 +572,16 @@ export function htmlToMenuText(html: string): string {
   const decoded = decodeEntities(stripped);
   const collapsed = decoded.replace(/\s+/g, " ").trim();
   return collapsed.slice(0, MAX_MENU_TEXT_CHARS);
+}
+
+/**
+ * Cap the text handed to the menu-structuring LLM. htmlToMenuText's 20k cap is
+ * the extraction budget; the prompt gets a tighter 12k — menus rarely run past
+ * it, the tail of long pages is usually footer/nav noise, and a smaller prompt
+ * cuts latency and output-truncation risk on the 20s provider timeout.
+ */
+export function clampMenuPromptText(text: string): string {
+  return typeof text === "string" ? text.slice(0, MAX_MENU_PROMPT_CHARS) : "";
 }
 
 // ---------------------------------------------------------------------------

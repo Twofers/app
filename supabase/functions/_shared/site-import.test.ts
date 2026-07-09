@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSiteMenuPrompt,
+  clampMenuPromptText,
   extractLogoCandidates,
   extractMenuLinks,
   htmlToMenuText,
   isPrivateOrReservedIp,
+  MAX_MENU_PROMPT_CHARS,
   MAX_MENU_TEXT_CHARS,
   menuSchema,
   normalizeMenuItems,
+  upgradeHttpToHttps,
   validateImportUrl,
 } from "./site-import.ts";
 
@@ -75,6 +78,49 @@ describe("validateImportUrl", () => {
   it("rejects malformed input", () => {
     expect(validateImportUrl("not a url").code).toBe("MALFORMED");
     expect(validateImportUrl("").code).toBe("MALFORMED");
+  });
+});
+
+describe("upgradeHttpToHttps", () => {
+  it("upgrades a plain http URL, preserving host/path/query/hash", () => {
+    expect(upgradeHttpToHttps("http://ascensiondallas.com/")).toBe("https://ascensiondallas.com/");
+    expect(upgradeHttpToHttps("http://www.canerosso.com/menu?x=1#hours")).toBe(
+      "https://www.canerosso.com/menu?x=1#hours",
+    );
+  });
+
+  it("drops an explicit http-default :80 so the result uses the https default", () => {
+    // The upgraded URL must pass validateImportUrl (empty/443 port only).
+    const upgraded = upgradeHttpToHttps("http://rodeogoat.com:80/");
+    expect(upgraded).toBe("https://rodeogoat.com/");
+    expect(validateImportUrl(upgraded!).ok).toBe(true);
+  });
+
+  it("preserves a non-standard port so it still trips BAD_PORT downstream", () => {
+    const upgraded = upgradeHttpToHttps("http://example.com:8080/");
+    expect(upgraded).toBe("https://example.com:8080/");
+    expect(validateImportUrl(upgraded!)).toEqual({ ok: false, code: "BAD_PORT" });
+  });
+
+  it("returns null for non-http input (already https, other schemes, empty)", () => {
+    expect(upgradeHttpToHttps("https://example.com/")).toBeNull();
+    expect(upgradeHttpToHttps("ftp://example.com/")).toBeNull();
+    expect(upgradeHttpToHttps("")).toBeNull();
+    expect(upgradeHttpToHttps("not a url")).toBeNull();
+  });
+
+  it("refuses to upgrade a credentialed URL (keeps the standard rejection)", () => {
+    expect(upgradeHttpToHttps("http://user:pass@example.com/")).toBeNull();
+  });
+
+  it("keeps a private/reserved or blocked host blocked after upgrade", () => {
+    // The upgrade only rewrites the scheme; the host defenses still apply.
+    expect(validateImportUrl(upgradeHttpToHttps("http://169.254.169.254/")!)).toEqual({
+      ok: false,
+      code: "IP_LITERAL",
+    });
+    expect(validateImportUrl(upgradeHttpToHttps("http://localhost/")!).code).toBe("BLOCKED_HOST");
+    expect(validateImportUrl(upgradeHttpToHttps("http://db.internal/")!).code).toBe("BLOCKED_HOST");
   });
 });
 
@@ -281,6 +327,22 @@ describe("htmlToMenuText", () => {
   it("caps at MAX_MENU_TEXT_CHARS", () => {
     const html = "<p>" + "word ".repeat(10000) + "</p>";
     expect(htmlToMenuText(html).length).toBeLessThanOrEqual(MAX_MENU_TEXT_CHARS);
+  });
+});
+
+describe("clampMenuPromptText", () => {
+  it("passes short text through unchanged", () => {
+    expect(clampMenuPromptText("Latte $5")).toBe("Latte $5");
+  });
+
+  it("caps at MAX_MENU_PROMPT_CHARS (tighter than the extraction cap)", () => {
+    const long = "x".repeat(MAX_MENU_TEXT_CHARS);
+    expect(clampMenuPromptText(long).length).toBe(MAX_MENU_PROMPT_CHARS);
+    expect(MAX_MENU_PROMPT_CHARS).toBeLessThan(MAX_MENU_TEXT_CHARS);
+  });
+
+  it("returns empty string for non-string input", () => {
+    expect(clampMenuPromptText(undefined as unknown as string)).toBe("");
   });
 });
 

@@ -1099,11 +1099,28 @@ export default function BusinessSetupScreen() {
                 ) : null}
 
                 {!siteImportResult.menu ? (
-                  <Text style={{ fontSize: 12, opacity: 0.7, color: theme.text }}>
-                    {siteImportResult.warnings.includes("MENU_PDF_ONLY")
-                      ? t("businessSetup.import.menuPdf")
-                      : t("businessSetup.import.menuNotFound")}
-                  </Text>
+                  siteImportResult.warnings.includes("MENU_EXTRACTION_FAILED") ||
+                  siteImportResult.warnings.includes("MENU_BUSY") ? (
+                    // Transient read failure (provider blip / circuit open) — the
+                    // menu is likely there, so offer a one-tap re-scan.
+                    <View style={{ gap: Spacing.xs }}>
+                      <Text style={{ fontSize: 12, opacity: 0.7, color: theme.text }}>
+                        {siteImportResult.warnings.includes("MENU_BUSY")
+                          ? t("businessSetup.import.menuBusy")
+                          : t("businessSetup.import.menuRetryNotice")}
+                      </Text>
+                      <SecondaryButton
+                        title={t("businessSetup.import.menuRetryButton")}
+                        onPress={() => void onImportWebsite()}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, opacity: 0.7, color: theme.text }}>
+                      {siteImportResult.warnings.includes("MENU_PDF_ONLY")
+                        ? t("businessSetup.import.menuPdf")
+                        : t("businessSetup.import.menuNotFound")}
+                    </Text>
+                  )
                 ) : null}
 
                 {siteImportEmpty ? (

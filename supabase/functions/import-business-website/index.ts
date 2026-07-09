@@ -12,6 +12,7 @@ import {
 import {
   AI_SITE_MENU_IMPORT_PROMPT_VERSION,
   buildSiteMenuPrompt,
+  clampMenuPromptText,
   extractLogoCandidates,
   extractMenuLinks,
   htmlToMenuText,
@@ -25,6 +26,7 @@ import {
   DAILY_SCAN_LIMIT_DEFAULT,
   menuSchema,
   normalizeMenuItems,
+  upgradeHttpToHttps,
   validateImportUrl,
   type LogoCandidateSource,
   type MenuExtractionResult,
@@ -225,9 +227,25 @@ function menuTextConfig(): AiTextProviderConfig {
   return {
     ...base,
     routerEnabled: true,
-    primaryProvider: "gemini",
-    fallbackProvider: "openai",
+    // OpenAI-primary, Gemini-fallback (the reverse of the menu image scanner).
+    // Prod ai_generation_costs shows Gemini rejects THIS menu request with
+    // INVALID_ARGUMENT 3/3 (a deterministic bad-request unique to site_import;
+    // image_qa runs 122/122 OK on the same model), so every past success rode
+    // the OpenAI fallback. Leading with the provider that actually works removes
+    // a guaranteed-failing first attempt (latency + a failure ledger row) on the
+    // happy path; Gemini stays as fallback so an OpenAI blip still gets a shot.
+    // The underlying Gemini INVALID_ARGUMENT is tracked as a separate follow-up
+    // (needs the live provider message, which we don't persist).
+    primaryProvider: "openai",
+    fallbackProvider: "gemini",
     fallbackEnabled: true,
+    // The router runs attempts with config.primaryTimeoutMs/fallbackTimeoutMs,
+    // NOT the request's timeoutMs (env defaults are 15s/14s). Menu structuring
+    // over up to MAX_MENU_PROMPT_CHARS needs the full 20s, and a primary attempt
+    // that dies on a full timeout should retry once before falling back.
+    primaryTimeoutMs: 20_000,
+    fallbackTimeoutMs: 20_000,
+    retryAfterFullTimeout: true,
   };
 }
 
@@ -245,6 +263,11 @@ function menuPdfConfigGeminiOnly(): AiTextProviderConfig {
     primaryProvider: "gemini",
     fallbackProvider: "openai",
     fallbackEnabled: false,
+    // Same timeout note as menuTextConfig: config timeouts win over the
+    // request's timeoutMs, so make the 20s budget real for the PDF path too.
+    primaryTimeoutMs: 20_000,
+    fallbackTimeoutMs: 20_000,
+    retryAfterFullTimeout: true,
   };
 }
 
@@ -325,7 +348,17 @@ serve(async (req) => {
       );
     }
 
-    const validated = validateImportUrl(websiteUrlRaw);
+    // Google Places commonly returns http:// for businesses whose sites serve
+    // (or redirect to) https. Retry an http URL as https on the same host/path.
+    // The upgraded URL is re-validated here and re-checked at fetch time (DNS/IP,
+    // per redirect), so this covers the common case without weakening the SSRF
+    // defense — we still only ever fetch an https URL.
+    let validated = validateImportUrl(websiteUrlRaw);
+    if (!validated.ok && validated.code === "NOT_HTTPS") {
+      const upgraded = upgradeHttpToHttps(websiteUrlRaw);
+      const revalidated = upgraded ? validateImportUrl(upgraded) : null;
+      if (revalidated?.ok) validated = revalidated;
+    }
     if (!validated.ok) {
       const blocked = validated.code === "IP_LITERAL" || validated.code === "BLOCKED_HOST";
       return errorResponse(
@@ -463,7 +496,7 @@ serve(async (req) => {
             operation: "merchant_context",
             systemPrompt:
               "Extract menu items from a local business's website text. Return only grounded JSON.",
-            userPrompt: `${buildSiteMenuPrompt(bizCategory)}\n\nWEBSITE TEXT:\n${menuText}`,
+            userPrompt: `${buildSiteMenuPrompt(bizCategory)}\n\nWEBSITE TEXT:\n${clampMenuPromptText(menuText)}`,
             jsonSchema: menuSchema,
             maxOutputTokens: 1600,
             timeoutMs: 20_000,
@@ -482,11 +515,13 @@ serve(async (req) => {
         };
       } catch (err) {
         await logAttempts((err as { attempts?: ProviderAttempt[] })?.attempts ?? []);
-        log("menu_extraction_failed", {
-          host,
-          errorCode: (err as { errorCode?: string })?.errorCode ?? "AI_GENERATION_FAILED",
-        });
-        warnings.push("MENU_EXTRACTION_FAILED");
+        const errorCode = (err as { errorCode?: string })?.errorCode ?? "AI_GENERATION_FAILED";
+        log("menu_extraction_failed", { host, errorCode });
+        // Circuit-open is a "come back in a minute" condition, not a read failure —
+        // give the client a distinct code so it can word the retry hint honestly.
+        warnings.push(
+          errorCode === "AI_PROVIDER_CIRCUIT_OPEN" ? "MENU_BUSY" : "MENU_EXTRACTION_FAILED",
+        );
       }
     } else if (!menuText && menuPdfUrl && (geminiApiKey ?? "").trim()) {
       // Menu is a PDF and no readable page text — Gemini can read PDFs directly.
@@ -534,7 +569,9 @@ serve(async (req) => {
 
     if (!menu) {
       if (menuPdfUrl && !warnings.includes("MENU_PDF_ONLY")) warnings.push("MENU_PDF_ONLY");
-      else if (!warnings.includes("MENU_EXTRACTION_FAILED")) warnings.push("MENU_NOT_FOUND");
+      else if (!warnings.includes("MENU_EXTRACTION_FAILED") && !warnings.includes("MENU_BUSY")) {
+        warnings.push("MENU_NOT_FOUND");
+      }
     } else if (Array.isArray(menu.items) && menu.items.length === 0) {
       warnings.push("MENU_EMPTY");
     }

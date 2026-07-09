@@ -2013,6 +2013,9 @@
       "failGeneric": "We couldn't read your website. You can add everything manually.",
       "menuNotFound": "We couldn't find a menu. You can scan it later.",
       "menuPdf": "We found your menu PDF — snap a photo of your menu later.",
+      "menuRetryNotice": "Couldn't read the menu. Try again.",
+      "menuRetryButton": "Try again",
+      "menuBusy": "Menu reading is busy. Try again in a minute.",
       "menuSaveFailed": "Couldn't save menu items — you can scan your menu later.",
       "nothingFound": "Nothing to import from your site. Add your details manually.",
       "rateLimited": "You've hit today's import limit. Try again tomorrow."

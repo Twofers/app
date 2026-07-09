@@ -34,6 +34,13 @@ describe("import-business-website source guards", () => {
     expect(source).toMatch(/feature:\s*"site_import"/);
   });
 
+  it("retries an http Places URL as https before rejecting, but only when NOT_HTTPS", () => {
+    // The upgraded URL must be re-validated (never fetched on trust).
+    expect(source).toMatch(/upgradeHttpToHttps\(websiteUrlRaw\)/);
+    expect(source).toMatch(/validated\.code === "NOT_HTTPS"/);
+    expect(source).toMatch(/validateImportUrl\(upgraded\)/);
+  });
+
   it("never logs raw HTML, full URLs, or upstream bodies", () => {
     // Structured logs carry host + counts only.
     expect(source).toMatch(/tag:\s*"site_import"/);
@@ -45,5 +52,34 @@ describe("import-business-website source guards", () => {
     expect(source).toMatch(/menuPdfConfigGeminiOnly/);
     expect(source).toMatch(/fallbackEnabled:\s*false/);
     expect(source).toMatch(/mimeType:\s*"application\/pdf"/);
+  });
+
+  it("routes text menu extraction OpenAI-primary, Gemini-fallback (Gemini rejects this schema)", () => {
+    // Gemini returns INVALID_ARGUMENT for the site_import menu request in prod;
+    // lead with OpenAI so the happy path doesn't start with a guaranteed failure.
+    const textCfg = source.slice(
+      source.indexOf("function menuTextConfig"),
+      source.indexOf("function menuPdfConfigGeminiOnly"),
+    );
+    expect(textCfg).toMatch(/primaryProvider:\s*"openai"/);
+    expect(textCfg).toMatch(/fallbackProvider:\s*"gemini"/);
+    expect(textCfg).toMatch(/fallbackEnabled:\s*true/);
+  });
+
+  it("makes the 20s menu budget real and retries a full-timeout primary", () => {
+    // The router uses config timeouts, not the request's timeoutMs — both menu
+    // configs must override the 15s/14s env defaults and opt into timeout retry.
+    expect(source.match(/primaryTimeoutMs:\s*20_000/g)?.length).toBe(2);
+    expect(source.match(/fallbackTimeoutMs:\s*20_000/g)?.length).toBe(2);
+    expect(source.match(/retryAfterFullTimeout:\s*true/g)?.length).toBe(2);
+  });
+
+  it("clamps the menu prompt text before handing it to the LLM", () => {
+    expect(source).toMatch(/clampMenuPromptText\(menuText\)/);
+  });
+
+  it("maps circuit-open to MENU_BUSY and never buries it under MENU_NOT_FOUND", () => {
+    expect(source).toMatch(/AI_PROVIDER_CIRCUIT_OPEN"\s*\?\s*"MENU_BUSY"\s*:\s*"MENU_EXTRACTION_FAILED"/);
+    expect(source).toMatch(/!warnings\.includes\("MENU_BUSY"\)/);
   });
 });
