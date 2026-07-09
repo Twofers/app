@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "supabase/functions/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "components/**/*.test.ts", "supabase/functions/**/*.test.ts"],
     passWithNoTests: false,
   },
 });
