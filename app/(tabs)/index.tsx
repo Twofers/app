@@ -244,6 +244,7 @@ export default function HomeScreen() {
   const [repeatPolicyByBusiness, setRepeatPolicyByBusiness] = useState<Map<string, RepeatPolicyFields>>(() => new Map());
   const [lastRedeemedByBusiness, setLastRedeemedByBusiness] = useState<Map<string, string>>(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favoritesExpanded, setFavoritesExpanded] = useState(false);
   const [sortMode, setSortMode] = useState<ConsumerDealSortMode>(DEFAULT_DEAL_SORT_MODE);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
@@ -1418,6 +1419,18 @@ export default function HomeScreen() {
     [feedSegment, renderDealItem, userGeo, t, liveDealIds, favoriteBusinessIds, router, toggleFavorite],
   );
 
+  // Resolve favorite ids to loaded business rows once, so the dropdown's count
+  // badge always matches the rows it renders (ids that haven't hydrated yet are
+  // excluded from both). Alphabetical so the list is scannable.
+  const favoriteBusinesses = useMemo(
+    () =>
+      favoriteBusinessIds
+        .map((fid) => businesses.find((x) => x.id === fid))
+        .filter((b): b is BusinessRow => !!b)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [favoriteBusinessIds, businesses],
+  );
+
   const listHeader = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.md }}>
@@ -1695,49 +1708,85 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {favoriteBusinessIds.length > 0 ? (
+        {favoriteBusinesses.length > 0 ? (
           <View
             style={{
               marginBottom: Spacing.lg,
-              ...(favoritesOnly
-                ? {
-                    backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
-                    borderRadius: Radii.lg,
-                    padding: Spacing.md,
-                    borderWidth: 1,
-                    borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
-                  }
-                : {}),
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              overflow: "hidden",
             }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "700", marginBottom: Spacing.sm, color: theme.mutedText }}>
-              {t("consumerHome.favoritesStripTitle")}
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-              {favoriteBusinessIds.map((fid) => {
-                const b = businesses.find((x) => x.id === fid);
-                if (!b) return null;
-                return (
-                  <Pressable
-                    key={fid}
-                    onPress={() => router.push(businessDetailHref(fid))}
-                    style={{
-                      paddingVertical: Spacing.sm,
-                      paddingHorizontal: Spacing.md,
-                      borderRadius: Radii.pill,
-                      backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      maxWidth: 160,
-                    }}
-                  >
-                    <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-                      {b.name}
-                    </Text>
-                  </Pressable>
-                );
+            <Pressable
+              onPress={() => setFavoritesExpanded((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: favoritesExpanded }}
+              accessibilityLabel={t("consumerHome.favoritesStripTitle")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: Spacing.sm,
+                paddingVertical: Spacing.md,
+                paddingHorizontal: Spacing.md,
+                backgroundColor: pressed ? theme.surfaceMuted : "transparent",
               })}
-            </ScrollView>
+            >
+              <MaterialIcons name="favorite" size={18} color={theme.favorite} />
+              <Text style={{ flex: 1, fontSize: 15, fontWeight: "700", color: theme.text }}>
+                {t("consumerHome.favoritesStripTitle")}
+              </Text>
+              <View
+                style={{
+                  minWidth: 24,
+                  height: 22,
+                  borderRadius: Radii.pill,
+                  paddingHorizontal: 7,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: theme.surfaceMuted,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.mutedText }} maxFontSizeMultiplier={1.2}>
+                  {favoriteBusinesses.length}
+                </Text>
+              </View>
+              <MaterialIcons
+                name={favoritesExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                size={24}
+                color={theme.mutedText}
+              />
+            </Pressable>
+
+            {favoritesExpanded ? (
+              <View style={{ paddingHorizontal: Spacing.sm, paddingBottom: Spacing.sm }}>
+                {favoriteBusinesses.map((b) => {
+                  return (
+                    <Pressable
+                      key={b.id}
+                      onPress={() => router.push(businessDetailHref(b.id))}
+                      accessibilityRole="button"
+                      accessibilityLabel={b.name}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: Spacing.sm,
+                        paddingVertical: Spacing.sm + 2,
+                        paddingHorizontal: Spacing.sm,
+                        borderRadius: Radii.md,
+                        backgroundColor: pressed ? theme.surfaceMuted : "transparent",
+                      })}
+                    >
+                      <Text numberOfLines={1} style={{ flex: 1, fontWeight: "600", fontSize: 15, color: theme.text }}>
+                        {b.name}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -1755,8 +1804,8 @@ export default function HomeScreen() {
       emptyNearbyLive,
       showDealsSkeleton,
       feedSegment,
-      favoriteBusinessIds,
-      businesses,
+      favoriteBusinesses,
+      favoritesExpanded,
       colorScheme,
       theme,
     ],
