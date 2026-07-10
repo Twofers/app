@@ -52,6 +52,7 @@ import {
   translateDeal,
   translateDealCopy,
   getErrorCode,
+  getErrorWaitSeconds,
   fetchAdGenerationQuota,
 } from "../../lib/functions";
 import {
@@ -454,6 +455,9 @@ async function fileUriToBase64(uri: string): Promise<string> {
 
 const QUOTA_FOCUS_MIN_MS = 30_000;
 const SOFT_REVISION_CAP = 2;
+// Fallback wait if the 429 body omits wait_seconds (older function build).
+// Mirrors the server default in supabase/functions/_shared/ai-limits.ts.
+const DEFAULT_GENERATION_COOLDOWN_SEC = 60;
 
 function createAiRequestGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;
@@ -1134,6 +1138,13 @@ export default function AiDealScreen() {
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [lastGenerationOutcomeKind, setLastGenerationOutcomeKind] = useState<GenerationOutcomeKind | null>(null);
+  /**
+   * Epoch-ms deadline for the AI generate cooldown (server rate limit). Stored as
+   * an absolute time, not a decrementing count, so the countdown stays correct if
+   * the app backgrounds and resumes mid-wait. null = no cooldown.
+   */
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownNowTick, setCooldownNowTick] = useState(() => Date.now());
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
@@ -1463,6 +1474,23 @@ export default function AiDealScreen() {
     };
   }, [lastGenerationError, lastGenerationOutcomeKind, t]);
 
+  // Drive the generate-cooldown countdown once a second while a deadline is set.
+  // Re-arming on cooldownNowTick keeps a single pending timeout alive until the
+  // deadline passes, then clears the cooldown so the button reverts on its own.
+  useEffect(() => {
+    if (cooldownUntil == null) return;
+    if (Date.now() >= cooldownUntil) {
+      setCooldownUntil(null);
+      return;
+    }
+    const id = setTimeout(() => setCooldownNowTick(Date.now()), 1000);
+    return () => clearTimeout(id);
+  }, [cooldownUntil, cooldownNowTick]);
+
+  const cooldownSecondsLeft =
+    cooldownUntil == null ? 0 : Math.max(0, Math.ceil((cooldownUntil - cooldownNowTick) / 1000));
+  const cooldownActive = cooldownSecondsLeft > 0;
+
   const hasDraftCopy =
     title.trim().length > 0 ||
     promoLine.trim().length > 0 ||
@@ -1522,6 +1550,18 @@ export default function AiDealScreen() {
     setLastGenerationError(message);
     setLastGenerationOutcomeKind(kind);
     setTimeout(() => scrollToGenerationRecovery(), 120);
+  }
+
+  /**
+   * A too-soon retry hit the server rate limit. Start (or extend) the live
+   * countdown on the Generate button instead of showing an error card/banner —
+   * the button label and caption reset automatically when the deadline passes.
+   */
+  function beginGenerationCooldown(err: unknown) {
+    const seconds = getErrorWaitSeconds(err) ?? DEFAULT_GENERATION_COOLDOWN_SEC;
+    setCooldownUntil(Date.now() + seconds * 1000);
+    setCooldownNowTick(Date.now());
+    clearGenerationErrorState();
   }
 
   function applyInferredEligibilityFromHint(text: string) {
@@ -2609,7 +2649,10 @@ export default function AiDealScreen() {
     // ownership, timeouts) are matched on the parsed message text.
     if (code === "OPENAI_KEY_MISSING") return t("createAi.friendlyOpenaiConfig");
     if (code === "MONTHLY_LIMIT") return t("createAi.friendlyMonthlyLimit");
-    if (code === "COOLDOWN_ACTIVE") return raw; // server message is specific ("Please wait 12s…")
+    // Cooldown is handled by the live countdown on the Generate button, not this
+    // text path; return a localized caption so no residual caller shows the raw
+    // English server string ("Please wait 12s…").
+    if (code === "COOLDOWN_ACTIVE") return t("createAi.cooldownCaption");
     if (code === "REVISION_LIMIT") return t("createAi.errRegenClientLimit");
     if (code === "COPY_FAILED") return t("createAi.friendlyCopyFailed");
     const lower = raw.toLowerCase();
@@ -2755,6 +2798,7 @@ export default function AiDealScreen() {
   }
 
   async function generateAd() {
+    if (cooldownActive) return;
     if (!validateInputs()) return;
     if (!businessId) {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
@@ -2869,6 +2913,16 @@ export default function AiDealScreen() {
       if (requestId !== generationRequestIdRef.current) return;
       const raw = err instanceof Error ? err.message : String(err);
       const code = getErrorCode(err);
+      if (code === "COOLDOWN_ACTIVE") {
+        // Short pace limit — drive the button countdown, no error card/banner.
+        beginGenerationCooldown(err);
+        trackEvent(AiAdsEvents.GENERATION_FAILED, {
+          screen: "create_ai",
+          regeneration_attempt: 0,
+          error_code: "COOLDOWN_ACTIVE",
+        });
+        return;
+      }
       const friendly = friendlyGenerationError(raw, code);
       setGenerationFailureState(
         friendly,
@@ -2894,6 +2948,7 @@ export default function AiDealScreen() {
   }
 
   async function reviseAd() {
+    if (cooldownActive) return;
     if (!generatedAd || !businessId) return;
     if (blockIneligibleOffer("revise_ad")) return;
     if (revisionsUsed >= SOFT_REVISION_CAP) {
@@ -3061,6 +3116,19 @@ export default function AiDealScreen() {
       if (requestId !== generationRequestIdRef.current) return;
       const raw = err instanceof Error ? err.message : String(err);
       const code = getErrorCode(err);
+      if (code === "COOLDOWN_ACTIVE") {
+        // Same rate limit applies to revisions — start the button countdown
+        // instead of showing an error banner.
+        beginGenerationCooldown(err);
+        trackEvent(AiAdsEvents.REVISION_FAILED, {
+          screen: "create_ai",
+          revision_target: effectiveRevisionTarget,
+          selected_revision_target: revisionTarget,
+          revision_count: revisionNumber,
+          error_code: "COOLDOWN_ACTIVE",
+        });
+        return;
+      }
       const friendly = friendlyGenerationError(raw, code);
       setBanner({ message: friendly, tone: "error" });
       trackEvent(AiAdsEvents.REVISION_FAILED, {
@@ -4296,7 +4364,7 @@ export default function AiDealScreen() {
       : revisionsLeft === 1
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
-  const canReviseAd = revisionsLeft > 0 && !revising && !generating;
+  const canReviseAd = revisionsLeft > 0 && !revising && !generating && !cooldownActive;
   const renderPosterPreview = () => {
     if (!effectivePosterSpec) return null;
     return (
@@ -5215,6 +5283,12 @@ export default function AiDealScreen() {
                   onPress={() => {}}
                   disabled
                 />
+              ) : cooldownActive ? (
+                <PrimaryButton
+                  title={t("createAi.generateCooldownCta", { seconds: cooldownSecondsLeft })}
+                  onPress={() => {}}
+                  disabled
+                />
               ) : (
                 <PrimaryButton
                   title={t("createAi.generateCta")}
@@ -5222,6 +5296,11 @@ export default function AiDealScreen() {
                   disabled={revising}
                 />
               )}
+              {cooldownActive && !generating ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center", color: theme.text }}>
+                  {t("createAi.cooldownCaption")}
+                </Text>
+              ) : null}
               {!generating && !generatedAd && !showDraftEditor ? (
                 <SecondaryButton
                   title={t("createAi.showDraftFields")}

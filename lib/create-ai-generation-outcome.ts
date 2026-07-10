@@ -1,5 +1,6 @@
 export type GenerationOutcomeKind =
   | "ownership_blocked"
+  | "cooldown_blocked"
   | "quota_or_cooldown_blocked"
   | "input_or_offer_blocked"
   | "ai_failed_fallback_available"
@@ -33,7 +34,13 @@ export function classifyGenerationFailure({
     return "ownership_blocked";
   }
 
-  if (upperCode === "MONTHLY_LIMIT" || upperCode === "COOLDOWN_ACTIVE" || upperCode === "REVISION_LIMIT") {
+  // A short pace limit (15–60s) is not the same as an exhausted monthly cap:
+  // the caller shows a live countdown, not the "AI is paused" recovery card.
+  if (upperCode === "COOLDOWN_ACTIVE") {
+    return "cooldown_blocked";
+  }
+
+  if (upperCode === "MONTHLY_LIMIT" || upperCode === "REVISION_LIMIT") {
     return "quota_or_cooldown_blocked";
   }
 

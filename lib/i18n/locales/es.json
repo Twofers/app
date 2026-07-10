@@ -1817,6 +1817,8 @@
     "expandSettings": "Mostrar",
     "generateWorking": "Trabajando en tu anuncio...",
     "generateCta": "Generar anuncio",
+    "generateCooldownCta": "Reintenta en {{seconds}}s",
+    "cooldownCaption": "Pausa breve entre generaciones con IA.",
     "regenerate": "Regenerate (new wording)",
     "regenerating": "Regenerating…",
     "refreshLimitReached": "Sin regeneraciones — inicia un nuevo lote o edita abajo.",

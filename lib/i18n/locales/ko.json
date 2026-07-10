@@ -1817,6 +1817,8 @@
     "expandSettings": "보기",
     "generateWorking": "광고를 만드는 중...",
     "generateCta": "광고 생성",
+    "generateCooldownCta": "{{seconds}}초 후 다시 시도",
+    "cooldownCaption": "AI 생성 사이 잠시 기다려 주세요.",
     "regenerate": "Regenerate (new wording)",
     "regenerating": "Regenerating…",
     "refreshLimitReached": "재생성 완료 — 새 배치를 시작하거나 아래에서 편집하세요.",

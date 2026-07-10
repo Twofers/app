@@ -136,7 +136,7 @@ export function parseFunctionError(error: unknown): string {
 }
 
 /** Thrown from AI edge invokes when the response body includes `error_code`. */
-export type ErrorWithCode = Error & { code?: string };
+export type ErrorWithCode = Error & { code?: string; waitSeconds?: number };
 
 function extractErrorCodeFromInvokeError(error: unknown): string | undefined {
   if (!isSupabaseFunctionInvokeError(error)) return undefined;
@@ -166,9 +166,31 @@ export function getErrorCode(e: unknown): string | undefined {
   return extractErrorCodeFromInvokeError(e);
 }
 
-export function throwInvokeError(message: string, code?: string): never {
+/**
+ * Seconds the caller should wait before retrying, for rate-limited AI edge
+ * calls (COOLDOWN_ACTIVE). Prefers the structured `waitSeconds` threaded from
+ * the 429 body; falls back to parsing "…12s…" out of the message so an older
+ * function build still drives a countdown. Callers default to a sane value
+ * (e.g. DEFAULT_COOLDOWN_SEC) when this returns undefined.
+ */
+export function getErrorWaitSeconds(e: unknown): number | undefined {
+  if (e && typeof e === "object" && e !== null && "waitSeconds" in e) {
+    const w = (e as ErrorWithCode).waitSeconds;
+    if (typeof w === "number" && Number.isFinite(w) && w > 0) return w;
+  }
+  const message = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  const match = message.match(/(\d+)\s*s\b/);
+  if (match) {
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+export function throwInvokeError(message: string, code?: string, waitSeconds?: number): never {
   const err = new Error(message) as ErrorWithCode;
   if (code) err.code = code;
+  if (typeof waitSeconds === "number" && Number.isFinite(waitSeconds)) err.waitSeconds = waitSeconds;
   throw err;
 }
 
@@ -843,16 +865,20 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
  */
 async function readInvokeErrorBody(
   error: unknown,
-): Promise<{ message?: string; code?: string }> {
+): Promise<{ message?: string; code?: string; waitSeconds?: number }> {
   const ctx = (error as { context?: unknown } | null)?.context;
   if (typeof Response !== "undefined" && ctx instanceof Response) {
     try {
       const data = await ctx.clone().json();
       if (data && typeof data === "object") {
-        const o = data as { error?: unknown; error_code?: unknown };
+        const o = data as { error?: unknown; error_code?: unknown; wait_seconds?: unknown };
         return {
           message: typeof o.error === "string" ? o.error : undefined,
           code: typeof o.error_code === "string" ? o.error_code : undefined,
+          waitSeconds:
+            typeof o.wait_seconds === "number" && Number.isFinite(o.wait_seconds)
+              ? o.wait_seconds
+              : undefined,
         };
       }
     } catch {
@@ -871,7 +897,7 @@ async function invokeAdEdge(payload: Record<string, unknown>): Promise<AiGenerat
     const fromBody = await readInvokeErrorBody(error);
     const code = fromBody.code ?? extractErrorCodeFromInvokeError(error);
     const message = fromBody.message ?? parseFunctionError(error);
-    throwInvokeError(message, code);
+    throwInvokeError(message, code, fromBody.waitSeconds);
   }
   throwIfEdgeResponseError(data);
   const d = data as { ad?: GeneratedAd; ads?: GeneratedAd[]; quota?: AdVariantsQuota };

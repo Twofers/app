@@ -1199,6 +1199,8 @@
     "expandSettings": "Show",
     "generateWorking": "Working on your ad…",
     "generateCta": "Generate ad",
+    "generateCooldownCta": "Try again in {{seconds}}s",
+    "cooldownCaption": "Short pause between AI generations.",
     "regenerate": "Generate again",
     "regenerating": "Generating…",
     "refreshLimitReached": "You've revised this ad enough times — start fresh with a new offer.",
