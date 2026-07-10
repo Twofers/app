@@ -65,6 +65,20 @@ describe("admin dashboard foundation", () => {
     expect(usageSource).toMatch(/admin_ai_quota_reset/);
     expect(usageSource).toMatch(/countAiQuotaUsage/);
     expect(usageSource).toMatch(/business_members/);
+    // Owner email lookup must use the direct RPC, never auth.admin.listUsers,
+    // which 500s ("Database error finding users") on malformed auth.users rows.
+    expect(usageSource).not.toMatch(/auth\.admin\.listUsers/);
+    expect(usageSource).toMatch(/admin_user_id_by_email/);
+    const emailRpcMigration = read(
+      "supabase/migrations/20260808130000_admin_user_id_by_email_rpc.sql",
+    );
+    expect(emailRpcMigration).toMatch(
+      /create or replace function public\.admin_user_id_by_email/i,
+    );
+    expect(emailRpcMigration).toMatch(/security definer/i);
+    expect(emailRpcMigration).toMatch(
+      /grant execute on function public\.admin_user_id_by_email\(text\) to service_role/i,
+    );
     expect(adminPage).toMatch(/data-admin-ai-usage-endpoint/);
     expect(adminPage).toMatch(/AI Spend & Quotas/);
     expect(adminPage).toMatch(/data-ai-reset-button disabled/);

@@ -169,16 +169,17 @@ async function authUserByEmail(supabaseAdmin: any, email: string) {
   const target = email.trim().toLowerCase();
   if (!target) return null;
 
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
-    const users = (data?.users ?? []) as Array<{ email?: string | null } & Record<string, unknown>>;
-    const found = users.find((candidate) => (candidate.email ?? "").toLowerCase() === target);
-    if (found) return found;
-    if (users.length < 1000) break;
-  }
+  // Resolve via a direct, indexed lookup instead of the GoTrue admin user-list
+  // scan, which returns "Database error finding users" (HTTP 500) at larger page
+  // sizes when any auth.users row is malformed — that crashed this whole lookup.
+  // See migration 20260808130000_admin_user_id_by_email_rpc.sql.
+  const { data, error } = await supabaseAdmin.rpc("admin_user_id_by_email", { p_email: target });
+  if (error) throw error;
 
-  return null;
+  const userId = typeof data === "string" ? data : null;
+  if (!userId || !UUID_RE.test(userId)) return null;
+
+  return authUserById(supabaseAdmin, userId);
 }
 
 async function resolveTargetUser(supabaseAdmin: any, payload: Payload) {
@@ -442,9 +443,13 @@ Deno.serve(async (req) => {
 
     const action = cleanString(payload.action || "lookup", 40);
     if (action === "reset_quota") {
-      return resetQuota(req, adminContext, payload);
+      // Must `await` inside the try: a bare `return resetQuota(...)` returns the
+      // pending promise and the catch below never sees its rejection, so the
+      // Deno runtime emits a bare 500 with no CORS headers (browser reports it
+      // as an unreachable/network failure instead of the real error).
+      return await resetQuota(req, adminContext, payload);
     }
-    return lookupUsage(req, adminContext, payload);
+    return await lookupUsage(req, adminContext, payload);
   } catch (err) {
     console.error("[admin-ai-usage] error:", err);
     return json(req, { error: "Failed to load AI usage.", request_id: requestId }, 500);
