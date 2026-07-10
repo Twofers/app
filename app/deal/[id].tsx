@@ -47,8 +47,10 @@ import {
 } from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
+import { hideBusiness } from "@/lib/hidden-businesses";
 import {
   isAiV4SharedRendererEnabled,
   isAiV5CustomerLocaleResolutionEnabled,
@@ -201,6 +203,40 @@ export default function DealDetail() {
       router.replace("/(tabs)" as Href);
     }
   }, [router]);
+
+  const { confirm: brandedConfirm, confirmModal } = useBrandedConfirm();
+
+  // Hide ("block") this deal's business for the current user, then leave the screen so the
+  // now-hidden business drops out of view (the feed/map re-filter on focus). Returns whether
+  // the write succeeded so callers can decide whether to navigate or surface an error.
+  const performHideBusiness = useCallback(async (): Promise<boolean> => {
+    if (!deal || !userId) return false;
+    const result = await hideBusiness({ userId, businessId: deal.business_id });
+    return result.ok;
+  }, [deal, userId]);
+
+  const confirmHideBusiness = useCallback(() => {
+    if (!deal || !userId) return;
+    brandedConfirm({
+      title: t("hideBusiness.confirmTitle", { defaultValue: "Hide this business?" }),
+      message: t("hideBusiness.confirmBody", {
+        defaultValue:
+          "You won't see deals from this business in your feed. You can unhide it anytime in Settings.",
+      }),
+      confirmLabel: t("hideBusiness.confirmCta", { defaultValue: "Hide" }),
+      cancelLabel: t("commonUi.cancel", { defaultValue: "Cancel" }),
+      iconName: "visibility-off",
+      onConfirm: () => {
+        void (async () => {
+          if (await performHideBusiness()) {
+            goBack();
+          } else {
+            setBanner(t("hideBusiness.error", { defaultValue: "Couldn't hide this business. Please try again." }));
+          }
+        })();
+      },
+    });
+  }, [deal, userId, brandedConfirm, performHideBusiness, goBack, t]);
 
   const handleQrHide = useCallback(() => {
     setQrVisible(false);
@@ -1011,19 +1047,34 @@ export default function DealDetail() {
           </Text>
         </View>
 
-        <Pressable
-          onPress={() => setReportVisible(true)}
-          accessibilityRole="button"
+        <View
           style={{
             marginTop: Spacing.xl,
-            paddingVertical: Spacing.md,
+            flexDirection: "row",
+            justifyContent: "center",
             alignItems: "center",
+            gap: Spacing.xl,
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
-            {t("dealDetail.reportOfferLink", { defaultValue: "Report this offer" })}
-          </Text>
-        </Pressable>
+          <Pressable
+            onPress={() => setReportVisible(true)}
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.md }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+              {t("dealDetail.reportOfferLink", { defaultValue: "Report this offer" })}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={confirmHideBusiness}
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.md }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+              {t("dealDetail.hideBusinessLink", { defaultValue: "Hide this business" })}
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       {!composedCustomerRendererEnabled ? (
@@ -1063,7 +1114,31 @@ export default function DealDetail() {
           });
           return { ok: result.ok };
         }}
+        successAction={
+          userId
+            ? {
+                label: t("hideBusiness.alsoHide", { defaultValue: "Also hide this business" }),
+                onPress: () => {
+                  void (async () => {
+                    const ok = await performHideBusiness();
+                    setReportVisible(false);
+                    if (ok) {
+                      goBack();
+                    } else {
+                      setBanner(
+                        t("hideBusiness.error", {
+                          defaultValue: "Couldn't hide this business. Please try again.",
+                        }),
+                      );
+                    }
+                  })();
+                },
+              }
+            : undefined
+        }
       />
+
+      {confirmModal}
 
       <QrModal
         visible={qrVisible}

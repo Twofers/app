@@ -36,6 +36,7 @@ import {
   loadBusinessRedemptionMap,
   loadBusinessRepeatPolicies,
 } from "@/lib/repeat-claim-visibility";
+import { loadHiddenBusinessIds } from "@/lib/hidden-businesses";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
@@ -205,23 +206,31 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     devWarn("[map] deals fetch failed; preserving previous deals", t("consumerMap.dataError"));
   }
 
-  // Hide deals from businesses that currently repeat-restrict this customer, so a restricted
-  // business loses its live-dot / preview instead of dead-ending at a claim they can't make.
-  // Best-effort: on any lookup failure all deals stay and the claim-deal edge function still
-  // enforces the limit.
+  // Hide businesses the customer has hidden ("block" control) — dropping both their markers and
+  // deals — and deals from businesses that currently repeat-restrict this customer, so a
+  // restricted business loses its live-dot / preview instead of dead-ending at a claim they can't
+  // make. Best-effort: on any lookup failure everything stays and the claim-deal edge function
+  // still enforces the limit.
   let visibleDeals = deals;
+  let visibleBusinesses = businesses;
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    const uid = user?.id ?? null;
     const businessIds = deals.map((d) => d.business_id);
-    const [policies, redemptions] = await Promise.all([
+    const [policies, redemptions, hidden] = await Promise.all([
       loadBusinessRepeatPolicies(businessIds),
-      loadBusinessRedemptionMap(user?.id ?? null, businessIds),
+      loadBusinessRedemptionMap(uid, businessIds),
+      loadHiddenBusinessIds(uid),
     ]);
+    if (hidden.size > 0) {
+      visibleDeals = visibleDeals.filter((d) => !hidden.has(d.business_id));
+      visibleBusinesses = visibleBusinesses.filter((b) => !hidden.has(b.id));
+    }
     if (policies.size > 0) {
       const nowMs = Date.now();
-      visibleDeals = deals.filter(
+      visibleDeals = visibleDeals.filter(
         (d) =>
           !isDealHiddenByRepeatPolicy({
             policy: policies.get(d.business_id),
@@ -239,7 +248,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     userPos,
     showDeviceBlueDot,
     usingDefaultArea: !coords,
-    businesses,
+    businesses: visibleBusinesses,
     deals: visibleDeals,
     dealsFetchFailed,
   };

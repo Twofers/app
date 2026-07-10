@@ -48,8 +48,19 @@ Twofer is free for consumers. Business accounts are created through direct merch
 - Notifications: optional and can be turned off in Settings.
 - Account deletion: available in-app under consumer Settings and merchant Account.
 - AI-assisted offer creation: merchants review generated copy before publishing; deal facts remain authoritative.
-- Reporting: customers can report an offer from the deal detail screen.
+- Objectionable content & user safety: see "Content Moderation (Guideline 1.2)" below — report, hide/block, moderation queue, and terms acceptance are all in the build.
 - Billing: mobile billing, Stripe Checkout, pricing, subscription purchase, and external payment links are hidden/disabled in this review build.
+
+## Content Moderation (Guideline 1.2)
+
+Twofer's content producers are verified business owners, not anonymous users; customers do not post content to one another. We address the user-generated-content requirements as follows:
+
+- Filtering objectionable material: businesses are manually vetted and approved before they can publish, and all AI-assisted offer copy passes automated validation before publication. Admins can remove any offer or business immediately from the internal admin console.
+- Reporting: every offer has a "Report this offer" action (deal detail screen) and every business page has a "Report this business" action. Reports are written to a moderation queue.
+- Timely response: reports appear in an internal admin Reports queue (`/admin/reports`) and on the admin home screen's "Open reports" counter. We review reports daily and act on them within 24 hours, including removing content and suspending or terminating offending accounts.
+- Blocking abusive users: every offer and every business page has a "Hide this business" action that removes that business's offers from the user's feed and map. Hidden businesses can be reviewed and unhidden under consumer Settings → Hidden businesses.
+- Terms of use: account creation requires agreeing to a Terms of Service that prohibits objectionable content and abusive behavior (required checkbox on the sign-up screen). Terms: https://www.twoferapp.com/terms
+- Contact: support@twoferapp.com (also published at https://www.twoferapp.com/support).
 
 ## Manual Verification Before Pasting
 

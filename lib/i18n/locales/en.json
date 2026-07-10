@@ -218,6 +218,7 @@
     "notNow": "Not now"
   },
   "businessProfile": {
+    "reportBusinessLink": "Report this business",
     "title": "Business",
     "loading": "Loading…",
     "notFound": "We couldn’t find this business.",
@@ -747,6 +748,7 @@
     "backToCreate": "← Back to Create"
   },
   "dealDetail": {
+    "hideBusinessLink": "Hide this business",
     "title": "Deal",
     "loading": "Loading...",
     "favorited": "Saved",
@@ -984,6 +986,9 @@
     "logIn": "Log in",
     "pleaseWait": "Please wait…",
     "legalFooter": "By continuing you agree to our <terms>Terms</terms> and <privacy>Privacy Policy</privacy>.",
+    "termsCheckbox": "I agree to the <terms>Terms of Service</terms>, which prohibit objectionable content and abusive behavior.",
+    "termsCheckboxA11y": "I agree to the Terms of Service, which prohibit objectionable content and abusive behavior",
+    "errTermsRequired": "Please agree to the Terms of Service to create an account.",
     "errIncorrectCredentials": "Incorrect email or password.",
     "errNoAccount": "No account found with that email.",
     "errAlreadyExists": "An account with that email already exists. Try logging in.",
@@ -2080,6 +2085,10 @@
   "merchantAccess": {
     "inactiveTitle": "Business account not active",
     "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
+    "verifyTitle": "Verify your business",
+    "verifyBody": "Your business account isn't active yet. Start your free trial and we'll review your request within 1–2 business days.",
+    "verifyEmailHint": "Apply with the same email you signed in with:",
+    "startTrialCta": "Start free trial",
     "contactSupport": "Contact support"
   },
   "businessTerms": {
@@ -2275,6 +2284,23 @@
         "hint": "Create a simple buy-one-get-one deal to attract first-time customers."
       }
     }
+  },
+  "hideBusiness": {
+    "confirmTitle": "Hide this business?",
+    "confirmBody": "You won't see deals from this business in your feed. You can unhide it anytime in Settings.",
+    "confirmCta": "Hide",
+    "error": "Couldn't hide this business. Please try again.",
+    "alsoHide": "Also hide this business",
+    "hiddenTitle": "You've hidden this business",
+    "hiddenBody": "Its deals won't appear in your feed.",
+    "unhide": "Unhide",
+    "hideLink": "Hide this business"
+  },
+  "hiddenBusinesses": {
+    "sectionTitle": "Hidden businesses",
+    "sectionHelp": "Businesses you hide won't appear in your feed.",
+    "empty": "You haven't hidden any businesses.",
+    "unnamed": "This business"
   },
   "report": {
     "businessTitle": "Report this business",

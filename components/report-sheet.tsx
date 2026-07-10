@@ -33,9 +33,11 @@ type Props = {
   subjectLabel: string;
   onDismiss: () => void;
   onSubmit: (input: { reason: string; comment: string }) => Promise<{ ok: boolean; errorMessage?: string }>;
+  /** Optional follow-up offered in the success state, e.g. "Also hide this business". */
+  successAction?: { label: string; onPress: () => void } | null;
 };
 
-export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }: Props) {
+export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit, successAction }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -147,6 +149,9 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
                   })}
                   tone="success"
                 />
+                {successAction ? (
+                  <SecondaryButton title={successAction.label} onPress={successAction.onPress} />
+                ) : null}
                 <PrimaryButton
                   title={t("report.close", { defaultValue: "Close" })}
                   onPress={onDismiss}

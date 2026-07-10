@@ -54,6 +54,11 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { deleteUserAccount } from "@/lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
+import {
+  loadHiddenBusinessesWithNames,
+  unhideBusiness,
+  type HiddenBusinessRow,
+} from "@/lib/hidden-businesses";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
@@ -82,12 +87,17 @@ export default function SettingsScreen() {
   const [consumerSession, setConsumerSession] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [hiddenBusinesses, setHiddenBusinesses] = useState<HiddenBusinessRow[]>([]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setLoadFailed(false);
     try {
-      const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
+      const [a, p, hidden] = await Promise.all([
+        getAlertsEnabled(),
+        getConsumerPreferences(),
+        loadHiddenBusinessesWithNames(session?.user?.id ?? null),
+      ]);
       setAlertsEnabledState(a);
       setLocationModeState(p.locationMode);
       setZip(sanitizeUsZipInput(p.zipCode));
@@ -95,6 +105,7 @@ export default function SettingsScreen() {
       setRadius(p.radiusMiles);
       setNotifModeState(p.notificationPrefs.mode);
       setConsumerSession(!!session?.user);
+      setHiddenBusinesses(hidden);
     } catch (err: unknown) {
       devWarn("[settings] reload failed", err);
       setLoadFailed(true);
@@ -286,6 +297,18 @@ export default function SettingsScreen() {
       });
     } finally {
       setZipSaving(false);
+    }
+  }
+
+  async function unhideOne(businessId: string) {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    const previous = hiddenBusinesses;
+    setHiddenBusinesses((rows) => rows.filter((r) => r.businessId !== businessId));
+    const res = await unhideBusiness({ userId: uid, businessId });
+    if (!res.ok) {
+      setHiddenBusinesses(previous);
+      showSettingsSaveError();
     }
   }
 
@@ -627,6 +650,59 @@ export default function SettingsScreen() {
           </View>
           <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 18 }}>{t("consumerSettings.notifFavoritesOverride")}</Text>
         </View>
+
+        {consumerSession ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>
+              {t("hiddenBusinesses.sectionTitle", { defaultValue: "Hidden businesses" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+              {t("hiddenBusinesses.sectionHelp", { defaultValue: "Businesses you hide won't appear in your feed." })}
+            </Text>
+            {hiddenBusinesses.length === 0 ? (
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20, marginTop: Spacing.xs }}>
+                {t("hiddenBusinesses.empty", { defaultValue: "You haven't hidden any businesses." })}
+              </Text>
+            ) : (
+              hiddenBusinesses.map((row) => (
+                <View
+                  key={row.businessId}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: Spacing.md,
+                    paddingVertical: Spacing.sm,
+                    borderTopWidth: 1,
+                    borderTopColor: theme.border,
+                  }}
+                >
+                  <Text style={{ flex: 1, color: theme.text, fontWeight: "700", fontSize: 15 }} numberOfLines={1}>
+                    {row.name || t("hiddenBusinesses.unnamed", { defaultValue: "This business" })}
+                  </Text>
+                  <Pressable
+                    onPress={() => void unhideOne(row.businessId)}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm }}
+                  >
+                    <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>
+                      {t("hideBusiness.unhide", { defaultValue: "Unhide" })}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
+          </View>
+        ) : null}
 
         <View
           style={{

@@ -218,6 +218,7 @@
     "notNow": "나중에"
   },
   "businessProfile": {
+    "reportBusinessLink": "이 매장 신고",
     "title": "매장",
     "loading": "불러오는 중…",
     "notFound": "매장을 찾을 수 없습니다.",
@@ -747,6 +748,7 @@
     "backToCreate": "← Back to Create"
   },
   "dealDetail": {
+    "hideBusinessLink": "이 매장 숨기기",
     "title": "딜",
     "loading": "불러오는 중…",
     "favorited": "저장됨",
@@ -984,6 +986,9 @@
     "logIn": "로그인",
     "pleaseWait": "잠시만 기다려 주세요…",
     "legalFooter": "계속하면 <terms>약관</terms> 및 <privacy>개인정보 처리방침</privacy>에 동의하게 됩니다.",
+    "termsCheckbox": "<terms>서비스 약관</terms>에 동의하며, 약관은 부적절한 콘텐츠와 악의적인 행동을 금지합니다.",
+    "termsCheckboxA11y": "서비스 약관에 동의하며, 약관은 부적절한 콘텐츠와 악의적인 행동을 금지합니다",
+    "errTermsRequired": "계정을 만들려면 서비스 약관에 동의해 주세요.",
     "errIncorrectCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
     "errNoAccount": "해당 이메일로 등록된 계정이 없습니다.",
     "errAlreadyExists": "해당 이메일로 등록된 계정이 이미 있습니다. 로그인해 보세요.",
@@ -2080,6 +2085,10 @@
   "merchantAccess": {
     "inactiveTitle": "비즈니스 계정이 활성 상태가 아닙니다",
     "inactiveBody": "비즈니스 계정이 활성 상태가 아닙니다. 계정을 활성화하려면 Twofer 지원팀에 문의하세요.",
+    "verifyTitle": "비즈니스 인증하기",
+    "verifyBody": "비즈니스 계정이 아직 활성화되지 않았습니다. 무료 체험을 시작하시면 영업일 기준 1~2일 내에 검토해 드립니다.",
+    "verifyEmailHint": "로그인한 이메일과 동일한 이메일로 신청해 주세요:",
+    "startTrialCta": "무료 체험 시작",
     "contactSupport": "지원팀에 문의"
   },
   "businessTerms": {
@@ -2275,6 +2284,23 @@
         "hint": "첫 방문 고객을 유도할 수 있는 간단한 1+1 딜을 만드세요."
       }
     }
+  },
+  "hideBusiness": {
+    "confirmTitle": "이 매장을 숨길까요?",
+    "confirmBody": "피드에서 이 매장의 혜택이 표시되지 않습니다. 설정에서 언제든지 다시 표시할 수 있습니다.",
+    "confirmCta": "숨기기",
+    "error": "매장을 숨기지 못했습니다. 다시 시도해 주세요.",
+    "alsoHide": "이 매장도 숨기기",
+    "hiddenTitle": "이 매장을 숨겼습니다",
+    "hiddenBody": "이 매장의 혜택이 피드에 표시되지 않습니다.",
+    "unhide": "다시 표시",
+    "hideLink": "이 매장 숨기기"
+  },
+  "hiddenBusinesses": {
+    "sectionTitle": "숨긴 매장",
+    "sectionHelp": "숨긴 매장은 피드에 표시되지 않습니다.",
+    "empty": "숨긴 매장이 없습니다.",
+    "unnamed": "이 매장"
   },
   "report": {
     "businessTitle": "이 매장을 신고합니다",

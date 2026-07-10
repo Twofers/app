@@ -31,6 +31,7 @@
           <a href="/admin/trial-requests">Trial Requests</a>
           <a href="/admin/businesses">Businesses</a>
           <a href="/admin/offers">Offers</a>
+          <a href="/admin/reports">Reports</a>
           <a href="/admin/billing/events">Billing</a>
           <a href="/admin/ai-operating-report">AI Report</a>
           <a href="/admin/ai-prompts">Prompts</a>
@@ -94,6 +95,10 @@
           <a class="admin-next-action" href="/admin/offers?status=review" data-action-count="offers.needsReview">
             <span class="admin-action-copy"><strong>Offers needing review</strong><small>Owner work that may need moderation or support.</small></span>
             <span class="admin-action-count" data-metric="offers.needsReview">0</span>
+          </a>
+          <a class="admin-next-action" href="/admin/reports" data-action-count="moderation.openReports">
+            <span class="admin-action-copy"><strong>Open reports</strong><small>Reported businesses, offers, or customers awaiting review.</small></span>
+            <span class="admin-action-count" data-metric="moderation.openReports">0</span>
           </a>
           <a class="admin-next-action" href="/admin/businesses?attention=1" data-action-count="businesses.needingAttention">
             <span class="admin-action-copy"><strong>Business health reviews</strong><small>Businesses with live offers, claims, trial timing, or AI usage signals needing review.</small></span>

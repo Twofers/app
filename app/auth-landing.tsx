@@ -226,6 +226,8 @@ export default function AuthLandingScreen() {
   // picker — it routes by the role stored on the profile.
   const [screenMode, setScreenMode] = useState<AuthScreenMode>("login");
   const [signupRole, setSignupRole] = useState<TabMode>("customer");
+  // Apple 1.2: account creation requires explicit agreement to the conduct policy.
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -345,6 +347,14 @@ export default function AuthLandingScreen() {
 
   async function handleSignUp() {
     if (busy) return;
+    if (!termsAccepted) {
+      setAuthError(
+        t("authLanding.errTermsRequired", {
+          defaultValue: "Please agree to the Terms of Service to create an account.",
+        }),
+      );
+      return;
+    }
     if (!validateFields()) return;
     if (signupRole === "business" && !isValidBusinessInviteCode(inviteCode)) {
       setInviteError(
@@ -432,6 +442,7 @@ export default function AuthLandingScreen() {
     defaultValue: "Create simple buy-one-get-one offers and redeem customer tickets.",
   });
   const isSignup = screenMode === "signup";
+  const submitBlockedByTerms = isSignup && !termsAccepted;
   const authInputPadding = isSignup ? Spacing.md : Spacing.lg;
   const authSubmitBottomGap = isSignup ? Spacing.sm : Spacing.md;
 
@@ -867,12 +878,58 @@ export default function AuthLandingScreen() {
                 <View style={{ height: Spacing.sm }} />
               )}
 
+              {isSignup ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: Spacing.sm,
+                    marginBottom: Spacing.md,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => setTermsAccepted((v) => !v)}
+                    disabled={busy}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: termsAccepted, disabled: busy }}
+                    accessibilityLabel={t("authLanding.termsCheckboxA11y", {
+                      defaultValue: "I agree to the Terms of Service, which prohibit objectionable content and abusive behavior",
+                    })}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ paddingTop: 1 }}
+                  >
+                    <MaterialIcons
+                      name={termsAccepted ? "check-box" : "check-box-outline-blank"}
+                      size={22}
+                      color={termsAccepted ? theme.primary : theme.mutedText}
+                    />
+                  </Pressable>
+                  <Text
+                    style={{ flex: 1, fontSize: 12, lineHeight: 17, color: theme.mutedText }}
+                    maxFontSizeMultiplier={1.1}
+                  >
+                    <Trans
+                      i18nKey="authLanding.termsCheckbox"
+                      components={{
+                        terms: (
+                          <Text
+                            accessibilityRole="link"
+                            style={{ textDecorationLine: "underline", color: theme.primary }}
+                            onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
+                          />
+                        ),
+                      }}
+                    />
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Custom Pressable (not PrimaryButton) only because it renders an
                   inline busy spinner + accessibilityState.busy. Sizing must match
                   the button standard: Controls.buttonHeight + Radii.md, no shadow
                   (see components/ui/primary-button.tsx). */}
               <ScalePressable
-                disabled={busy}
+                disabled={busy || submitBlockedByTerms}
                 onPress={() => void (isSignup ? handleSignUp() : handleLogIn())}
                 accessibilityLabel={
                   busy
@@ -881,11 +938,12 @@ export default function AuthLandingScreen() {
                       ? t("authLanding.createAccount")
                       : t("authLanding.logIn")
                 }
-                accessibilityState={{ disabled: busy, busy }}
+                accessibilityState={{ disabled: busy || submitBlockedByTerms, busy }}
                 style={{
                   minHeight: Controls.buttonHeight,
                   borderRadius: Radii.md,
                   backgroundColor: theme.primary,
+                  opacity: submitBlockedByTerms && !busy ? 0.6 : 1,
                   justifyContent: "center",
                   alignItems: "center",
                   flexDirection: "row",

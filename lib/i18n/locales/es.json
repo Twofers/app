@@ -218,6 +218,7 @@
     "notNow": "Ahora no"
   },
   "businessProfile": {
+    "reportBusinessLink": "Reportar este negocio",
     "title": "Negocio",
     "loading": "Cargando…",
     "notFound": "No encontramos este negocio.",
@@ -747,6 +748,7 @@
     "backToCreate": "← Back to Create"
   },
   "dealDetail": {
+    "hideBusinessLink": "Ocultar este negocio",
     "title": "Oferta",
     "loading": "Cargando...",
     "favorited": "Guardado",
@@ -984,6 +986,9 @@
     "logIn": "Iniciar sesión",
     "pleaseWait": "Por favor espera…",
     "legalFooter": "Al continuar aceptas nuestros <terms>Términos</terms> y <privacy>Política de privacidad</privacy>.",
+    "termsCheckbox": "Acepto los <terms>Términos de servicio</terms>, que prohíben el contenido inapropiado y el comportamiento abusivo.",
+    "termsCheckboxA11y": "Acepto los Términos de servicio, que prohíben el contenido inapropiado y el comportamiento abusivo",
+    "errTermsRequired": "Acepta los Términos de servicio para crear una cuenta.",
     "errIncorrectCredentials": "Correo o contraseña incorrectos.",
     "errNoAccount": "No encontramos una cuenta con ese correo.",
     "errAlreadyExists": "Ya existe una cuenta con ese correo. Intenta iniciar sesión.",
@@ -2080,6 +2085,10 @@
   "merchantAccess": {
     "inactiveTitle": "La cuenta comercial no está activa",
     "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
+    "verifyTitle": "Verifica tu negocio",
+    "verifyBody": "Tu cuenta comercial aún no está activa. Comienza tu prueba gratis y revisaremos tu solicitud en 1 o 2 días hábiles.",
+    "verifyEmailHint": "Solicítala con el mismo correo con el que iniciaste sesión:",
+    "startTrialCta": "Comenzar prueba gratis",
     "contactSupport": "Contactar soporte"
   },
   "businessTerms": {
@@ -2275,6 +2284,23 @@
         "hint": "Crea una oferta simple de compra uno y recibe otro gratis para atraer clientes nuevos."
       }
     }
+  },
+  "hideBusiness": {
+    "confirmTitle": "¿Ocultar este negocio?",
+    "confirmBody": "No verás ofertas de este negocio en tu feed. Puedes volver a mostrarlo cuando quieras en Ajustes.",
+    "confirmCta": "Ocultar",
+    "error": "No pudimos ocultar este negocio. Inténtalo de nuevo.",
+    "alsoHide": "Ocultar también este negocio",
+    "hiddenTitle": "Has ocultado este negocio",
+    "hiddenBody": "Sus ofertas no aparecerán en tu feed.",
+    "unhide": "Mostrar",
+    "hideLink": "Ocultar este negocio"
+  },
+  "hiddenBusinesses": {
+    "sectionTitle": "Negocios ocultos",
+    "sectionHelp": "Los negocios que ocultes no aparecerán en tu feed.",
+    "empty": "No has ocultado ningún negocio.",
+    "unnamed": "Este negocio"
   },
   "report": {
     "businessTitle": "Reportar este negocio",

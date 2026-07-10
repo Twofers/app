@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reports | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-reports-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-reports"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/reports" aria-current="page">Reports</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Content moderation</p>
+          <h1>Reports</h1>
+          <p class="lede">
+            Reports submitted from the app's "Report" actions. Review each open item and mark it reviewed or dismissed.
+            To remove content, open the business in
+            <a href="/admin/businesses">Businesses</a> or the offer in <a href="/admin/offers">Offers</a> and deactivate it there.
+            Target: act on reported content within 24 hours.
+          </p>
+        </div>
+        <div class="admin-actions">
+          <button type="button" class="button button-small" data-refresh-reports>Refresh</button>
+        </div>
+      </div>
+
+      <section class="admin-panel">
+        <h2>Reported businesses &amp; offers</h2>
+        <p class="status" data-reports-status></p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Offer</th>
+                <th>Reason</th>
+                <th>Details</th>
+                <th>Status</th>
+                <th>Reported</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody data-business-reports-body>
+              <tr><td colspan="7" class="admin-row-detail">Sign in to load reports.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-panel">
+        <h2>Reported customers</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead>
+              <tr>
+                <th>Reported by</th>
+                <th>Reason</th>
+                <th>Details</th>
+                <th>Status</th>
+                <th>Reported</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody data-user-reports-body>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load reports.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/reports.js?v=20260710-content-reports"></script>
+  </body>
+</html>

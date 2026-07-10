@@ -24,7 +24,9 @@ export type ProspectPermission =
   | "claim_link.write"
   | "trial.create"
   | "report.generate"
-  | "prompt.manage";
+  | "prompt.manage"
+  | "moderation.read"
+  | "moderation.write";
 
 export type AdminContext = {
   user: { id: string; email?: string | null };
@@ -116,6 +118,12 @@ export function roleCan(role: AdminRole, permission: ProspectPermission): boolea
   }
   if (permission === "prompt.manage") {
     return ["admin", "developer"].includes(role);
+  }
+  if (permission === "moderation.read") {
+    return ["admin", "support", "moderator", "developer", "read_only"].includes(role);
+  }
+  if (permission === "moderation.write") {
+    return ["admin", "moderator", "developer"].includes(role);
   }
   return ["admin", "sales", "moderator", "developer"].includes(role);
 }

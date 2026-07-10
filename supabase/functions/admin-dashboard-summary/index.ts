@@ -47,6 +47,19 @@ async function countRows(query: PromiseLike<{ count: number | null; error: unkno
   return count ?? 0;
 }
 
+// Like countRows but never throws: a missing table or transient error yields 0.
+// Used for soft metrics (e.g. content-report queue) that must not be able to take
+// down the whole dashboard summary if their table isn't present in every env yet.
+async function countRowsSafe(query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> {
+  try {
+    const { count, error } = await query;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 const SECTION_NAMES = [
   "businesses",
   "offers",
@@ -1296,6 +1309,8 @@ serve(async (req) => {
       openProspects,
       readyProspects,
       acceptedClaimLinks,
+      openBusinessReports,
+      openUserReports,
     ] = await Promise.all([
       countRows(
         supabaseAdmin
@@ -1426,6 +1441,18 @@ serve(async (req) => {
           .not("accepted_at", "is", null)
           .gte("accepted_at", currentMonthStart.toISOString()),
       ),
+      countRowsSafe(
+        supabaseAdmin
+          .from("business_reports")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "open"),
+      ),
+      countRowsSafe(
+        supabaseAdmin
+          .from("user_reports")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "open"),
+      ),
     ]);
 
     const { data: recentApplications, error: applicationsError } = await supabaseAdmin
@@ -1512,6 +1539,9 @@ serve(async (req) => {
           open: openProspects,
           readyToContact: readyProspects,
           acceptedClaimLinksThisMonth: acceptedClaimLinks,
+        },
+        moderation: {
+          openReports: openBusinessReports + openUserReports,
         },
       },
       businessHealth,

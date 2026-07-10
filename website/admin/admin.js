@@ -561,6 +561,7 @@
         setMetric("prospects.open", s.prospects?.open ?? 0);
         setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
         setMetric("prospects.acceptedClaimLinks", s.prospects?.acceptedClaimLinksThisMonth ?? 0);
+        setMetric("moderation.openReports", s.moderation?.openReports ?? 0);
         const businessHealthRows = payload.businessHealth || [];
         const businessHealthLoaded = !payload.businessHealthError && Array.isArray(payload.businessHealth);
         const businessHealthAttention = businessHealthLoaded

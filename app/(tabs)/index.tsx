@@ -87,6 +87,7 @@ import {
   loadBusinessRepeatPolicies,
   type RepeatPolicyFields,
 } from "@/lib/repeat-claim-visibility";
+import { loadHiddenBusinessIds } from "@/lib/hidden-businesses";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -243,6 +244,9 @@ export default function HomeScreen() {
    *  deals the customer is currently restricted from. Empty maps => nothing hidden. */
   const [repeatPolicyByBusiness, setRepeatPolicyByBusiness] = useState<Map<string, RepeatPolicyFields>>(() => new Map());
   const [lastRedeemedByBusiness, setLastRedeemedByBusiness] = useState<Map<string, string>>(() => new Map());
+  /** Businesses this customer has hidden ("block" control). Their deals are filtered out of the
+   *  feed and the shops list. Empty set => nothing hidden. */
+  const [hiddenBusinessIds, setHiddenBusinessIds] = useState<Set<string>>(() => new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favoritesExpanded, setFavoritesExpanded] = useState(false);
   const [sortMode, setSortMode] = useState<ConsumerDealSortMode>(DEFAULT_DEAL_SORT_MODE);
@@ -604,6 +608,10 @@ export default function HomeScreen() {
     setFavoriteBusinessIds((data ?? []).map((row) => row.business_id));
   }, []);
 
+  const loadHidden = useCallback(async (currentUserId: string | null) => {
+    setHiddenBusinessIds(await loadHiddenBusinessIds(currentUserId));
+  }, []);
+
   const hydrateLocationFromPrefs = useCallback(async () => {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
@@ -641,7 +649,8 @@ export default function HomeScreen() {
       void loadDeals();
       void loadBusinesses();
       void loadFavorites(userId);
-    }, [loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]),
+      void loadHidden(userId);
+    }, [loadDeals, loadBusinesses, loadFavorites, loadHidden, userId, hydrateLocationFromPrefs]),
   );
 
   useEffect(() => {
@@ -856,20 +865,28 @@ export default function HomeScreen() {
     [t],
   );
 
-  // Hide deals the customer is currently repeat-restricted from, so they never see a deal
-  // they can't claim. Applied upstream of search/radius/sort (and any realtime-added deals).
-  // When no business in view has an active limit, the maps are empty and this is a no-op.
+  // Hide deals the customer can't/won't see: businesses they've hidden ("block" control), and
+  // deals they're currently repeat-restricted from (so they never see a deal they can't claim).
+  // Applied upstream of search/radius/sort (and any realtime-added deals). When nothing is hidden
+  // and no business in view has an active limit, this is a no-op.
   const repeatVisibleDeals = useMemo(() => {
-    if (repeatPolicyByBusiness.size === 0) return deals;
-    return deals.filter(
-      (d) =>
-        !isDealHiddenByRepeatPolicy({
+    const hasHidden = hiddenBusinessIds.size > 0;
+    const hasRepeatLimits = repeatPolicyByBusiness.size > 0;
+    if (!hasHidden && !hasRepeatLimits) return deals;
+    return deals.filter((d) => {
+      if (hasHidden && hiddenBusinessIds.has(d.business_id)) return false;
+      if (
+        hasRepeatLimits &&
+        isDealHiddenByRepeatPolicy({
           policy: repeatPolicyByBusiness.get(d.business_id),
           lastRedeemedAt: lastRedeemedByBusiness.get(d.business_id) ?? null,
           nowMs: nowTick,
-        }),
-    );
-  }, [deals, repeatPolicyByBusiness, lastRedeemedByBusiness, nowTick]);
+        })
+      )
+        return false;
+      return true;
+    });
+  }, [deals, repeatPolicyByBusiness, lastRedeemedByBusiness, nowTick, hiddenBusinessIds]);
 
   const searchFilteredDeals = useMemo(
     () => repeatVisibleDeals.filter((d) => dealMatchesSearch(d, searchQuery)),
@@ -944,6 +961,9 @@ export default function HomeScreen() {
 
   const businessesDisplay = useMemo(() => {
     let list = businesses;
+    if (hiddenBusinessIds.size > 0) {
+      list = list.filter((b) => !hiddenBusinessIds.has(b.id));
+    }
     if (favoritesOnly) {
       list = list.filter((b) => favoriteBusinessIds.includes(b.id));
     }
@@ -969,7 +989,7 @@ export default function HomeScreen() {
       });
     }
     return list;
-  }, [businesses, favoritesOnly, favoriteBusinessIds, userGeo]);
+  }, [businesses, favoritesOnly, favoriteBusinessIds, userGeo, hiddenBusinessIds]);
 
   const shopsForList = useMemo(() => {
     let list = businessesDisplay;
@@ -1008,13 +1028,19 @@ export default function HomeScreen() {
     if (refreshingFeed) return;
     setRefreshingFeed(true);
     try {
-      await Promise.all([loadDeals(), loadBusinesses(), loadFavorites(userId), hydrateLocationFromPrefs()]);
+      await Promise.all([
+        loadDeals(),
+        loadBusinesses(),
+        loadFavorites(userId),
+        loadHidden(userId),
+        hydrateLocationFromPrefs(),
+      ]);
       lastFeedFocusHydrateAtRef.current = Date.now();
       lastFeedFocusHydrateUserIdRef.current = userId ?? null;
     } finally {
       setRefreshingFeed(false);
     }
-  }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]);
+  }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, loadHidden, userId, hydrateLocationFromPrefs]);
 
   const formatTimeLeft = useCallback(
     (endTimeIso: string) => {
