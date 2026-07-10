@@ -59,6 +59,7 @@ export default function CreateDeal() {
   const {
     blocked: blockedSubscription,
     loading: billingLoading,
+    access: billingAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
     subscriptionTier,
@@ -335,7 +336,7 @@ export default function CreateDeal() {
         </View>
       ) : blockedSubscription ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <MerchantAccessBlockedCard />
+          <MerchantAccessBlockedCard status={billingAccess.status} />
         </View>
       ) : termsRequired && businessId ? (
         <View style={{ marginTop: Spacing.lg }}>

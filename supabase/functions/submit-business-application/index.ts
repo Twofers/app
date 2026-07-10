@@ -10,6 +10,7 @@ import {
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
 import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts";
+import { sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 30;
 const RATE_LIMIT_MAX_PER_EMAIL = 3;
@@ -351,6 +352,25 @@ serve(async (req) => {
     }).select("id").single();
 
     if (error) throw error;
+
+    // Best-effort admin alert (never throws, never blocks the insert): notify the
+    // team a new application landed so a trial can be turned on. Fires for every
+    // inserted application regardless of decision; the honeypot early-return and
+    // rate-limited requests never reach this point.
+    await sendNewApplicationAdminAlert({
+      applicationId: application.id as string,
+      businessName,
+      contactName,
+      email,
+      phone: normalized.phone,
+      address,
+      businessType,
+      status: decision.status,
+      accessTier: decision.access_tier,
+      verificationStatus: decision.verification_status,
+      riskScore: decision.risk_score,
+      source: "website_start_trial",
+    });
 
     const requestId = await createOnboardingRequest(supabase, normalized, payload as Record<string, unknown>, {
       applicationId: application.id,

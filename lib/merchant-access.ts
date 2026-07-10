@@ -20,6 +20,21 @@ export function isMerchantAccessAllowedStatus(status: BillingStatus | string | n
   return typeof status === "string" && ALLOWED_STATUSES.has(status);
 }
 
+// Blocked statuses that mean the owner never activated anything yet: a brand-new
+// business (fresh location defaults to trial_eligible) or a web checkout they
+// started but never finished. These get the "start your free trial" path.
+// Every OTHER blocked status is a lapsed account — trial expired, suspended,
+// canceled, or refunded — and must NOT be told to start a free trial; those keep
+// the "contact support" message.
+const NEVER_ACTIVATED_STATUSES = new Set<string>([
+  "trial_eligible",
+  "trial_checkout_pending",
+]);
+
+export function isNeverActivatedBillingStatus(status: BillingStatus | string | null | undefined): boolean {
+  return status == null || NEVER_ACTIVATED_STATUSES.has(status);
+}
+
 export function getMerchantAccessForBillingSummary(params: {
   isLoggedIn: boolean;
   businessId: string | null;

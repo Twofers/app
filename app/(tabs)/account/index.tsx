@@ -92,6 +92,7 @@ export default function AccountScreen() {
   const {
     blocked: merchantAccessBlocked,
     loading: merchantAccessLoading,
+    access: merchantAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
     subscriptionTier,
@@ -998,7 +999,7 @@ export default function AccountScreen() {
           ) : null}
 
           {tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
-            <MerchantAccessBlockedCard />
+            <MerchantAccessBlockedCard status={merchantAccess.status} />
           ) : null}
 
           {mobileBillingEnabled && tabMode === "business" && businessId ? (
