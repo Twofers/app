@@ -35,6 +35,23 @@ describe("business billing access state sync wiring", () => {
     expect(source).not.toMatch(/trialDays: null,/);
   });
 
+  it("reconciles billing access for owners whose business was linked before admin approval (stuck 'Business account not active')", () => {
+    const source = readFunction("get-business-onboarding-context");
+    expect(source).toMatch(/import \{ applyBusinessBillingAccessState \} from "\.\.\/_shared\/business-location-entitlement-sync\.ts"/);
+    // Both early-return paths (direct owner_id match and business_members
+    // link) previously returned before any billing sync; each must reconcile.
+    const reconcileCalls = source.match(/await reconcileBillingAccessForLinkedBusiness\(/g) ?? [];
+    expect(reconcileCalls.length).toBeGreaterThanOrEqual(2);
+    // Picks up an approved-but-unlinked application by owner email...
+    expect(source).toMatch(/\.in\("status", \["trial_limited", "trial_active"\]\)/);
+    // ...seeds the subscription (which mirrors into location_entitlements)
+    // with the admin-approved trial length, and backlinks the application.
+    expect(source).toMatch(/source: "app_login_reconcile"/);
+    expect(source).toMatch(/update\(\{ business_id: businessId \}\)/);
+    // Reconciliation is a healing side-effect: it must never 500 the context load.
+    expect(source).toMatch(/billing reconcile failed/);
+  });
+
   it("creates prospect-approved trials with the same 30\/14-day lengths as admin-business-applications, and seeds business_subscriptions immediately when the business already exists", () => {
     const source = readFunction("admin-trial-create-from-prospect");
     expect(source).toMatch(/trialDays: 30/);

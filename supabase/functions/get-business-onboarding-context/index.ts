@@ -13,6 +13,7 @@ import {
   seedBusinessSubscription,
   upsertBusinessBillingProfile,
 } from "../_shared/stripe-business-billing.ts";
+import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -60,6 +61,97 @@ function normalizeFromRequest(row: Record<string, unknown>): NormalizedBusinessO
   };
 }
 
+// Subscription states that grant app access and therefore must be mirrored
+// into location_entitlements for the merchant gate to open. Terminal states
+// (expired/canceled/suspended) are owned by the Stripe webhook and the expiry
+// sweeps; re-stamping them here would only churn suspended_at.
+const ACCESS_GRANTING_STATUSES = new Set(["trial_limited", "trialing", "active", "past_due_grace"]);
+
+/**
+ * Owners who create or link their business BEFORE the admin approves their
+ * trial request take the early-return paths in ensureLinkedBusiness, so the
+ * approval recorded in business_applications never reaches
+ * business_subscriptions / location_entitlements — the tables the app's
+ * merchant gate actually reads — and the owner is stuck on "Business account
+ * not active". (admin-business-applications deliberately never scans Auth by
+ * email, so it cannot link such a business at decision time.) Reconcile on
+ * every context load for an already-linked business. Failures must not block
+ * the context response; the next load retries.
+ */
+async function reconcileBillingAccessForLinkedBusiness(
+  supabase: DbClient,
+  businessId: string,
+  email: string,
+): Promise<void> {
+  try {
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from("business_subscriptions")
+      .select("app_access_status,trial_type,trial_start,trial_end,current_period_start,current_period_end,cancel_at_period_end")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (subscriptionError) throw subscriptionError;
+
+    const subscriptionRow = subscription as Record<string, unknown> | null;
+    const appAccessStatus = typeof subscriptionRow?.app_access_status === "string"
+      ? subscriptionRow.app_access_status
+      : null;
+
+    if (appAccessStatus && ACCESS_GRANTING_STATUSES.has(appAccessStatus)) {
+      // Billing was already decided; re-mirror the subscription row so an
+      // earlier failed or skipped sync heals itself (idempotent).
+      const trialType = typeof subscriptionRow?.trial_type === "string" ? subscriptionRow.trial_type : null;
+      await applyBusinessBillingAccessState({
+        supabase,
+        businessId,
+        provider: trialType === "stripe_trial" || appAccessStatus === "active" || appAccessStatus === "past_due_grace"
+          ? "stripe"
+          : "admin",
+        appAccessStatus,
+        trialType,
+        trialStart: typeof subscriptionRow?.trial_start === "string" ? subscriptionRow.trial_start : null,
+        trialEnd: typeof subscriptionRow?.trial_end === "string" ? subscriptionRow.trial_end : null,
+        currentPeriodStart: typeof subscriptionRow?.current_period_start === "string" ? subscriptionRow.current_period_start : null,
+        currentPeriodEnd: typeof subscriptionRow?.current_period_end === "string" ? subscriptionRow.current_period_end : null,
+        cancelAtPeriodEnd: subscriptionRow?.cancel_at_period_end === true,
+      });
+      return;
+    }
+    if (appAccessStatus && appAccessStatus !== "pending") return;
+
+    // No decided subscription yet: pick up a trial the admin approved against
+    // this owner's email after the business was already linked.
+    const { data: application, error: applicationError } = await supabase
+      .from("business_applications")
+      .select("id,status,access_tier,trial_days,business_id")
+      .eq("email", email)
+      .in("status", ["trial_limited", "trial_active"])
+      .order("reviewed_at", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+    if (applicationError) throw applicationError;
+    const applicationRow = application as Record<string, unknown> | null;
+    if (!applicationRow) return;
+
+    await seedBusinessSubscription(supabase, {
+      businessId,
+      source: "app_login_reconcile",
+      trialDays: typeof applicationRow.trial_days === "number" ? applicationRow.trial_days : null,
+      accessStatus: applicationRow.access_tier === "trialing" || applicationRow.status === "trial_active"
+        ? "trialing"
+        : "trial_limited",
+    });
+    // Backlink so the admin dashboard and future decisions see this business.
+    if (!applicationRow.business_id) {
+      await supabase
+        .from("business_applications")
+        .update({ business_id: businessId })
+        .eq("id", applicationRow.id as string);
+    }
+  } catch (error) {
+    console.error("[get-business-onboarding-context] billing reconcile failed:", error);
+  }
+}
+
 async function ensureLinkedBusiness(
   supabase: DbClient,
   userId: string,
@@ -72,7 +164,10 @@ async function ensureLinkedBusiness(
     .maybeSingle();
   if (directError) throw directError;
   const direct = directBusiness as { id?: string } | null;
-  if (direct?.id) return direct.id;
+  if (direct?.id) {
+    await reconcileBillingAccessForLinkedBusiness(supabase, direct.id, email);
+    return direct.id;
+  }
 
   const { data: member, error: memberError } = await supabase
     .from("business_members")
@@ -89,6 +184,7 @@ async function ensureLinkedBusiness(
       .update({ user_id: userId, status: "active", role: "owner", linked_at: new Date().toISOString() })
       .eq("id", memberRow.id);
     await supabase.from("businesses").update({ owner_id: userId }).eq("id", memberRow.business_id);
+    await reconcileBillingAccessForLinkedBusiness(supabase, memberRow.business_id, email);
     return memberRow.business_id;
   }
 
