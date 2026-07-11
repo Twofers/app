@@ -44,10 +44,28 @@ scripts/check-ai-poster-core-lock.mjs` (30/30, `app/create/ai.tsx` hash re-locke
   and `publishDeal`, gated on `showPosterFormat`) and guarded `usePhotoAsFinal` so a poster-only deal
   doesn't claim a nonexistent photo. Fail-safe: server rejection routes to existing publish-error
   handling, and the existing poster-spec→Standard-card fallback still applies. Standard-card format
-  still requires an image. **Needs on-device verify: (a) `publish-offer-version` accepts an imageless
-  deterministic ad_spec, (b) the `ComposedAdCard` fallback render is screenshot-worthy** (it may show
-  a "Photo coming soon" visual rather than the owner's gradient poster — Phase 4 photo or a working
-  AI image still give the nicest screenshot).
+  still requires an image.
+  **2026-07-11 double-check pass (Dan-requested) — reachability completion.** The first cut was
+  INERT for the target scenario: three upstream client gates still dead-ended the no-image poster
+  flow before the softened gates could fire. Fixed all three (same approval scope):
+  1. `generateAd`'s NO_IMAGE_RETURNED branch hardcoded outcome `ai_failed_no_fallback`, so the
+     recovery card never showed "Use fallback template" — now derived from
+     `hasFallbackTemplateSource()`.
+  2. `hasFallbackTemplateSource()` required a saved image — now counts poster format as a fallback
+     source.
+  3. `acceptAd` (which is also the exact-preview approval path, mandatory in prod because
+     `EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED=true`) blocked any no-image ad — now
+     scoped to `!showPosterFormat`.
+  The same pass **statically verified the server accepts an imageless publish** (downgrading the
+  earlier "unknown"): `buildDefaultAdPresentationSpec` and the publish presentation both coalesce a
+  null image to the pre-existing `"deterministic-fallback"` sentinel (`lib/ad-presentation-spec.ts:157`,
+  `ai.tsx` publish block), the composite QA explicitly passes `deterministic_fallback` with no image
+  (`lib/ad-composite-qa.ts:86`), `validatePosterSpecV1` accepts a null `source_asset_path`, and
+  `publish-offer-version`'s `MISSING_PRESENTATION_IMAGE_ASSET` check is satisfied by the sentinel.
+  Also verified: `rememberImageVersion` is null-safe for the imageless fallback ad, and
+  `publishReadiness` has no image requirement. Remaining on-device check is only (b): whether the
+  `ComposedAdCard` fallback render is screenshot-worthy (it may show "Photo coming soon" rather than
+  the owner's gradient poster — Phase 4 photo or a working AI image still give the nicest shot).
 - **Phase 6 — DONE (likely fix; needs on-device confirmation).** The plan's "Edit offer details"
   (`description`) field was already safe (`invalidateAcceptedAdDraft`, keeps the image). The actual
   match for the symptom is the custom-image-edit **instruction** TextInput (`app/create/ai.tsx:4841`):

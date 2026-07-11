@@ -1541,7 +1541,10 @@ export default function AiDealScreen() {
   }
 
   function hasFallbackTemplateSource() {
-    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl);
+    // Poster-style deals can always fall back: the deterministic poster/composed
+    // card renders the offer natively with no image (Phase 5), so "fallback
+    // available" no longer requires a saved image in that format.
+    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl || showPosterFormat);
   }
 
   function clearGenerationErrorState() {
@@ -2908,7 +2911,13 @@ export default function AiDealScreen() {
         const friendly = t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
         });
-        setGenerationFailureState(friendly, "ai_failed_no_fallback");
+        // Not hardcoded to "no fallback" anymore: with a photo saved — or in
+        // poster format, where the deterministic poster needs no image (Phase 5)
+        // — the recovery card must offer the "Use fallback template" action.
+        setGenerationFailureState(
+          friendly,
+          hasFallbackTemplateSource() ? "ai_failed_fallback_available" : "ai_failed_no_fallback",
+        );
         setBanner({ message: friendly, tone: "error" });
         trackEvent(AiAdsEvents.GENERATION_FAILED, {
           screen: "create_ai",
@@ -3177,7 +3186,12 @@ export default function AiDealScreen() {
 
   function acceptAd() {
     if (!generatedAd) return;
-    if (!imageVersionStoragePath(generatedAd)) {
+    // Poster-style ads may be accepted with no image (Phase 5): the deterministic
+    // poster/composed card renders the offer natively, the composite QA treats
+    // deterministic_fallback as having a visual, and publish stores a null poster.
+    // Standard-card ads still require one. acceptAd is also the exact-preview
+    // approval path, so blocking here would dead-end the no-image poster flow.
+    if (!imageVersionStoragePath(generatedAd) && !showPosterFormat) {
       setBanner({
         message: t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
