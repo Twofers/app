@@ -18,6 +18,8 @@ type QrModalProps = {
   shortCode?: string | null;
   graceMinutes?: number;
   successToastNonce?: number;
+  /** Which success toast to show when `successToastNonce` changes. Defaults to "claimed". */
+  successToastVariant?: "claimed" | "redeemed";
   onHide: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -71,6 +73,7 @@ export function QrModal({
   shortCode = null,
   graceMinutes = DEFAULT_CLAIM_GRACE_MINUTES,
   successToastNonce = 0,
+  successToastVariant = "claimed",
   onHide,
   onRefresh,
   refreshing,
@@ -261,10 +264,12 @@ export function QrModal({
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.15}>
-                    {t("dealStatus.claimed")}
+                    {successToastVariant === "redeemed" ? t("dealStatus.redeemed") : t("dealStatus.claimed")}
                   </Text>
                   <Text style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-                    {t("consumerWallet.qrModalTitle")}
+                    {successToastVariant === "redeemed"
+                      ? t("consumerWallet.redeemedConfirmSub")
+                      : t("consumerWallet.qrModalTitle")}
                   </Text>
                 </View>
                 <View

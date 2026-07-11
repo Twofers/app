@@ -1217,6 +1217,7 @@
     "emptyClaimsTitle": "Aún no hay reclamaciones",
     "emptyClaimsSub": "Reclama una oferta desde Inicio: aparecerá aquí con tu QR.",
     "qrModalTitle": "Tu QR",
+    "redeemedConfirmSub": "¡Todo listo!",
     "qrValidUntil": "Válido hasta: {{time}}",
     "qrExpiresAt": "Caduca: {{datetime}}",
     "hideQr": "Cerrar",

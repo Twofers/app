@@ -48,6 +48,7 @@ import {
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { hideBusiness } from "@/lib/hidden-businesses";
@@ -167,6 +168,7 @@ export default function DealDetail() {
   const [activeClaim, setActiveClaim] = useState<ActiveClaim | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
+  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -370,9 +372,33 @@ export default function DealDetail() {
       expires_at: claim.expires_at,
       short_code: claim.short_code ?? null,
     });
-    if (showSuccessToast) setClaimSuccessToastNonce((n) => n + 1);
+    if (showSuccessToast) {
+      setClaimToastVariant("claimed");
+      setClaimSuccessToastNonce((n) => n + 1);
+    }
     setQrVisible(true);
   }
+
+  // While the claim QR is on screen, watch it so a counter scan flips the "View QR" action
+  // off and closes the modal on its own — redemption UPDATEs aren't broadcast via Realtime
+  // in this project (see the hook), so a manual refresh would otherwise be required.
+  useClaimRedeemedWatch({
+    claimId: activeClaim?.id ?? null,
+    enabled: qrVisible && !!activeClaim?.id,
+    onRedeemed: () => {
+      setClaimToastVariant("redeemed");
+      setClaimSuccessToastNonce((n) => n + 1);
+      setTimeout(() => {
+        handleQrHide(); // closes the modal and fires the pending save-business prompt
+        setActiveClaim(null); // a redeemed claim must not reopen via "View QR"
+        if (deal?.id) void loadClaimCount(deal.id);
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      setActiveClaim(null);
+    },
+  });
 
   const loadDeal = useCallback(async () => {
     if (!id) {
@@ -1146,6 +1172,7 @@ export default function DealDetail() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
+        successToastVariant={claimToastVariant}
         onHide={handleQrHide}
         onRefresh={viewQr}
         refreshing={refreshingQr}

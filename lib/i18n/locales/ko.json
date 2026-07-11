@@ -1217,6 +1217,7 @@
     "emptyClaimsTitle": "클레임 내역 없음",
     "emptyClaimsSub": "홈에서 오퍼를 받으면 여기에 QR과 함께 표시됩니다.",
     "qrModalTitle": "내 QR",
+    "redeemedConfirmSub": "완료되었습니다",
     "qrValidUntil": "유효까지: {{time}}",
     "qrExpiresAt": "만료: {{datetime}}",
     "hideQr": "닫기",

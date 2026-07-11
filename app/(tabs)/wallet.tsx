@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
+import { AppState, Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -30,6 +30,7 @@ import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-moda
 import { useBusiness } from "@/hooks/use-business";
 import { useSaveBusinessPrompt } from "@/hooks/use-save-business-prompt";
 import { useSecondTick } from "@/hooks/use-second-tick";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -158,6 +159,8 @@ export default function WalletScreen() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
+  const [qrClaimId, setQrClaimId] = useState<string | null>(null);
+  const [qrRedeemedNonce, setQrRedeemedNonce] = useState(0);
   const [qrGraceMinutes, setQrGraceMinutes] = useState(DEFAULT_CLAIM_GRACE_MINUTES);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -319,6 +322,38 @@ export default function WalletScreen() {
     }, [loadClaims]),
   );
 
+  // Safety net for the backgrounded-scan case: if the phone was locked or the app was
+  // switched away right after a counter scan, reload claims on the way back so the
+  // redeemed deal is reflected without a manual pull-to-refresh.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && userId) void loadClaims();
+    });
+    return () => sub.remove();
+  }, [loadClaims, userId]);
+
+  // While the QR modal is open, watch that claim so a counter scan (a redemption UPDATE,
+  // which Realtime does not broadcast in this project) makes the QR disappear on its own.
+  useClaimRedeemedWatch({
+    claimId: qrClaimId,
+    enabled: qrVisible && !!qrClaimId,
+    onRedeemed: ({ claimId }) => {
+      // Flash the in-modal "Redeemed" confirmation (confetti + toast), then close and
+      // reload — loadClaims() moves the card to Ended → Redeemed and fires the existing
+      // save-this-business prompt for the just-redeemed claim.
+      setQrRedeemedNonce((n) => n + 1);
+      void clearWalletClaimToken(claimId);
+      setTimeout(() => {
+        setQrVisible(false);
+        void loadClaims();
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      void loadClaims();
+    },
+  });
+
   async function onRefresh() {
     setRefreshing(true);
     try {
@@ -344,6 +379,7 @@ export default function WalletScreen() {
     setQrToken(row.token);
     setQrShortCode(row.short_code);
     setQrExpires(row.expires_at);
+    setQrClaimId(row.id);
     setQrGraceMinutes(row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES);
     setActiveDealId(row.deal_id);
     setQrVisible(true);
@@ -375,6 +411,7 @@ export default function WalletScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setQrClaimId(out.claim_id ?? null);
       setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       await loadClaims();
     } catch (e: unknown) {
@@ -412,6 +449,7 @@ export default function WalletScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setQrClaimId(out.claim_id ?? row.id);
       setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       setActiveDealId(row.deal_id);
       setQrVisible(true);
@@ -1168,6 +1206,8 @@ export default function WalletScreen() {
         shortCode={qrShortCode}
         expiresAt={qrExpires}
         graceMinutes={qrGraceMinutes}
+        successToastNonce={qrRedeemedNonce}
+        successToastVariant="redeemed"
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

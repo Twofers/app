@@ -1531,6 +1531,7 @@
     "emptyClaimsTitle": "No tickets yet",
     "emptyClaimsSub": "Claim an offer from Home. It will appear here with your QR.",
     "qrModalTitle": "Your QR",
+    "redeemedConfirmSub": "You're all set",
     "qrValidUntil": "Valid until: {{time}}",
     "qrExpiresAt": "Expires: {{datetime}}",
     "hideQr": "Hide",

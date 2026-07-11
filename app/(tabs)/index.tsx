@@ -33,6 +33,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { useBusiness } from "@/hooks/use-business";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import {
   mergeDealsById,
   readBusinessCoordinates,
@@ -219,10 +220,12 @@ export default function HomeScreen() {
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
+  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [claimingDealId, setClaimingDealId] = useState<string | null>(null);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
+  const [lastClaimId, setLastClaimId] = useState<string | null>(null);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
   const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<string | null>(null);
   const [loadingDeals, setLoadingDeals] = useState(true);
@@ -735,7 +738,10 @@ export default function HomeScreen() {
 
         const out = await claimDeal(dealId);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
-        if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
+        if (out.claim_id) {
+          setClaimToastVariant("claimed");
+          setClaimSuccessToastNonce((n) => n + 1);
+        }
         trackAppAnalyticsEvent({
           event_name: "deal_claimed",
           claim_id: out.claim_id ?? null,
@@ -747,6 +753,7 @@ export default function HomeScreen() {
         setQrExpires(out.expires_at);
         setQrShortCode(out.short_code ?? null);
         setLastClaimDealId(dealId);
+        setLastClaimId(out.claim_id ?? null);
         setUserClaimsByDeal((prev) => {
           const next = new Map(prev);
           next.set(dealId, {
@@ -824,6 +831,34 @@ export default function HomeScreen() {
     void loadUserClaims(dealsRef.current.map((d) => d.id));
   }, [loadUserClaims]);
 
+  // While the claim QR is on screen, watch it so a counter scan flips the deal card to
+  // redeemed and closes the modal on its own (redemption UPDATEs aren't broadcast via
+  // Realtime in this project — see the hook).
+  useClaimRedeemedWatch({
+    claimId: lastClaimId,
+    enabled: qrVisible && !!lastClaimId,
+    onRedeemed: () => {
+      const dealId = lastClaimDealId;
+      setClaimToastVariant("redeemed");
+      setClaimSuccessToastNonce((n) => n + 1);
+      setTimeout(() => {
+        setQrVisible(false);
+        if (dealId) {
+          setClaimStatus((prev) => {
+            const next = { ...prev };
+            delete next[dealId];
+            return next;
+          });
+        }
+        void loadUserClaims(dealsRef.current.map((d) => d.id));
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      void loadUserClaims(dealsRef.current.map((d) => d.id));
+    },
+  });
+
   async function refreshQr() {
     if (!lastClaimDealId) {
       setBanner(t("consumerWallet.errNoDealForQr"));
@@ -836,6 +871,7 @@ export default function HomeScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setLastClaimId(out.claim_id ?? null);
     } catch (e: unknown) {
       const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
       setBanner(mapClaimError(msg));
@@ -1899,6 +1935,7 @@ export default function HomeScreen() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
+        successToastVariant={claimToastVariant}
         onHide={hideClaimQrModal}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
