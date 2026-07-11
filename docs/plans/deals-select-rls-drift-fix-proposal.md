@@ -129,11 +129,21 @@ Not the earlier single-policy swap. Consolidate to remove F1 and F3:
   (`npm run probe:deals-rls`) confirms the test project's authenticated `deals`
   read 42501s today (F3). Re-run it after applying the consolidation to prove the
   fix.
-- **Consolidation** — SQL above is reviewed and root-cause-confirmed, but is
-  **not** yet a migration file and has **not** been applied/validated: applying
-  DDL to the test project from this machine is blocked (no test DB password;
-  `supabase db push` needs one, and `psql`/`pg`/Docker are unavailable). Promote
-  it to `supabase/migrations/` only after the test-project apply + re-probe pass.
+- **Consolidation** — written as
+  `supabase/migrations/20260812130000_consolidate_deals_rls_policies.sql`
+  (+ `consolidate-deals-rls-migration.test.ts`, 6 checks). Reconstructed from the
+  source migrations (billing-v4 owner policies, 20260730120000 delete-ended,
+  20260712120000 redeemer guards) so it is idempotent and converges BOTH test and
+  prod. **NOT yet applied/validated** — applying DDL from this machine is blocked
+  (no test DB password; `supabase db push` needs one; `psql`/`pg`/Docker
+  unavailable). Push it to the test project, then run the three checks below.
+
+  **Two behavior decisions baked as "preserve current prod behavior" (ungated),
+  with the stricter migration-intent variants left as commented `-- (a)/(b)`
+  blocks in the file:** prod's manual `deals_owner_crud` / `business manage own
+  deals` (ALL) policies had removed (a) the billing-v4 trial/active subscription
+  gate on owner select/insert/update and (b) the ended-only delete restriction.
+  Uncomment to restore either; leaving them commented keeps today's behavior.
 
 ## Required steps before applying (all Dan-gated)
 
