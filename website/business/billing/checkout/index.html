@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Continue to Checkout | Twofer</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="description" content="Continue to secure Stripe checkout for your Twofer business subscription." />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+  </head>
+  <body class="trial-page" data-checkout-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/business-checkout-link">
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+          <span>Twofer</span>
+        </a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="/business" data-i18n="nav.businessAccess">Business Access</a>
+          <a href="/support" data-i18n="nav.support">Support</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button
+            class="nav-menu-button"
+            type="button"
+            aria-controls="site-nav-links"
+            aria-expanded="false"
+            data-site-menu-toggle
+            data-i18n="nav.menu"
+          >
+            Menu
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="trial-main">
+      <p class="trial-kicker">Business billing</p>
+      <h1 class="trial-heading" data-checkout-heading>Preparing your checkout</h1>
+      <p class="trial-lede" data-checkout-message>Hold on while we open your secure Stripe checkout.</p>
+
+      <div class="trial-shell">
+        <section class="trial-panel" aria-label="Checkout status" aria-live="polite">
+          <p class="status" data-checkout-status role="status" aria-live="polite">Connecting to secure checkout…</p>
+          <div class="trial-actions" data-checkout-actions hidden>
+            <a class="button" data-store-cta="ios" hidden>Get Twofer for iPhone</a>
+            <a class="button" data-store-cta="android" hidden>Get Twofer for Android</a>
+            <a class="button button-secondary" href="/support" data-i18n="trial.contactSupport">Contact support</a>
+          </div>
+          <p class="trial-lede" data-store-fallback-note hidden>
+            Open the Twofer app on your phone and sign in with your approved business email, then return to this link.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <script src="/localization.js?v=20260702-site"></script>
+    <script src="/store-links.js?v=20260702-site"></script>
+    <script src="/business/billing/checkout/checkout.js?v=20260809-checkout"></script>
+  </body>
+</html>

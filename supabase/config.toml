@@ -622,6 +622,15 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/business-claim-link/index.ts"
 
+# Public: exchanges an emailed, application-scoped checkout token for a Stripe
+# checkout URL by minting a single-use billing token and self-calling
+# stripe-create-checkout-session. No JWT by design; guarded by token + expiry +
+# per-business throttle inside the function.
+[functions.business-checkout-link]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/business-checkout-link/index.ts"
+
 [functions.admin-trial-create-from-prospect]
 enabled = true
 verify_jwt = false

@@ -127,8 +127,9 @@
       const linked = payload.business_linked
         ? "Business record is linked and ready."
         : "Saved. The business record links automatically when the owner signs in to the app with this email.";
-      const billingWarning = payload.billing_sync_warning ? ` ${payload.billing_sync_warning}` : "";
-      setStatus(`Trial created for ${fields.business_name}. ${linked}${billingWarning}`);
+      const decisionWarnings = [payload.billing_sync_warning, payload.approval_email_warning].filter(Boolean);
+      const warningSuffix = decisionWarnings.length ? ` ${decisionWarnings.join(" ")}` : "";
+      setStatus(`Trial created for ${fields.business_name}. ${linked}${warningSuffix}`);
       form.reset();
     } catch {
       setStatus("Could not reach the admin service. Check that admin-business-applications is deployed.", "danger");

@@ -34,6 +34,40 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/subscription_tier/);
   });
 
+  it("exchanges an emailed checkout token by reusing the audited checkout function", () => {
+    const source = readFunction("business-checkout-link");
+    // Resolve the application from the hashed, emailed token.
+    expect(source).toMatch(/from\("business_applications"\)/);
+    expect(source).toMatch(/\.eq\("checkout_token_hash", tokenHash\)/);
+    // If the owner hasn't materialized a business yet, prompt signup WITHOUT
+    // minting a token or touching Stripe.
+    expect(source).toMatch(/reason: "signup_required"/);
+    const signupAt = source.indexOf('reason: "signup_required"');
+    const mintAt = source.indexOf('from("billing_tokens").insert');
+    expect(signupAt).toBeGreaterThan(-1);
+    expect(mintAt).toBeGreaterThan(-1);
+    expect(signupAt).toBeLessThan(mintAt);
+    // Reuse the audited checkout function through a single-use billing token,
+    // preserving all of its guards, rather than duplicating checkout logic.
+    expect(source).toMatch(/action: "subscription_checkout"/);
+    expect(source).toMatch(/functions\/v1\/stripe-create-checkout-session/);
+    expect(source).toMatch(/source: "email"/);
+    expect(source).toMatch(/billing_token: rawBillingToken/);
+    // Per-business abuse throttle before any Stripe session is created.
+    expect(source).toMatch(/const THROTTLE_MAX_PER_BUSINESS\s*=\s*\d+/);
+    expect(source).toMatch(/\},\s*429\)/);
+    // Public endpoint: generic errors, never expose upstream secrets.
+    expect(source).toMatch(/This link isn't available/);
+    expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
+  });
+
+  it("registers the public checkout-link exchange function", () => {
+    const config = readFileSync(join(process.cwd(), "supabase", "config.toml"), "utf8");
+    expect(config).toMatch(
+      /\[functions\.business-checkout-link\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/business-checkout-link\/index\.ts"/,
+    );
+  });
+
   it("creates portal sessions only for business billing customers", () => {
     const source = readFunction("stripe-customer-portal-session");
     expect(source).toMatch(/loadRuntimeBillingConfig/);

@@ -12,6 +12,7 @@ import {
   billingProfileFromOnboarding,
   ensureStripeCustomerForBusiness,
 } from "../_shared/stripe-business-billing.ts";
+import { sendApprovalEmail } from "../_shared/approval-email.ts";
 
 type AdminRole =
   | "owner"
@@ -526,6 +527,18 @@ async function applyDecision(
 
   const businessSync = await syncBusinessDecision(ctx, application, config, businessId, ownerUserId);
 
+  // Trial-welcome email (best-effort; never blocks the decision). Only the two
+  // approval tiers notify the owner and hand over the payment link.
+  let approvalEmailWarning: string | null = null;
+  if (decision === "approve_limited" || decision === "approve_full") {
+    approvalEmailWarning = await sendApprovalEmail({
+      supabaseAdmin: ctx.supabaseAdmin,
+      application: updated as Record<string, unknown>,
+      decision,
+      requestId: ctx.requestId,
+    });
+  }
+
   await ctx.supabaseAdmin.from("admin_audit_log").insert({
     admin_user_id: ctx.user.id,
     admin_email: adminEmail,
@@ -556,6 +569,7 @@ async function applyDecision(
     business_linked: Boolean(businessId),
     business_updated: businessSync.businessUpdated,
     billing_sync_warning: businessSync.billingSyncWarning,
+    approval_email_warning: approvalEmailWarning,
   });
 }
 

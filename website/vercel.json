@@ -183,6 +183,14 @@
       "destination": "/business/billing/cancel/index.html"
     },
     {
+      "source": "/business/billing/checkout/:token",
+      "destination": "/business/billing/checkout/index.html"
+    },
+    {
+      "source": "/business/billing/checkout/:token/",
+      "destination": "/business/billing/checkout/index.html"
+    },
+    {
       "source": "/business/billing/manage",
       "destination": "/business/billing/manage/index.html"
     },

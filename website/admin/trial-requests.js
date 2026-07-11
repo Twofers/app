@@ -363,9 +363,10 @@
       const savedMessage = payload.business_linked
         ? "Decision saved and linked business access updated."
         : "Decision saved. Business owner will link when they sign in.";
+      const decisionWarnings = [payload.billing_sync_warning, payload.approval_email_warning].filter(Boolean);
       setTrialStatus(
-        payload.billing_sync_warning ? `${savedMessage} ${payload.billing_sync_warning}` : savedMessage,
-        payload.billing_sync_warning ? "warning" : "info",
+        decisionWarnings.length ? `${savedMessage} ${decisionWarnings.join(" ")}` : savedMessage,
+        decisionWarnings.length ? "warning" : "info",
       );
       try {
         await loadApplications();

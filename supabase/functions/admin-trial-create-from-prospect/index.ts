@@ -18,6 +18,7 @@ import {
   billingProfileFromOnboarding,
   ensureStripeCustomerForBusiness,
 } from "../_shared/stripe-business-billing.ts";
+import { sendApprovalEmail } from "../_shared/approval-email.ts";
 
 // Trial length matches admin-business-applications' approve_full (30 days)
 // and approve_limited (14 days) decisions. This path previously used a
@@ -229,11 +230,31 @@ Deno.serve(async (req) => {
       reason: nullableString(payload.reason, 500) || "trial_created_from_prospect",
     });
 
+    // Trial-welcome email (best-effort; never blocks the decision). Both tiers
+    // here are approvals, so always notify. Content fields come from the owner
+    // details we normalized plus the trial limits just written to the row.
+    const emailDecision = cleanString(payload.decision, 40) === "approve_full" ? "approve_full" : "approve_limited";
+    const approvalEmailWarning = await sendApprovalEmail({
+      supabaseAdmin: ctx.supabaseAdmin,
+      application: {
+        id: application.id,
+        business_name: normalized.businessName,
+        contact_name: normalized.contactName,
+        email: normalized.email,
+        trial_days: application.trial_days,
+        trial_offer_limit: application.trial_offer_limit,
+        trial_claim_limit: application.trial_claim_limit,
+      },
+      decision: emailDecision,
+      requestId,
+    });
+
     return json(req, {
       ok: true,
       request_id: requestId,
       application,
       business_onboarding_request_id: onboardingRequestId,
+      approval_email_warning: approvalEmailWarning,
       note: "No deal or Stripe customer was created by this function.",
     });
   } catch (error) {
