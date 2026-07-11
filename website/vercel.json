@@ -327,6 +327,14 @@
       "destination": "/admin/offers/index.html"
     },
     {
+      "source": "/admin/reports",
+      "destination": "/admin/reports/index.html"
+    },
+    {
+      "source": "/admin/reports/",
+      "destination": "/admin/reports/index.html"
+    },
+    {
       "source": "/admin/billing/events",
       "destination": "/admin/billing/events/index.html"
     },
