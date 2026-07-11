@@ -1,0 +1,24 @@
+-- Fix F1 (deals RLS over-exposure): drop the `deals_public_read_live` policy.
+--
+-- Context (prod pg_policies probe, 2026-07-11): the `deals` table carries three
+-- overlapping public-read SELECT policies. Two are correct — they hide deals
+-- that have not started yet:
+--   "Anyone can read active deals" : is_active AND end_time > now() AND start_time <= now()
+--   "public view active deals"     : is_active AND start_time <= now() AND end_time > now()
+-- The third is missing the start_time gate:
+--   "deals_public_read_live"       : is_active AND now() < end_time      <-- BUG
+--
+-- Because permissive RLS policies OR together, the loosest one wins, so a
+-- one-time deal that is active but SCHEDULED FOR THE FUTURE (start_time > now())
+-- becomes publicly readable before it starts. That defeats the explicit
+-- "hide deals that have not started yet" intent of 20260330140000.
+--
+-- `deals_public_read_live` was added directly to production and appears in NO
+-- migration file (it is drift), so dropping it here reconciles the schema. The
+-- two correct public-read policies remain, so consumer feeds of live deals are
+-- unaffected — only not-yet-started deals stop leaking.
+--
+-- IF EXISTS: no-op on any environment (e.g. the migrations-only test project)
+-- that never had this manually-added policy.
+
+DROP POLICY IF EXISTS "deals_public_read_live" ON public.deals;

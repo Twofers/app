@@ -55,18 +55,39 @@ styles (`Title Case`, `snake_case`, `lower case`). Old policies were never
 dropped when new ones were added. Hard to reason about; easy to reintroduce a
 leak like F1.
 
-### F3 — latent `owner_id` column-privilege fragility (explains the 403)
-The owner-read policy's subquery reads `businesses.owner_id`, which clients can't
-SELECT (F1 probe). On a **migrations-only schema** (the test project) *every*
-client `deals` SELECT returns 403; prod does not. Most likely mechanism: the OR
-of permissive policies short-circuits per row — when a permissive public-read
-policy is already TRUE (a currently-live deal), the owner branch isn't evaluated,
-so `owner_id` is never read and no permission error fires. Prod always has live
-deals, so reads succeed; the freshly-seeded test project had no currently-live
-row to short-circuit, so the owner branch ran → `owner_id` permission error →
-403. **This means the same latent failure exists on prod** for any read where no
-permissive policy matches (e.g. an owner viewing their own not-yet-started or
-ended deal). Treat as "most likely" until reproduced on the test project.
+### F3 — the blanket 403 is a plan-time `businesses` privilege failure (CONFIRMED)
+The owner-read policy's subquery reads `businesses` (`owner_id`), which clients
+can't SELECT after the PII grants. **Reproduced on the test project
+`zsuzrerdailvylccqtds` 2026-07-11** with `scripts/probe-deals-rls.mjs` (throwaway
+authenticated user): *every* authenticated `deals` SELECT — including a plain
+`select=id&limit=1` and a live-only `is_active=eq.true` read — returns:
+
+```
+42501  permission denied for table businesses
+hint:  Grant the required privileges to the current role with:
+       GRANT SELECT ON public.businesses TO authenticated;
+```
+
+Service-role reads return 200 (RLS bypassed). So this is a **plan-time**
+privilege check, not a per-row short-circuit (my earlier theory was wrong — even
+a live-deal read fails, because Postgres validates the `businesses` privilege for
+the owner policy regardless of which rows/policies would match). The moment any
+policy on `deals` references `businesses`, the querying role must be able to read
+`businesses` or the whole statement 42501s.
+
+**Why prod still works:** prod's authenticated `deals` reads succeed, so on prod
+the `authenticated` role *can* read `businesses` — unlike the test project. The
+grant state itself is drifted between the two. **Follow-up (unverified — QA
+shopper creds were stale):** confirm whether prod `authenticated` can read
+`businesses.owner_id` / `business_email`; if so, the PII migration's intent
+(hide those from clients) is only half in force on prod and authenticated users
+can read owner PII — a separate finding.
+
+**Why the fix works:** routing the owner check through a `SECURITY DEFINER`
+helper means the *policy* reads `businesses` with definer privileges, so the
+querying role no longer needs any `businesses` grant — which is exactly what the
+42501 hint asks for. The consolidation is therefore well-founded; it still must
+be applied to the test project and re-probed to capture the green "after".
 
 ## Proposed fix (consolidation migration — gated, validate on test first)
 
@@ -99,15 +120,30 @@ Not the earlier single-policy swap. Consolidate to remove F1 and F3:
    whether the billing-v4 subscription gate (`trial`/`active`) should apply to
    owner *reads* (prod currently does NOT gate reads — confirm intended).
 
+## Status of the pieces
+
+- **F1 drop** — ready as `supabase/migrations/20260812120000_drop_deals_public_read_live.sql`
+  (+ `drop-deals-public-read-live-migration.test.ts`). Low-risk, standalone.
+  Not yet applied (gated).
+- **Before-state reproduced** — `scripts/probe-deals-rls.mjs`
+  (`npm run probe:deals-rls`) confirms the test project's authenticated `deals`
+  read 42501s today (F3). Re-run it after applying the consolidation to prove the
+  fix.
+- **Consolidation** — SQL above is reviewed and root-cause-confirmed, but is
+  **not** yet a migration file and has **not** been applied/validated: applying
+  DDL to the test project from this machine is blocked (no test DB password;
+  `supabase db push` needs one, and `psql`/`pg`/Docker are unavailable). Promote
+  it to `supabase/migrations/` only after the test-project apply + re-probe pass.
+
 ## Required steps before applying (all Dan-gated)
 
-1. Reproduce the 403 on the **test project** (`zsuzrerdailvylccqtds`, built from
-   migrations) and confirm F3's short-circuit theory.
-2. Apply the consolidation there first; run `node scripts/probe-rls-smoke.mjs`
-   **and** `npm run test:db` (suite 2c) green.
-3. Also decide whether prod's extra policies should be encoded back into the
-   migration files so the two stop diverging (fixes the root drift, not just the
-   symptom).
+1. Apply the consolidation to the **test project** (`zsuzrerdailvylccqtds`) —
+   e.g. `supabase db push --db-url <test-conn>` or the dashboard SQL editor.
+2. Re-run `node scripts/probe-deals-rls.mjs` (now green), `node
+   scripts/probe-rls-smoke.mjs`, and `npm run test:db` (suite 2c).
+3. Decide whether prod's extra manual policies + the `businesses` authenticated
+   grant should be encoded back into the migration files so the two stop
+   diverging (fixes the root drift, not just the symptom).
 4. Only then, gated prod apply → immediately re-run `probe-rls-smoke` per the
    RLS-NULL-policy incident rule.
 
