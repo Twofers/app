@@ -809,6 +809,11 @@
     "linkErrorTitle": "링크를 열 수 없음",
     "linkErrorBody": "연결을 확인하고 다시 시도해 주세요."
   },
+  "walletPass": {
+    "addToGoogleWallet": "Google 월렛에 추가",
+    "preparing": "Google 월렛 여는 중...",
+    "errAdd": "Twofer 카드를 추가하지 못했어요. 다시 시도해 주세요."
+  },
   "redemptionMode": {
     "title": "사용 전용 모드",
     "locked": "잠금",

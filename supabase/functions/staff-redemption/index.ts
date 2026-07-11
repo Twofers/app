@@ -7,6 +7,8 @@ import {
   isStaffRedemptionLockedOut,
   STAFF_LOCKOUT_WINDOW_MS,
 } from "../_shared/staff-redemption-lockout.ts";
+import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NEW_STAFF_PREFLIGHT_COLUMN_NAMES = ["location_id", "qr_token_hash"] as const;
@@ -108,11 +110,19 @@ serve(async (req) => {
       return json({ error: "Missing action." }, 400, corsHeaders);
     }
 
-    const shortCodeNorm =
+    let shortCodeNorm =
       typeof body.short_code === "string"
         ? body.short_code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
         : "";
-    const tokenNorm = typeof body.token === "string" ? body.token.trim() : "";
+    let tokenNorm = typeof body.token === "string" ? body.token.trim() : "";
+    // Native wallet-pass barcodes encode the short code (twofer://redeem/sc/<CODE>).
+    // Staff scanners forward raw scans as `token`; treat those as short-code entry
+    // so pass scans ride the existing rate-limited short-code path.
+    const walletScanShortCode = shortCodeNorm.length === 0 ? parseShortCodeScanValue(tokenNorm) : null;
+    if (walletScanShortCode) {
+      shortCodeNorm = walletScanShortCode;
+      tokenNorm = "";
+    }
 
     // 🔒 Brute-force lockout (Batch 6 parity, scoped per counter device — the
     // device id is a server-set app_metadata claim). >= 10 recorded failures
@@ -144,8 +154,8 @@ serve(async (req) => {
     }
 
     const emptyClaimId = "00000000-0000-0000-0000-000000000000";
-    const claimSelectNew = "id, short_code, location_id, deal:deals!inner(is_demo,business_id,location_id)";
-    const claimSelectLegacy = "id, short_code, deal:deals!inner(is_demo,business_id)";
+    const claimSelectNew = "id, user_id, short_code, location_id, deal:deals!inner(is_demo,business_id,location_id)";
+    const claimSelectLegacy = "id, user_id, short_code, deal:deals!inner(is_demo,business_id)";
     const tokenHash = tokenNorm.length > 0 ? await sha256Base64Url(tokenNorm) : "";
     const runPreflight = (selectColumns: string, match: "short_code" | "qr_token_hash" | "token" | "none") => {
       let query = supabaseAdmin.from("deal_claims").select(selectColumns).limit(1);
@@ -186,6 +196,7 @@ serve(async (req) => {
     }
     const preflightRow = preflightRows?.[0] as {
       id?: string | null;
+      user_id?: string | null;
       short_code?: string | null;
       location_id?: string | null;
       deal?: { is_demo?: boolean | null; business_id?: string | null; location_id?: string | null } | null;
@@ -219,9 +230,11 @@ serve(async (req) => {
     const rpcShortCode =
       typeof body.short_code === "string"
         ? body.short_code
-        : tokenNorm.length > 0 && preflightRow?.short_code
-          ? preflightRow.short_code
-          : null;
+        : walletScanShortCode
+          ? walletScanShortCode
+          : tokenNorm.length > 0 && preflightRow?.short_code
+            ? preflightRow.short_code
+            : null;
     const { data, error } = await supabase.rpc(rpcName, {
       p_token: rpcShortCode ? null : typeof body.token === "string" ? body.token : null,
       p_short_code: rpcShortCode,
@@ -264,6 +277,12 @@ serve(async (req) => {
         .from("redemptions")
         .update({ redeem_method: "staff_qr", code_type: "token" })
         .eq("claim_id", preflightRow.id);
+    }
+
+    if (action === "confirm") {
+      // Native wallet pass: flip the customer's Twofer Card to "Redeemed".
+      // Best-effort and flag-gated; a no-op until the customer added the card.
+      await syncWalletPassForUser(supabaseAdmin, preflightRow?.user_id ?? null);
     }
 
     return json(result, 200, corsHeaders);

@@ -809,6 +809,11 @@
     "linkErrorTitle": "Couldn't open link",
     "linkErrorBody": "Check your connection and try again."
   },
+  "walletPass": {
+    "addToGoogleWallet": "Add to Google Wallet",
+    "preparing": "Opening Google Wallet...",
+    "errAdd": "Couldn't add your Twofer Card. Try again."
+  },
   "redemptionMode": {
     "title": "Redemption mode",
     "locked": "LOCKED",

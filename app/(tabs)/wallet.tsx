@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { QrModal } from "@/components/qr-modal";
+import { AddToWalletButton } from "@/components/add-to-wallet-button";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
 import { useBusiness } from "@/hooks/use-business";
@@ -945,6 +946,7 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </NativePressable>
+            {!rowIsDemo ? <AddToWalletButton /> : null}
             {shareDealEnabled ? (
               <NativePressable
                 onPress={() => void shareWalletDeal(row)}

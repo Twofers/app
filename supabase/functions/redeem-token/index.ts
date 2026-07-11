@@ -6,6 +6,8 @@ import {
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
@@ -236,12 +238,19 @@ serve(async (req) => {
 
     const tokenRaw = body.token;
     const shortCodeRaw = body.short_code;
-    const shortCodeNorm =
+    let shortCodeNorm =
       typeof shortCodeRaw === "string"
         ? shortCodeRaw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
         : "";
     const tokenInput = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
     const tokenNorm = tokenInput ? normalizeQrToken(tokenInput) : "";
+    // Native wallet-pass barcodes encode the short code (twofer://redeem/sc/<CODE>).
+    // The scanner forwards raw scans as `token`, so route those through the existing
+    // short-code lookup — same credential staff type manually today.
+    if (shortCodeNorm.length === 0) {
+      const walletScanShortCode = parseShortCodeScanValue(tokenInput);
+      if (walletScanShortCode) shortCodeNorm = walletScanShortCode;
+    }
 
     const selectClaimNew = `
         *,
@@ -524,6 +533,10 @@ serve(async (req) => {
     } catch (err) {
       console.error("[redeem-token] analytics insert failed", err);
     }
+
+    // Native wallet pass: flip the customer's Twofer Card to "Redeemed".
+    // Best-effort and flag-gated; a no-op until the customer added the card.
+    await syncWalletPassForUser(supabaseAdmin, (claim.user_id as string | null | undefined) ?? null);
 
     // ✅ Success
     return new Response(

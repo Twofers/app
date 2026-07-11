@@ -7,6 +7,7 @@ import { formatAppDateTime } from "../lib/i18n/format-datetime";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { Colors, Controls, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { AddToWalletButton } from "@/components/add-to-wallet-button";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -415,6 +416,8 @@ export function QrModal({
               {codeDisplay}
             </Text>
           </View>
+
+          <AddToWalletButton style={{ marginTop: 12 }} />
 
           <View style={{ marginTop: 14 }}>
             <HapticScalePressable

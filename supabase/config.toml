@@ -410,6 +410,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/release-claim/index.ts"
 
+[functions.wallet-pass-issue]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/wallet-pass-issue/index.ts"
+
 [functions.activate-redemption-mode]
 enabled = true
 verify_jwt = false

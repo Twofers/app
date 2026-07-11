@@ -36,6 +36,7 @@
         "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
         "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
         "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+        "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "false",
         "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "false",
@@ -67,6 +68,7 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+        "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "false",
         "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "false",
@@ -100,6 +102,7 @@
       },
       "env": {
         "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+        "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "false",
         "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
         "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",

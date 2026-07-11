@@ -809,6 +809,11 @@
     "linkErrorTitle": "No se pudo abrir el enlace",
     "linkErrorBody": "Revisa tu conexión e inténtalo de nuevo."
   },
+  "walletPass": {
+    "addToGoogleWallet": "Añadir a Google Wallet",
+    "preparing": "Abriendo Google Wallet...",
+    "errAdd": "No se pudo añadir tu Tarjeta Twofer. Inténtalo de nuevo."
+  },
   "redemptionMode": {
     "title": "Modo Canje",
     "locked": "BLOQUEADO",

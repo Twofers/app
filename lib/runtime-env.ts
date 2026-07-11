@@ -133,6 +133,7 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: process.env.EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS ?? "(unset)",
     EXPO_PUBLIC_ENABLE_SITE_IMPORT: process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT ?? "(unset)",
     EXPO_PUBLIC_ENABLE_MOBILE_STRIPE: process.env.EXPO_PUBLIC_ENABLE_MOBILE_STRIPE ?? "(unset)",
     EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA: process.env.EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA ?? "(unset)",
@@ -204,6 +205,11 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+/** Native wallet pass ("Twofer Card" in Apple/Google Wallet). Default off; server has its own kill switch. */
+export function isNativeWalletPassEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS === "true";
 }
 
 /** Website-import at business onboarding (logo + menu prefill). Default off. */

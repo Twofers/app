@@ -17,6 +17,7 @@ import {
   evaluateRepeatClaimPolicy,
   normalizeRepeatClaimPolicyType,
 } from "../_shared/repeat-claim-policy.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -873,6 +874,10 @@ serve(async (req) => {
     } catch (pushErr) {
       console.error("[claim-deal] owner push failed (non-fatal):", pushErr);
     }
+
+    // Native wallet pass: mirror the new claim onto the customer's Twofer Card.
+    // Best-effort and flag-gated; a no-op until the user has added the card.
+    await syncWalletPassForUser(supabaseAdmin, user.id);
 
     // ✅ Success
     return new Response(

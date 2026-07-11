@@ -6,6 +6,7 @@ import {
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const MIN_MS = 14_000;
 const MAX_MS = 120_000;
@@ -242,6 +243,10 @@ serve(async (req) => {
         console.error("[complete-visual-redeem] redemptions audit insert failed:", auditErr);
       }
     }
+
+    // Native wallet pass: flip the customer's Twofer Card to "Redeemed".
+    // Best-effort and flag-gated; a no-op until the customer added the card.
+    await syncWalletPassForUser(supabaseAdmin, user.id);
 
     const { data: dealRow } = await supabase
       .from("deals")

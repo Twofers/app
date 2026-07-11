@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 type ClaimWithDeal = {
   id: string;
@@ -232,6 +233,13 @@ serve(async (req) => {
       }
     } else if (openErr) {
       console.error(openErr);
+    }
+
+    // Native wallet pass: only sync when a claim actually changed state, so the
+    // frequent no-change calls from wallet loads never touch the Google API.
+    if (finalizedCount + expiredCount > 0) {
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+      await syncWalletPassForUser(supabaseAdmin, user.id);
     }
 
     return new Response(
