@@ -32,13 +32,16 @@
 -- RESTRICTIVE redeemer_deals_* guards (their functions are SECURITY DEFINER, so
 -- they never triggered the 42501 and they still constrain redeemer sessions).
 --
--- ⚠️  BEHAVIOR DECISION (Dan): prod's manual `deals_owner_crud` / `business
---     manage own deals` (ALL) policies had silently REMOVED two restrictions the
---     migrations intended. This migration PRESERVES CURRENT PROD BEHAVIOR
---     (ungated owner CRUD, delete not limited to ended). To restore the stricter
---     migration intent, uncomment the marked blocks:
---       (a) billing-v4 subscription gate (trial/active) on owner select/insert/update;
---       (b) ended-only delete (20260730120000).
+-- ⚠️  BEHAVIOR DECISIONS (Dan, 2026-07-11): prod's manual `deals_owner_crud` /
+--     `business manage own deals` (ALL) policies had silently REMOVED two
+--     restrictions the migrations intended. Chosen settings:
+--       (a) billing-v4 subscription gate (trial/active) on owner read/write —
+--           OFF (kept as commented `-- (a)` blocks). Owners keep access to their
+--           deals regardless of billing status; billing is enforced in the app /
+--           edge layer where it can fail gracefully.
+--       (b) ended-only delete (20260730120000) — ON. Owners can only delete
+--           already-ended deals (matches the app; hardens against a crafted
+--           request deleting a live/claimed deal).
 
 -- 1) Owner-check helper ------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.is_business_owner(p_business_id uuid)
@@ -123,11 +126,15 @@ CREATE POLICY "deals_owner_update"
     -- (a) trial/active gate: AND EXISTS (... business_profiles ...)
   );
 
--- Owner delete. Prod currently allows deleting any own deal.
+-- Owner delete — ended-only (decision (b) ON). The app only ever deletes ended
+-- deals (canDeleteOldDeal requires end_time <= now()), and service-role deletes
+-- bypass RLS, so this only hardens against a hand-crafted client request
+-- deleting a live/claimed deal. Set back to just is_business_owner(business_id)
+-- to allow deleting any own deal.
 CREATE POLICY "deals_owner_delete"
   ON public.deals FOR DELETE
   TO authenticated
   USING (
     public.is_business_owner(business_id)
-    -- (b) To restore the ended-only rule (20260730120000): AND end_time <= now()
+    AND end_time <= now()
   );

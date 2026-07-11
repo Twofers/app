@@ -48,6 +48,10 @@ describe("consolidate_deals_rls_policies migration (deals RLS F2/F3)", () => {
     expect(migration).toMatch(/CREATE POLICY "deals_owner_insert"[\s\S]*is_business_owner\(business_id\)/);
     expect(migration).toMatch(/CREATE POLICY "deals_owner_update"[\s\S]*is_business_owner\(business_id\)/);
     expect(migration).toMatch(/CREATE POLICY "deals_owner_delete"[\s\S]*is_business_owner\(business_id\)/);
+    // Decision (b) ON: owner delete is limited to already-ended deals.
+    expect(migration).toMatch(
+      /CREATE POLICY "deals_owner_delete"[\s\S]*is_business_owner\(business_id\)[\s\S]*AND end_time <= now\(\)/,
+    );
     // No policy body may re-inline the ungranted column (that is the F3 bug).
     const active = migration.replace(/^\s*--.*$/gm, ""); // strip comment lines
     expect(active).not.toMatch(/CREATE POLICY[\s\S]*owner_id = auth\.uid\(\)/);
