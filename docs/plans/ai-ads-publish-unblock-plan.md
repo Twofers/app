@@ -1,7 +1,77 @@
 # AI Ads publish unblock plan (parser corruption + image blockers)
 
-Status: PLAN ONLY — nothing implemented. Written 2026-07-10 after a full on-device diagnosis
-(business dev APK `com.unvmex2.twoforone.dev`, physical S10, Android 12).
+Status: PARTIALLY IMPLEMENTED 2026-07-10 (Dan chat approval "you have permission to do all the
+others"). Written 2026-07-10 after a full on-device diagnosis (business dev APK
+`com.unvmex2.twoforone.dev`, physical S10, Android 12).
+
+## Implementation status (2026-07-10) — UNCOMMITTED, needs dev rebuild
+
+Gates all green: `npm run typecheck`, `npm run lint`, `npm test` (1476), `node
+scripts/check-ai-poster-core-lock.mjs` (30/30, `app/create/ai.tsx` hash re-locked with the
+2026-07-10 approval ref).
+
+- **Phase 1 — DONE.** 3 regression fixtures in `lib/deal-eligibility-inference.test.ts` (fail-first
+  verified; one reproduced the `"B"` single-letter corruption).
+- **Phase 2 (parser, items 1–3) — DONE** in `lib/deal-eligibility-inference.ts` (unlocked): spaced
+  `"2 for 1"` → BOGO same-item; same reward noun stays `BUY_ONE_GET_ONE_FREE` (gated so the F-025
+  `"second muffin"` case is untouched); percent-off + plain-item branches guard `isUsableItem`
+  (kills the `"2"`/`"o"`/`"B"` single-letter leaks).
+- **Phase 2.4 — DONE.** Enforcement added to `mergeInferredEligibilityForm` (`touchedFields`
+  option + 2 tests); call-site `eligibilityTouchedRef` wired in `app/create/ai.tsx` so hint
+  auto-inference never overwrites a hand-edited offer field or flips a manually chosen rule.
+- **Phase 3 — DONE.** `friendlyGenerationError` routes a photo/image failure with NO attached photo
+  to new `createAi.errImageServiceDown`; `offerMechanicsInvalid` reworded to point at the offer
+  fields, not the ad copy. en/es/ko added to base locale files.
+- **Phase 4 — DONE (code).** Root cause CONFIRMED: `expo-image-picker`'s own manifest declares
+  `READ_EXTERNAL_STORAGE` but `app.json` `blockedPermissions` stripped it → picker dead on Android
+  ≤12 (S10 is 12); 13+ works permission-free. Fix: removed `READ_EXTERNAL_STORAGE` from
+  `blockedPermissions` (kept `WRITE_EXTERNAL_STORAGE` blocked); added a `console.warn` diagnostic in
+  the picker catch. Optional Play-cleanliness follow-up: constrain it to `maxSdkVersion=32` via a
+  config plugin (needs a build to verify the merged manifest). **Needs dev rebuild to take effect.**
+- **Phase 0 (OpenAI credits) — WITHDRAWN.** Dan confirms credits were never exhausted. The instant
+  no-image failure is NOT billing: in `ai-generate-ad-variants/index.ts` `produceImage` returns a
+  null `posterStoragePath` when the vision QA step is unavailable or reports the required item
+  missing (index.ts:2444), or when image bytes come back null (index.ts:2334) — client then shows
+  `errImageGenerationNoImage`, no monthly use counted (matches "<3s, stays 24/30"). Confirming the
+  exact failure needs the prod `ai_generation_costs`/logs rows for the failed request group.
+- **Phase 5 — DONE (Dan approved "Phase 5 + Phase 6"); rule-compliant, NOT a rasterizer.** Earlier
+  "gray box" reading was the LEGACY card (`components/deal-card-poster.tsx`). The live consumer feed
+  uses `ComposedAdCard` (`EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED="true"` in prod) which renders a
+  no-image deal NATIVELY (`deterministic_fallback`, offer text rendered live — no baked-in pixels,
+  no gray box), and the deal row already stores `poster_url`/`poster_storage_path` as null. A
+  rasterizer would have BAKED the offer text into pixels, violating the repo AI rule — avoided.
+  Change: softened the two poster-style "Every deal needs an image" gates (`useFallbackTemplateAd`
+  and `publishDeal`, gated on `showPosterFormat`) and guarded `usePhotoAsFinal` so a poster-only deal
+  doesn't claim a nonexistent photo. Fail-safe: server rejection routes to existing publish-error
+  handling, and the existing poster-spec→Standard-card fallback still applies. Standard-card format
+  still requires an image. **Needs on-device verify: (a) `publish-offer-version` accepts an imageless
+  deterministic ad_spec, (b) the `ComposedAdCard` fallback render is screenshot-worthy** (it may show
+  a "Photo coming soon" visual rather than the owner's gradient poster — Phase 4 photo or a working
+  AI image still give the nicest screenshot).
+- **Phase 6 — DONE (likely fix; needs on-device confirmation).** The plan's "Edit offer details"
+  (`description`) field was already safe (`invalidateAcceptedAdDraft`, keeps the image). The actual
+  match for the symptom is the custom-image-edit **instruction** TextInput (`app/create/ai.tsx:4841`):
+  its onChange called `resetGenerationState()` on EVERY keystroke, nulling `generatedAd` →
+  collapsing the review UI to Step 1 mid-type → the field left holding one character. Fixed to call
+  `invalidateAcceptedAdDraft()` (keeps the image; the instruction is applied on the next Generate),
+  matching the copy fields. On repro, confirm this was the field.
+
+### Phase 7 — device steps for Dan (agent cannot drive the S10)
+
+1. **Dev rebuild required** — `app.json` (permission) + `app/create/ai.tsx` (locked, re-approved)
+   both need a fresh dev-client build to reach the device. Build the AI-studio dev variant per
+   `docs/dev/AI_DEAL_STUDIO_DEV_APK_SETUP.md` (Dan-gated build).
+2. After install on the S10, open AI ads and rebuild the clean draft (**item set manually, NO
+   free-text description** — the parser is now hardened, but the manual path is still the surest).
+3. Get an image: either **tap "Pick photo"** (now works on Android 12 after the permission fix) and
+   choose a coffee photo, OR **Generate ad** and watch the new `console.warn`/quota to see whether
+   the AI image now succeeds (credits are fine, so a retry may work; if it still returns no image,
+   the QA-unavailable path in the diagnosis is the culprit — capture the logs).
+4. Verify the poster → **Publish**.
+5. Switch to shopper (`test1@test.com`), capture feed card + deal detail, process to 1320×2868
+   (white pad, alpha strip, nav-bar crop) matching the 7 files in `ap store/`, name
+   `08_ai_deal_feed` / `09_ai_deal_detail`.
+
 
 ## What was proven on device (do not re-litigate)
 

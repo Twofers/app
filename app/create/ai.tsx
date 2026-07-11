@@ -1054,6 +1054,9 @@ export default function AiDealScreen() {
     () => createDefaultDealEligibilityFormState(),
   );
   const lastAutoEligibilityInferenceRef = useRef<DealEligibilityFormState | null>(null);
+  // Fields the merchant edited by hand in the offer form; free-text auto-inference
+  // must never overwrite them, nor flip a manually chosen offer rule (Phase 2.4).
+  const eligibilityTouchedRef = useRef<Set<keyof DealEligibilityFormState>>(new Set());
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
   const [ctaText, setCtaText] = useState("");
@@ -1574,6 +1577,7 @@ export default function AiDealScreen() {
       mergeInferredEligibilityForm(current, inferred, {
         allowDealTypeChange: true,
         previousInferred: lastAutoEligibilityInferenceRef.current,
+        touchedFields: eligibilityTouchedRef.current,
       }),
     );
     lastAutoEligibilityInferenceRef.current = inferred;
@@ -1585,6 +1589,11 @@ export default function AiDealScreen() {
   }
 
   function handleEligibilityFormChange(next: DealEligibilityFormState) {
+    // The offer form changes exactly one field per interaction; record every
+    // field the merchant edits so later hint auto-inference leaves it alone.
+    for (const key of Object.keys(next) as (keyof DealEligibilityFormState)[]) {
+      if (next[key] !== eligibilityForm[key]) eligibilityTouchedRef.current.add(key);
+    }
     setEligibilityForm(next);
   }
 
@@ -2457,7 +2466,11 @@ export default function AiDealScreen() {
       resetGenerationState();
       setBanner(null);
       void persistSelectedPhotoForRecovery(uri);
-    } catch {
+    } catch (err) {
+      // Log the underlying reason so a still-failing picker (e.g. a missing
+      // media-read permission on Android <=12) is diagnosable from device logs;
+      // the owner-facing banner stays friendly.
+      console.warn("[create-ai] photo picker failed:", err instanceof Error ? err.message : err);
       setBanner({ message: t("createAi.errPhotoPicker"), tone: "error" });
     }
   }
@@ -2665,7 +2678,14 @@ export default function AiDealScreen() {
     if (lower.includes("unauthorized") || lower.includes("log in")) {
       return t("createAi.friendlySession");
     }
-    if (lower.includes("photo")) return t("createAi.friendlyPhoto");
+    if (lower.includes("photo") || lower.includes("image")) {
+      // Only blame the merchant's photo when they actually attached one. With no
+      // photo attached, a "photo"/"image" failure is our image backend, not their
+      // upload — don't tell the owner to fix a photo that doesn't exist.
+      return photoUri || photoPath
+        ? t("createAi.friendlyPhoto")
+        : t("createAi.errImageServiceDown");
+    }
     return t("createAi.friendlyGenerationLongError");
   }
 
@@ -3269,7 +3289,11 @@ export default function AiDealScreen() {
     const generatedPosterPath = imageVersionStoragePath(generatedAd);
     const fallbackPosterPath = generatedPosterPath ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
-    if (!hasImageSource) {
+    // Poster-style deals render the offer natively in the consumer feed
+    // (ComposedAdCard, deterministic_fallback) — no baked-in image — so a poster
+    // deal may ship with no photo when image generation is down. Standard cards
+    // still need one.
+    if (!hasImageSource && !showPosterFormat) {
       setBanner({
         message: t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
@@ -3301,7 +3325,9 @@ export default function AiDealScreen() {
           photo_treatment: generatedPosterPath ? generatedAd?.photo_treatment ?? null : null,
         }
       : fallbackBaseAd;
-    if (!fallbackPosterPath) {
+    if (!fallbackPosterPath && (photoUri || posterUrl)) {
+      // Only claim "use the merchant photo as final" when there actually is one;
+      // a poster-only deal (no image at all) must leave usePhotoAsFinal false.
       setUsePhotoAsFinal(true);
       setMerchantOriginalWarningAcknowledged(false);
     }
@@ -3398,7 +3424,7 @@ export default function AiDealScreen() {
       const mechanicsValidation = validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(offerDefinition), offerContract);
       if (!mechanicsValidation.valid) {
         const message = t("createAi.offerMechanicsInvalid", {
-          defaultValue: "The ad copy changes the offer terms. Keep the required purchase, free item, discount, and location exactly as shown in the locked offer.",
+          defaultValue: "Your offer setup doesn't match this deal type. Check what the customer buys, the free item, and the offer rule above, then try again.",
         });
         showPublishError(message, "warning");
         trackEvent("deal_validation_failed", {
@@ -3832,7 +3858,12 @@ export default function AiDealScreen() {
             screenshotQa: composedScreenshotQaSnapshotForPublish,
           }
         : null;
-      if (!posterForPublish) {
+      // Poster-style deals render the offer natively for consumers (ComposedAdCard
+      // deterministic_fallback), and the deal row stores a null poster fine, so a
+      // poster deal may publish with no image. Standard cards still require one.
+      // Fail-safe: if the server rejects the imageless poster spec, the poster-spec
+      // fallback below retries as a Standard card.
+      if (!posterForPublish && !showPosterFormat) {
         showPublishError(t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
         }));
@@ -4818,7 +4849,12 @@ export default function AiDealScreen() {
                     value={customImageEditInstruction}
                     onChangeText={(text) => {
                       setCustomImageEditInstruction(text);
-                      if (generatedAd) resetGenerationState();
+                      // Typing here must NOT drop the generated ad: resetGenerationState()
+                      // nulls generatedAd, which collapses the review UI back to Step 1
+                      // mid-keystroke and leaves this field holding one character. The
+                      // instruction only needs to be applied on the next Generate, so just
+                      // un-accept the draft (keeps the image visible) like the copy fields.
+                      invalidateAcceptedAdDraft();
                     }}
                     placeholder={t("createAi.customImageEditPlaceholder")}
                     placeholderTextColor={theme.mutedText}

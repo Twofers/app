@@ -146,6 +146,58 @@ describe("deal eligibility inference", () => {
     });
   });
 
+  it("reads '2 for 1' phrasing as same-item BOGO, not a buy-two quantity (2026-07-10 plan)", () => {
+    // On-device repro: typing "2 for 1 latte" left the item slots holding the
+    // literal "2 for 1" text; the offer builder then read it as a buy-TWO deal
+    // ("Buy two lattes…") and publish failed with REQUIRES_TWO_PURCHASES.
+    // "2 for 1" means buy ONE, get ONE free of the SAME item.
+    for (const text of ["2 for 1 latte", "2-for-1 latte", "two for one latte"]) {
+      expect(inferDealEligibilityFormFromText(text)).toMatchObject({
+        dealType: "BUY_ONE_GET_ONE_FREE",
+        requiredItemDescription: "latte",
+        freeItemDescription: "latte",
+      });
+    }
+  });
+
+  it("keeps same-item 'buy one X and get one X free' as BOGO, not a free-item flip (2026-07-10 plan)", () => {
+    // On-device repro: "Buy one latte and get one latte free" silently flipped
+    // the offer rule BOGO -> BUY_ONE_GET_SOMETHING_FREE. A same-item free-item
+    // offer renders the canonical "get one latte free" line, which fails the
+    // VAGUE_GET_ONE_FREE publish guard. Same reward noun => BOGO.
+    const form = inferDealEligibilityFormFromText("Buy one latte and get one latte free");
+    expect(form).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "latte",
+      freeItemDescription: "latte",
+    });
+    expect(validateDealEligibility(dealEligibilityFormToInput(form!))).toMatchObject({
+      eligible: true,
+      eligibilityStatus: "VALID",
+    });
+  });
+
+  it("never emits a single-letter or partial-word item while the description is typed (2026-07-10 plan)", () => {
+    // Per-keystroke inference must never commit a stray fragment (the "2"/"B"
+    // corruption): a bad seed survives draft save/resume and poisons publish.
+    // Feed every prefix of a phrase and assert any emitted item is >= 2 chars.
+    const usable = (value: string) => value === "" || value.trim().length >= 2;
+    for (const phrase of [
+      "Buy one latte and get one latte free",
+      "2 for 1 latte",
+      "House vanilla latte, buy one get one free",
+    ]) {
+      for (let end = 1; end <= phrase.length; end++) {
+        const prefix = phrase.slice(0, end);
+        const form = inferDealEligibilityFormFromText(prefix);
+        if (!form) continue;
+        expect(usable(form.itemDescription), `item @ "${prefix}"`).toBe(true);
+        expect(usable(form.requiredItemDescription), `required @ "${prefix}"`).toBe(true);
+        expect(usable(form.freeItemDescription), `free @ "${prefix}"`).toBe(true);
+      }
+    }
+  });
+
   it("uses a plain item description to seed the default single-item discount", () => {
     expect(inferDealEligibilityFormFromText("Hot fudge sundae")).toMatchObject({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
@@ -254,6 +306,55 @@ describe("deal eligibility inference", () => {
     ).toMatchObject({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
       itemDescription: "Hot fudge sundae",
+    });
+  });
+
+  it("never overwrites a manually touched field, even when it matches the previous auto inference", () => {
+    // touchedFields is the call-site guard (Phase 2.4): once the merchant edits a
+    // field by hand, the free-text parser may never rewrite it — even if its value
+    // coincidentally equals the last auto inference (which the still-auto heuristic
+    // alone would treat as replaceable).
+    const current = {
+      ...createDefaultDealEligibilityFormState(),
+      dealType: "BUY_ONE_GET_ONE_FREE" as const,
+      requiredItemDescription: "coffee",
+      freeItemDescription: "coffee",
+    };
+    const previousInferred = inferDealEligibilityFormFromText("Buy one coffee get one free");
+    const nextInferred = inferDealEligibilityFormFromText("Buy one latte get one free");
+
+    expect(
+      mergeInferredEligibilityForm(current, nextInferred, {
+        allowDealTypeChange: true,
+        previousInferred,
+        touchedFields: ["requiredItemDescription"],
+      }),
+    ).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "coffee", // touched → protected
+      freeItemDescription: "latte", // untouched → still auto-updates
+    });
+  });
+
+  it("never flips a manually chosen deal type (touched dealType)", () => {
+    // The merchant tapped the BOGO offer-rule chip; a later BOGSF inference from
+    // the description must not silently flip the rule back.
+    const current = {
+      ...createDefaultDealEligibilityFormState(),
+      dealType: "BUY_ONE_GET_ONE_FREE" as const,
+      requiredItemDescription: "",
+      freeItemDescription: "",
+    };
+    const inferred = inferDealEligibilityFormFromText("Buy one sandwich, get a free coffee");
+
+    expect(
+      mergeInferredEligibilityForm(current, inferred, {
+        allowDealTypeChange: true,
+        touchedFields: ["dealType"],
+      }),
+    ).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE", // stays despite BOGSF inference
+      requiredItemDescription: "sandwich", // untouched item slots still fill
     });
   });
 });

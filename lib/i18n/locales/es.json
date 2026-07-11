@@ -1848,6 +1848,8 @@
     "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",
     "errAiGenerationFailed": "AI generation failed.",
     "errImageGenerationNoImage": "La IA no pudo crear una imagen para este anuncio. Agrega una foto o inténtalo de nuevo antes de usarlo.",
+    "errImageServiceDown": "Nuestro servicio de imágenes está ocupado ahora. Inténtalo de nuevo en unos minutos o añade tu propia foto.",
+    "offerMechanicsInvalid": "La configuración de tu oferta no coincide con este tipo de oferta. Revisa qué compra el cliente, el artículo gratis y la regla de la oferta, luego inténtalo de nuevo.",
     "errUploadPhotoForDevCreate": "Sube una foto primero.",
     "fallbackIntro": "No pudimos generar anuncios ahora. Aun así puedes terminar esta oferta manualmente.",
     "fallbackBody": "Your photo and offer note stay put. Open the title, subheadline, CTA, and details below, then publish — or adjust the note and tap Generate again.",

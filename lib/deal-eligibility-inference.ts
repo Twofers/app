@@ -99,7 +99,11 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   const source = cleanText(text);
   if (!source) return null;
 
-  const bogoPrefix = source.match(/\b(?:bogo|2-for-1|two\s+for\s+one)\s+([^.!?,;]+)/i);
+  // "2 for 1", "2-for-1", "2for1", "two for one" all mean buy ONE get ONE free
+  // of the same item — NOT a buy-two quantity. Without the spaced digit form the
+  // phrase fell through to the plain-item branch and the literal "2 for 1" text
+  // leaked into the item slot, which the offer builder then read as buy-two.
+  const bogoPrefix = source.match(/\b(?:bogo|2\s*-?\s*for\s*-?\s*1|two\s+for\s+one)\s+([^.!?,;]+)/i);
   if (bogoPrefix?.[1]) {
     const seeded = withItemSeed(bogoPrefix[1]);
     return seeded ? { ...seeded, dealType: "BUY_ONE_GET_ONE_FREE" } : null;
@@ -147,9 +151,29 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   );
   if (buyOneGetFreeItem?.[1] && buyOneGetFreeItem[2]) {
     const requiredItem = cleanItem(buyOneGetFreeItem[1]);
-    const freeItem = stripDuplicateQualifier(cleanItem(buyOneGetFreeItem[2]), requiredItem);
+    const rawFreeItem = cleanItem(buyOneGetFreeItem[2]);
+    const freeItem = stripDuplicateQualifier(rawFreeItem, requiredItem);
     const freeItemIsPronoun = /^(?:one|item|same|next|second|another)$/i.test(freeItem);
     if (requiredItem && freeItem && !freeItemIsPronoun && isUsableItem(requiredItem) && isUsableItem(freeItem)) {
+      // Same reward noun stated plainly ("buy one latte and get one latte free")
+      // is a BOGO, not a free-item offer. Routing it through
+      // BUY_ONE_GET_SOMETHING_FREE builds a same-item "get one latte free" line
+      // that fails the VAGUE_GET_ONE_FREE publish guard. The referential-qualifier
+      // case ("get a SECOND muffin free") still resolves to a free-item offer via
+      // stripDuplicateQualifier (F-025) — only fold to BOGO when nothing was
+      // stripped, so that path is untouched.
+      const qualifierStripped = freeItem !== rawFreeItem;
+      const sameRewardNoun =
+        normalizeForSameItemCheck(requiredItem) === normalizeForSameItemCheck(freeItem);
+      if (sameRewardNoun && !qualifierStripped) {
+        return {
+          ...createDefaultDealEligibilityFormState({
+            requiredItemDescription: requiredItem,
+            freeItemDescription: requiredItem,
+          }),
+          dealType: "BUY_ONE_GET_ONE_FREE",
+        };
+      }
       return {
         ...createDefaultDealEligibilityFormState({
           requiredItemDescription: requiredItem,
@@ -196,7 +220,7 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   const percentOff = source.match(/\b([4-9]\d|100)\s*%\s*(?:off|discount)\s+(?:one|a|an|the)?\s*([^.!?,;]+)/i);
   if (percentOff?.[1] && percentOff[2]) {
     const item = cleanItem(percentOff[2]);
-    if (item) {
+    if (item && isUsableItem(item)) {
       return {
         ...createDefaultDealEligibilityFormState({ itemDescription: item }),
         dealType: "PERCENT_OFF_SINGLE_ITEM",
@@ -207,10 +231,15 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
 
   if (looksLikePlainItem(source)) {
     const item = cleanItem(source);
-    return {
-      ...createDefaultDealEligibilityFormState({ itemDescription: item }),
-      dealType: "PERCENT_OFF_SINGLE_ITEM",
-    };
+    // A single letter or stopword is a mid-typing fragment ("2", "o", "B"), not
+    // a menu item — never seed it (it survives draft save/resume and poisons
+    // publish). Fall through to null and let the next keystroke re-infer.
+    if (isUsableItem(item)) {
+      return {
+        ...createDefaultDealEligibilityFormState({ itemDescription: item }),
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+      };
+    }
   }
 
   return null;
@@ -229,13 +258,26 @@ function fillIfEmptyOrAuto(current: string, inferred: string, previousInferred?:
 export function mergeInferredEligibilityForm(
   current: DealEligibilityFormState,
   inferred: DealEligibilityFormState | null,
-  options: { allowDealTypeChange?: boolean; previousInferred?: DealEligibilityFormState | null } = {},
+  options: {
+    allowDealTypeChange?: boolean;
+    previousInferred?: DealEligibilityFormState | null;
+    // Fields the merchant edited by hand in the offer form. Auto-inference from
+    // the free-text hint must never overwrite these, and a touched dealType
+    // (they tapped an offer-rule chip) must never be flipped by the parser.
+    touchedFields?: Iterable<keyof DealEligibilityFormState> | null;
+  } = {},
 ): DealEligibilityFormState {
   if (!inferred) return current;
 
+  const touched = options.touchedFields ? new Set(options.touchedFields) : null;
+  const isTouched = (key: keyof DealEligibilityFormState) => touched?.has(key) ?? false;
+  const mergeField = (key: keyof DealEligibilityFormState, inferredValue: string, previousValue?: string) =>
+    isTouched(key) ? current[key] : fillIfEmptyOrAuto(current[key], inferredValue, previousValue);
+
   const previous = options.previousInferred ?? null;
   const canChangeDealType =
-    options.allowDealTypeChange &&
+    Boolean(options.allowDealTypeChange) &&
+    !isTouched("dealType") &&
     (!previous || current.dealType === previous.dealType || current.dealType === createDefaultDealEligibilityFormState().dealType);
   const dealType = canChangeDealType ? inferred.dealType : current.dealType;
   if (dealType === "PERCENT_OFF_SINGLE_ITEM") {
@@ -245,10 +287,12 @@ export function mergeInferredEligibilityForm(
       ...current,
       dealType,
       discountPercent:
-        inferred.dealType === "PERCENT_OFF_SINGLE_ITEM" && (!current.discountPercent.trim() || current.discountPercent === "40")
+        !isTouched("discountPercent") &&
+        inferred.dealType === "PERCENT_OFF_SINGLE_ITEM" &&
+        (!current.discountPercent.trim() || current.discountPercent === "40")
           ? inferred.discountPercent
           : current.discountPercent,
-      itemDescription: fillIfEmptyOrAuto(current.itemDescription, itemDescription, previous?.itemDescription),
+      itemDescription: mergeField("itemDescription", itemDescription, previous?.itemDescription),
     };
   }
 
@@ -256,18 +300,18 @@ export function mergeInferredEligibilityForm(
   return {
     ...current,
     dealType,
-    requiredItemDescription: fillIfEmptyOrAuto(
-      current.requiredItemDescription,
+    requiredItemDescription: mergeField(
+      "requiredItemDescription",
       sameItemFallback,
       previous?.requiredItemDescription || previous?.itemDescription,
     ),
     freeItemDescription:
       dealType === "BUY_ONE_GET_ONE_FREE"
-        ? fillIfEmptyOrAuto(
-            current.freeItemDescription,
+        ? mergeField(
+            "freeItemDescription",
             inferred.freeItemDescription || sameItemFallback,
             previous?.freeItemDescription || previous?.requiredItemDescription || previous?.itemDescription,
           )
-        : fillIfEmptyOrAuto(current.freeItemDescription, inferred.freeItemDescription, previous?.freeItemDescription),
+        : mergeField("freeItemDescription", inferred.freeItemDescription, previous?.freeItemDescription),
   };
 }

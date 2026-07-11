@@ -1314,6 +1314,8 @@
     "errUnexpectedAiResponse": "We couldn't prepare an ad. Try again.",
     "errAiGenerationFailed": "Couldn't generate an ad.",
     "errImageGenerationNoImage": "AI couldn't create an image for this ad. Add a photo or try again before using it.",
+    "errImageServiceDown": "Our image service is busy right now. Try again in a few minutes, or add your own photo.",
+    "offerMechanicsInvalid": "Your offer setup doesn't match this deal type. Check what the customer buys, the free item, and the offer rule above, then try again.",
     "errUploadPhotoForDevCreate": "Upload a photo first.",
     "fallbackIntro": "We couldn’t generate ads right now. You can still finish this offer manually.",
     "fallbackBody": "Your photo and offer note are saved. Fill in the headline, short line, button text, and details below, or adjust the note and generate again.",
