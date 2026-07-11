@@ -214,26 +214,38 @@ export function getMerchantDealScheduleStatus(
   return isDealActiveNow(deal) ? "live" : "ended";
 }
 
-/**
- * Turn an IANA timezone id into a short, customer-friendly label. Uses the
- * locale's short zone name ("CST"/"CDT") and collapses the US daylight/standard
- * variants to one generic abbreviation ("CT"). Falls back to the short name, or
- * the raw id, when no clean abbreviation is available.
- */
-export function shortTimeZoneLabel(timeZone: string, lang?: string): string {
+function shortZoneName(timeZone: string, lang: string): string | null {
   try {
-    const parts = new Intl.DateTimeFormat(lang || "en", {
+    const parts = new Intl.DateTimeFormat(lang, {
       timeZone,
       timeZoneName: "short",
     }).formatToParts(new Date());
-    const name = parts.find((p) => p.type === "timeZoneName")?.value;
-    if (!name) return timeZone;
-    // Collapse US "CST"/"CDT" → "CT" (X[S|D]T pattern); leave "GMT+9" etc. as-is.
-    const generic = name.match(/^([A-Z]{1,3})[SD]T$/);
-    return generic ? `${generic[1]}T` : name;
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? null;
   } catch {
-    return timeZone;
+    return null;
   }
+}
+
+// Collapse US "CST"/"CDT" → "CT" (X[S|D]T pattern); null for "GMT+9", "UTC", etc.
+function collapseUsZoneAbbreviation(name: string | null): string | null {
+  const generic = name?.match(/^([A-Z]{1,3})[SD]T$/);
+  return generic ? `${generic[1]}T` : null;
+}
+
+/**
+ * Turn an IANA timezone id into a short, customer-friendly label such as "CT".
+ *
+ * The friendly US abbreviations ("CST"/"CDT" → "CT") only exist in English
+ * `Intl` output, so the collapsible abbreviation is always resolved from an
+ * English formatter regardless of the app language — otherwise es/ko fall back
+ * to a raw "GMT-5" offset (launch-audit F-018). When English yields no
+ * collapsible abbreviation (e.g. "GMT+9"), we use the locale's own short name,
+ * then the raw id.
+ */
+export function shortTimeZoneLabel(timeZone: string, lang?: string): string {
+  const generic = collapseUsZoneAbbreviation(shortZoneName(timeZone, "en"));
+  if (generic) return generic;
+  return shortZoneName(timeZone, lang || "en") ?? timeZone;
 }
 
 export function formatValiditySummary(deal: RecurringInfo, options?: FormatValiditySummaryOptions) {

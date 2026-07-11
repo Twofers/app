@@ -121,4 +121,12 @@ describe("shortTimeZoneLabel", () => {
   it("leaves non-abbreviating zones as their short name", () => {
     expect(shortTimeZoneLabel("UTC")).toBe("UTC");
   });
+
+  it("keeps the US abbreviation in non-English locales (F-018)", () => {
+    // es/ko Intl returns a raw "GMT-5" offset for America/Chicago; the label
+    // must still collapse to "CT" instead of leaking the offset to the user.
+    expect(shortTimeZoneLabel("America/Chicago", "es")).toBe("CT");
+    expect(shortTimeZoneLabel("America/Chicago", "ko")).toBe("CT");
+    expect(shortTimeZoneLabel("America/New_York", "es")).toBe("ET");
+  });
 });
