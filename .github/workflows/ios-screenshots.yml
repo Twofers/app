@@ -1,0 +1,64 @@
+name: iOS App Store screenshots
+
+# Manual only — screenshots are a release chore, not something to run per-push.
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Simulator device (must be a 6.9\" 1320x2868 device)"
+        default: "iPhone 16 Pro Max"
+        required: true
+
+jobs:
+  screenshots:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      # Screenshot mode intercepts every network call, so these never reach a
+      # real backend — dummy values are fine and keep real secrets out of CI.
+      # (lib/supabase.ts requires them to be *present* at bundle time.)
+      EXPO_PUBLIC_SUPABASE_URL: "https://screenshots.invalid.supabase.co"
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: "screenshot-mode-dummy-anon-key"
+      SCREENSHOT_DEVICE: ${{ github.event.inputs.device }}
+      # Activates plugins/with-screenshot-test-target so prebuild adds the UI
+      # test target. Never set on normal/production prebuilds.
+      TWOFER_SCREENSHOT_BUILD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
+
+      - name: Install extraction tools
+        run: |
+          brew install chargepoint/xcparse/xcparse
+          gem install xcpretty
+
+      # Generates ios/ and (because TWOFER_SCREENSHOT_BUILD=1) adds the
+      # ScreenshotTests target via plugins/with-screenshot-test-target.
+      # --clean guarantees a fresh project so the plugin runs deterministically.
+      - name: Prebuild iOS project
+        run: npx expo prebuild -p ios --no-install --clean
+
+      - name: Install pods
+        working-directory: ios
+        run: pod install
+
+      - name: Capture screenshots
+        run: bash scripts/screenshots.sh
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-store-screenshots-en-US
+          path: fastlane/screenshots/en-US/*.png
+          if-no-files-found: error

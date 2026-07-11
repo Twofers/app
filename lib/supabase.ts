@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { getAiStudioDevStartupGuardError } from "@/lib/runtime-env";
+import { isScreenshotMode } from "@/lib/screenshot-mode";
+import { resolveScreenshotResponse } from "@/lib/screenshot-fixtures";
 import {
   getNativeSessionItem,
   removeNativeSessionItem,
@@ -408,6 +410,12 @@ function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Re
   const method = requestMethod(input, init);
   const authorization = requestAuthorization(input, init);
   const body = requestBodyJson(init);
+  // Screenshot mode (dev-only, -screenshotMode 1): serve deterministic demo
+  // fixtures and never touch the network. See lib/screenshot-mode.ts.
+  if (isScreenshotMode()) {
+    const canned = resolveScreenshotResponse(url, method, init?.headers, body);
+    if (canned) return Promise.resolve(canned);
+  }
   observeBeforeRequest(url, method, authorization);
   return run(input, init).then((response) => {
     void observeSuccessfulResponse(url, method, body, authorization, response.clone()).catch(() => {});

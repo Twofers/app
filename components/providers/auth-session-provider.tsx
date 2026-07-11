@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { buildScreenshotSession, isScreenshotMode } from "@/lib/screenshot-mode";
 
 type AuthSessionContextValue = {
   session: Session | null;
@@ -14,6 +15,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   useEffect(() => {
+    // Screenshot mode (dev-only): skip the real login flow and inject a fully
+    // synthetic authenticated session so store captures are deterministic.
+    if (isScreenshotMode()) {
+      setSession(buildScreenshotSession());
+      setIsInitialLoading(false);
+      return;
+    }
     let cancelled = false;
     // FIX: Track whether `onAuthStateChange` has already delivered a session
     // so we don't overwrite it with a stale `getSession` result. This prevents
