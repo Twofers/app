@@ -1,132 +1,121 @@
-# Proposal: reconcile the `deals` SELECT RLS drift (migrations vs prod)
+# Proposal: reconcile the `deals` RLS drift (migrations vs prod)
 
 Status: **PROPOSAL — do not apply as-is.** Applying Supabase migrations is
-hard-gated (needs Dan's approval), and this is RLS-sensitive. The SQL below is a
-starting point for review, **not** a migration file — that's why it lives in
-`docs/plans/` and not `supabase/migrations/`. Before anything is applied, the
-prod probe in step 1 must confirm what prod's live policy actually is.
+hard-gated and this is RLS-sensitive. This doc lives in `docs/plans/` (not
+`supabase/migrations/`) on purpose. Updated 2026-07-11 with a **read-only prod
+`pg_policies` probe** (Dan-authorized) that replaced the earlier file-only
+guesswork — prod's live policy set is very different from the migration files.
 
-Traced entirely from source on 2026-07-11 (no prod touched). Companion notes in
-the DB-guardrails session memory.
+## What prod actually has (probe, 2026-07-11, project `kvodhiqhdqnptqovovia`)
 
-## Symptom
+`SELECT policyname, cmd, roles, qual FROM pg_policies WHERE tablename='deals'`
+returned ~14 policies — far more than the migration files define. Grouped:
 
-On a schema built purely from the migration files, **every client SELECT on
-`public.deals` returns 403**. The DB-suite (`test:db`, suite 2c) records this as
-an explicit skip. Meanwhile the production feed reads deals fine — so **prod's
-live RLS has drifted from the migration files**. That means a fresh environment
-rebuilt from `supabase/migrations` (or a `supabase db reset`) would ship a broken
-consumer feed. This is a migration-fidelity bug, not a live prod bug.
+**Public read (no `owner_id`) — three overlapping SELECT policies:**
+| policy | `USING` | note |
+|---|---|---|
+| `Anyone can read active deals` | `is_active AND end_time>now() AND start_time<=now()` | correct — hides not-yet-started deals |
+| `public view active deals` | `is_active AND start_time<=now() AND end_time>now()` | correct — duplicate of the above |
+| `deals_public_read_live` | `is_active AND now()<end_time` | **BUG: no `start_time` gate** |
 
-## Root cause (from source)
+**Owner read (references `businesses.owner_id`, role `{public}`):**
+`Businesses can read their own deals` — `EXISTS(SELECT 1 FROM businesses WHERE
+id=deals.business_id AND owner_id=auth.uid())`. This is the **pre-billing-v4
+shape** — no `business_profiles` subscription gate, unlike migration
+`20260601153000`. So billing-v4's intended replacement never took on prod (or was
+overlaid by later manual policies).
 
-Two SELECT policies exist on `deals`:
+**Claim / redeemer:** `Users can read deals they claimed`,
+`redeemer_deals_select_guard`.
 
-1. `"Anyone can read active deals"` — `20260330120000` / `20260330140000`,
-   permissive public discovery:
+**Owner CRUD (overlapping):** `deals_owner_crud` (ALL), `business manage own
+deals` (ALL), `Businesses can insert/update/delete their own deals`,
+`redeemer_deals_{insert,update,delete}_guard`.
+
+PII column grants **are** applied on prod: an anon `select=owner_id` /
+`business_email` / `contact_name` on `businesses` returns `42501 permission
+denied`, while `select=id` returns 200. So `owner_id` is genuinely ungranted to
+clients — the PII migration `20260705120000` is live.
+
+## Findings
+
+### F1 — over-exposure: scheduled deals leak before they start (real)
+`deals_public_read_live` grants public SELECT on any `is_active` deal whose
+`end_time` is in the future, with **no `start_time <= now()` check**. Because
+permissive RLS policies OR together, this is the most permissive branch and it
+**defeats the explicit "hide deals that have not started yet" intent** documented
+in migration `20260330140000`. A one-time deal scheduled for the future (active,
+not yet started) is publicly readable early. Confidence: high (it's literally in
+the live policy list). This is the one finding with user-visible impact.
+
+### F2 — policy sprawl / drift (maintainability + fragility)
+Three near-identical public-read policies and 4+ overlapping owner-CRUD policies
+have accumulated across migrations and manual edits, in three different naming
+styles (`Title Case`, `snake_case`, `lower case`). Old policies were never
+dropped when new ones were added. Hard to reason about; easy to reintroduce a
+leak like F1.
+
+### F3 — latent `owner_id` column-privilege fragility (explains the 403)
+The owner-read policy's subquery reads `businesses.owner_id`, which clients can't
+SELECT (F1 probe). On a **migrations-only schema** (the test project) *every*
+client `deals` SELECT returns 403; prod does not. Most likely mechanism: the OR
+of permissive policies short-circuits per row — when a permissive public-read
+policy is already TRUE (a currently-live deal), the owner branch isn't evaluated,
+so `owner_id` is never read and no permission error fires. Prod always has live
+deals, so reads succeed; the freshly-seeded test project had no currently-live
+row to short-circuit, so the owner branch ran → `owner_id` permission error →
+403. **This means the same latent failure exists on prod** for any read where no
+permissive policy matches (e.g. an owner viewing their own not-yet-started or
+ended deal). Treat as "most likely" until reproduced on the test project.
+
+## Proposed fix (consolidation migration — gated, validate on test first)
+
+Not the earlier single-policy swap. Consolidate to remove F1 and F3:
+
+1. **Collapse the three public-read policies into one correct definition** (keep
+   the `start_time <= now()` gate); drop `deals_public_read_live` and one of the
+   duplicates.
    ```sql
-   USING (is_active = true AND end_time > NOW() AND start_time <= NOW())
+   DROP POLICY IF EXISTS "deals_public_read_live"     ON public.deals;
+   DROP POLICY IF EXISTS "public view active deals"   ON public.deals;
+   DROP POLICY IF EXISTS "Anyone can read active deals" ON public.deals;
+   CREATE POLICY "deals_public_read_active" ON public.deals FOR SELECT
+     USING (is_active = true AND start_time <= now() AND end_time > now());
    ```
-2. `"Businesses can read their own deals"` — `20260601153000` (billing-v4),
-   owner + subscription gate:
+2. **Refactor `owner_id` references behind a SECURITY DEFINER helper** so the
+   caller context never reads the ungranted column (removes F3). Mirrors the
+   existing `get_my_business()` pattern; do **not** re-grant `owner_id`.
    ```sql
-   USING (
-     EXISTS (SELECT 1 FROM public.businesses b
-             WHERE b.id = deals.business_id AND b.owner_id = auth.uid())
-     AND EXISTS (SELECT 1 FROM public.business_profiles bp
-                 WHERE (bp.user_id = auth.uid() OR bp.owner_id = auth.uid())
-                   AND bp.subscription_status IN ('trial','active'))
-   )
+   CREATE OR REPLACE FUNCTION public.is_business_owner(p_business_id uuid)
+   RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE
+   AS $$ SELECT EXISTS (SELECT 1 FROM public.businesses b
+                        WHERE b.id = p_business_id AND b.owner_id = auth.uid()); $$;
+   REVOKE EXECUTE ON FUNCTION public.is_business_owner(uuid) FROM PUBLIC, anon;
+   GRANT  EXECUTE ON FUNCTION public.is_business_owner(uuid) TO authenticated;
+   -- then rewrite the owner read/CRUD policies to call is_business_owner(business_id)
+   -- instead of EXISTS(... businesses ... owner_id = auth.uid()).
    ```
+3. **De-duplicate the owner-CRUD policies** into one coherent set, deciding
+   whether the billing-v4 subscription gate (`trial`/`active`) should apply to
+   owner *reads* (prod currently does NOT gate reads — confirm intended).
 
-Migration `20260705120000_businesses_pii_column_grants.sql` then did
-`REVOKE SELECT ON public.businesses FROM anon, authenticated` and re-granted only
-a non-PII column allowlist — **deliberately leaving `owner_id` ungranted** (its
-line 35 says so). Postgres enforces column-level SELECT privileges on columns
-referenced **inside an RLS policy's `USING` expression**, so policy (2) can no
-longer read `b.owner_id`; evaluating it raises a permission error, which aborts
-the whole `deals` SELECT rather than just returning `false`. Policy (1) alone
-should still allow public reads, so the fact that a migrations-only schema 403s
-outright is consistent with the owner-policy error aborting the query.
+## Required steps before applying (all Dan-gated)
 
-`business_profiles` is **not** affected: `20260726120000` only did
-`REVOKE UPDATE (...)` on it, so the second `EXISTS` still has SELECT on
-`user_id` / `owner_id` / `subscription_status`. The single offending reference is
-`businesses.owner_id` in the first `EXISTS`.
-
-## Proposed fix
-
-Mirror the existing `get_my_business()` pattern from the same PII migration: move
-the `owner_id` check into a `SECURITY DEFINER` helper so the policy stops
-referencing an ungranted column. **Do not** re-grant `owner_id` to clients —
-that would undo the PII migration and re-expose the owner's `auth.users` uuid.
-
-```sql
--- Does the caller own this business? SECURITY DEFINER bypasses the column-level
--- GRANT that (correctly) hides businesses.owner_id from anon/authenticated.
-CREATE OR REPLACE FUNCTION public.is_business_owner(p_business_id uuid)
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.businesses b
-    WHERE b.id = p_business_id
-      AND b.owner_id = auth.uid()
-  );
-$$;
-
--- Supabase grants EXECUTE to anon by default; REVOKE FROM PUBLIC alone does not
--- remove it (verified live 2026-06-10). Revoke anon explicitly.
-REVOKE EXECUTE ON FUNCTION public.is_business_owner(uuid) FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.is_business_owner(uuid) TO authenticated;
-
--- Rewrite the owner-read policy to call the helper instead of touching owner_id.
-DROP POLICY IF EXISTS "Businesses can read their own deals" ON public.deals;
-CREATE POLICY "Businesses can read their own deals"
-  ON public.deals FOR SELECT
-  USING (
-    public.is_business_owner(deals.business_id)
-    AND EXISTS (
-      SELECT 1 FROM public.business_profiles bp
-      WHERE (bp.user_id = auth.uid() OR bp.owner_id = auth.uid())
-        AND bp.subscription_status IN ('trial','active')
-    )
-  );
-
--- Belt-and-suspenders: make sure public discovery is present and unchanged.
-DROP POLICY IF EXISTS "Anyone can read active deals" ON public.deals;
-CREATE POLICY "Anyone can read active deals"
-  ON public.deals FOR SELECT
-  USING (is_active = true AND end_time > NOW() AND start_time <= NOW());
-```
-
-## Before applying — required steps (all Dan-gated)
-
-1. **Probe prod first (read-only).** Capture the real live policy so we're not
-   writing against an assumption:
-   ```sql
-   SELECT policyname, cmd, qual
-   FROM pg_policies
-   WHERE schemaname = 'public' AND tablename = 'deals';
-   ```
-   Confirm whether prod's owner-read policy already avoids `owner_id` (e.g. was
-   hand-edited to a helper or a `business_profiles`-only check). The migration
-   must encode **prod's** intended shape, then also fix the file lineage.
-2. Decide the target ref (CLI link state is uncertain — could be test
-   `zsuzrerdailvylccqtds` or prod `kvodhiqhdqnptqovovia`). Apply to test first.
-3. Promote the reviewed SQL into a real timestamped file under
-   `supabase/migrations/` only when approved.
-4. **After apply, immediately run `node scripts/probe-rls-smoke.mjs`** (per the
-   RLS-NULL-policy incident rule) and re-run `npm run test:db` suite 2c to
-   confirm the client `deals` SELECT is no longer 403.
+1. Reproduce the 403 on the **test project** (`zsuzrerdailvylccqtds`, built from
+   migrations) and confirm F3's short-circuit theory.
+2. Apply the consolidation there first; run `node scripts/probe-rls-smoke.mjs`
+   **and** `npm run test:db` (suite 2c) green.
+3. Also decide whether prod's extra policies should be encoded back into the
+   migration files so the two stop diverging (fixes the root drift, not just the
+   symptom).
+4. Only then, gated prod apply → immediately re-run `probe-rls-smoke` per the
+   RLS-NULL-policy incident rule.
 
 ## Risk notes
-
-- `SECURITY DEFINER` + `SET search_path = public` + `STABLE` matches the
-  existing safe helpers in this repo; the function reads one row and returns a
-  boolean, so it cannot leak `owner_id` itself.
-- Keep both SELECT policies — they OR together (public discovery + owner read).
-- Do not widen the column allowlist on `businesses`.
+- F1 is the only finding with live user impact (early exposure of scheduled
+  deals) and could ship as a tiny standalone fix (drop `deals_public_read_live`)
+  ahead of the larger consolidation, if desired.
+- Keep at least one permissive public-read policy at all times so consumer feeds
+  never break mid-migration.
+- `SECURITY DEFINER` + `SET search_path = public` + `STABLE` matches existing
+  safe helpers; the function returns a boolean and cannot leak `owner_id`.
