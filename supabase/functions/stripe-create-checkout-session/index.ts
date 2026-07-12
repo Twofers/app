@@ -16,7 +16,7 @@ import {
 } from "../_shared/stripe-business-billing.ts";
 import { ensurePrimaryBusinessLocationId } from "../_shared/business-location-entitlement-sync.ts";
 
-type BillingSource = "admin" | "website" | "email" | "test";
+type BillingSource = "admin" | "website" | "email";
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   const corsHeaders = getCorsHeaders(req);
@@ -26,11 +26,13 @@ function jsonResponse(req: Request, body: Record<string, unknown>, status = 200)
   });
 }
 
+// Audit F-005: the request body may only *ask* for a source; the effective
+// source is derived server-side below (token => "email"; "admin" only with a
+// verified active admin role; everything else => "website"). "test" no longer
+// exists as a source.
 function billingSource(value: unknown): BillingSource {
   const source = safeGetString(value);
-  return source === "admin" || source === "website" || source === "email" || source === "test"
-    ? source
-    : "website";
+  return source === "admin" || source === "website" || source === "email" ? source : "website";
 }
 
 function safeWebUrl(value: unknown, fallback: string): string {
@@ -140,26 +142,27 @@ async function userCanBillBusiness(supabase: any, businessId: string, userId: st
   return { ok: Boolean(member?.id), adminRole: null };
 }
 
+/**
+ * Audit F-006: consume the emailed billing token in ONE atomic conditional
+ * UPDATE (consume_billing_token RPC, migration 20260813120000) so concurrent
+ * replays of a single-use token cannot each create a Checkout Session. Fails
+ * closed on any RPC error, mirroring consumeTrialNoCardExemptionCode above.
+ */
 async function useBillingToken(supabase: any, businessId: string, rawToken: string | null): Promise<boolean> {
   if (!rawToken) return false;
   const tokenHash = await sha256Hex(rawToken);
-  const { data, error } = await supabase
-    .from("billing_tokens")
-    .select("id,max_uses,use_count,expires_at,revoked_at,action")
-    .eq("business_id", businessId)
-    .eq("token_hash", tokenHash)
-    .eq("action", "subscription_checkout")
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.id || data.revoked_at) return false;
-  if (new Date(String(data.expires_at)).getTime() <= Date.now()) return false;
-  if (Number(data.use_count ?? 0) >= Number(data.max_uses ?? 1)) return false;
-  const { error: updateError } = await supabase
-    .from("billing_tokens")
-    .update({ use_count: Number(data.use_count ?? 0) + 1 })
-    .eq("id", data.id);
-  if (updateError) throw updateError;
-  return true;
+  const { data, error } = await supabase.rpc("consume_billing_token", {
+    p_business_id: businessId,
+    p_token_hash: tokenHash,
+    p_action: "subscription_checkout",
+  });
+  if (error) {
+    // Code + message only — never the raw error object, which can echo RPC
+    // arguments (token hash, business id) into platform logs.
+    console.error("[stripe-create-checkout-session] billing_tokens consume failed:", error.code ?? "", error.message ?? "");
+    return false;
+  }
+  return data === true;
 }
 
 async function loadBillingInput(supabase: any, businessId: string): Promise<BusinessBillingProfileInput> {
@@ -227,7 +230,7 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Missing or invalid business_id." }, 400);
     }
 
-    const source = billingSource(body.source);
+    const requestedSource = billingSource(body.source);
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: authHeader } },
@@ -237,9 +240,14 @@ serve(async (req) => {
     const rawToken = safeGetString(body.billing_token);
     let userId: string | null = null;
     let adminRole: string | null = null;
+    let source: BillingSource;
     if (rawToken) {
       const tokenOk = await useBillingToken(supabaseAdmin, businessId, rawToken);
       if (!tokenOk) return jsonResponse(req, { error: "Invalid or expired billing link." }, 403);
+      // Emailed checkout links are always the "email" surface; the body cannot
+      // pick a different one (F-005: a raw-token holder could previously send
+      // source "admin"/"test" and skip the purchase-surface gate).
+      source = "email";
     } else {
       const {
         data: { user },
@@ -248,25 +256,31 @@ serve(async (req) => {
       if (userError || !user) return jsonResponse(req, { error: "Unauthorized." }, 401);
       if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
       userId = user.id;
-      const authz = await userCanBillBusiness(supabaseAdmin, businessId, user.id, source);
+      const authz = await userCanBillBusiness(supabaseAdmin, businessId, user.id, requestedSource);
       if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
       adminRole = authz.adminRole;
+      // "admin" only with a verified active admin role; everything else is the
+      // public website surface regardless of what the body claimed.
+      source = requestedSource === "admin" && adminCanCreateCheckout(authz.adminRole) ? "admin" : "website";
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);
-    if (config.purchaseSurface !== "web_only" && source !== "admin" && source !== "test") {
+    if (config.purchaseSurface !== "web_only" && source !== "admin") {
       return jsonResponse(req, { error: "Web billing conversion is not enabled." }, 403);
     }
     if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
       return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);
     }
 
-    const priceId = safeGetString(body.price_id) ??
-      (config.billingEnvironment === "production"
+    // Audit F-005: the price is resolved exclusively server-side (runtime
+    // config for the active billing environment, then server env fallbacks).
+    // The request body carries no price selection — there is exactly one
+    // purchasable product; if a second plan ever ships, the client sends an
+    // enum key the server maps, never a raw Stripe price id.
+    const priceId = (config.billingEnvironment === "production"
         ? config.twoferBusinessMonthlyPriceIdLive
         : config.twoferBusinessMonthlyPriceIdTest) ??
       safeGetString(Deno.env.get("STRIPE_PRICE_ID_TWOFER_PRO_MONTHLY")) ??
-      safeGetString(Deno.env.get("STRIPE_PRICE_ID_TWOFer_PRO_MONTHLY")) ??
       safeGetString(Deno.env.get("STRIPE_TWOFER_BUSINESS_PRICE_ID")) ??
       safeGetString(Deno.env.get("STRIPE_PRICE_ID"));
     if (!priceId) return jsonResponse(req, { error: "Billing price is not configured." }, 500);

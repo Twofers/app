@@ -84,26 +84,27 @@ async function userCanOpenPortal(supabase: any, businessId: string, userId: stri
   return { ok: Boolean(member?.id), adminRole: null };
 }
 
+/**
+ * Audit F-006: consume the emailed billing token in ONE atomic conditional
+ * UPDATE (consume_billing_token RPC, migration 20260813120000) so concurrent
+ * replays of a single-use token cannot each create a portal session. Fails
+ * closed on any RPC error.
+ */
 async function useBillingToken(supabase: any, businessId: string, rawToken: string | null): Promise<boolean> {
   if (!rawToken) return false;
   const tokenHash = await sha256Hex(rawToken);
-  const { data, error } = await supabase
-    .from("billing_tokens")
-    .select("id,max_uses,use_count,expires_at,revoked_at,action")
-    .eq("business_id", businessId)
-    .eq("token_hash", tokenHash)
-    .eq("action", "customer_portal")
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.id || data.revoked_at) return false;
-  if (new Date(String(data.expires_at)).getTime() <= Date.now()) return false;
-  if (Number(data.use_count ?? 0) >= Number(data.max_uses ?? 1)) return false;
-  const { error: updateError } = await supabase
-    .from("billing_tokens")
-    .update({ use_count: Number(data.use_count ?? 0) + 1 })
-    .eq("id", data.id);
-  if (updateError) throw updateError;
-  return true;
+  const { data, error } = await supabase.rpc("consume_billing_token", {
+    p_business_id: businessId,
+    p_token_hash: tokenHash,
+    p_action: "customer_portal",
+  });
+  if (error) {
+    // Code + message only — never the raw error object, which can echo RPC
+    // arguments (token hash, business id) into platform logs.
+    console.error("[stripe-customer-portal-session] billing_tokens consume failed:", error.code ?? "", error.message ?? "");
+    return false;
+  }
+  return data === true;
 }
 
 serve(async (req) => {
@@ -135,7 +136,7 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Missing or invalid business_id." }, 400);
     }
 
-    const source = portalSource(body.source);
+    const requestedSource = portalSource(body.source);
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: authHeader } },
@@ -144,10 +145,14 @@ serve(async (req) => {
 
     let userId: string | null = null;
     let adminRole: string | null = null;
+    let source: PortalSource;
     const rawToken = safeGetString(body.billing_token);
     if (rawToken) {
       const tokenOk = await useBillingToken(supabaseAdmin, businessId, rawToken);
       if (!tokenOk) return jsonResponse(req, { error: "Invalid or expired billing link." }, 403);
+      // Emailed portal links are always the "email" surface; the body cannot
+      // relabel a token session as "admin" in the audit records.
+      source = "email";
     } else {
       const {
         data: { user },
@@ -156,9 +161,13 @@ serve(async (req) => {
       if (userError || !user) return jsonResponse(req, { error: "Unauthorized." }, 401);
       if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
       userId = user.id;
-      const authz = await userCanOpenPortal(supabaseAdmin, businessId, user.id, source);
+      const authz = await userCanOpenPortal(supabaseAdmin, businessId, user.id, requestedSource);
       if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
       adminRole = authz.adminRole;
+      // "admin" only with a verified active admin role; every other
+      // authenticated caller is the merchant web surface — the body cannot
+      // relabel a session as "email" (that is derived from the token branch).
+      source = requestedSource === "admin" && adminCanOpenPortal(authz.adminRole) ? "admin" : "merchant_web";
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);

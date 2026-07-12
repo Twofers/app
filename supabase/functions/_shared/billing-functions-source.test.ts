@@ -32,6 +32,36 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/trial_checkout_intents/);
     expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
     expect(source).not.toMatch(/subscription_tier/);
+    // Audit F-005: the request body must never choose the Stripe price or a
+    // gate-bypassing source. The price is resolved server-side only; "test"
+    // does not exist as a source; the token branch is pinned to "email"; and
+    // "admin" requires a verified active admin role.
+    expect(source).not.toMatch(/body\.price_id/);
+    expect(source).not.toMatch(/=== "test"/);
+    expect(source).toMatch(/source = "email"/);
+    expect(source).toMatch(/source = requestedSource === "admin" && adminCanCreateCheckout\(authz\.adminRole\) \? "admin" : "website"/);
+    // Audit F-006: token consumption goes through the atomic RPC; no JS-side
+    // read-then-update on use_count may remain.
+    expect(source).toMatch(/rpc\("consume_billing_token"/);
+    expect(source).not.toMatch(/use_count/);
+  });
+
+  it("consumes billing tokens only through the atomic service-role RPC (audit F-006)", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "supabase", "migrations", "20260813120000_consume_billing_token_rpc.sql"),
+      "utf8",
+    );
+    // One conditional UPDATE + GET DIAGNOSTICS => concrete boolean, race-safe.
+    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.consume_billing_token/);
+    expect(migration).toMatch(/SET use_count = use_count \+ 1/);
+    expect(migration).toMatch(/use_count < max_uses/);
+    expect(migration).toMatch(/revoked_at IS NULL/);
+    expect(migration).toMatch(/expires_at > p_now/);
+    expect(migration).toMatch(/GET DIAGNOSTICS/);
+    // Service-role only; anon/authenticated revoked explicitly (REVOKE FROM
+    // PUBLIC alone does not remove Supabase's default grants).
+    expect(migration).toMatch(/REVOKE ALL ON FUNCTION public\.consume_billing_token[^;]*FROM PUBLIC, anon, authenticated/);
+    expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.consume_billing_token[^;]*TO service_role/);
   });
 
   it("exchanges an emailed checkout token by reusing the audited checkout function", () => {
@@ -85,6 +115,11 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/config\.billingEnvironment !== "production"/);
     expect(source).not.toMatch(/user_owns_business_location/);
     expect(source).not.toMatch(/location_id/);
+    // Audit F-006: same atomic RPC as checkout; no use_count read-then-update.
+    expect(source).toMatch(/rpc\("consume_billing_token"/);
+    expect(source).not.toMatch(/use_count/);
+    // Token sessions are always recorded as the "email" surface.
+    expect(source).toMatch(/source = "email"/);
   });
 
   it("keeps checkout redirect handling on website pages only", () => {
