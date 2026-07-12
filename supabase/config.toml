@@ -168,7 +168,8 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# Matches the app's client-side rule (lib/auth-password-recovery.ts PASSWORD_MIN_LENGTH).
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -202,9 +203,12 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Locked product decision: email confirmation stays ON (CLAUDE.md). Keep this
+# aligned with the hosted project so local/dev behavior cannot mask
+# confirmation-flow defects (audit F-011).
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
-secure_password_change = false
+secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 # Number of characters used in the email OTP.
@@ -534,6 +538,12 @@ entrypoint = "./functions/finalize-stale-redeems/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/deal-link/index.ts"
+
+# Public share-preview lookup for the /s/<code> web landing (audit F-009).
+[functions.deal-share-lookup]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/deal-share-lookup/index.ts"
 
 [functions.submit-business-application]
 enabled = true
