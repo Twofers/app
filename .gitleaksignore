@@ -31,3 +31,7 @@ f474780e3da8ce0619bad933e200776342d1bc7d:lib/recent-publish.ts:generic-api-key:1
 # - app/(tabs)/index.tsx: a word inside an English code comment (already in main's history).
 8734349ca262b1d6d8021545e51312a3d94627b5:lib/save-business-prompt.ts:generic-api-key:10
 4eee4f0b75915d1c79c3eb5da22506c22fac65e7:app/(tabs)/index.tsx:generic-api-key:497
+# CI's gitleaks (v8.18.4, .github/workflows/ci.yml) private-key rule matches the literal
+# "-----BEGIN PRIVATE KEY-----" inside PEM-header-stripping code in importRs256Key(); the real
+# key arrives at runtime from the GOOGLE_WALLET_SERVICE_ACCOUNT_JSON secret. No key is stored.
+ca64bbabb5d38865a875525575f5a2b197d94a5d:supabase/functions/_shared/wallet-pass-sync.ts:private-key:80
