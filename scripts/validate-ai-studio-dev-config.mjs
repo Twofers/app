@@ -1,7 +1,12 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const PROD_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
-const REQUIRED_PROD_VERSION_CODE = 31;
+// The check's job is to prove the dev variant doesn't mutate production
+// config, so compare against the committed app.json value instead of a
+// hardcoded number that drifts every release (audit F-012: it was pinned to
+// 31 while app.json had moved to 49, failing on every run).
+const REQUIRED_PROD_VERSION_CODE = JSON.parse(readFileSync("app.json", "utf8")).expo?.android?.versionCode;
 const EXPO_DEV_CLIENT_PLUGIN = "expo-dev-client";
 
 function expoConfig(envOverrides) {
@@ -92,7 +97,11 @@ assertCheck("AI Studio publishing is disabled", devPublishingDisabled, summary);
 assertCheck("dev config includes expo-dev-client plugin", devPlugins.includes(EXPO_DEV_CLIENT_PLUGIN), summary);
 assertCheck("production app name is Twofer", prodConfig.name === "Twofer", summary);
 assertCheck("production package is com.unvmex2.twoforone", prodConfig.android?.package === "com.unvmex2.twoforone", summary);
-assertCheck("production versionCode is 31", prodConfig.android?.versionCode === REQUIRED_PROD_VERSION_CODE, summary);
+assertCheck(
+  `production versionCode matches app.json (${REQUIRED_PROD_VERSION_CODE})`,
+  Number.isInteger(REQUIRED_PROD_VERSION_CODE) && prodConfig.android?.versionCode === REQUIRED_PROD_VERSION_CODE,
+  summary,
+);
 assertCheck("production config excludes expo-dev-client plugin", !prodPlugins.includes(EXPO_DEV_CLIENT_PLUGIN), summary);
 
 console.log(JSON.stringify(summary, null, 2));

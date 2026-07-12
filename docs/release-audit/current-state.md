@@ -4,11 +4,17 @@ This document reflects the repository after the launch-hardening pass. Routes an
 
 ## Current build / runtime flags
 
-- App version: `1.0.0`.
-- Local Android `versionCode`: `31` in `app.json`; production EAS builds use remote app versioning / auto-increment, so the store build number may differ.
+> Versions, counts, and flag values are **generated** — see
+> `docs/release-audit/generated-state.md` (`npm run release:state`; CI drift
+> gate `npm run gate:release-state`). Audit F-012 found hand-maintained values
+> here that had drifted (versionCode "31" vs the real 49; the pilot billing
+> bypass described as still on after it was flipped off). Do not restate
+> generated facts in this file.
+
+- Production EAS builds use remote app versioning / auto-increment, so the store build number may differ from `app.json`.
 - Production package and bundle id: `com.unvmex2.twoforone`.
 - Share Deal: enabled in production/apk/preview EAS profiles with `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`, read through `lib/runtime-env.ts`.
-- Billing: `PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true`; billing UI exists, while pilot publish enforcement is bypassed.
+- Billing: see generated state for `PAID_BILLING_ENABLED` / `PILOT_DISABLE_BILLING_GATE`; as of 2026-07-12 billing is enabled AND enforced (the pilot bypass is off).
 - AI Deal Studio dev variant: separate app name/package (`Twofer Dev`, `com.unvmex2.twoforone.dev`) behind `TWOFER_APP_VARIANT=ai-studio-dev` / `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`, with publishing disabled by `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`.
 - Localization: English, U.S. Spanish, and Korean code paths exist; Juan signed off Spanish and June signed off Korean on 2026-07-03. Production deployment, hosted flags, migrations, and store submissions remain hard-gated.
 

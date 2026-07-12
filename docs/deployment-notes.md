@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 112 migration files and the latest is `20260802140000_admin_ai_prompt_registry.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative inventory is **generated** — see `docs/release-audit/generated-state.md` (regenerate with `npm run release:state`; CI fails on drift via `npm run gate:release-state`). Do not restate migration counts or "latest" filenames in prose; they drift (audit F-012 found this line asserting 112/`20260802140000` while the repo had 136/`20260813120000`).
 
 Read-only compare:
 

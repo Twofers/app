@@ -45,3 +45,8 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      # Audit F-012: fail when docs/release-audit/generated-state.* no longer
+      # match the code (versions, migration count, function list, flags).
+      - name: Release-state drift check
+        run: npm run gate:release-state

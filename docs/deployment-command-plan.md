@@ -34,7 +34,14 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (112 files, strict filename / timestamp order)
+### 2.1 Full local set (strict filename / timestamp order)
+
+> ⚠️ The enumeration below is a **historical snapshot** (it stops at #112,
+> `20260802140000_admin_ai_prompt_registry.sql`) and is NOT maintained. The
+> authoritative count and latest migration are generated — see
+> `docs/release-audit/generated-state.md` (`npm run release:state`), and use
+> `ls supabase/migrations` / `npx supabase migration list` for the live set
+> (audit F-012).
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -153,7 +160,7 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 
 ### 2.2 Latest migration
 
-**`20260802140000_admin_ai_prompt_registry.sql`**
+See `docs/release-audit/generated-state.md` (generated; do not hand-maintain — audit F-012).
 
 ### 2.3 Multilingual rollout migrations
 
@@ -271,7 +278,12 @@ See [production-deploy-checklist.md §2](./production-deploy-checklist.md): owne
 
 ### 4.1 Functions to deploy (repo inventory)
 
-All of the following exist under `supabase/functions/` and have `[functions.<name>]` entries in `supabase/config.toml` (each with `verify_jwt = false` — callers must pass auth headers where required; Stripe webhook uses signature verification).
+> ⚠️ The list below is a **historical snapshot** and is NOT maintained (audit
+> F-012 found it missing 13+ functions). The authoritative list is generated —
+> see `docs/release-audit/generated-state.md` (`npm run release:state`), or
+> `ls supabase/functions`.
+
+All functions exist under `supabase/functions/` and have `[functions.<name>]` entries in `supabase/config.toml` (each with `verify_jwt = false` — callers must pass auth headers where required; Stripe webhook uses signature verification).
 
 | Function |
 |----------|
