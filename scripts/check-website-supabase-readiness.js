@@ -145,7 +145,14 @@ if (failures.length === 0) {
   const adminGuardScript = read("website/admin/admin-guard.js");
   const styles = read("website/styles.css");
   for (const rel of walkFiles("website").filter((file) => file.endsWith(".html"))) {
-    assertNotIncludes(rel, read(rel), "20260701-logo", "website pages must not point at stale stylesheet cache keys");
+    const html = read(rel);
+    assertNotIncludes(rel, html, "20260701-logo", "website pages must not point at stale stylesheet cache keys");
+    if (html.includes("/styles.css?v=")) {
+      assertIncludes(rel, html, "/styles.css?v=20260712-site-hardening", "website pages must load the current shared stylesheet version");
+    }
+    if (html.includes("/localization.js?v=")) {
+      assertIncludes(rel, html, "/localization.js?v=20260712-site-hardening", "public pages must load the current localization version");
+    }
   }
   assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
   assertIncludes("website/styles.css", styles, ".nav-menu-button", "shared stylesheet must support the mobile navigation menu");
@@ -188,6 +195,8 @@ if (failures.length === 0) {
   assertIncludes("website/store-links.js", storeLinksScript, "android: null", "Android store CTA must stay hidden until a real listing exists");
   assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
   assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
+  assertIncludes("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js?v=20260712-session-hardening", "admin login must load the current session script version");
+  assertIncludes("website/business/claim/index.html", read("website/business/claim/index.html"), "/business/claim/claim.js?v=20260712-claim-hardening", "claim page must load the current guarded claim script version");
   assertIncludes("website/admin/admin-guard.js", adminGuardScript, "window.location.replace", "signed-out admin subroutes must return to login");
   for (const rel of walkFiles("website/admin").filter((file) => file.endsWith("/index.html") && !["website/admin/index.html", "website/admin/login/index.html"].includes(file))) {
     assertIncludes(rel, read(rel), "/admin/admin-guard.js", "admin subroutes must load the signed-out session guard");
