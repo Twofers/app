@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (99 files, strict filename / timestamp order)
+### 2.1 Full local set (112 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -137,10 +137,23 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 97. `20260729121000_deal_release_push_cron_schedule.sql`
 98. `20260730120000_deals_owner_delete_ended.sql`
 99. `20260730121000_customer_deal_poster_spec_projection.sql`
+100. `20260730123000_business_applications.sql`
+101. `20260730124000_business_onboarding_workflow.sql`
+102. `20260730125000_admin_dashboard_foundation.sql`
+103. `20260730126000_website_app_onboarding_sync.sql`
+104. `20260730127000_stripe_business_billing_reconnection.sql`
+105. `20260730128000_admin_ai_quota_resets.sql`
+106. `20260730129000_admin_onboarding_service_role_invite_gate.sql`
+107. `20260731120000_business_saved_customers_rpc.sql`
+108. `20260801120000_business_repeat_visit_stats.sql`
+109. `20260801121000_profiles_app_locale.sql`
+110. `20260802120000_business_prospect_command_center.sql`
+111. `20260802130000_admin_ai_operating_layer.sql`
+112. `20260802140000_admin_ai_prompt_registry.sql`
 
 ### 2.2 Latest migration
 
-**`20260730121000_customer_deal_poster_spec_projection.sql`**
+**`20260802140000_admin_ai_prompt_registry.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -169,11 +182,45 @@ The current local chain also includes these later migrations:
 
 These add owner deletion for ended deals and expose customer-safe native poster specs for active published deals. Applying either migration is production-changing and requires explicit approval; after applying the poster projection migration, include the customer poster spec RPC in hosted read-only smoke.
 
-### 2.6 Duplicate timestamp check
+### 2.6 Website/admin/billing/AI admin migrations
+
+The current local chain ends with this website/admin sequence:
+
+- `20260730123000_business_applications.sql`
+- `20260730124000_business_onboarding_workflow.sql`
+- `20260730125000_admin_dashboard_foundation.sql`
+- `20260730126000_website_app_onboarding_sync.sql`
+- `20260730127000_stripe_business_billing_reconnection.sql`
+- `20260730128000_admin_ai_quota_resets.sql`
+- `20260730129000_admin_onboarding_service_role_invite_gate.sql`
+
+This starts from `20260730123000_business_applications.sql`, adds `20260730124000_business_onboarding_workflow.sql` for deterministic onboarding tier/risk metadata and field-invite placeholders, adds `20260730125000_admin_dashboard_foundation.sql` for the internal admin allowlist, audit log, launch areas, feature flags, and central publish eligibility helper, adds `20260730126000_website_app_onboarding_sync.sql` for website-to-app profile materialization, membership linkage, field sources, revision history, setup checklist, terms acceptance, and app-safe profile update flow, adds `20260730127000_stripe_business_billing_reconnection.sql` for business billing profiles, subscriptions, billing events, web/admin Stripe session audit tables, sync jobs, reminders, and billing tokens, adds `20260730128000_admin_ai_quota_resets.sql` for admin-only AI quota reset records and reset-aware compose quota display, then adds `20260730129000_admin_onboarding_service_role_invite_gate.sql` so reviewed website/admin onboarding can materialize businesses through service-role Edge Functions while normal client signups remain invite-gated. Public submissions go through `submit-business-application`; admin summary reads go through `admin-dashboard-summary`; admin AI usage and quota resets go through `admin-ai-usage`; admin trial request reviews go through `admin-business-applications`; app onboarding reads and writes go through `get-business-onboarding-context` and `update-business-profile-section`. Web/admin billing starts through `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, and `stripe-backfill-customers`; mobile app billing remains closed. Applying any of these migrations is production-changing and requires explicit approval.
+
+### 2.7 Saved customers, repeat visits, and app locale
+
+The current local chain also includes:
+
+- `20260731120000_business_saved_customers_rpc.sql`
+- `20260801120000_business_repeat_visit_stats.sql`
+- `20260801121000_profiles_app_locale.sql`
+
+These add owner-facing saved-customer and repeat-visit helpers plus `profiles.app_locale` for server-originated localized copy. Applying any of these migrations is production-changing and requires explicit approval.
+
+### 2.8 Prospect command center and admin AI operations
+
+The current local chain also includes:
+
+- `20260802120000_business_prospect_command_center.sql`
+- `20260802130000_admin_ai_operating_layer.sql`
+- `20260802140000_admin_ai_prompt_registry.sql`
+
+These add website/admin prospect operations, claim-link support, admin AI output metadata, and the editable admin-only prompt registry. Applying any of these migrations is production-changing and requires explicit approval.
+
+### 2.9 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.7 Command to apply migrations (do not run without explicit approval)
+### 2.10 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
@@ -229,6 +276,22 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | Function |
 |----------|
 | `activate-redemption-mode` |
+| `admin-ai-operating-report` |
+| `admin-ai-prompts` |
+| `admin-dashboard-summary` |
+| `admin-ai-usage` |
+| `admin-business-applications` |
+| `admin-claim-link-assistant` |
+| `admin-claim-link-create` |
+| `admin-demand-proof` |
+| `admin-onboarding-review-ai` |
+| `admin-prospect-enrich` |
+| `admin-prospect-import` |
+| `admin-prospect-sales` |
+| `admin-prospect-score` |
+| `admin-sales-script` |
+| `admin-trial-conversion-assistant` |
+| `admin-trial-create-from-prospect` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |
@@ -236,6 +299,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `ai-extract-menu` |
 | `ai-generate-ad-variants` |
 | `ai-generate-deal-copy` |
+| `ai-studio-generate-draft` |
 | `ai-translate-deal` |
 | `begin-visual-redeem` |
 | `billing-checkout-redirect` |
@@ -247,6 +311,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `delete-user-account` |
 | `exit-redemption-mode` |
 | `finalize-stale-redeems` |
+| `get-business-onboarding-context` |
 | `ingest-analytics-event` |
 | `manage-redemption-devices` |
 | `owner-redemption-security` |
@@ -257,13 +322,17 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `send-trial-ending-reminders` |
 | `simulate-subscribe` |
 | `staff-redemption` |
+| `stripe-backfill-customers` |
 | `stripe-cancel-paid-subscription` |
 | `stripe-cancel-trial-subscription` |
 | `stripe-create-checkout-session` |
 | `stripe-customer-portal-session` |
+| `stripe-ensure-customer` |
 | `stripe-expire-pending-checkout` |
 | `stripe-request-introductory-refund` |
 | `stripe-webhook` |
+| `submit-business-application` |
+| `update-business-profile-section` |
 | `weekly-deal-digest` |
 
 **Note:** deploy only function folders that exist above and are present in `supabase/config.toml`.
@@ -278,7 +347,8 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 - **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
 - **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
 - **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
-- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
+- **Web business intake/admin sync:** `submit-business-application`, `admin-dashboard-summary`, `admin-ai-usage`, `admin-business-applications`, `get-business-onboarding-context`, and `update-business-profile-section`
+- **Billing (web/admin only if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-backfill-customers`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)
 
@@ -318,7 +388,7 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.4-mini`, other allowlisted models are explicit overrides. |
+| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.5`, other allowlisted models are explicit overrides. |
 | `OPENAI_WHISPER_MODEL` | Voice path in `ai-compose-offer`. |
 | `GEMINI_API_KEY` | Required only when Gemini text fallback, independent judging, vision QA fallback, or Gemini image generation is enabled. |
 | `GEMINI_TEXT_MODEL` | Gemini structured text model; default `gemini-3.5-flash`. |
@@ -333,11 +403,12 @@ Never paste real secret values into tickets or commits.
 | `AI_RETRY_AFTER_FULL_TIMEOUT` | Allows retry after a full primary timeout when explicitly true. |
 | `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks with the router; activate only after the circuit-breaker migration is applied. |
 | `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent judging for ad-variant candidates. |
-| `AI_VISION_FALLBACK_ENABLED` | Enables image QA fallback. |
-| `AI_VISION_FALLBACK_PROVIDER` | Image QA fallback provider; defaults to `gemini`. |
+| `AI_VISION_PRIMARY_PROVIDER` | Image QA primary provider; defaults to `gemini` (set `openai` to run QA on OpenAI). |
+| `AI_VISION_FALLBACK_ENABLED` | Enables the other provider as image QA fallback; default `true`. |
 | `AI_VISION_PRIMARY_TIMEOUT_MS` | Image QA primary timeout; default `25000`. |
 | `AI_VISION_FALLBACK_TIMEOUT_MS` | Image QA fallback timeout; default `14000`. |
 | `AI_STOCK_QA_CANDIDATE_LIMIT` | Ranked stock-candidate QA cap; default `3`, maximum `10`. |
+| `AI_AD_WEB_SEARCH_ENABLED` | Enables the paid `gpt-4o-search-preview` unfamiliar-item lookup; default `true`, set `false` to disable. |
 | `AI_V3_COST_BUDGET_ENABLED` | Enables AI provider cost projection/budget checks. |
 | `AI_TEXT_COST_SOFT_LIMIT_USD` | Text cost soft-limit telemetry threshold; default `0.2`. |
 | `AI_TEXT_COST_HARD_LIMIT_USD` | Per-text-attempt hard projection limit; default `0.5`. |
@@ -375,8 +446,13 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `STRIPE_SECRET_KEY` | Checkout, portal, webhook processing. |
+| `STRIPE_SECRET_KEY` | Web/admin checkout, portal, customer sync, controlled backfill, and webhook processing. |
 | `STRIPE_WEBHOOK_SECRET` | Preferred name in code; `STRIPE_WEBHOOK_SIGNING_SECRET` also accepted by `stripe-webhook`. |
+| `STRIPE_PRICE_ID_TWOFER_PRO_MONTHLY` / `STRIPE_TWOFER_BUSINESS_PRICE_ID` | Fallback monthly business price for web/admin Checkout when runtime billing config does not provide a price id. |
+| `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | Optional custom Stripe Customer Portal configuration. |
+| `ENABLE_STRIPE_BACKFILL` | Must be `true` before `stripe-backfill-customers` performs writes; dry-run review does not require it. |
+| `PAST_DUE_GRACE_DAYS` | Optional failed-payment grace window for business subscriptions; defaults to 3. |
+| `SITE_URL` | Optional website base URL for Checkout success/cancel and portal return pages. |
 
 ### 5.6 QA-only gate
 

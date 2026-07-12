@@ -10,6 +10,9 @@
       "twofer"
     ],
     "userInterfaceStyle": "automatic",
+    "androidNavigationBar": {
+      "enforceContrast": false
+    },
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.unvmex2.twoforone",
@@ -199,11 +202,10 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.unvmex2.twoforone",
-      "versionCode": 27,
+      "versionCode": 49,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -293,7 +295,8 @@
         }
       ],
       "expo-notifications",
-      "./plugins/with-android-audio-service-cleanup"
+      "./plugins/with-android-audio-service-cleanup",
+      "./plugins/with-screenshot-test-target"
     ],
     "experiments": {
       "typedRoutes": true,

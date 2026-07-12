@@ -15,6 +15,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { formatPhoneLabel } from "@/lib/display-format";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
@@ -22,12 +23,25 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
   type DealStructuredDisplayFields,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+} from "@/lib/repeat-claim-visibility";
+import { loadHiddenBusinessIds, hideBusiness, unhideBusiness } from "@/lib/hidden-businesses";
+import { ReportSheet } from "@/components/report-sheet";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import {
   isAiV5CustomerLocaleResolutionEnabled,
@@ -97,6 +111,9 @@ export default function BusinessProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const { confirm: brandedConfirm, confirmModal } = useBrandedConfirm();
   const [customerPreferredDealLocale, setCustomerPreferredDealLocale] = useState<string | null>(null);
   const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
     () => new Map(),
@@ -163,7 +180,29 @@ export default function BusinessProfileScreen() {
     }
 
     const raw = (dealsData ?? []) as DealRow[];
-    setDeals(raw.filter((d) => isDealActiveNow(d)));
+    const activeDeals = raw.filter((d) => isDealActiveNow(d));
+    // Hide this business's deals when the customer is currently repeat-restricted here,
+    // so they don't see an offer they can't claim. Best-effort: on lookup failure nothing
+    // is hidden and the claim-deal edge function still enforces the limit.
+    if (activeDeals.length > 0) {
+      const [policies, redemptions] = await Promise.all([
+        loadBusinessRepeatPolicies([id]),
+        loadBusinessRedemptionMap(userId, [id]),
+      ]);
+      const nowMs = Date.now();
+      setDeals(
+        activeDeals.filter(
+          (d) =>
+            !isDealHiddenByRepeatPolicy({
+              policy: policies.get(d.business_id),
+              lastRedeemedAt: redemptions.get(d.business_id) ?? null,
+              nowMs,
+            }),
+        ),
+      );
+    } else {
+      setDeals(activeDeals);
+    }
 
     if (userId) {
       const { data: fav } = await supabase
@@ -173,8 +212,11 @@ export default function BusinessProfileScreen() {
         .eq("business_id", id)
         .maybeSingle();
       setIsFavorite(!!fav);
+      const hidden = await loadHiddenBusinessIds(userId);
+      setIsHidden(hidden.has(id));
     } else {
       setIsFavorite(false);
+      setIsHidden(false);
     }
     setLoading(false);
   }, [id, userId, t]);
@@ -267,6 +309,50 @@ export default function BusinessProfileScreen() {
         setIsFavorite(true);
         setBanner(t("consumerHome.errFavoriteToggle"));
       }
+    }
+  }
+
+  // Hide ("block") this business for the current user. Unlike the feed, we stay on this screen
+  // (the customer navigated here deliberately) and surface a "hidden" banner with an Unhide action;
+  // the business's deals still render here so the state is legible.
+  async function performHide(): Promise<boolean> {
+    if (!userId || !id) return false;
+    const res = await hideBusiness({ userId, businessId: id });
+    if (res.ok) setIsHidden(true);
+    return res.ok;
+  }
+
+  function confirmHide() {
+    if (!userId || !id) {
+      setBanner(t("dealDetail.errLoginFavorite"));
+      return;
+    }
+    brandedConfirm({
+      title: t("hideBusiness.confirmTitle", { defaultValue: "Hide this business?" }),
+      message: t("hideBusiness.confirmBody", {
+        defaultValue:
+          "You won't see deals from this business in your feed. You can unhide it anytime in Settings.",
+      }),
+      confirmLabel: t("hideBusiness.confirmCta", { defaultValue: "Hide" }),
+      cancelLabel: t("commonUi.cancel", { defaultValue: "Cancel" }),
+      iconName: "visibility-off",
+      onConfirm: () => {
+        void (async () => {
+          if (!(await performHide())) {
+            setBanner(t("hideBusiness.error", { defaultValue: "Couldn't hide this business. Please try again." }));
+          }
+        })();
+      },
+    });
+  }
+
+  async function unhide() {
+    if (!userId || !id) return;
+    setIsHidden(false);
+    const res = await unhideBusiness({ userId, businessId: id });
+    if (!res.ok) {
+      setIsHidden(true);
+      setBanner(t("hideBusiness.error", { defaultValue: "Couldn't hide this business. Please try again." }));
     }
   }
 
@@ -484,6 +570,43 @@ export default function BusinessProfileScreen() {
           </View>
         </Pressable>
 
+        {isHidden ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: Spacing.sm,
+              marginTop: Spacing.md,
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              paddingHorizontal: Spacing.md,
+              paddingVertical: Spacing.md,
+            }}
+          >
+            <MaterialIcons name="visibility-off" size={22} color={theme.icon} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text }}>
+                {t("hideBusiness.hiddenTitle", { defaultValue: "You've hidden this business" })}
+              </Text>
+              <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: 2 }}>
+                {t("hideBusiness.hiddenBody", { defaultValue: "Its deals won't appear in your feed." })}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => void unhide()}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={{ paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.accentText }}>
+                {t("hideBusiness.unhide", { defaultValue: "Unhide" })}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
           <View
             style={{
@@ -533,7 +656,7 @@ export default function BusinessProfileScreen() {
             <InfoRow
               icon="call"
               label={t("businessProfile.phone")}
-              value={biz.phone?.trim() ? biz.phone : t("businessProfile.notProvided")}
+              value={biz.phone?.trim() ? formatPhoneLabel(biz.phone) : t("businessProfile.notProvided")}
               theme={theme}
               onPress={biz.phone?.trim() ? dialPhone : undefined}
               emphasize={!!biz.phone?.trim()}
@@ -566,7 +689,10 @@ export default function BusinessProfileScreen() {
                   },
                   locale: resolvedDealDisplayLocale.locale,
                   localeResolutionSource: resolvedDealDisplayLocale.source,
-                  useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+                  useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+                    resolvedDealDisplayLocale.locale,
+                    localizedOfferRendererEnabled,
+                  ),
                   fallbackLanguage: i18n.language,
                 });
                 const dealTitle = localizedDisplay.title || t("dealDetail.dealFallback");
@@ -645,7 +771,7 @@ export default function BusinessProfileScreen() {
                 {t("dealStatus.noLiveDeal")}
               </Text>
               <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21, textAlign: "center" }}>
-                {t("businessProfile.noLiveDeal")}
+                {isFavorite ? t("businessProfile.noLiveDealSaved") : t("businessProfile.noLiveDeal")}
               </Text>
             </View>
           )}
@@ -677,7 +803,70 @@ export default function BusinessProfileScreen() {
             </Text>
           </View>
         ) : null}
+
+        <View
+          style={{
+            marginTop: Spacing.xl,
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: Spacing.xl,
+          }}
+        >
+          <Pressable
+            onPress={() => setReportVisible(true)}
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.md }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+              {t("businessProfile.reportBusinessLink", { defaultValue: "Report this business" })}
+            </Text>
+          </Pressable>
+          {!isHidden ? (
+            <Pressable onPress={confirmHide} accessibilityRole="button" style={{ paddingVertical: Spacing.md }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+                {t("hideBusiness.hideLink", { defaultValue: "Hide this business" })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </ScrollView>
+
+      <ReportSheet
+        visible={reportVisible}
+        mode="business"
+        subjectLabel={biz.name}
+        onDismiss={() => setReportVisible(false)}
+        onSubmit={async ({ reason, comment }) => {
+          const result = await submitBusinessReport({
+            businessId: id,
+            reason: reason as BusinessReportReason,
+            comment,
+          });
+          return { ok: result.ok };
+        }}
+        successAction={
+          !isHidden && userId
+            ? {
+                label: t("hideBusiness.alsoHide", { defaultValue: "Also hide this business" }),
+                onPress: () => {
+                  void (async () => {
+                    const ok = await performHide();
+                    setReportVisible(false);
+                    if (!ok) {
+                      setBanner(
+                        t("hideBusiness.error", {
+                          defaultValue: "Couldn't hide this business. Please try again.",
+                        }),
+                      );
+                    }
+                  })();
+                },
+              }
+            : undefined
+        }
+      />
+      {confirmModal}
     </View>
   );
 }

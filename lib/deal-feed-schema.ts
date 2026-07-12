@@ -4,7 +4,7 @@ export const DEAL_STRUCTURED_DISPLAY_COLUMNS =
 
 /** Base Supabase select string for active deal surfaces. Keep this compatible with older DB states. */
 export const DEAL_FEED_BASE_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,created_at,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 
 /** Shared enriched select string for consumer deal feeds. Falls back to DEAL_FEED_BASE_SELECT when staged columns are absent. */
 export const DEAL_FEED_SELECT = `${DEAL_FEED_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
@@ -65,6 +65,7 @@ export type Deal = DealStructuredDisplayFields & {
     is_demo?: boolean | null;
   } | null;
   start_time: string;
+  created_at?: string | null;
   is_recurring: boolean;
   days_of_week: number[] | null;
   window_start_minutes: number | null;

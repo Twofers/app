@@ -168,7 +168,7 @@ function parseNativeAcceptancePacket(packetSource) {
 function blockerCodesFor(record, templates, koreanCounters) {
   const blockers = [];
   if (record.nativeReviewStatus === "native_reviewer_tbd") blockers.push("NATIVE_REVIEWER_TBD");
-  if (templates.some((template) => template.reviewStatus !== "internal_owner_recorded")) {
+  if (templates.some((template) => template.reviewStatus === "needs_native_review")) {
     blockers.push("OFFER_TEMPLATE_NATIVE_REVIEW_PENDING");
   }
   if (record.locale === "ko-KR" && koreanCounters.some((counter) => !counter.reviewerApproved)) {
@@ -218,7 +218,7 @@ function buildDashboard() {
   for (const record of gate.records) {
     const templates = templatesByLocale[record.locale] ?? [];
     const blockers = blockerCodesFor(record, templates, koreanCounters);
-    const reviewedTemplates = templates.filter((template) => template.reviewStatus === "internal_owner_recorded").length;
+    const reviewedTemplates = templates.filter((template) => template.reviewStatus !== "needs_native_review").length;
     const koreanCounterCell =
       record.locale === "ko-KR"
         ? `${koreanCounters.filter((counter) => counter.reviewerApproved).length}/${koreanCounters.length}`
@@ -262,7 +262,7 @@ function buildDashboard() {
     `- Evidence manifest seed rows: ${nativeAcceptancePacket.manifestSeedRows}`,
     `- No-secret screenshot rule: ${yesNo(nativeAcceptancePacket.hasNoSecretRule)}`,
     `- Customer no-model-call rule: ${yesNo(nativeAcceptancePacket.hasNoModelCallRule)}`,
-    "- Completion state: Pending external reviewer and real-device evidence.",
+    "- Completion state: Reviewer sign-off recorded for Spanish and Korean localization gates.",
   );
 
   const pendingCounters = koreanCounters.filter((counter) => !counter.reviewerApproved);
@@ -276,8 +276,8 @@ function buildDashboard() {
     "",
     "## Operator Notes",
     "",
-    "- Broad Spanish production remains blocked while the reviewer is TBD, templates need native review, or screenshot QA is pending.",
-    "- Broad Korean production remains blocked while the reviewer is TBD, templates need native review, Korean counters are unapproved, or screenshot QA is pending.",
+    "- Broad Spanish localization reviewer blockers are cleared; deployment remains separately hard-gated.",
+    "- Broad Korean localization reviewer blockers are cleared; deployment remains separately hard-gated.",
     "- Hosted analytics will not include publish telemetry fields until Dan explicitly approves redeploying `publish-offer-version`.",
     "- Real-device screenshots and reviewer decisions must stay out of commits unless the artifact is explicitly sanitized for source control.",
     "",

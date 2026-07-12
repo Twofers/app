@@ -85,6 +85,7 @@ export type AiDealCopyVariant = {
   push_notification: string;
   social_caption?: string;
   headline_alternative?: string;
+  poster_kicker?: string;
   push_title?: string;
   push_body?: string;
   cta?: string;
@@ -214,6 +215,20 @@ const KNOWN_FOOD_ITEM_CANONICALS: Record<string, string> = {
   drinks: "drink",
 };
 
+const COMMON_FOOD_WORD_CORRECTIONS: Record<string, string> = {
+  avacado: "avocado",
+  avacados: "avocados",
+  bagle: "bagel",
+  bagles: "bagels",
+  ceasar: "caesar",
+  expresso: "espresso",
+  mozerella: "mozzarella",
+  mozzarela: "mozzarella",
+};
+
+const DESSERT_SUNDAE_CONTEXT =
+  /\b(?:banana split|caramel|chocolate|dessert|fudge|ice cream|strawberry|sundae|sundaes|vanilla)\b/;
+
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
@@ -225,6 +240,17 @@ function normalizeItemKey(value: string): string {
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function applyKnownFoodSpellcheck(cleanKey: string): string | null {
+  let corrected = cleanKey;
+  corrected = corrected.replace(/\b[a-z]+\b/g, (word) => COMMON_FOOD_WORD_CORRECTIONS[word] ?? word);
+  if (DESSERT_SUNDAE_CONTEXT.test(corrected)) {
+    corrected = corrected
+      .replace(/\bsundays\b/g, "sundaes")
+      .replace(/\bsunday\b/g, "sundae");
+  }
+  return corrected !== cleanKey ? corrected : null;
 }
 
 export function canonicalizeOfferItem(
@@ -254,6 +280,16 @@ export function canonicalizeOfferItem(
       canonical: known,
       confidence: cleanKey === known ? "medium" : "high",
       source: "known_food_dictionary",
+    };
+  }
+
+  const spellchecked = applyKnownFoodSpellcheck(cleanKey);
+  if (spellchecked) {
+    return {
+      original: clean,
+      canonical: spellchecked,
+      confidence: "high",
+      source: "spellcheck",
     };
   }
 
@@ -343,6 +379,10 @@ function startsWithArticle(value: string): boolean {
   return /^(?:a|an|the)\s+/i.test(cleanText(value));
 }
 
+function startsWithDeterminer(value: string): boolean {
+  return /^(?:a|an|any|the)\s+/i.test(cleanText(value));
+}
+
 function stripLeadingArticle(value: string): string {
   return cleanText(value).replace(/^(?:a|an|the)\s+/i, "");
 }
@@ -391,7 +431,7 @@ function formatPurchasePhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
     return `${articleFor(item)} ${lowerFirst(item)}`;
   }
   return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
@@ -401,6 +441,7 @@ function formatCountedItem(quantity: number, itemName: string): string {
   const item = stripLeadingArticle(itemName);
   if (!item) return "";
   if (quantity === 1) {
+    if (/^any\s+/i.test(item)) return lowerFirst(item);
     if (startsWithQuantityPhrase(item)) return lowerFirst(item);
     return `one ${lowerFirst(item)}`;
   }
@@ -411,7 +452,7 @@ function formatFreeRewardPhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
     if (looksPluralLike(item)) return `free ${lowerFirst(stripLeadingArticle(item))}`;
     return `a free ${lowerFirst(item)}`;
   }
@@ -427,6 +468,8 @@ function normalizeItemForComparison(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
   if (KNOWN_FOOD_ITEM_CANONICALS[clean]) return KNOWN_FOOD_ITEM_CANONICALS[clean];
+  const spellchecked = applyKnownFoodSpellcheck(clean);
+  if (spellchecked) return spellchecked;
   return clean.replace(/ies\b/g, "y").replace(/(?:ches|shes|xes|zes|ses)\b/g, (m) => m.slice(0, -2)).replace(/s\b/g, "");
 }
 
@@ -558,8 +601,10 @@ function canonicalFreeItemTerms(
   const quantity = Number.isFinite(quantityLimit ?? NaN) && (quantityLimit ?? 0) > 0
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
+  const requiredPhrase = formatCountedItem(requiredQuantity, requiredItem);
+  const freePhrase = formatCountedItem(freeQuantity, freeItem);
   return sentence(
-    `Purchase ${requiredQuantity} ${requiredItem} to receive ${freeQuantity} ${freeItem} free. Redeem only at ${locationName}. ${quantity}`,
+    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${locationName}. ${quantity}`,
   );
 }
 
@@ -825,7 +870,10 @@ function containsForbiddenAiPhrase(text: string): boolean {
 }
 
 function hasAdLikeHeadlineHook(headline: string): boolean {
-  return /\b(?:free|on us|save|off)\b/i.test(headline) || /\+\s*free\b/i.test(headline);
+  return (
+    /\b(?:free|on us|save|off|bonus|combo|pairing|pair|break|run|perk|plus)\b/i.test(headline) ||
+    /\+/.test(headline)
+  );
 }
 
 function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]): void {
@@ -837,7 +885,12 @@ function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCode
 
   if (headline && /[.!?]$/.test(headline)) reasonCodes.push("HEADLINE_TRAILING_PUNCTUATION");
   if (headline && /\bwith\s+(?:a\s+|an\s+|one\s+)?free\b/i.test(headline)) reasonCodes.push("HEADLINE_WITH_FREE_FRAGMENT");
-  if (headline && !/^(?:buy|get|order|save|claim)\b/i.test(headline) && !hasAdLikeHeadlineHook(headline)) {
+  if (
+    headline &&
+    headline.split(/\s+/).filter(Boolean).length < 2 &&
+    !/^(?:buy|get|order|save|claim)\b/i.test(headline) &&
+    !hasAdLikeHeadlineHook(headline)
+  ) {
     reasonCodes.push("HEADLINE_DOES_NOT_START_WITH_ACTION");
   }
   if (containsForbiddenAiPhrase(text)) reasonCodes.push("FORBIDDEN_AI_PHRASE");
@@ -1066,6 +1119,8 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     strategyId?: unknown;
     strategyReason?: unknown;
     headlineAlternative?: unknown;
+    posterKicker?: unknown;
+    posterSubline?: unknown;
     description?: unknown;
     pushTitle?: unknown;
     pushBody?: unknown;
@@ -1078,6 +1133,12 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
   };
   const headlineAlternative =
     typeof raw.headlineAlternative === "string" ? raw.headlineAlternative : copy.headline_alternative;
+  const posterKicker =
+    typeof raw.posterKicker === "string"
+      ? raw.posterKicker
+      : typeof raw.posterSubline === "string"
+      ? raw.posterSubline
+      : copy.poster_kicker;
   const description = typeof raw.description === "string" ? raw.description : copy.short_description;
   const pushTitle = typeof raw.pushTitle === "string" ? raw.pushTitle : copy.push_title;
   const pushBody =
@@ -1103,6 +1164,7 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     short_description: compactText(cleanText(description), DEAL_COPY_LIMITS.description),
     push_notification: compactText(cleanText(pushBody), DEAL_COPY_LIMITS.pushBody),
     ...(isNonEmptyString(headlineAlternative) ? { headline_alternative: compactText(headlineAlternative, DEAL_COPY_LIMITS.headline) } : {}),
+    ...(isNonEmptyString(posterKicker) ? { poster_kicker: compactText(posterKicker, 32) } : {}),
     ...(isNonEmptyString(pushTitle) ? { push_title: compactText(pushTitle, DEAL_COPY_LIMITS.pushTitle) } : {}),
     ...(isNonEmptyString(pushBody) ? { push_body: compactText(pushBody, DEAL_COPY_LIMITS.pushBody) } : {}),
     ...(isNonEmptyString(socialCaption) ? { social_caption: compactText(socialCaption, DEAL_COPY_LIMITS.socialCaption) } : {}),
@@ -1238,7 +1300,7 @@ function lockCopy(
   const deterministic = buildDeterministicDealChannelCopy(contract);
   return {
     ...clean,
-    headline: deterministic.headline,
+    headline: clean.headline || deterministic.headline,
     push_title: clean.push_title || deterministic.pushTitle,
     push_body: clean.push_body || clean.push_notification || deterministic.pushBody,
     push_notification: clean.push_body || clean.push_notification || deterministic.pushBody,

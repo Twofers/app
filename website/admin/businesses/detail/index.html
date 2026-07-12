@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Business Detail | Twofer Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-business-applications-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-applications"
+    data-admin-section="business_detail"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/businesses" aria-current="page">Businesses</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Business detail</p>
+          <h1 data-business-name>Business Profile</h1>
+          <p class="lede" data-business-meta>Sign in to load this business.</p>
+        </div>
+        <div class="admin-actions">
+          <span class="admin-badge" data-admin-status>Checking session</span>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <a class="button button-small button-secondary" data-back-to-command-center href="/admin">Back to Command Center</a>
+        <a class="button button-small button-secondary" href="/admin/businesses">View business directory</a>
+        <a class="button button-small button-secondary" data-view-offers-link href="/admin/offers">View offers</a>
+        <a class="button button-small button-secondary" href="#business-record">Open read-only business record</a>
+      </div>
+
+      <section class="admin-section" aria-label="Verification">
+        <div class="admin-section-header">
+          <div>
+            <h2>Verification</h2>
+            <p>Manually verify or reject this business, independent of the trial request queue.</p>
+          </div>
+        </div>
+        <div class="admin-grid two">
+          <article class="admin-card"><span>Verification status</span><span class="admin-badge" data-verification-status>&mdash;</span></article>
+        </div>
+        <div class="admin-inline-actions">
+          <button type="button" class="button button-small" data-verify-decision="verify">Mark verified</button>
+          <button type="button" class="button button-small button-secondary" data-verify-decision="reject">Reject verification</button>
+        </div>
+        <p class="status" data-verify-status role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="admin-section" aria-label="Business health drilldown">
+        <div class="admin-section-header">
+          <div>
+            <h2>Health Summary</h2>
+            <p>Read-only signal explaining why this business may need attention.</p>
+          </div>
+        </div>
+        <p class="status warning" data-drilldown-warning hidden></p>
+        <div class="admin-grid two">
+          <article class="admin-card"><span>Health</span><span class="admin-badge" data-health-label>&mdash;</span></article>
+          <article class="admin-card"><span>Attention score</span><strong data-health-score>&mdash;</strong></article>
+        </div>
+        <p class="admin-note" data-health-reason>No health summary available.</p>
+        <p class="admin-note" data-health-codes hidden></p>
+        <p class="admin-note" data-health-next-step hidden></p>
+      </section>
+
+      <section class="admin-section" aria-label="Offer activity">
+        <div class="admin-section-header">
+          <div>
+            <h2>Offer Activity</h2>
+            <p>Live and scheduled offers, and when this business last posted one.</p>
+          </div>
+        </div>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Live offers</span><strong data-offer-live-count>0</strong></article>
+          <article class="admin-card"><span>Active or scheduled</span><strong data-offer-active-count>0</strong></article>
+          <article class="admin-card"><span>Days since last offer</span><strong data-offer-days-since>&mdash;</strong></article>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Offer</th><th>Starts</th><th>Ends</th><th>Status</th><th>Claims</th><th>Redemptions</th></tr></thead>
+            <tbody data-offer-rows>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load offers.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Claim and redemption activity">
+        <div class="admin-section-header">
+          <div>
+            <h2>Claims &amp; Redemptions</h2>
+            <p>Claims and redemptions are tracked separately. Redemptions use the canonical admin_redemption_facts_v1 metric.</p>
+          </div>
+        </div>
+        <h3 class="admin-group-title">Claims</h3>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Claims 7d</span><strong data-claims-7d>0</strong></article>
+          <article class="admin-card"><span>Claims 30d</span><strong data-claims-30d>0</strong></article>
+          <article class="admin-card"><span>Unredeemed 30d</span><strong data-claims-unredeemed>0</strong></article>
+        </div>
+        <h3 class="admin-group-title">Redemptions</h3>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Redemptions 7d</span><strong data-redemptions-7d>0</strong></article>
+          <article class="admin-card"><span>Redemptions 30d</span><strong data-redemptions-30d>0</strong></article>
+          <article class="admin-card"><span>Last redeemed</span><span class="admin-badge" data-last-redeemed>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="Trial and access timing">
+        <div class="admin-section-header">
+          <div>
+            <h2>Trial &amp; Access Timing</h2>
+            <p>Current app access is canonical. Trial request fields below are historical context, not live access.</p>
+          </div>
+        </div>
+        <p class="status warning" data-access-mismatch-warning hidden></p>
+        <p class="admin-note" data-trial-empty hidden>No trial timing data found.</p>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Current app access status</span><span class="admin-badge" data-app-access-status>&mdash;</span></article>
+          <article class="admin-card"><span>Trial ends (if currently trialing)</span><span class="admin-badge" data-trial-ends>&mdash;</span></article>
+          <article class="admin-card"><span>Trial days remaining (if currently trialing)</span><span class="admin-badge" data-trial-days-remaining>&mdash;</span></article>
+          <article class="admin-card"><span>Trial request status (history)</span><span class="admin-badge" data-trial-request-status>&mdash;</span></article>
+          <article class="admin-card"><span>Trial request created</span><span class="admin-badge" data-trial-request-created>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" aria-label="AI usage">
+        <div class="admin-section-header">
+          <div>
+            <h2>AI Usage</h2>
+          </div>
+        </div>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>AI generations used this month (busiest scope)</span><strong data-ai-used>0</strong></article>
+          <article class="admin-card"><span>AI generation limit this month (busiest scope)</span><strong data-ai-limit>0</strong></article>
+          <article class="admin-card"><span>AI quota risk</span><span class="admin-badge" data-ai-risk>&mdash;</span></article>
+          <article class="admin-card"><span>AI month cost</span><span class="admin-badge" data-ai-cost>&mdash;</span></article>
+        </div>
+      </section>
+
+      <section class="admin-section" id="business-record">
+        <h2>Applications</h2>
+        <p class="admin-note">Trial requests and field invites linked to this business. These are historical application records and do not change after a decision is made &mdash; they can go stale if access is later canceled or expired. Current app access is shown above under Trial &amp; Access Timing. Decisions are made on the Trial Requests page.</p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Contact</th><th>Email</th><th>Request status</th><th>Requested access</th><th>Approved trial days</th><th>Created</th></tr></thead>
+            <tbody data-applications>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load applications.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="admin-section">
+        <h2>Audit History</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Admin</th><th>Action</th><th>Reason</th><th>Created</th></tr></thead>
+            <tbody data-audit>
+              <tr><td colspan="4" class="admin-row-detail">Sign in to load audit history.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/admin-directory.js?v=20260707-return-link-hardening"></script>
+  </body>
+</html>

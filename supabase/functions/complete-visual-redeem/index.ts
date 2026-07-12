@@ -6,6 +6,7 @@ import {
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const MIN_MS = 14_000;
 const MAX_MS = 120_000;
@@ -31,6 +32,8 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
+    /** Service role — deal_claims writes must not depend on the client RLS grant. See findings/02-deal-claims-self-redeem.md. */
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const {
       data: { user },
@@ -47,7 +50,7 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
-    let body: { claim_id?: string };
+    let body: { claim_id?: string; location_id?: string };
     try {
       body = await req.json();
     } catch {
@@ -64,15 +67,21 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Optional: the client doesn't send this today. If a future client version
+    // does, reject a mismatch the same way redeem-token's WRONG_LOCATION_REDEMPTION
+    // does. See findings/06-visual-redeem-honor-system.md (Option 1).
+    const clientLocationId = typeof body.location_id === "string" ? body.location_id.trim() : "";
 
     const now = new Date();
     const nowIso = now.toISOString();
 
-    await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+    await finalizeStaleVisualRedeemForClaim(supabaseAdmin, claimId, nowIso);
 
     const { data: claim, error: fetchErr } = await supabase
       .from("deal_claims")
-      .select("id, user_id, deal_id, expires_at, redeemed_at, claim_status, redeem_started_at, grace_period_minutes, deal:deals!inner(id,is_demo)")
+      .select(
+        "id, user_id, deal_id, business_id, location_id, expires_at, redeemed_at, claim_status, redeem_started_at, grace_period_minutes, deal:deals!inner(id,is_demo)",
+      )
       .eq("id", claimId)
       .maybeSingle();
 
@@ -88,6 +97,19 @@ serve(async (req) => {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (clientLocationId && claim.location_id && clientLocationId !== claim.location_id) {
+      return new Response(
+        JSON.stringify({
+          error: "This deal can only be redeemed at the location shown in your wallet.",
+          error_code: "WRONG_LOCATION_REDEMPTION",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const deal = claim.deal as { is_demo?: boolean | null } | null;
@@ -114,7 +136,7 @@ serve(async (req) => {
       : 10;
 
     if (isPastRedeemDeadline(now.getTime(), claim.expires_at as string, grace)) {
-      await supabase
+      await supabaseAdmin
         .from("deal_claims")
         .update({ claim_status: "expired", redeem_started_at: null })
         .eq("id", claimId);
@@ -140,7 +162,7 @@ serve(async (req) => {
       });
     }
     if (elapsed > MAX_MS) {
-      await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+      await finalizeStaleVisualRedeemForClaim(supabaseAdmin, claimId, nowIso);
       const { data: again } = await supabase
         .from("deal_claims")
         .select("redeemed_at")
@@ -162,13 +184,14 @@ serve(async (req) => {
       });
     }
 
-    const { data: updated, error: upErr } = await supabase
+    const { data: updated, error: upErr } = await supabaseAdmin
       .from("deal_claims")
       .update({
         redeemed_at: nowIso,
         claim_status: "redeemed",
         redeem_method: "visual",
         redeem_started_at: null,
+        redeemed_at_location_id: claim.location_id ?? null,
       })
       .eq("id", claimId)
       .eq("user_id", user.id)
@@ -200,7 +223,36 @@ serve(async (req) => {
       });
     }
 
-    const { data: dealRow } = await supabase.from("deals").select("title").eq("id", claim.deal_id).maybeSingle();
+    // Audit trail: give visual completions the same append-only record staff/
+    // owner redemptions get, so every redemption method shares one trail.
+    // claim_id is UNIQUE on redemptions, so a retry can't double-insert.
+    if (claim.business_id) {
+      const { error: auditErr } = await supabaseAdmin.from("redemptions").insert({
+        claim_id: claimId,
+        deal_id: claim.deal_id,
+        business_id: claim.business_id,
+        redemption_device_id: null,
+        redeemer_user_id: null,
+        device_label: "Customer visual redeem",
+        redeemed_at: nowIso,
+        redeem_method: "visual",
+        code_type: "visual",
+        location_id: claim.location_id ?? null,
+      });
+      if (auditErr && auditErr.code !== "23505") {
+        console.error("[complete-visual-redeem] redemptions audit insert failed:", auditErr);
+      }
+    }
+
+    // Native wallet pass: flip the customer's Twofer Card to "Redeemed".
+    // Best-effort and flag-gated; a no-op until the customer added the card.
+    await syncWalletPassForUser(supabaseAdmin, user.id);
+
+    const { data: dealRow } = await supabase
+      .from("deals")
+      .select("title, source_locale, title_en, title_es, title_ko")
+      .eq("id", claim.deal_id)
+      .maybeSingle();
 
     return new Response(
       JSON.stringify({
@@ -208,6 +260,10 @@ serve(async (req) => {
         already_redeemed: false,
         redeemed_at: nowIso,
         deal_title: dealRow?.title ?? null,
+        deal_source_locale: dealRow?.source_locale ?? null,
+        deal_title_en: dealRow?.title_en ?? null,
+        deal_title_es: dealRow?.title_es ?? null,
+        deal_title_ko: dealRow?.title_ko ?? null,
         deal_id: claim.deal_id,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

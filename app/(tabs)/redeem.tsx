@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, ScrollView, Text, TextInput, type TextInputProps, useWindowDimensions, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -29,7 +30,7 @@ import {
   type OwnerRedemptionSecurityStatus,
 } from "@/lib/owner-redemption-security";
 import { isRedemptionCodeComplete, normalizeRedemptionCode } from "@/lib/redemption-mode-logic";
-import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealTitle } from "@/lib/deal-localization";
 
 type RedeemMode = "scan" | "manual";
 
@@ -170,7 +171,16 @@ export default function RedeemScanner() {
       const result = await redeemToken(body);
       setSuccess({
         dealTitle: result.deal_title
-          ? getDealDisplayTitle({ title: result.deal_title }, result.deal_title)
+          ? localizedDealTitle(
+              {
+                title: result.deal_title,
+                source_locale: result.deal_source_locale ?? null,
+                title_en: result.deal_title_en ?? null,
+                title_es: result.deal_title_es ?? null,
+                title_ko: result.deal_title_ko ?? null,
+              },
+              i18n.language,
+            ) || result.deal_title
           : t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
         claimId: result.claim_id ?? null,
@@ -376,35 +386,63 @@ export default function RedeemScanner() {
         </View>
       ) : (
         <View style={{ marginTop: Spacing.lg, flex: 1, paddingBottom: scrollBottom, gap: Spacing.md }}>
-          <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-            <Pressable
-              onPress={() => setMode("scan")}
-              disabled={processing}
-              style={{
-                flex: 1,
-                paddingVertical: Spacing.sm,
-                borderRadius: Radii.pill,
-                backgroundColor: mode === "scan" ? theme.primary : theme.surfaceMuted,
-                alignItems: "center",
-                opacity: processing && mode !== "scan" ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.primaryText : theme.text }}>{t("redeem.modeScan")}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMode("manual")}
-              disabled={processing}
-              style={{
-                flex: 1,
-                paddingVertical: Spacing.sm,
-                borderRadius: Radii.pill,
-                backgroundColor: mode === "manual" ? theme.primary : theme.surfaceMuted,
-                alignItems: "center",
-                opacity: processing && mode !== "manual" ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.primaryText : theme.text }}>{t("redeem.modeManual")}</Text>
-            </Pressable>
+          <View
+            style={{
+              flexDirection: "row",
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.sm,
+              overflow: "hidden",
+              backgroundColor: theme.surface,
+            }}
+          >
+            {(["scan", "manual"] as RedeemMode[]).map((nextMode, index) => {
+              const selected = mode === nextMode;
+              const iconName = nextMode === "scan" ? "qr-code-scanner" : "dialpad";
+              const label = nextMode === "scan" ? t("redeem.modeScan") : t("redeem.modeManual");
+              return (
+                <Pressable
+                  key={nextMode}
+                  onPress={() => setMode(nextMode)}
+                  disabled={processing}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    paddingHorizontal: Spacing.sm,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: Spacing.xs,
+                    borderRightWidth: index === 0 ? 1 : 0,
+                    borderRightColor: theme.border,
+                    backgroundColor: selected ? theme.primary : theme.surface,
+                    opacity: processing && !selected ? 0.5 : 1,
+                  }}
+                >
+                  <MaterialIcons
+                    name={iconName}
+                    size={18}
+                    color={selected ? theme.primaryText : theme.icon}
+                  />
+                  <Text
+                    style={{
+                      minWidth: 0,
+                      fontWeight: "800",
+                      color: selected ? theme.primaryText : theme.text,
+                      textAlign: "center",
+                    }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    maxFontSizeMultiplier={1.1}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           {mode === "manual" ? (
@@ -502,13 +540,6 @@ export default function RedeemScanner() {
                 }}
                 disabled={cameraPermissionRequesting}
               />
-              <SecondaryButton
-                title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
-                accessibilityLabel={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
-                testID="redeem-camera-manual-fallback"
-                onPress={() => setMode("manual")}
-                disabled={processing}
-              />
             </View>
           ) : (
             <>
@@ -535,11 +566,6 @@ export default function RedeemScanner() {
                       setScanned(false);
                       setScannerActive(true);
                     }}
-                    disabled={processing}
-                  />
-                  <SecondaryButton
-                    title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
-                    onPress={() => setMode("manual")}
                     disabled={processing}
                   />
                 </View>
@@ -585,10 +611,6 @@ export default function RedeemScanner() {
                   >
                     <Text style={{ textAlign: "center", fontWeight: "700", color: theme.text }}>{t("redeem.scanNext")}</Text>
                   </Pressable>
-                  <SecondaryButton
-                    title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
-                    onPress={() => setMode("manual")}
-                  />
                 </>
               )}
             </>

@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "L9DT756YSN.com.unvmex2.twoforone"
+        ],
+        "components": [
+          {
+            "/": "/s/*"
+          }
+        ]
+      }
+    ]
+  }
+}

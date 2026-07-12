@@ -2,6 +2,16 @@
 
 This document reflects the repository after the launch-hardening pass. Routes and data flows are taken from `app/`, `lib/`, and `supabase/`.
 
+## Current build / runtime flags
+
+- App version: `1.0.0`.
+- Local Android `versionCode`: `31` in `app.json`; production EAS builds use remote app versioning / auto-increment, so the store build number may differ.
+- Production package and bundle id: `com.unvmex2.twoforone`.
+- Share Deal: enabled in production/apk/preview EAS profiles with `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`, read through `lib/runtime-env.ts`.
+- Billing: `PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true`; billing UI exists, while pilot publish enforcement is bypassed.
+- AI Deal Studio dev variant: separate app name/package (`Twofer Dev`, `com.unvmex2.twoforone.dev`) behind `TWOFER_APP_VARIANT=ai-studio-dev` / `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`, with publishing disabled by `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`.
+- Localization: English, U.S. Spanish, and Korean code paths exist; Juan signed off Spanish and June signed off Korean on 2026-07-03. Production deployment, hosted flags, migrations, and store submissions remain hard-gated.
+
 ## App routes / screens
 
 ### Root stack (`app/_layout.tsx`)
@@ -118,7 +128,9 @@ This document reflects the repository after the launch-hardening pass. Routes an
 | `finalize-stale-redeems` | `lib/functions.ts` / wallet load |
 | `delete-user-account` | `lib/functions.ts` / account screen |
 | `ingest-analytics-event` | `lib/app-analytics.ts` |
-| `ai-generate-deal-copy`, `ai-create-deal`, `ai-generate-ad-variants`, `ai-compose-offer` | create / compose flows |
+| `ai-generate-deal-copy`, `ai-generate-ad-variants`, `ai-compose-offer` | create / compose flows |
+
+**Legacy AI endpoint:** `ai-create-deal` is intentionally disabled and should return HTTP 410 with `AI_CREATE_DEAL_LEGACY_DISABLED`; no current app code should call it.
 
 **Migrations** (apply in Supabase): `20260327120000_launch_visual_redeem_analytics.sql`; `20260328140000_merchant_insights_rpc.sql` (`merchant_deal_insights`, `merchant_business_insights`).
 

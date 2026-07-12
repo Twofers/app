@@ -34,6 +34,8 @@ yarn-error.*
 .env
 .env.development.local
 .env*.local
+.env.test
+.env.test.*
 
 # typescript
 *.tsbuildinfo
@@ -75,3 +77,13 @@ penguinfalls-build-plan.md
 twofer-audit-setup.js
 
 testsprite_tests/tmp/
+
+qa-artifacts/
+
+# Local signing/credential helper scripts — never commit
+set-signing-creds.ps1
+*-signing-creds.ps1
+
+# Stray local documents and store assets at the repo root
+/*.pdf
+/ap store/

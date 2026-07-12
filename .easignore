@@ -55,6 +55,8 @@ android/app/.cxx/
 
 # Local QA, release-prep, and agent artifacts
 artifacts/
+qa-artifacts/
+s10-live-publish-qa/
 notification_emulator_*/
 twofer_rc_qa_*/
 share_deal_*
@@ -85,6 +87,13 @@ convert-claude-history.ps1
 /test_*.png
 penguinfalls-build-plan.md
 twofer-audit-setup.js
+
+# Local signing/credential helper scripts — must never upload to build servers
+set-signing-creds.ps1
+*-signing-creds.ps1
+
+# Stray local documents/exports that would otherwise bloat the EAS upload
+*.pdf
 
 # Common local junk
 .DS_Store

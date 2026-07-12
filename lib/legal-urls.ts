@@ -11,6 +11,9 @@ export const TERMS_OF_SERVICE_URL =
 
 export const SUPPORT_URL = process.env.EXPO_PUBLIC_SUPPORT_URL ?? "https://www.twoferapp.com/support";
 
+export const BUSINESS_START_TRIAL_URL =
+  process.env.EXPO_PUBLIC_BUSINESS_START_TRIAL_URL ?? "https://www.twoferapp.com/business/start-trial";
+
 export const DELETE_ACCOUNT_URL =
   process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL ?? "https://www.twoferapp.com/delete-account";
 

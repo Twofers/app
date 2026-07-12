@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Prompts | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-ai-prompts-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-ai-prompts"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts" aria-current="page">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Prompt registry</p>
+          <h1>Admin AI Prompts</h1>
+          <p class="lede">Edit internal prompt versions for admin-only AI workflows. Active versions are loaded server-side by Edge Functions and logged on each AI output.</p>
+        </div>
+        <div class="admin-actions">
+          <button type="button" class="button button-small" data-refresh-prompts>Refresh</button>
+          <button type="button" class="button button-small button-secondary" data-new-prompt>New version</button>
+        </div>
+      </div>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Prompt Versions</h2>
+          <div class="admin-table-wrap">
+            <table class="admin-table" data-mobile-cards>
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Version</th>
+                  <th>Status</th>
+                  <th>Last used</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody data-prompt-body></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="admin-panel">
+          <h2>Edit Version</h2>
+          <form class="admin-form" data-prompt-form novalidate>
+            <label>
+              Feature
+              <select name="feature" data-prompt-feature required>
+                <option value="prospect_enrichment">Prospect enrichment</option>
+                <option value="prospect_scoring">Prospect scoring</option>
+                <option value="demand_proof">Demand proof</option>
+                <option value="sales_script">Sales script</option>
+                <option value="onboarding_review">Onboarding review</option>
+                <option value="claim_link_assistant">Claim-link assistant</option>
+                <option value="trial_conversion_assistant">Trial conversion assistant</option>
+                <option value="operating_report">Operating report</option>
+              </select>
+            </label>
+            <label>
+              Prompt name
+              <input name="prompt_name" type="text" autocomplete="off" required />
+            </label>
+            <label>
+              Prompt version
+              <input name="prompt_version" type="text" autocomplete="off" required />
+            </label>
+            <label>
+              System prompt
+              <textarea name="system_prompt" rows="14" spellcheck="true" required></textarea>
+            </label>
+            <label>
+              Output schema JSON
+              <textarea name="output_schema" rows="8" spellcheck="false" data-1p-ignore data-lpignore="true"></textarea>
+            </label>
+            <label class="admin-checkbox">
+              <input name="is_active" type="checkbox" />
+              Activate this version for its feature
+            </label>
+            <div class="admin-actions">
+              <button type="submit" class="button">Save prompt</button>
+              <button type="button" class="button button-secondary" data-reset-prompt-form>Reset</button>
+            </div>
+          </form>
+          <p class="status" data-prompt-status></p>
+        </article>
+      </section>
+    </main>
+    <script src="/admin/ai-prompts.js?v=20260802-prompt-registry"></script>
+  </body>
+</html>

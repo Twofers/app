@@ -32,6 +32,7 @@ export type OwnerBusinessRow = {
   phone: string | null;
   hours_text: string | null;
   logo_url: string | null;
+  current_profile_version: number | null;
 };
 
 const OWNER_BUSINESS_COLUMNS =

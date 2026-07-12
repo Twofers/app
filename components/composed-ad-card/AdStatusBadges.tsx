@@ -11,22 +11,15 @@ type AdStatusBadgesProps = {
   showTimeRemaining: boolean;
 };
 
-function Badge({ label, tokens, accent }: { label: string; tokens: AdThemeTokens; accent?: boolean }) {
-  return (
-    <View style={[styles.badge, { backgroundColor: accent ? tokens.ctaBackground : tokens.badgeBackground }]}>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.78}
-        maxFontSizeMultiplier={1.15}
-        style={[styles.badgeText, { color: accent ? tokens.ctaText : tokens.badgeText }]}
-      >
-        {label}
-      </Text>
-    </View>
-  );
+function clean(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+/**
+ * A single, readable urgency line for the deal card — replaces the old row of tiny
+ * uppercase chips. Live deals get an accent dot plus status · time left · quantity;
+ * calmer states (claimed / expired) render the same line without the dot.
+ */
 export function AdStatusBadges({
   liveState,
   tokens,
@@ -34,21 +27,46 @@ export function AdStatusBadges({
   showQuantityRemaining,
   showTimeRemaining,
 }: AdStatusBadgesProps) {
-  const labels = [
-    showLiveStatus ? { label: liveState.statusLabel, accent: liveState.status === "live" } : null,
-    showQuantityRemaining && liveState.quantityRemainingLabel
-      ? { label: liveState.quantityRemainingLabel, accent: false }
-      : null,
-    showTimeRemaining && liveState.timeRemainingLabel ? { label: liveState.timeRemainingLabel, accent: false } : null,
-  ].filter((item): item is { label: string; accent: boolean } => Boolean(item?.label));
+  const isLive = liveState.status === "live";
+  const statusLabel = clean(liveState.statusLabel);
+  const timeLabel = clean(liveState.timeRemainingLabel);
+  const quantityLabel = clean(liveState.quantityRemainingLabel);
 
-  if (labels.length === 0) return null;
+  const parts: { key: string; label: string; strong: boolean }[] = [];
+  if (showLiveStatus && statusLabel) {
+    parts.push({ key: "status", label: statusLabel, strong: isLive });
+  }
+  if (showTimeRemaining && timeLabel && timeLabel !== statusLabel) {
+    parts.push({ key: "time", label: timeLabel, strong: true });
+  }
+  if (showQuantityRemaining && quantityLabel) {
+    parts.push({ key: "quantity", label: quantityLabel, strong: true });
+  }
+
+  if (parts.length === 0) return null;
 
   return (
     <View style={styles.root}>
-      {labels.map((item) => (
-        <Badge key={item.label} label={item.label} tokens={tokens} accent={item.accent} />
-      ))}
+      {isLive ? <View style={[styles.dot, { backgroundColor: tokens.ctaBackground }]} /> : null}
+      <Text
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        maxFontSizeMultiplier={1.15}
+        style={[styles.line, { color: tokens.panelText }]}
+      >
+        {parts.map((part, index) => (
+          <Text
+            key={part.key}
+            style={{
+              color: part.strong ? tokens.panelText : tokens.panelMutedText,
+              fontWeight: part.strong ? "800" : "700",
+            }}
+          >
+            {index > 0 ? <Text style={{ color: tokens.panelMutedText, fontWeight: "600" }}>{"   ·   "}</Text> : null}
+            {part.label}
+          </Text>
+        ))}
+      </Text>
     </View>
   );
 }
@@ -56,21 +74,19 @@ export function AdStatusBadges({
 const styles = StyleSheet.create({
   root: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
   },
-  badge: {
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    maxWidth: "100%",
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  badgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "900",
+  line: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
     letterSpacing: 0,
-    textTransform: "uppercase",
   },
 });

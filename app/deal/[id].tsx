@@ -17,6 +17,7 @@ import { ScreenHeader } from "../../components/ui/screen-header";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
+import { useSaveBusinessPrompt } from "../../hooks/use-save-business-prompt";
 import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
@@ -34,7 +35,11 @@ import {
   fetchCustomerDealPosterSpecs,
   type CustomerDealPosterSpec,
 } from "@/lib/customer-deal-poster-specs";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -42,8 +47,11 @@ import {
 } from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
+import { hideBusiness } from "@/lib/hidden-businesses";
 import {
   isAiV4SharedRendererEnabled,
   isAiV5CustomerLocaleResolutionEnabled,
@@ -145,7 +153,7 @@ function sleep(ms: number) {
 export default function DealDetail() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { height: winH } = useWindowDimensions();
+  const { height: winH, width: winW } = useWindowDimensions();
   const { top, horizontal, scrollBottom, insets } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -160,9 +168,12 @@ export default function DealDetail() {
   const [activeClaim, setActiveClaim] = useState<ActiveClaim | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
+  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  // Return path: after a fresh claim, offer to save the business once the QR modal closes.
+  const pendingSaveBusinessPromptRef = useRef(false);
   const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
   /** True only when claimsCount came from the deal_claim_counts RPC (full total, not own-claims-only). */
@@ -182,6 +193,11 @@ export default function DealDetail() {
   const [selectedDealLocale, setSelectedDealLocale] = useState<SupportedLocale | null>(null);
   const deviceDealLocaleRef = useRef(getDeviceDealLocale());
 
+  const { maybePromptSaveBusiness, saveBusinessPromptElement } = useSaveBusinessPrompt({
+    userId,
+    onSaved: () => setIsFavorite(true),
+  });
+
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -190,11 +206,58 @@ export default function DealDetail() {
     }
   }, [router]);
 
+  const { confirm: brandedConfirm, confirmModal } = useBrandedConfirm();
+
+  // Hide ("block") this deal's business for the current user, then leave the screen so the
+  // now-hidden business drops out of view (the feed/map re-filter on focus). Returns whether
+  // the write succeeded so callers can decide whether to navigate or surface an error.
+  const performHideBusiness = useCallback(async (): Promise<boolean> => {
+    if (!deal || !userId) return false;
+    const result = await hideBusiness({ userId, businessId: deal.business_id });
+    return result.ok;
+  }, [deal, userId]);
+
+  const confirmHideBusiness = useCallback(() => {
+    if (!deal || !userId) return;
+    brandedConfirm({
+      title: t("hideBusiness.confirmTitle", { defaultValue: "Hide this business?" }),
+      message: t("hideBusiness.confirmBody", {
+        defaultValue:
+          "You won't see deals from this business in your feed. You can unhide it anytime in Settings.",
+      }),
+      confirmLabel: t("hideBusiness.confirmCta", { defaultValue: "Hide" }),
+      cancelLabel: t("commonUi.cancel", { defaultValue: "Cancel" }),
+      iconName: "visibility-off",
+      onConfirm: () => {
+        void (async () => {
+          if (await performHideBusiness()) {
+            goBack();
+          } else {
+            setBanner(t("hideBusiness.error", { defaultValue: "Couldn't hide this business. Please try again." }));
+          }
+        })();
+      },
+    });
+  }, [deal, userId, brandedConfirm, performHideBusiness, goBack, t]);
+
+  const handleQrHide = useCallback(() => {
+    setQrVisible(false);
+    if (!pendingSaveBusinessPromptRef.current) return;
+    pendingSaveBusinessPromptRef.current = false;
+    if (!deal) return;
+    void maybePromptSaveBusiness({
+      businessId: deal.business_id,
+      businessName: deal.businesses?.name ?? null,
+      context: "claim",
+      alreadyFavorited: isFavorite,
+    });
+  }, [deal, isFavorite, maybePromptSaveBusiness]);
+
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (qrVisible) {
-        setQrVisible(false);
+        handleQrHide();
         return true;
       }
       if (reportVisible) {
@@ -205,7 +268,7 @@ export default function DealDetail() {
       return true;
     });
     return () => sub.remove();
-  }, [goBack, qrVisible, reportVisible]);
+  }, [goBack, handleQrHide, qrVisible, reportVisible]);
 
   useEffect(() => {
     let cancelled = false;
@@ -309,9 +372,33 @@ export default function DealDetail() {
       expires_at: claim.expires_at,
       short_code: claim.short_code ?? null,
     });
-    if (showSuccessToast) setClaimSuccessToastNonce((n) => n + 1);
+    if (showSuccessToast) {
+      setClaimToastVariant("claimed");
+      setClaimSuccessToastNonce((n) => n + 1);
+    }
     setQrVisible(true);
   }
+
+  // While the claim QR is on screen, watch it so a counter scan flips the "View QR" action
+  // off and closes the modal on its own — redemption UPDATEs aren't broadcast via Realtime
+  // in this project (see the hook), so a manual refresh would otherwise be required.
+  useClaimRedeemedWatch({
+    claimId: activeClaim?.id ?? null,
+    enabled: qrVisible && !!activeClaim?.id,
+    onRedeemed: () => {
+      setClaimToastVariant("redeemed");
+      setClaimSuccessToastNonce((n) => n + 1);
+      setTimeout(() => {
+        handleQrHide(); // closes the modal and fires the pending save-business prompt
+        setActiveClaim(null); // a redeemed claim must not reopen via "View QR"
+        if (deal?.id) void loadClaimCount(deal.id);
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      setActiveClaim(null);
+    },
+  });
 
   const loadDeal = useCallback(async () => {
     if (!id) {
@@ -480,6 +567,7 @@ export default function DealDetail() {
           claim_id: out.claim_id,
         });
       }
+      if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
       openClaimQr(out, true);
       void loadClaimCount(deal.id);
     } catch (e: unknown) {
@@ -488,6 +576,7 @@ export default function DealDetail() {
         const existing = await loadActiveClaimForDeal(deal.id, userId, 4);
         if (existing) {
           setBanner(null);
+          if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
           openClaimQr(existing, true);
           void loadClaimCount(deal.id);
           return;
@@ -546,7 +635,10 @@ export default function DealDetail() {
       deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
       locale: resolvedLocale.locale,
       localeResolutionSource: resolvedLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return display.title || t("dealDetail.dealFallback");
@@ -667,7 +759,10 @@ export default function DealDetail() {
       : scheduleBlockReason
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
-  const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
+  const compactWidth = winW < 390;
+  const titleFontSize = compactWidth ? 24 : 28;
+  const titleLineHeight = compactWidth ? 30 : 34;
+  const heroHeight = Math.round(Math.min(compactWidth ? 220 : 280, Math.max(compactWidth ? 144 : 180, winH * 0.24)));
   const resolvedDisplayLocale = customerLocaleResolutionEnabled
     ? resolveDealDisplayLocale({
         customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
@@ -684,7 +779,10 @@ export default function DealDetail() {
     deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
     locale: resolvedDisplayLocale.locale,
     localeResolutionSource: resolvedDisplayLocale.source,
-    useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+    useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+      resolvedDisplayLocale.locale,
+      localizedOfferRendererEnabled,
+    ),
     fallbackLanguage: i18n.language,
   });
   const displayTitle = localizedDisplay.title || t("dealDetail.dealFallback");
@@ -826,6 +924,7 @@ export default function DealDetail() {
           <ComposedAdCard
             imageUri={posterUri}
             posterSpec={customerDealPosterSpec?.posterSpec ?? null}
+            contentLocale={resolvedDisplayLocale.locale}
             offerFacts={composedOfferFacts}
             merchant={composedMerchant}
             copy={composedCopy}
@@ -837,7 +936,10 @@ export default function DealDetail() {
           />
         ) : (
           <>
-            <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+            <Text
+              style={{ fontSize: titleFontSize, fontWeight: "800", lineHeight: titleLineHeight, color: theme.text }}
+              maxFontSizeMultiplier={1.15}
+            >
               {displayTitle}
             </Text>
             {posterUri ? (
@@ -857,7 +959,10 @@ export default function DealDetail() {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+                <MaterialIcons name="local-offer" size={28} color={theme.mutedText} />
+                <Text style={{ color: theme.mutedText, fontSize: 14, fontWeight: "700", marginTop: Spacing.xs }}>
+                  {t("dealDetail.noImage")}
+                </Text>
               </View>
             )}
           </>
@@ -968,19 +1073,34 @@ export default function DealDetail() {
           </Text>
         </View>
 
-        <Pressable
-          onPress={() => setReportVisible(true)}
-          accessibilityRole="button"
+        <View
           style={{
             marginTop: Spacing.xl,
-            paddingVertical: Spacing.md,
+            flexDirection: "row",
+            justifyContent: "center",
             alignItems: "center",
+            gap: Spacing.xl,
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
-            {t("dealDetail.reportBusinessLink", { defaultValue: "Report this business" })}
-          </Text>
-        </Pressable>
+          <Pressable
+            onPress={() => setReportVisible(true)}
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.md }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+              {t("dealDetail.reportOfferLink", { defaultValue: "Report this offer" })}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={confirmHideBusiness}
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.md }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+              {t("dealDetail.hideBusinessLink", { defaultValue: "Hide this business" })}
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       {!composedCustomerRendererEnabled ? (
@@ -1008,8 +1128,8 @@ export default function DealDetail() {
 
       <ReportSheet
         visible={reportVisible}
-        mode="business"
-        subjectLabel={deal.businesses?.name ?? t("dealDetail.localBusiness")}
+        mode="offer"
+        subjectLabel={displayTitle}
         onDismiss={() => setReportVisible(false)}
         onSubmit={async ({ reason, comment }) => {
           const result = await submitBusinessReport({
@@ -1020,7 +1140,31 @@ export default function DealDetail() {
           });
           return { ok: result.ok };
         }}
+        successAction={
+          userId
+            ? {
+                label: t("hideBusiness.alsoHide", { defaultValue: "Also hide this business" }),
+                onPress: () => {
+                  void (async () => {
+                    const ok = await performHideBusiness();
+                    setReportVisible(false);
+                    if (ok) {
+                      goBack();
+                    } else {
+                      setBanner(
+                        t("hideBusiness.error", {
+                          defaultValue: "Couldn't hide this business. Please try again.",
+                        }),
+                      );
+                    }
+                  })();
+                },
+              }
+            : undefined
+        }
       />
+
+      {confirmModal}
 
       <QrModal
         visible={qrVisible}
@@ -1028,13 +1172,16 @@ export default function DealDetail() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
-        onHide={() => setQrVisible(false)}
+        successToastVariant={claimToastVariant}
+        onHide={handleQrHide}
         onRefresh={viewQr}
         refreshing={refreshingQr}
         onShare={shareDealEnabled ? handleShare : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
       />
+
+      {saveBusinessPromptElement}
     </View>
   );
 }

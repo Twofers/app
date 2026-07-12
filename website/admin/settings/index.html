@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings | Twofer Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-section="settings"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings" aria-current="page">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Controlled rollout</p>
+          <h1>Settings</h1>
+          <p class="lede">Launch areas, feature flags, and the admin allowlist. Changes stay server-side and audited.</p>
+        </div>
+        <div class="admin-actions">
+          <span class="admin-badge" data-admin-status>Checking session</span>
+        </div>
+      </div>
+      <section class="admin-section">
+        <h2>Launch Areas</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Area</th><th>City</th><th>Status</th><th>Timezone</th></tr></thead>
+            <tbody data-launch-areas>
+              <tr><td colspan="4" class="admin-row-detail">Sign in to load launch areas.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="admin-section">
+        <h2>Feature Flags</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Flag</th><th>Description</th><th>Enabled</th><th>Updated</th></tr></thead>
+            <tbody data-feature-flags>
+              <tr><td colspan="4" class="admin-row-detail">Sign in to load feature flags.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="admin-section">
+        <h2>Admin Users</h2>
+        <p class="admin-note">Visible to owner and admin roles. Users must exist in Supabase Auth and the <code>admin_users</code> allowlist; changes go through server functions only.</p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Email</th><th>Role</th><th>Active</th><th>MFA</th><th>Last login</th></tr></thead>
+            <tbody data-admin-users>
+              <tr><td colspan="5" class="admin-row-detail">Sign in to load admin users.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/admin-directory.js?v=20260707-return-link-hardening"></script>
+  </body>
+</html>

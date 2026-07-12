@@ -20,12 +20,18 @@ const geminiProviderSource = readFileSync(
 );
 
 describe("ai-generate-ad-variants vision QA source guard", () => {
-  it("keeps Gemini vision QA fallback behind the hosted fallback flag", () => {
+  it("defaults vision QA to Gemini with OpenAI as a guarded fallback", () => {
     expect(source).toMatch(/AI_VISION_FALLBACK_ENABLED/);
-    expect(source).toMatch(/AI_VISION_FALLBACK_PROVIDER/);
-    expect(source).toMatch(/function geminiVisionQaFallbackEnabled/);
+    expect(source).toMatch(/AI_VISION_PRIMARY_PROVIDER/);
+    expect(source).toMatch(/function visionQaPrimaryProvider/);
     expect(source).toMatch(/function makeImageQaConfig/);
-    expect(source).toMatch(/fallbackEnabled,\s*\n\s*fallbackProvider:\s*"gemini"/);
+    // Gemini is the default primary inspector; OpenAI only backstops it.
+    expect(source).toMatch(/configured === "openai" \? "openai" : "gemini"/);
+    expect(source).toMatch(
+      /fallbackProvider(?::\s*"gemini"\s*\|\s*"openai")?\s*=\s*primaryProvider === "gemini" \? "openai" : "gemini"/,
+    );
+    // Vision QA runs on the low reasoning tier to keep thinking-token cost down.
+    expect(source).toMatch(/promptVersion:\s*"AI_IMAGE_QA_V1",\s*\n\s*reasoningLevel:\s*"low"/);
   });
 
   it("routes image QA through the shared structured provider router", () => {
@@ -102,6 +108,33 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     expect(fallbackBlock).toMatch(/qaApprovedStockFallback/);
     expect(fallbackBlock).toMatch(/qa:\s*stockQa/);
     expect(fallbackBlock).not.toMatch(/skippedImageQaTelemetry\("approved_stock"\)/);
+  });
+
+  it("runs source-aware QA before automatically accepting merchant original photos", () => {
+    const helperIndex = source.indexOf("async function qaMerchantOriginalPhoto(");
+    const openAiOnlyIndex = source.indexOf("async function produceImageOpenAiOnly(");
+    const produceImageIndex = source.indexOf("async function produceImage(");
+
+    expect(helperIndex).toBeGreaterThan(-1);
+    expect(openAiOnlyIndex).toBeGreaterThan(helperIndex);
+    expect(produceImageIndex).toBeGreaterThan(openAiOnlyIndex);
+
+    const helperBlock = source.slice(helperIndex, openAiOnlyIndex);
+    expect(helperBlock).toMatch(/sourceAwareQaForImageBytes/);
+    expect(helperBlock).toMatch(/sourceType:\s*"merchant_original"/);
+    expect(helperBlock).toMatch(/merchantOverrideAcknowledged/);
+
+    const openAiOnlyBlock = source.slice(openAiOnlyIndex, produceImageIndex);
+    expect(openAiOnlyBlock).toMatch(/fetchUploadedDealPhotoBytes/);
+    expect(openAiOnlyBlock).toMatch(/qaMerchantOriginalPhoto/);
+    expect(openAiOnlyBlock).toMatch(/imageQaBlocksAutomaticSelection\(originalQa\)/);
+    expect(openAiOnlyBlock).toMatch(/merchant_original_image_qa_blocked/);
+
+    const produceImageBlock = source.slice(produceImageIndex);
+    expect(produceImageBlock).toMatch(/const originalUploadedPhoto = async/);
+    expect(produceImageBlock).toMatch(/qaMerchantOriginalPhoto/);
+    expect(produceImageBlock).toMatch(/originalUploadedPhotoOrFallback/);
+    expect(produceImageBlock).toMatch(/imageQaBlocksAutomaticSelection\(original\.qa\)/);
   });
 
   it("keeps vision QA active even when no required visual items are inferred", () => {

@@ -22,6 +22,7 @@ type BusinessInfo = {
   preferred_locale: string | null;
   phone: string | null;
   hours_text: string | null;
+  current_profile_version: number | null;
 };
 
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled";
@@ -138,6 +139,7 @@ export function useBusiness() {
             preferred_locale: data.preferred_locale ?? null,
             phone: data.phone ?? null,
             hours_text: data.hours_text ?? null,
+            current_profile_version: data.current_profile_version ?? null,
           }
         : null,
     );

@@ -17,10 +17,10 @@ Start each task with a read-only audit of the files and docs that apply to that 
 
 Older handoff, plan, audit, and status documents under `outdated/` are history only. Do not work from them unless Dan explicitly asks for archaeology.
 
-## Current app state as of 2026-06-25
+## Current app state as of 2026-06-29
 
 - Stack: Expo SDK 54, React Native 0.81, React 19, TypeScript, Expo Router, Supabase Postgres/RLS/Storage/Edge Functions.
-- App version is `1.0.0`; Android `versionCode` is currently 25 in `app.json`.
+- App version is `1.0.0`; Android `versionCode` is currently 31 in `app.json`.
 - Production package and bundle id remain `com.unvmex2.twoforone`.
 - A dev AI Studio Android variant exists: app name `Twofer Dev`, package `com.unvmex2.twoforone.dev`, enabled by `TWOFER_APP_VARIANT=ai-studio-dev` or `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`.
 - The current branch may contain active AI Deal Studio foundation work and local QA/store artifacts. Never delete untracked artifacts, screenshots, APKs, reports, or docs without asking.
@@ -95,6 +95,7 @@ If you cannot run a required check, say exactly why.
 
 ## AI and offer rules
 
+- AI poster/ad generation is a core locked feature. Before changing AI poster layout, AI ad prompts, AI ad image generation, offer-to-poster copy, AI create review/publish behavior, or the lock files themselves, stop and get Dan's explicit approval for each file individually. The agent must list the exact file, the intended behavior change, validation impact, and any deploy impact before editing. Broad approval such as "fix AI" is not enough. Follow `docs/ai-poster-core-lock.md` and keep `docs/ai-poster-core-lock.json` current after approved changes.
 - Deal facts are authoritative; creativity must never alter them.
 - Headlines must explain the customer action and reward naturally.
 - Do not solve copy-quality bugs with example-specific string replacements.

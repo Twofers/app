@@ -410,6 +410,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/release-claim/index.ts"
 
+[functions.wallet-pass-issue]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/wallet-pass-issue/index.ts"
+
+[functions.wallet-pass-webservice]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/wallet-pass-webservice/index.ts"
+
 [functions.activate-redemption-mode]
 enabled = true
 verify_jwt = false
@@ -493,6 +503,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/send-trial-ending-reminders/index.ts"
 
+# Cron-triggered; authorizes via x-cron-secret (env CRON_SECRET or Vault), not JWT.
+[functions.expire-billing-access]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/expire-billing-access/index.ts"
+
 [functions.begin-visual-redeem]
 enabled = true
 verify_jwt = false
@@ -518,6 +534,147 @@ entrypoint = "./functions/finalize-stale-redeems/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/deal-link/index.ts"
+
+[functions.submit-business-application]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/submit-business-application/index.ts"
+
+# Public pre-launch email capture from the website; no auth by design, guarded
+# by honeypot + per-IP rate limit inside the function.
+[functions.submit-launch-signup]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/submit-launch-signup/index.ts"
+
+[functions.admin-dashboard-summary]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-dashboard-summary/index.ts"
+
+[functions.admin-auth-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-auth-session/index.ts"
+
+[functions.admin-ai-usage]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-usage/index.ts"
+
+[functions.admin-business-applications]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-business-applications/index.ts"
+
+[functions.public-local-businesses]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/public-local-businesses/index.ts"
+
+[functions.request-business-on-twofer]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/request-business-on-twofer/index.ts"
+
+[functions.admin-prospect-import]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-import/index.ts"
+
+[functions.admin-prospect-enrich]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-enrich/index.ts"
+
+[functions.admin-prospect-score]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-score/index.ts"
+
+[functions.admin-demand-proof]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-demand-proof/index.ts"
+
+[functions.admin-sales-script]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-sales-script/index.ts"
+
+[functions.admin-onboarding-review-ai]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-onboarding-review-ai/index.ts"
+
+[functions.admin-prospect-sales]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-prospect-sales/index.ts"
+
+[functions.admin-claim-link-create]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-claim-link-create/index.ts"
+
+[functions.admin-claim-link-assistant]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-claim-link-assistant/index.ts"
+
+[functions.business-claim-link]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/business-claim-link/index.ts"
+
+# Public: exchanges an emailed, application-scoped checkout token for a Stripe
+# checkout URL by minting a single-use billing token and self-calling
+# stripe-create-checkout-session. No JWT by design; guarded by token + expiry +
+# per-business throttle inside the function.
+[functions.business-checkout-link]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/business-checkout-link/index.ts"
+
+[functions.admin-trial-create-from-prospect]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-trial-create-from-prospect/index.ts"
+
+[functions.admin-trial-conversion-assistant]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-trial-conversion-assistant/index.ts"
+
+[functions.admin-ai-operating-report]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-operating-report/index.ts"
+
+[functions.admin-ai-cost-ledger-reset]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-cost-ledger-reset/index.ts"
+
+[functions.admin-ai-prompts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-prompts/index.ts"
+
+[functions.get-business-onboarding-context]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-business-onboarding-context/index.ts"
+
+[functions.update-business-profile-section]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update-business-profile-section/index.ts"
+
+[functions.accept-business-terms]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/accept-business-terms/index.ts"
 
 [functions.send-deal-push]
 enabled = true
@@ -564,6 +721,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-customer-portal-session/index.ts"
 
+[functions.stripe-ensure-customer]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-ensure-customer/index.ts"
+
+[functions.stripe-backfill-customers]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-backfill-customers/index.ts"
+
 [functions.stripe-expire-pending-checkout]
 enabled = true
 verify_jwt = false
@@ -589,3 +756,8 @@ entrypoint = "./functions/stripe-request-introductory-refund/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-webhook/index.ts"
+
+[functions.import-business-website]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/import-business-website/index.ts"

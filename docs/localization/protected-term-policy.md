@@ -3,8 +3,8 @@
 Current ownership:
 
 - Internal localization owner: Dan / Twofer admin
-- U.S. Spanish reviewer: TBD before production launch
-- Korean reviewer: TBD before production launch
+- U.S. Spanish reviewer: Juan
+- Korean reviewer: June
 
 ## Protected By Default
 

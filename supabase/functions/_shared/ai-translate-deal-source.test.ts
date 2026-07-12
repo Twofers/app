@@ -6,6 +6,10 @@ const source = readFileSync(
   join(process.cwd(), "supabase", "functions", "ai-translate-deal", "index.ts"),
   "utf8",
 );
+const limitSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "deal-translate-limit.ts"),
+  "utf8",
+);
 
 describe("ai-translate-deal source guards", () => {
   it("does not return deterministic translations when provider configuration is unavailable", () => {
@@ -46,6 +50,22 @@ describe("ai-translate-deal source guards", () => {
     expect(source).not.toMatch(/ingredientes de primera/);
     expect(source).not.toMatch(/single-origin/);
     expect(source).not.toMatch(/made fresh/);
+  });
+
+  it("sizes the monthly cap from the account deal-credit allowance, not a flat 30", () => {
+    expect(source).toMatch(/resolveDealTranslateMonthlyLimit\(admin, businessId\)/);
+    expect(source).toMatch(/if \(used >= TRANSLATE_MONTHLY_LIMIT\)/);
+    expect(source).not.toMatch(/Deno\.env\.get\("AI_TRANSLATE_MONTHLY_LIMIT"\) \?\? "30"/);
+
+    expect(limitSource).toMatch(/DEAL_TRANSLATE_LIMIT_MULTIPLIER = 4/);
+    expect(limitSource).toMatch(/DEFAULT_DEAL_CREDIT_ALLOWANCE = 30/);
+    // Env var stays an absolute operational override when set.
+    expect(limitSource).toMatch(/AI_TRANSLATE_MONTHLY_LIMIT/);
+    // Allowance comes from active deal credit periods with a runtime-config fallback.
+    expect(limitSource).toMatch(/deal_credit_periods/);
+    expect(limitSource).toMatch(/eq\("status", "active"\)/);
+    expect(limitSource).toMatch(/get_runtime_billing_config/);
+    expect(limitSource).toMatch(/trial_deal_credit_allowance/);
   });
 
   it("does not return raw provider error details to the client", () => {

@@ -58,6 +58,14 @@ function StepBadge({ step }: { step: Step }) {
 
 type AiSuggestion = { title: string; hint: string } | null;
 
+function categoryStarterKey(category: string | null | undefined): "cafe" | "restaurant" | "retail" | "default" {
+  const key = category?.trim().toLowerCase() ?? "";
+  if (/\b(cafe|coffee|bakery|tea)\b/.test(key)) return "cafe";
+  if (/\b(restaurant|food|pizza|taco|sandwich|bar|grill)\b/.test(key)) return "restaurant";
+  if (/\b(retail|shop|store|boutique)\b/.test(key)) return "retail";
+  return "default";
+}
+
 export function WelcomeWalkthrough({
   visible,
   onDismiss,
@@ -159,6 +167,12 @@ export function WelcomeWalkthrough({
   if (!visible) return null;
 
   const Entering = direction === "forward" ? FadeInRight : FadeInLeft;
+  const fallbackStarterKey = categoryStarterKey(businessCategory);
+  const fallbackSuggestion = {
+    title: t(`walkthrough.starterDeal.${fallbackStarterKey}.title`),
+    hint: t(`walkthrough.starterDeal.${fallbackStarterKey}.hint`),
+  };
+  const displayedSuggestion = aiSuggestion ?? (!aiLoading && stepIdx === 2 ? fallbackSuggestion : null);
 
   return (
       <View
@@ -221,7 +235,7 @@ export function WelcomeWalkthrough({
             </Text>
 
             {/* AI suggestion on final step */}
-            {stepIdx === 2 && aiSuggestion ? (
+            {stepIdx === 2 && displayedSuggestion ? (
               <View
                 style={{
                   marginTop: Spacing.lg,
@@ -251,7 +265,7 @@ export function WelcomeWalkthrough({
                     color: theme.text,
                   }}
                 >
-                  {aiSuggestion.title}
+                  {displayedSuggestion.title}
                 </Text>
               </View>
             ) : null}
@@ -331,11 +345,25 @@ export function WelcomeWalkthrough({
             <View style={{ gap: Spacing.sm }}>
               <PrimaryButton
                 title={
-                  aiSuggestion
+                  displayedSuggestion
                     ? t("walkthrough.useAiDeal")
                     : t("walkthrough.createFirstDeal")
                 }
-                onPress={handleCreateDeal}
+                onPress={() => {
+                  if (!aiSuggestion && displayedSuggestion) {
+                    onDismiss();
+                    router.push({
+                      pathname: "/create/ai",
+                      params: {
+                        prefillTitle: displayedSuggestion.title,
+                        prefillHint: displayedSuggestion.hint,
+                        fromCreateHub: "1",
+                      },
+                    });
+                    return;
+                  }
+                  handleCreateDeal();
+                }}
               />
               <SecondaryButton
                 title={t("walkthrough.exploreDashboard")}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Modal, Text, View } from "react-native";
+import { Image, Modal, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
@@ -7,6 +7,7 @@ import { formatAppDateTime } from "../lib/i18n/format-datetime";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { Colors, Controls, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { AddToWalletButton } from "@/components/add-to-wallet-button";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -18,6 +19,8 @@ type QrModalProps = {
   shortCode?: string | null;
   graceMinutes?: number;
   successToastNonce?: number;
+  /** Which success toast to show when `successToastNonce` changes. Defaults to "claimed". */
+  successToastVariant?: "claimed" | "redeemed";
   onHide: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -71,6 +74,7 @@ export function QrModal({
   shortCode = null,
   graceMinutes = DEFAULT_CLAIM_GRACE_MINUTES,
   successToastNonce = 0,
+  successToastVariant = "claimed",
   onHide,
   onRefresh,
   refreshing,
@@ -80,8 +84,12 @@ export function QrModal({
 }: QrModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const compactModal = height < 760;
+  const qrSize = compactModal ? 180 : 210;
+  const qrBoxSize = qrSize + 24;
   const [remaining, setRemaining] = useState<string | null>(null);
   const tick = false;
   const [toastVisible, setToastVisible] = useState(false);
@@ -203,9 +211,9 @@ export function QrModal({
         style={{
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.6)",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 16,
+          paddingHorizontal: 16,
+          paddingTop: Math.max(24, insets.top + 12),
+          paddingBottom: Math.max(24, insets.bottom + 16),
         }}
       >
         {toastVisible ? (
@@ -257,10 +265,12 @@ export function QrModal({
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.15}>
-                    {t("dealStatus.claimed")}
+                    {successToastVariant === "redeemed" ? t("dealStatus.redeemed") : t("dealStatus.claimed")}
                   </Text>
                   <Text style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-                    {t("consumerWallet.qrModalTitle")}
+                    {successToastVariant === "redeemed"
+                      ? t("consumerWallet.redeemedConfirmSub")
+                      : t("consumerWallet.qrModalTitle")}
                   </Text>
                 </View>
                 <View
@@ -293,12 +303,18 @@ export function QrModal({
           </Animated.View>
         ) : null}
 
+        <ScrollView
+          style={{ width: "100%" }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         <View
           style={{
             backgroundColor: "#fff",
             borderRadius: Radii.lg,
-            padding: 16,
-            paddingBottom: Math.max(16, insets.bottom + 8),
+            padding: compactModal ? 14 : 16,
+            paddingBottom: 16,
             width: "100%",
             maxWidth: 400,
           }}
@@ -339,13 +355,13 @@ export function QrModal({
                   backgroundColor: "#fff",
                 }}
               >
-                <QRCode value={token} size={210} />
+                <QRCode value={token} size={qrSize} />
               </View>
             ) : token ? (
               <View
                 style={{
-                  width: 220,
-                  height: 220,
+                  width: qrBoxSize,
+                  height: qrBoxSize,
                   backgroundColor: Gray[100],
                   borderRadius: Radii.md,
                   alignItems: "center",
@@ -400,6 +416,8 @@ export function QrModal({
               {codeDisplay}
             </Text>
           </View>
+
+          <AddToWalletButton style={{ marginTop: 12 }} />
 
           <View style={{ marginTop: 14 }}>
             <HapticScalePressable
@@ -467,6 +485,7 @@ export function QrModal({
             ) : null}
           </View>
         </View>
+        </ScrollView>
       </View>
     </Modal>
   );

@@ -16,7 +16,7 @@ describe("classifyGenerationFailure", () => {
     expect(canUseFallbackTemplateForOutcome(kind)).toBe(false);
   });
 
-  it("blocks fallback for quota and cooldown errors", () => {
+  it("blocks fallback for the monthly quota cap", () => {
     expect(
       classifyGenerationFailure({
         raw: "Monthly AI limit reached.",
@@ -24,13 +24,17 @@ describe("classifyGenerationFailure", () => {
         hasFallbackSource: true,
       }),
     ).toBe("quota_or_cooldown_blocked");
-    expect(
-      classifyGenerationFailure({
-        raw: "Please wait 12s.",
-        code: "COOLDOWN_ACTIVE",
-        hasFallbackSource: true,
-      }),
-    ).toBe("quota_or_cooldown_blocked");
+  });
+
+  it("classifies a short cooldown separately from the monthly cap", () => {
+    const kind = classifyGenerationFailure({
+      raw: "Please wait 12s.",
+      code: "COOLDOWN_ACTIVE",
+      hasFallbackSource: true,
+    });
+
+    expect(kind).toBe("cooldown_blocked");
+    expect(canUseFallbackTemplateForOutcome(kind)).toBe(false);
   });
 
   it("allows fallback only for AI failures with a source image", () => {

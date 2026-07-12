@@ -1,8 +1,14 @@
 import { normalizeGeneratedAdDisplayCopy, type GeneratedAd, type PhotoTreatment } from "./ad-variants";
 import { createDefaultDealEligibilityFormState, type DealEligibilityFormState } from "./deal-eligibility-form";
 import { getDealDisplayTitle } from "./deal-display-copy";
+import {
+  createDefaultOneTimeDealSchedule,
+  createOneTimeDealScheduleFromStart,
+} from "./deal-schedule-defaults";
 
 export const AI_DEAL_DRAFT_VERSION = 1;
+
+export type AiDealDraftCreativeFormat = "standard_card" | "poster_v1";
 
 export type AiDealRecoveryDraft = {
   version: typeof AI_DEAL_DRAFT_VERSION;
@@ -14,6 +20,8 @@ export type AiDealRecoveryDraft = {
   customImageEditInstruction: string;
   usePhotoAsFinal: boolean;
   merchantOriginalWarningAcknowledged: boolean;
+  creativeFormat: AiDealDraftCreativeFormat;
+  previewFormat: AiDealDraftCreativeFormat;
   hintText: string;
   price: string;
   title: string;
@@ -36,10 +44,15 @@ export type AiDealRecoveryDraft = {
   manualDraftUnlocked: boolean;
 };
 
-type DraftCandidate = Omit<AiDealRecoveryDraft, "version" | "businessId" | "updatedAt" | "startTime" | "endTime"> & {
+type DraftCandidate = Omit<
+  AiDealRecoveryDraft,
+  "version" | "businessId" | "updatedAt" | "startTime" | "endTime" | "creativeFormat" | "previewFormat"
+> & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
   endTime: Date | string | number;
+  creativeFormat?: AiDealDraftCreativeFormat | null;
+  previewFormat?: AiDealDraftCreativeFormat | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -81,9 +94,18 @@ function cleanPhotoTreatment(value: unknown): PhotoTreatment {
   return VALID_PHOTO_TREATMENTS.includes(value as PhotoTreatment) ? (value as PhotoTreatment) : "studiopolish";
 }
 
-function cleanIsoDate(value: unknown, fallback: Date): string {
+function cleanCreativeFormat(value: unknown): AiDealDraftCreativeFormat {
+  if (value === "standard_card" || value === "poster_v1") return value;
+  return "poster_v1";
+}
+
+function cleanDate(value: unknown, fallback: Date): Date {
   const date = typeof value === "string" || typeof value === "number" ? new Date(value) : value instanceof Date ? value : fallback;
-  return Number.isFinite(date.getTime()) ? date.toISOString() : fallback.toISOString();
+  return Number.isFinite(date.getTime()) ? date : fallback;
+}
+
+function cleanIsoDate(value: unknown, fallback: Date): string {
+  return cleanDate(value, fallback).toISOString();
 }
 
 function cleanMinute(value: unknown, fallback: number): number {
@@ -112,8 +134,13 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
 export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryDraft | null {
   const businessId = cleanString(input.businessId).trim();
   if (!businessId) return null;
+  const generatedAd = cleanGeneratedAd(input.generatedAd);
+  const creativeFormat = cleanCreativeFormat(input.creativeFormat);
+  const previewFormat = cleanCreativeFormat(input.previewFormat);
   const now = new Date();
-  const fallbackEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const defaultSchedule = createDefaultOneTimeDealSchedule(now);
+  const startTime = cleanDate(input.startTime, defaultSchedule.startTime);
+  const endTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
   const draft: AiDealRecoveryDraft = {
     version: AI_DEAL_DRAFT_VERSION,
     businessId,
@@ -127,6 +154,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
       .slice(0, 400),
     usePhotoAsFinal: input.usePhotoAsFinal === true,
     merchantOriginalWarningAcknowledged: input.merchantOriginalWarningAcknowledged === true,
+    creativeFormat,
+    previewFormat,
     hintText: cleanString(input.hintText),
     price: cleanString(input.price),
     title: cleanDisplayTitle(input.title),
@@ -137,14 +166,14 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     maxClaims: cleanString(input.maxClaims) || "50",
     cutoffMins: cleanString(input.cutoffMins) || "15",
     validityMode: input.validityMode === "recurring" ? "recurring" : "one-time",
-    startTime: cleanIsoDate(input.startTime, now),
-    endTime: cleanIsoDate(input.endTime, fallbackEnd),
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
     daysOfWeek: cleanDays(input.daysOfWeek),
     windowStartMinutes: cleanMinute(input.windowStartMinutes, 540),
     windowEndMinutes: cleanMinute(input.windowEndMinutes, 1020),
     timezone: cleanString(input.timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
     publishLocationIds: cleanStringArray(input.publishLocationIds),
-    generatedAd: cleanGeneratedAd(input.generatedAd),
+    generatedAd,
     adAccepted: input.adAccepted === true,
     manualDraftUnlocked: input.manualDraftUnlocked === true,
   };
@@ -157,6 +186,7 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
     const parsed = JSON.parse(raw) as Partial<AiDealRecoveryDraft>;
     if (parsed.version !== AI_DEAL_DRAFT_VERSION) return null;
     if (parsed.businessId !== businessId) return null;
+    const defaultSchedule = createDefaultOneTimeDealSchedule();
     const draft = buildAiDealRecoveryDraft({
       businessId: parsed.businessId,
       photoPath: parsed.photoPath ?? null,
@@ -165,6 +195,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       customImageEditInstruction: parsed.customImageEditInstruction ?? "",
       usePhotoAsFinal: parsed.usePhotoAsFinal === true,
       merchantOriginalWarningAcknowledged: parsed.merchantOriginalWarningAcknowledged === true,
+      creativeFormat: parsed.creativeFormat,
+      previewFormat: parsed.previewFormat,
       hintText: parsed.hintText ?? "",
       price: parsed.price ?? "",
       title: parsed.title ?? "",
@@ -175,8 +207,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       maxClaims: parsed.maxClaims ?? "50",
       cutoffMins: parsed.cutoffMins ?? "15",
       validityMode: parsed.validityMode === "recurring" ? "recurring" : "one-time",
-      startTime: parsed.startTime ?? new Date().toISOString(),
-      endTime: parsed.endTime ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      startTime: parsed.startTime ?? defaultSchedule.startTime,
+      endTime: parsed.endTime ?? defaultSchedule.endTime,
       daysOfWeek: parsed.daysOfWeek ?? [1, 2, 3, 4, 5],
       windowStartMinutes: parsed.windowStartMinutes ?? 540,
       windowEndMinutes: parsed.windowEndMinutes ?? 1020,

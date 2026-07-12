@@ -7,37 +7,92 @@ function readFunction(name: string): string {
 }
 
 describe("billing edge function safety", () => {
-  it("gates checkout creation on the server-owned in-app purchase surface", () => {
+  it("creates checkout sessions only through web/admin business billing", () => {
     const source = readFunction("stripe-create-checkout-session");
     expect(source).toMatch(/loadRuntimeBillingConfig/);
-    expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
-    expect(source).toMatch(/user_owns_business_location/);
+    expect(source).toMatch(/config\.purchaseSurface !== "web_only"/);
+    expect(source).toMatch(/business_id/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/business_members/);
+    expect(source).toMatch(/admin_users/);
+    expect(source).toMatch(/billing_tokens/);
+    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/stripe_checkout_sessions/);
+    expect(source).toMatch(/billing_events/);
+    expect(source).toMatch(/\/business\/billing\/success\//);
+    expect(source).toMatch(/\/business\/billing\/cancel\//);
     expect(source).toMatch(/STRIPE_TWOFER_BUSINESS_PRICE_ID/);
-    expect(source).toMatch(/trial_acknowledged/);
-    expect(source).toMatch(/trial_checkout_intents/);
-    expect(source).toMatch(/check_business_location_trial_reuse/);
-    expect(source).toMatch(/TRIAL_LOCATION_ALREADY_USED/);
-    expect(source).toMatch(/TRIAL_LOCATION_REVIEW_REQUIRED/);
-    expect(source).toMatch(/trial_period_days: TRIAL_DAYS/);
-    expect(source).toMatch(/payment_method_collection: "always"/);
-    expect(source).toMatch(/entitlementError/);
-    expect(source).toMatch(/trialHistoryError/);
-    expect(source).toMatch(/customerUpdateError/);
-    expect(source).toMatch(/intentUpdateError/);
-    expect(source).toMatch(/pendingEntitlementError/);
-    expect(source).not.toMatch(/payment_method_collection: "if_required"/);
+    expect(source).toMatch(/mode: "subscription"/);
+    // No-card trial toggle (Dan, 2026-07-06): card is required unless the
+    // global require_card_for_trial switch is off or a valid exemption code
+    // was used -- see the dedicated describe block below for the full check.
+    expect(source).toMatch(/payment_method_collection: skipCardCollection \? "if_required" : "always"/);
+    expect(source).not.toMatch(/user_owns_business_location/);
+    expect(source).not.toMatch(/trial_acknowledged/);
+    expect(source).not.toMatch(/trial_checkout_intents/);
+    expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
     expect(source).not.toMatch(/subscription_tier/);
   });
 
-  it("gates portal creation on location ownership and purchase surface", () => {
+  it("exchanges an emailed checkout token by reusing the audited checkout function", () => {
+    const source = readFunction("business-checkout-link");
+    // Resolve the application from the hashed, emailed token.
+    expect(source).toMatch(/from\("business_applications"\)/);
+    expect(source).toMatch(/\.eq\("checkout_token_hash", tokenHash\)/);
+    // If the owner hasn't materialized a business yet, prompt signup WITHOUT
+    // minting a token or touching Stripe.
+    expect(source).toMatch(/reason: "signup_required"/);
+    const signupAt = source.indexOf('reason: "signup_required"');
+    const mintAt = source.indexOf('from("billing_tokens").insert');
+    expect(signupAt).toBeGreaterThan(-1);
+    expect(mintAt).toBeGreaterThan(-1);
+    expect(signupAt).toBeLessThan(mintAt);
+    // Reuse the audited checkout function through a single-use billing token,
+    // preserving all of its guards, rather than duplicating checkout logic.
+    expect(source).toMatch(/action: "subscription_checkout"/);
+    expect(source).toMatch(/functions\/v1\/stripe-create-checkout-session/);
+    expect(source).toMatch(/source: "email"/);
+    expect(source).toMatch(/billing_token: rawBillingToken/);
+    // Per-business abuse throttle before any Stripe session is created.
+    expect(source).toMatch(/const THROTTLE_MAX_PER_BUSINESS\s*=\s*\d+/);
+    expect(source).toMatch(/\},\s*429\)/);
+    // Public endpoint: generic errors, never expose upstream secrets.
+    expect(source).toMatch(/This link isn't available/);
+    expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
+  });
+
+  it("registers the public checkout-link exchange function", () => {
+    const config = readFileSync(join(process.cwd(), "supabase", "config.toml"), "utf8");
+    expect(config).toMatch(
+      /\[functions\.business-checkout-link\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/business-checkout-link\/index\.ts"/,
+    );
+  });
+
+  it("creates portal sessions only for business billing customers", () => {
     const source = readFunction("stripe-customer-portal-session");
     expect(source).toMatch(/loadRuntimeBillingConfig/);
-    expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
-    expect(source).toMatch(/user_owns_business_location/);
-    expect(source).toMatch(/location_id/);
+    expect(source).toMatch(/business_id/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/business_members/);
+    expect(source).toMatch(/admin_users/);
+    expect(source).toMatch(/billing_tokens/);
+    expect(source).toMatch(/customer_portal/);
+    expect(source).toMatch(/stripe_portal_sessions/);
+    expect(source).toMatch(/billing_events/);
+    expect(source).toMatch(/\/business\/billing\/manage\//);
     expect(source).toMatch(/STRIPE_SECRET_KEY/);
     expect(source).toMatch(/stripeSecretKey\.startsWith\("sk_live_"\)/);
     expect(source).toMatch(/config\.billingEnvironment !== "production"/);
+    expect(source).not.toMatch(/user_owns_business_location/);
+    expect(source).not.toMatch(/location_id/);
+  });
+
+  it("keeps checkout redirect handling on website pages only", () => {
+    const source = readFunction("billing-checkout-redirect");
+    expect(source).toMatch(/\/business\/billing\/success\//);
+    expect(source).toMatch(/\/business\/billing\/cancel\//);
+    expect(source).not.toMatch(/twoforone:\/\//);
+    expect(source).not.toMatch(/exp\+/);
   });
 
   it("expires canceled pending checkout sessions without starting trials", () => {
@@ -69,6 +124,19 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/if \(existingPeriod\?\.id\) return/);
     expect(source).toMatch(/event\.type === "customer\.subscription\.updated"/);
     expect(source).not.toMatch(/event\.type === "invoice\.payment_succeeded"\) \{\s*await grantPaidPeriod/);
+  });
+
+  it("syncs business subscriptions from verified Stripe webhooks without intercepting refunds", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/syncBusinessSubscriptionFromStripe/);
+    expect(source).toMatch(/businessIdForStripeCustomer/);
+    expect(source).toMatch(/business_subscriptions/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/stripe_checkout_sessions/);
+    expect(source).toMatch(/billing_reminders/);
+    expect(source).toMatch(/event\.type === "invoice\.payment_failed"/);
+    expect(source).toMatch(/appAccessStatus: "past_due_grace"/);
+    expect(source).toMatch(/businessId && !isRefundWebhookEvent\(event\.type\)/);
   });
 
   it("retries failed Stripe provider events without replaying processed duplicates", () => {
@@ -114,6 +182,59 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/introductory_refund/);
     expect(source).toMatch(/introductory_refund_used_at/);
     expect(source).toMatch(/const metadataLocationId = safeGetString\(mergedMetadata\.business_location_id\)/);
+  });
+
+  it("suspends access on chargebacks and never auto-restores on a won dispute", () => {
+    const source = readFunction("stripe-webhook");
+    // Finding 03: charge.dispute.created must be recognized and routed to an
+    // immediate forced suspension, with the customer id resolved from the
+    // Dispute's charge/payment_intent (Disputes have no .customer field).
+    expect(source).toMatch(/async function stripeCustomerIdForDispute/);
+    expect(source).toMatch(/event\.type === "charge\.dispute\.created"\s*\n\s*\? await stripeCustomerIdForDispute\(stripe, obj\)/);
+    expect(source).toMatch(/forceChargebackSuspend\?:\s*boolean/);
+    expect(source).toMatch(
+      /const access = params\.forceChargebackSuspend\s*\n\s*\? \{ billingStatus: "chargeback", appAccessStatus: "suspended" \}/,
+    );
+    expect(source).toMatch(/event\.type === "charge\.dispute\.created"\) \{/);
+    expect(source).toMatch(/forceChargebackSuspend: true/);
+    // Dan confirmed 2026-07-06: no restore-on-won branch. charge.dispute.closed
+    // must never be a handled dispatch condition that grants access back.
+    expect(source).not.toMatch(/event\.type === "charge\.dispute\.closed"/);
+  });
+
+  it("asserts the expected Stripe price and fails closed on an unknown status (Finding 07)", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(
+      /if \(subscription && \(access\.appAccessStatus === "active" \|\| access\.appAccessStatus === "trialing"\)\) \{/,
+    );
+    expect(source).toMatch(/assertExpectedPrice\(priceConfig, subscription\)/);
+    // The permissive `cancelAtPeriodEnd ? active : pending` fallback must be
+    // gone -- any unrecognized status now always returns pending.
+    expect(source).not.toMatch(/cancelAtPeriodEnd\s*\?\s*\{\s*billingStatus:\s*"active"/);
+  });
+
+  it("marks the location's trial as used once a trialing subscription is confirmed (Finding 05 bookkeeping)", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/if \(access\.appAccessStatus === "trialing"\) \{/);
+    expect(source).toMatch(/ensurePrimaryBusinessLocationId\(supabase, businessId\)/);
+    expect(source).toMatch(/from\("business_location_identity"\)\.upsert\(/);
+  });
+
+  it("gates the no-card trial on the global switch + reuse guard, then a code as a last-resort override", () => {
+    const source = readFunction("stripe-create-checkout-session");
+    expect(source).toMatch(/async function consumeTrialNoCardExemptionCode/);
+    expect(source).toMatch(/consume_trial_no_card_exemption_code/);
+    expect(source).toMatch(/async function isBusinessLocationTrialAlreadyUsed/);
+    expect(source).toMatch(/check_business_location_trial_reuse/);
+    // The automatic no-card grant is gated on the switch AND the per-location
+    // reuse guard...
+    expect(source).toMatch(/if \(!config\.requireCardForTrial\) \{/);
+    expect(source).toMatch(/skipCardCollection = !\(locationId && \(await isBusinessLocationTrialAlreadyUsed\(/);
+    // ...and the code is only consumed when the card would otherwise be
+    // required, so a limited-use code is never burned needlessly.
+    expect(source).toMatch(/if \(!skipCardCollection\) \{\s*\n\s*skipCardCollection = await consumeTrialNoCardExemptionCode\(/);
+    expect(source).toMatch(/trial_period_days: config\.noCardTrialDays/);
+    expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
   });
 
   it("disables the old simulate subscribe helper", () => {

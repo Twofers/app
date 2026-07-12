@@ -33,7 +33,7 @@ describe("AI ads photo picker source", () => {
   });
 
   it("makes the no-photo description path visible on the screen", () => {
-    expect(createAiSource).toContain("createAi.photoSkipHint");
+    expect(createAiSource).not.toContain("createAi.photoSkipHint");
     expect(createAiSource).toContain("createAi.skipPhoto");
     expect(createAiSource).toContain("skipPhotoToDescription");
     expect(createAiSource).toContain("hintInputRef");

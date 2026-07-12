@@ -16,6 +16,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Gray } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealTitle } from "@/lib/deal-localization";
 
 type TemplateRow = {
   id: string;
@@ -30,9 +31,13 @@ type DealRow = {
   title: string | null;
   description: string | null;
   source_locale: string | null;
+  title_en?: string | null;
+  title_es?: string | null;
+  title_ko?: string | null;
   price: number | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
+  start_time: string;
   end_time: string;
   is_recurring: boolean | null;
   days_of_week: number[] | null;
@@ -52,7 +57,7 @@ type DealRow = {
 };
 
 const REUSE_DEALS_BASE_SELECT =
-  "id,title,description,source_locale,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,title_en,title_es,title_ko,price,poster_url,poster_storage_path,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
 const REUSE_DEALS_ENRICHED_SELECT =
   `${REUSE_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
 const OPTIONAL_REUSE_DEAL_COLUMNS = [
@@ -93,7 +98,7 @@ async function fetchReusableDeals(businessId: string) {
 
 export default function ReuseDealScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -176,7 +181,7 @@ export default function ReuseDealScreen() {
   function repeatDeal(row: DealRow) {
     router.push({
       pathname: "/create/ai",
-      params: buildReuseDealPrefillParams(row),
+      params: buildReuseDealPrefillParams(row, { resetSchedule: true }),
     } as Href);
   }
 
@@ -185,7 +190,7 @@ export default function ReuseDealScreen() {
   }
 
   function dealTitle(row: DealRow): string {
-    return getDealDisplayTitle(row, row.title) || t("reuseHub.untitled");
+    return localizedDealTitle(row, i18n.language) || t("reuseHub.untitled");
   }
 
   return (

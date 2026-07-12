@@ -69,25 +69,26 @@ const checks = [
     pattern: /LOCALIZATION_NATIVE_REVIEW_LOG_PATH\s*=\s*"docs\/localization\/native-review-log\.md"/,
   },
   {
-    name: "Spanish reviewer remains explicitly TBD before production",
+    name: "Spanish reviewer signoff is recorded",
     file: "lib/localization-rollout-gate.ts",
-    pattern: /"es-US"[\s\S]+reviewerName:\s*"TBD"[\s\S]+nativeReviewStatus:\s*"native_reviewer_tbd"[\s\S]+nativeScreenshotQaStatus:\s*"pending"/,
+    pattern: /"es-US"[\s\S]+reviewerName:\s*"Juan"[\s\S]+nativeReviewStatus:\s*"native_reviewer_signed_off"[\s\S]+nativeScreenshotQaStatus:\s*"passed"/,
   },
   {
-    name: "Korean reviewer and counters remain explicitly pending before production",
+    name: "Korean reviewer and counters signoff is recorded",
     file: "lib/localization-rollout-gate.ts",
     patterns: [
-      /"ko-KR"[\s\S]+reviewerName:\s*"TBD"[\s\S]+nativeReviewStatus:\s*"native_reviewer_tbd"[\s\S]+nativeScreenshotQaStatus:\s*"pending"/,
-      /KOREAN_COUNTER_NATIVE_REVIEW_PENDING/,
+      /"ko-KR"[\s\S]+reviewerName:\s*"June"[\s\S]+nativeReviewStatus:\s*"native_reviewer_signed_off"[\s\S]+nativeScreenshotQaStatus:\s*"passed"/,
+      /korean-counter-registry-v1-native-reviewed/,
     ],
   },
   {
-    name: "native review log blocks broad Spanish and Korean production",
+    name: "native review log records Spanish and Korean signoff",
     file: "docs/localization/native-review-log.md",
     patterns: [
-      /Broad Spanish production use is blocked until a named U\.S\. Spanish reviewer signs off\./,
-      /Broad Korean production use is blocked until a named Korean reviewer signs off\./,
-      /localization-rollout-gate-v1/,
+      /U\.S\. Spanish reviewer: Juan/,
+      /Korean reviewer: June/,
+      /Juan[\s\S]+es-US[\s\S]+Approved[\s\S]+No issues found[\s\S]+Yes/,
+      /June[\s\S]+ko-KR[\s\S]+Approved[\s\S]+No issues found[\s\S]+Yes/,
     ],
   },
   {
@@ -96,7 +97,7 @@ const checks = [
     patterns: [
       /npm run gate:localization-rollout/,
       /LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true/,
-      /U\.S\. Spanish and Korean broad production rollout remains blocked/,
+      /U\.S\. Spanish and Korean localization reviewer sign-off is recorded/,
     ],
   },
   {
@@ -179,8 +180,8 @@ const checks = [
     patterns: [
       /npm run dashboard:localization-rollout/,
       /source\/readiness dashboard/,
-      /U\.S\. Spanish remains blocked/,
-      /Korean remains blocked/,
+      /U\.S\. Spanish is allowed through the localization-specific gate/,
+      /Korean is allowed through the localization-specific gate/,
     ],
   },
   {
@@ -206,24 +207,26 @@ const checks = [
     ],
   },
   {
-    name: "no multilingual push policy is guarded",
+    name: "viewer-language push policy is guarded",
     file: "supabase/functions/_shared/send-deal-push-source.test.ts",
     patterns: [
       /send-deal-push multilingual rollout source guards/,
-      /buildDeterministicDealChannelCopy/,
+      /buildDealReleasePushCopy/,
+      /fetchProfileLocaleByUserId/,
+      /sendExpoPushMessages/,
       /not\.toMatch\(\/generateStructuredText\//,
       /not\.toMatch\(\/customer_deal_localizations\//,
-      /not\.toMatch\(\/title_es\|title_ko\|description_es\|description_ko\//,
     ],
   },
   {
-    name: "no multilingual push handoff document exists",
+    name: "viewer-language push handoff document exists",
     file: "docs/localization/multilingual-deals-pr4-no-multilingual-push.md",
     patterns: [
-      /push delivery is not multilingual/,
-      /Do not claim push notifications are multilingual/,
-      /Do not call translation/,
-      /Feed and deal-detail localization remain independent from push delivery/,
+      /Superseding local implementation/,
+      /buildDealReleasePushCopy/,
+      /buildDigestPushCopy/,
+      /profiles\.app_locale/,
+      /Hosted production cannot claim recipient-language push/,
     ],
   },
   {
@@ -236,9 +239,12 @@ const checks = [
       /20260728123000_customer_deal_localization_projection\.sql/,
       /npx supabase functions deploy ai-generate-ad-variants/,
       /npx supabase functions deploy publish-offer-version/,
+      /npx supabase functions deploy deal-link/,
+      /npx supabase functions deploy send-deal-push/,
+      /npx supabase functions deploy weekly-deal-digest/,
       /AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED/,
       /Customer viewing must not make a model call/,
-      /Do not deploy `send-deal-push` to claim multilingual push support/,
+      /Do not claim strict viewer-language Share Deal or push support/,
     ],
   },
   {

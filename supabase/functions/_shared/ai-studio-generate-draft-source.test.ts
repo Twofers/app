@@ -10,6 +10,10 @@ const imageProviderSource = readFileSync(
   join(process.cwd(), "supabase", "functions", "_shared", "ai-image-provider.ts"),
   "utf8",
 );
+const devScreenSource = readFileSync(
+  join(process.cwd(), "app", "ai-deal-studio-dev.tsx"),
+  "utf8",
+);
 
 describe("ai-studio-generate-draft source guard", () => {
   it("requests Gemini images in the same 4:5 ratio used by the native preview", () => {
@@ -26,5 +30,24 @@ describe("ai-studio-generate-draft source guard", () => {
     expect(source).toMatch(/DEFAULT_CTA = ""/);
     expect(source).toMatch(/Never use the word Twofer in any poster field/);
     expect(source).toMatch(/scarcityLabel:\s*""/);
+  });
+
+  it("keeps deterministic poster fallback copy offer-aware instead of Try our item echoes", () => {
+    expect(source).toContain("posterHeadlineFromOffer");
+    expect(source).toContain("posterRewardLabel");
+    expect(source).toContain("getFreeMatch");
+    expect(source).toContain("isWeakPosterHeadline");
+    expect(source).toContain("stripAwkwardAnyDeterminer");
+    expect(source).toContain('kicker: "LOCAL DEAL"');
+    expect(source).toContain("Never use 'Try our' as the kicker or headline");
+    expect(source).toContain("not BUY AN ANY LARGE COFFEE DRINK");
+    expect(source).not.toContain('kicker: "TRY OUR"');
+    expect(source).not.toContain("`${product} TIME`");
+
+    expect(devScreenSource).toContain("posterHeadlineFromOffer");
+    expect(devScreenSource).toContain("getFreeMatch");
+    expect(devScreenSource).toContain("safePosterHeadline");
+    expect(devScreenSource).toContain("stripAwkwardAnyDeterminer");
+    expect(devScreenSource).not.toContain("`${product} TIME`");
   });
 });

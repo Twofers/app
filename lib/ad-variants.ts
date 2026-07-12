@@ -23,6 +23,19 @@ export type ItemResearch = {
   is_familiar: boolean;
 };
 
+export type GeneratedAdCopyAlternative = {
+  candidate_id?: string;
+  strategy_id?: string;
+  strategy_reason?: string;
+  variant_index?: number | null;
+  headline: string;
+  short_description: string;
+  push_notification?: string;
+  social_caption?: string;
+  cta?: string;
+  selected?: boolean;
+};
+
 export type GeneratedAd = {
   headline: string;
   subheadline: string;
@@ -35,6 +48,7 @@ export type GeneratedAd = {
   copy_source?: "AI_VALIDATED" | "AI_RETRY_VALIDATED" | "DETERMINISTIC_FALLBACK";
   variant_count?: number;
   selected_variant_index?: number | null;
+  copy_alternatives?: GeneratedAdCopyAlternative[];
   validation_reason_codes?: string[];
   cta: string;
   /** Storage path in deal-photos bucket; null if image production failed. */
@@ -87,8 +101,55 @@ export function composeListingDescription(promo: string, cta: string, offerDetai
   return [promo.trim(), cta.trim(), offerDetails.trim()].filter(Boolean).join("\n\n");
 }
 
+export function stripAppRenderedTimingMetadata(value: string): string {
+  return value
+    .replace(/\s*Offer window:\s*[\s\S]*?(?=(?:\s*Claims close\b|\s*Limit one claim\b|\s*Redeem only\b|\s*Limited to\b|\s*Schedule:|\s*Max claims:|$))/gi, " ")
+    .replace(/\s*Schedule:\s*[\s\S]*?(?=(?:\s*Max claims:|\s*Limit one claim\b|\s*Redeem only\b|\s*Limited to\b|\s*Claims close\b|$))/gi, " ")
+    .replace(/\s*Claims close\b[^.]*\./gi, " ")
+    .replace(/\s*Max claims:\s*\d+\.?/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+}
+
+function stripDuplicateLeadingLine(value: string, duplicate: string): string {
+  const cleanValue = value.trim();
+  const cleanDuplicate = duplicate.trim();
+  if (!cleanValue || !cleanDuplicate) return cleanValue;
+  const normalizedValue = cleanValue.toLowerCase();
+  const normalizedDuplicate = cleanDuplicate.toLowerCase();
+  if (!normalizedValue.startsWith(normalizedDuplicate)) return cleanValue;
+  return cleanValue
+    .slice(cleanDuplicate.length)
+    .replace(/^[\s.:-]+/, "")
+    .trim();
+}
+
 function containsMechanicalOfferLanguage(value: string): boolean {
   return /\bBOGO\b|\bSame[-\s]?Item\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b/i.test(value);
+}
+
+function normalizeCopyAlternatives(ad: GeneratedAd): GeneratedAdCopyAlternative[] | undefined {
+  if (!Array.isArray(ad.copy_alternatives)) return ad.copy_alternatives;
+  const out = ad.copy_alternatives
+    .filter((option): option is GeneratedAdCopyAlternative =>
+      !!option &&
+      typeof option === "object" &&
+      typeof option.headline === "string" &&
+      typeof option.short_description === "string"
+    )
+    .map((option) => ({
+      ...option,
+      strategy_id: option.strategy_id?.trim(),
+      strategy_reason: option.strategy_reason?.trim(),
+      headline: getDealDisplayTitle({ title: option.headline }, option.headline),
+      short_description: option.short_description.trim(),
+      push_notification: option.push_notification?.trim(),
+      social_caption: option.social_caption?.trim(),
+      cta: option.cta?.trim(),
+    }))
+    .slice(0, 5);
+  return out.length > 0 ? out : undefined;
 }
 
 export function normalizeGeneratedAdDisplayCopy(ad: GeneratedAd): GeneratedAd {
@@ -98,6 +159,7 @@ export function normalizeGeneratedAdDisplayCopy(ad: GeneratedAd): GeneratedAd {
     ...ad,
     headline,
     push_notification: push ? (containsMechanicalOfferLanguage(push) ? headline : push) : ad.push_notification,
+    copy_alternatives: normalizeCopyAlternatives(ad),
   };
 }
 
@@ -114,8 +176,17 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const shortDescription = (ad.short_description ?? ad.subheadline).trim();
   const termsSummary = ad.terms_summary?.trim() ?? "";
   const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
-  const lockedTermsLine = ad.locked_terms_line?.trim() ?? termsSummary;
-  const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
+  const rawLockedTermsLine = stripAppRenderedTimingMetadata(ad.locked_terms_line?.trim() ?? termsSummary);
+  const lockedTermsLine = stripDuplicateLeadingLine(rawLockedTermsLine, lockedOfferLine);
+  // F-010: when a persuasive promo line (short_description) is present it already
+  // states the offer, so also emitting the canonical offer line here restates the
+  // offer a third time (promo + offer line + terms) in the stored description.
+  // Drop the offer line in that case — but only when the precise terms line
+  // survives to carry the offer facts, so the offer is never stripped to nothing.
+  const dropOfferLine = Boolean(shortDescription) && Boolean(lockedTermsLine);
+  const offerDetails = [dropOfferLine ? "" : lockedOfferLine, lockedTermsLine]
+    .filter(Boolean)
+    .join("\n");
   const displayAd = normalizeGeneratedAdDisplayCopy(ad);
   return {
     title: displayAd.headline,

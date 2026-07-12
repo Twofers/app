@@ -1,0 +1,402 @@
+{
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/admin(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://kvodhiqhdqnptqovovia.supabase.co; font-src 'self'; connect-src 'self' https://kvodhiqhdqnptqovovia.supabase.co wss://kvodhiqhdqnptqovovia.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.ico",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/business",
+      "destination": "/business/start-trial",
+      "permanent": false
+    },
+    {
+      "source": "/business/",
+      "destination": "/business/start-trial",
+      "permanent": false
+    },
+    {
+      "source": "/admon",
+      "destination": "/admin",
+      "permanent": false
+    },
+    {
+      "source": "/admon/:path*",
+      "destination": "/admin/:path*",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/s/:path*",
+      "destination": "/s/index.html"
+    },
+    {
+      "source": "/business",
+      "destination": "/business/index.html"
+    },
+    {
+      "source": "/business/",
+      "destination": "/business/index.html"
+    },
+    {
+      "source": "/business/start-trial",
+      "destination": "/business/start-trial/index.html"
+    },
+    {
+      "source": "/business/start-trial/",
+      "destination": "/business/start-trial/index.html"
+    },
+    {
+      "source": "/business/waitlist",
+      "destination": "/business/waitlist/index.html"
+    },
+    {
+      "source": "/business/waitlist/",
+      "destination": "/business/waitlist/index.html"
+    },
+    {
+      "source": "/business/review-pending",
+      "destination": "/business/review-pending/index.html"
+    },
+    {
+      "source": "/business/review-pending/",
+      "destination": "/business/review-pending/index.html"
+    },
+    {
+      "source": "/business/thanks",
+      "destination": "/business/thanks/index.html"
+    },
+    {
+      "source": "/business/thanks/",
+      "destination": "/business/thanks/index.html"
+    },
+    {
+      "source": "/business/claim/:token",
+      "destination": "/business/claim/index.html"
+    },
+    {
+      "source": "/business/claim/:token/",
+      "destination": "/business/claim/index.html"
+    },
+    {
+      "source": "/business/billing/start",
+      "destination": "/business/billing/start/index.html"
+    },
+    {
+      "source": "/business/billing/start/",
+      "destination": "/business/billing/start/index.html"
+    },
+    {
+      "source": "/business/billing/success",
+      "destination": "/business/billing/success/index.html"
+    },
+    {
+      "source": "/business/billing/success/",
+      "destination": "/business/billing/success/index.html"
+    },
+    {
+      "source": "/business/billing/cancel",
+      "destination": "/business/billing/cancel/index.html"
+    },
+    {
+      "source": "/business/billing/cancel/",
+      "destination": "/business/billing/cancel/index.html"
+    },
+    {
+      "source": "/business/billing/checkout/:token",
+      "destination": "/business/billing/checkout/index.html"
+    },
+    {
+      "source": "/business/billing/checkout/:token/",
+      "destination": "/business/billing/checkout/index.html"
+    },
+    {
+      "source": "/business/billing/manage",
+      "destination": "/business/billing/manage/index.html"
+    },
+    {
+      "source": "/business/billing/manage/",
+      "destination": "/business/billing/manage/index.html"
+    },
+    {
+      "source": "/business/billing/add-payment-method",
+      "destination": "/business/billing/add-payment-method/index.html"
+    },
+    {
+      "source": "/business/billing/add-payment-method/",
+      "destination": "/business/billing/add-payment-method/index.html"
+    },
+    {
+      "source": "/business/billing/status",
+      "destination": "/business/billing/status/index.html"
+    },
+    {
+      "source": "/business/billing/status/",
+      "destination": "/business/billing/status/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/admin/login/index.html"
+    },
+    {
+      "source": "/admin/login/",
+      "destination": "/admin/login/index.html"
+    },
+    {
+      "source": "/admin/businesses",
+      "destination": "/admin/businesses/index.html"
+    },
+    {
+      "source": "/admin/prospects",
+      "destination": "/admin/prospects/index.html"
+    },
+    {
+      "source": "/admin/prospects/",
+      "destination": "/admin/prospects/index.html"
+    },
+    {
+      "source": "/admin/prospects/import",
+      "destination": "/admin/prospects/import/index.html"
+    },
+    {
+      "source": "/admin/prospects/import/",
+      "destination": "/admin/prospects/import/index.html"
+    },
+    {
+      "source": "/admin/sales-ai",
+      "destination": "/admin/sales-ai/index.html"
+    },
+    {
+      "source": "/admin/sales-ai/",
+      "destination": "/admin/sales-ai/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/demand",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/demand/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/sales",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/sales/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/claim-links",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/claim-links/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/prospects/:prospectId/",
+      "destination": "/admin/prospects/detail/index.html"
+    },
+    {
+      "source": "/admin/businesses/",
+      "destination": "/admin/businesses/index.html"
+    },
+    {
+      "source": "/admin/businesses/new",
+      "destination": "/admin/businesses/new/index.html"
+    },
+    {
+      "source": "/admin/businesses/new/",
+      "destination": "/admin/businesses/new/index.html"
+    },
+    {
+      "source": "/admin/businesses/:businessId",
+      "destination": "/admin/businesses/detail/index.html"
+    },
+    {
+      "source": "/admin/businesses/:businessId/",
+      "destination": "/admin/businesses/detail/index.html"
+    },
+    {
+      "source": "/admin/trial-requests",
+      "destination": "/admin/trial-requests/index.html"
+    },
+    {
+      "source": "/admin/trial-requests/",
+      "destination": "/admin/trial-requests/index.html"
+    },
+    {
+      "source": "/admin/offers",
+      "destination": "/admin/offers/index.html"
+    },
+    {
+      "source": "/admin/offers/",
+      "destination": "/admin/offers/index.html"
+    },
+    {
+      "source": "/admin/reports",
+      "destination": "/admin/reports/index.html"
+    },
+    {
+      "source": "/admin/reports/",
+      "destination": "/admin/reports/index.html"
+    },
+    {
+      "source": "/admin/billing/events",
+      "destination": "/admin/billing/events/index.html"
+    },
+    {
+      "source": "/admin/billing/events/",
+      "destination": "/admin/billing/events/index.html"
+    },
+    {
+      "source": "/admin/audit-log",
+      "destination": "/admin/audit-log/index.html"
+    },
+    {
+      "source": "/admin/audit-log/",
+      "destination": "/admin/audit-log/index.html"
+    },
+    {
+      "source": "/admin/settings",
+      "destination": "/admin/settings/index.html"
+    },
+    {
+      "source": "/admin/settings/",
+      "destination": "/admin/settings/index.html"
+    },
+    {
+      "source": "/admin/ai-operating-report",
+      "destination": "/admin/ai-operating-report/index.html"
+    },
+    {
+      "source": "/admin/ai-operating-report/",
+      "destination": "/admin/ai-operating-report/index.html"
+    },
+    {
+      "source": "/admin/ai-prompts",
+      "destination": "/admin/ai-prompts/index.html"
+    },
+    {
+      "source": "/admin/ai-prompts/",
+      "destination": "/admin/ai-prompts/index.html"
+    },
+    {
+      "source": "/business-terms",
+      "destination": "/business-terms/index.html"
+    },
+    {
+      "source": "/business-terms/",
+      "destination": "/business-terms/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy/index.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms/index.html"
+    },
+    {
+      "source": "/support",
+      "destination": "/support/index.html"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/delete-account/index.html"
+    }
+  ]
+}

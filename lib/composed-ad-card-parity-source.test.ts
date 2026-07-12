@@ -16,7 +16,7 @@ describe("composed ad card preview/customer parity source guards", () => {
     expect(createAiSource).toMatch(/buildOwnerLanguagePreview/);
     expect(createAiSource).toMatch(/composedOfferFacts = ownerLanguagePreview\.offerFacts/);
     expect(createAiSource).toMatch(/composedCopy = ownerLanguagePreview\.copy/);
-    expect(createAiSource).toMatch(/GeneratedAdPreviewCard/);
+    expect(createAiSource).toMatch(/StandardDealPreviewCard/);
     for (const source of [homeSource, detailSource]) {
       expect(source).toMatch(/buildApprovedAdCopy/);
       expect(source).toMatch(/renderAuthoritativeOffer/);

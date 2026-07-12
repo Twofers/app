@@ -130,8 +130,9 @@ export function validatePosterSpecV1(
   }
 
   if (options.offerDefinition) {
-    const expected = buildPosterOfferLinesFromOfferDefinition(options.offerDefinition);
-    for (const copy of Object.values(parsed.copy_by_language)) {
+    for (const locale of Object.keys(parsed.copy_by_language) as SupportedLocale[]) {
+      const expected = buildPosterOfferLinesFromOfferDefinition(options.offerDefinition, locale);
+      const copy = parsed.copy_by_language[locale];
       if (copy.offer_line_1 !== expected.offer_line_1) reasonCodes.push("POSTER_OFFER_LINE_1_MISMATCH");
       if (copy.offer_line_2 !== expected.offer_line_2) reasonCodes.push("POSTER_OFFER_LINE_2_MISMATCH");
     }

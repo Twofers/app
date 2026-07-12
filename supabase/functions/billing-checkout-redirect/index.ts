@@ -1,51 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 serve((req) => {
   const url = new URL(req.url);
   const checkoutRaw = url.searchParams.get("checkout")?.trim().toLowerCase() ?? "";
-  const checkout = checkoutRaw === "success" || checkoutRaw === "cancel" ? checkoutRaw : null;
+  const checkout = checkoutRaw === "success" || checkoutRaw === "cancel" ? checkoutRaw : "success";
+  const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
+  const nextPath = checkout === "success" ? "/business/billing/success/" : "/business/billing/cancel/";
+  const nextUrl = `${siteUrl}${nextPath}`;
+  const title = checkout === "success" ? "Billing confirmed" : "Billing canceled";
+  const body = checkout === "success"
+    ? "Your Twofer business billing flow is complete. Stripe will securely confirm the subscription status before app access changes."
+    : "The Twofer business billing flow was canceled. No payment changes were made.";
 
-  // Stripe requires HTTP(S) success/cancel URLs, but we ultimately want to return into the app.
-  // Use canonical path-style deep links for stronger cross-platform parsing.
-  // Expected app route: /(tabs)/billing with checkout query.
-  const target =
-    checkout !== null
-      ? `twoforone:///billing?checkout=${encodeURIComponent(checkout)}`
-      : "twoforone:///billing";
-
-  const fallbackMessage =
-    checkout === "success"
-      ? "Payment completed. If the app does not open automatically, open Twofer and refresh Billing."
-      : "Checkout canceled. If the app does not open automatically, open Twofer and check Billing.";
-
-  const html = `<!doctype html>
-<html>
+  return new Response(
+    `<!doctype html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Twofer Billing Redirect</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content="0;url=${escapeHtml(nextUrl)}" />
+    <title>${escapeHtml(title)} | Twofer</title>
   </head>
-  <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; color: #11181c;">
-    <h2 style="margin:0 0 12px;">Returning to Twofer…</h2>
-    <p style="margin:0 0 12px;">${fallbackMessage}</p>
-    <p style="margin:0 0 12px;">
-      <a href="${target}" style="color:#FF9F1C;font-weight:700;">Open Twofer</a>
-    </p>
-    <script>
-      window.location.replace(${JSON.stringify(target)});
-      setTimeout(function () {
-        window.location.href = ${JSON.stringify(target)};
-      }, 900);
-    </script>
+  <body>
+    <main style="font-family: system-ui, sans-serif; max-width: 680px; margin: 12vh auto; padding: 24px;">
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(body)}</p>
+      <p><a href="${escapeHtml(nextUrl)}">Continue</a></p>
+    </main>
   </body>
-</html>`;
-
-  return new Response(html, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
+</html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } },
+  );
 });
-

@@ -1,3 +1,7 @@
+import {
+  resolveLocalizedOfferTerm,
+  type LocalizedOfferTerm,
+} from "../localized-offer-terms.ts";
 import { renderLocalizedOfferBundleFromDefinition } from "../localized-offer-renderer.ts";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "../supported-locales.ts";
 import type { OfferDefinitionV1 } from "../offer-definition.ts";
@@ -5,6 +9,7 @@ import {
   assertPosterCopyPolicy,
   sanitizePosterCopy,
   sanitizePosterText,
+  scanPosterTextPolicy,
 } from "./posterPolicy.ts";
 import type {
   PosterCopyV1,
@@ -42,12 +47,83 @@ function singularItem(value: string): string {
   return cleanText(value).replace(/\s+/g, " ");
 }
 
-function qtyLabel(quantity: number): string {
-  return Number.isFinite(quantity) && quantity > 1 ? String(Math.floor(quantity)) : "1";
+const POSTER_ITEM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "any",
+  "the",
+  "one",
+  "of",
+  "your",
+  "choice",
+  "large",
+  "medium",
+  "small",
+  "regular",
+  "hot",
+  "iced",
+  "ice",
+  "cold",
+  "fresh",
+]);
+
+const POSTER_KNOWN_ITEM_WORDS = [
+  "americano",
+  "coffee",
+  "latte",
+  "espresso",
+  "cappuccino",
+  "cookie",
+  "bagel",
+  "sandwich",
+  "muffin",
+  "croissant",
+  "pastry",
+  "scone",
+  "tea",
+  "drink",
+  "taco",
+  "dessert",
+  "entree",
+];
+
+function normalizePosterComparison(value: string): string {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s+%-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function posterItemLabel(value: string): string {
+  const normalized = normalizePosterComparison(value);
+  if (!normalized) return "";
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const known = POSTER_KNOWN_ITEM_WORDS.find((word) => words.includes(word));
+  if (known && !(known === "drink" && words.includes("coffee"))) return known;
+  if (words.includes("coffee")) return "coffee";
+  const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  if (meaningful.length === 0) return words.slice(0, 2).join(" ");
+  return meaningful.slice(-2).join(" ");
 }
 
 function lineItem(value: string, maxChars = 22): string {
   return sanitizePosterText(value, { fallback: "LOCAL DEAL", maxChars });
+}
+
+function isMechanicalOfferHeadline(value: string): boolean {
+  const text = cleanText(value).toLowerCase();
+  if (!text) return false;
+  if (/\bbuy\b/.test(text) && /\bget\b/.test(text)) return true;
+  if (/\b\d+\s*%\s*off\b/.test(text)) return true;
+  if (/\bfree\b/.test(text) && /\bwith\b|\bbuy\b|\bpurchase\b/.test(text)) return true;
+  return false;
+}
+
+function isWeakPosterHeroHeadline(value: string): boolean {
+  const text = normalizePosterComparison(value);
+  return /^try\s+(?:our|the)\b/.test(text);
 }
 
 export function sanitizePosterBusinessName(
@@ -79,31 +155,143 @@ export function choosePosterTemplateForOffer(
   return "premium";
 }
 
-export function buildPosterOfferLinesFromOfferDefinition(definition: OfferDefinitionV1): Pick<PosterCopyV1, "offer_line_1" | "offer_line_2"> {
-  const firstItem = singularItem(definition.qualifyingItems[0]?.displayName ?? "");
-  const firstQty = qtyLabel(definition.qualifyingItems[0]?.quantity ?? 1);
-  const rewardItem = singularItem(definition.reward.displayNames[0] ?? firstItem);
+type PosterOfferLines = Pick<PosterCopyV1, "offer_line_1" | "offer_line_2">;
+
+function localeNumber(locale: SupportedLocale, value: number): string {
+  return new Intl.NumberFormat(locale).format(Math.max(0, Math.floor(value)));
+}
+
+function posterTermDisplayName(term: LocalizedOfferTerm): string {
+  return cleanText(term.shortDisplayName) || cleanText(term.displayName);
+}
+
+function firstQualifyingItem(definition: OfferDefinitionV1) {
+  return definition.qualifyingItems[0] ?? {
+    catalogItemId: null,
+    displayName: "item",
+    quantity: 1,
+    verifiedAttributes: [],
+  };
+}
+
+function localizedPaidTerm(definition: OfferDefinitionV1, locale: SupportedLocale): LocalizedOfferTerm {
+  const item = firstQualifyingItem(definition);
+  return resolveLocalizedOfferTerm({
+    entityId: item.catalogItemId,
+    sourceDisplayName: item.displayName,
+    locale,
+  });
+}
+
+function localizedRewardTerm(definition: OfferDefinitionV1, locale: SupportedLocale): LocalizedOfferTerm {
+  const item = firstQualifyingItem(definition);
+  const rewardItem = definition.reward.displayNames[0] ?? item.displayName;
+  return resolveLocalizedOfferTerm({
+    entityId:
+      definition.reward.rule === "percent_off_single_item"
+        ? item.catalogItemId
+        : `reward:${rewardItem}`,
+    sourceDisplayName: rewardItem,
+    locale,
+  });
+}
+
+function discountBadge(locale: SupportedLocale, percent: number): string {
+  const value = localeNumber(locale, Math.round(percent));
+  if (locale === "es-US") return `${value}% DE DESCUENTO`;
+  if (locale === "ko-KR") return `${value}% \uD560\uC778`;
+  return `${value}% OFF`;
+}
+
+function sameItemBadge(locale: SupportedLocale, paidQuantity: number, rewardQuantity: number): string {
+  const quantity = localeNumber(locale, rewardQuantity);
+  const isClassicBogo = paidQuantity === 1 && rewardQuantity === 1;
+  if (locale === "es-US") return isClassicBogo ? "2 POR 1" : `${quantity} GRATIS`;
+  if (locale === "ko-KR") return `\uCD94\uAC00 ${quantity} \uBB34\uB8CC`;
+  return isClassicBogo ? "2 FOR 1" : `GET ${quantity} FREE`;
+}
+
+function freeRewardBadge(locale: SupportedLocale, rewardName: string, rewardQuantity: number): string {
+  const quantity = localeNumber(locale, rewardQuantity);
+  if (locale === "es-US") {
+    return rewardQuantity === 1 ? `${rewardName} GRATIS` : `${quantity} ${rewardName} GRATIS`;
+  }
+  if (locale === "ko-KR") {
+    return rewardQuantity === 1
+      ? `${rewardName} \uBB34\uB8CC`
+      : `${rewardName} x ${quantity} \uBB34\uB8CC`;
+  }
+  return rewardQuantity === 1 ? `FREE ${rewardName}` : `${quantity} FREE ${rewardName}`;
+}
+
+function purchaseContextLine(locale: SupportedLocale, paidName: string, paidQuantity: number): string {
+  const quantity = localeNumber(locale, paidQuantity);
+  if (locale === "es-US") return `AL COMPRAR ${quantity} ${paidName}`;
+  if (locale === "ko-KR") return `${paidName} x ${quantity} \uAD6C\uB9E4 \uC2DC`;
+  return paidQuantity === 1 ? `WITH ${paidName}` : `WITH ${quantity} ${paidName}`;
+}
+
+export function buildPosterOfferLinesFromOfferDefinition(
+  definition: OfferDefinitionV1,
+  locale: SupportedLocale = "en-US",
+): PosterOfferLines {
+  const localizedOffer = renderLocalizedOfferBundleFromDefinition(definition)[locale];
+  const paidTerm = localizedPaidTerm(definition, locale);
+  const rewardTerm = localizedRewardTerm(definition, locale);
+  const firstItem = singularItem(posterTermDisplayName(paidTerm) || definition.qualifyingItems[0]?.displayName || "");
+  const rewardItem = singularItem(posterTermDisplayName(rewardTerm) || definition.reward.displayNames[0] || firstItem);
 
   if (definition.reward.rule === "percent_off_single_item") {
     return {
-      offer_line_1: `${Math.round(definition.reward.discountPercent)}% OFF`,
-      offer_line_2: lineItem(rewardItem || firstItem, 24),
+      offer_line_1: lineItem(discountBadge(locale, definition.reward.discountPercent), 20),
+      offer_line_2: lineItem(rewardItem || firstItem || localizedOffer.compactOfferLine, 24),
+    };
+  }
+
+  const paidQuantity = definition.qualifyingItems[0]?.quantity ?? 1;
+  const rewardQuantity = definition.reward.quantity;
+
+  if (definition.reward.rule === "same_item_free") {
+    return {
+      offer_line_1: lineItem(sameItemBadge(locale, paidQuantity, rewardQuantity), 18),
+      offer_line_2: lineItem(firstItem || localizedOffer.compactOfferLine, 24),
     };
   }
 
   return {
-    offer_line_1: lineItem(`BUY ${firstQty} ${firstItem || "ITEM"}`, 28),
-    offer_line_2:
-      definition.reward.rule === "same_item_free"
-        ? lineItem(`GET ${qtyLabel(definition.reward.quantity)} FREE`, 22)
-        : lineItem(`GET ${qtyLabel(definition.reward.quantity)} ${rewardItem || "FREE"}`, 28),
+    offer_line_1: lineItem(freeRewardBadge(locale, rewardItem, rewardQuantity), 28),
+    offer_line_2: lineItem(purchaseContextLine(locale, firstItem, paidQuantity), 28),
   };
 }
 
-function headlineFallback(definition: OfferDefinitionV1): string {
-  const item = cleanText(definition.qualifyingItems[0]?.displayName ?? definition.reward.displayNames[0] ?? "");
-  if (definition.offerType === "percent_off_single_item") return item ? `SAVE ON ${item}` : "LOCAL DEAL";
-  return item ? `${item} PAIRING` : "LOCAL DEAL";
+function posterHeadlineFallback(definition: OfferDefinitionV1): string {
+  const firstItem = posterItemLabel(definition.qualifyingItems[0]?.displayName ?? "");
+  const rewardItem = posterItemLabel(definition.reward.displayNames[0] ?? "");
+
+  if (definition.offerType === "percent_off_single_item") {
+    return firstItem ? `${firstItem} savings` : "local deal";
+  }
+
+  if (definition.reward.rule === "same_item_free") {
+    return firstItem ? `${firstItem} bonus` : "local bonus";
+  }
+
+  if (firstItem && rewardItem) {
+    const pair = `${firstItem} + ${rewardItem}`;
+    return pair.length <= 22 ? `${pair} break` : pair;
+  }
+
+  return firstItem || rewardItem || "local deal";
+}
+
+function posterHeadline(definition: OfferDefinitionV1, requestedHeadline?: string | null): string {
+  const fallback = posterHeadlineFallback(definition);
+  const requested = cleanText(requestedHeadline);
+  if (!requested) return fallback;
+  if (!scanPosterTextPolicy(requested).passed) return fallback;
+  if (isWeakPosterHeroHeadline(requested)) return fallback;
+  if (isMechanicalOfferHeadline(requested)) return fallback;
+  return requested;
 }
 
 export function buildPosterCopyFromOfferDefinition(params: {
@@ -114,11 +302,12 @@ export function buildPosterCopyFromOfferDefinition(params: {
 }): PosterCopyV1 {
   const businessName = sanitizePosterBusinessName(params.definition.merchantName, params.businessCategory);
   const lines = buildPosterOfferLinesFromOfferDefinition(params.definition);
+  const headline = posterHeadline(params.definition, params.headline);
   const base: PosterCopyV1 = {
     business_name: businessName,
-    headline: sanitizePosterText(params.headline ?? "", {
-      fallback: headlineFallback(params.definition),
-      maxChars: 28,
+    headline: sanitizePosterText(headline, {
+      fallback: posterHeadlineFallback(params.definition),
+      maxChars: 32,
     }),
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
@@ -139,15 +328,19 @@ function copyForLocale(
   locale: SupportedLocale,
   base: PosterCopyV1,
 ): PosterCopyV1 {
-  const localized = renderLocalizedOfferBundleFromDefinition(definition)[locale];
-  const lines = buildPosterOfferLinesFromOfferDefinition({
-    ...definition,
-    canonicalOfferLine: localized.primaryOfferLine,
-  });
+  const lines = buildPosterOfferLinesFromOfferDefinition(definition, locale);
   return {
     ...base,
+    headline:
+      locale === "en-US"
+        ? base.headline
+        : sanitizePosterText(lines.offer_line_2, {
+            fallback: base.headline,
+            maxChars: 32,
+          }),
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
+    subline: undefined,
   };
 }
 
@@ -198,5 +391,15 @@ export function buildPosterSpecFromOfferDefinition(params: {
     content_policy: DEFAULT_CONTENT_POLICY,
     policy,
     composition_plan: cleanText(params.compositionPlan) || null,
+  };
+}
+
+export function normalizePosterSpecForPublish<T extends PosterDraftV1 | PosterSpecV1>(spec: T): T {
+  const enCopy = spec.copy_by_language["en-US"] ?? ("copy" in spec ? spec.copy : null) ?? Object.values(spec.copy_by_language)[0];
+  if (!enCopy) return spec;
+  return {
+    ...spec,
+    ...("copy" in spec ? { copy: enCopy } : {}),
+    copy_by_language: { "en-US": enCopy } as T["copy_by_language"],
   };
 }

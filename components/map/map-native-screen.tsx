@@ -21,12 +21,22 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
   type DealStructuredDisplayFields,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+} from "@/lib/repeat-claim-visibility";
+import { loadHiddenBusinessIds } from "@/lib/hidden-businesses";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
@@ -196,13 +206,50 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     devWarn("[map] deals fetch failed; preserving previous deals", t("consumerMap.dataError"));
   }
 
+  // Hide businesses the customer has hidden ("block" control) — dropping both their markers and
+  // deals — and deals from businesses that currently repeat-restrict this customer, so a
+  // restricted business loses its live-dot / preview instead of dead-ending at a claim they can't
+  // make. Best-effort: on any lookup failure everything stays and the claim-deal edge function
+  // still enforces the limit.
+  let visibleDeals = deals;
+  let visibleBusinesses = businesses;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const uid = user?.id ?? null;
+    const businessIds = deals.map((d) => d.business_id);
+    const [policies, redemptions, hidden] = await Promise.all([
+      loadBusinessRepeatPolicies(businessIds),
+      loadBusinessRedemptionMap(uid, businessIds),
+      loadHiddenBusinessIds(uid),
+    ]);
+    if (hidden.size > 0) {
+      visibleDeals = visibleDeals.filter((d) => !hidden.has(d.business_id));
+      visibleBusinesses = visibleBusinesses.filter((b) => !hidden.has(b.id));
+    }
+    if (policies.size > 0) {
+      const nowMs = Date.now();
+      visibleDeals = visibleDeals.filter(
+        (d) =>
+          !isDealHiddenByRepeatPolicy({
+            policy: policies.get(d.business_id),
+            lastRedeemedAt: redemptions.get(d.business_id) ?? null,
+            nowMs,
+          }),
+      );
+    }
+  } catch {
+    // Non-fatal: keep all deals; the claim-deal edge function still enforces the limit.
+  }
+
   return {
     radiusMiles: prefs.radiusMiles,
     userPos,
     showDeviceBlueDot,
     usingDefaultArea: !coords,
-    businesses,
-    deals,
+    businesses: visibleBusinesses,
+    deals: visibleDeals,
     dealsFetchFailed,
   };
 }
@@ -891,13 +938,15 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       },
       locale: resolvedDealDisplayLocale.locale,
       localeResolutionSource: resolvedDealDisplayLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedDealDisplayLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return display.title || null;
   }, [
     customerDealLocalizationsByDealId,
-    customerLocaleResolutionEnabled,
     i18n.language,
     localizedOfferRendererEnabled,
     previewDeal,

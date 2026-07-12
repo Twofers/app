@@ -10,6 +10,11 @@ export type ConsumerNotificationMode = "all_nearby" | "favorites_only";
 export const CONSUMER_RADIUS_MILES_OPTIONS = [1, 3, 5, 10] as const;
 export type ConsumerRadiusMiles = (typeof CONSUMER_RADIUS_MILES_OPTIONS)[number];
 
+/** How the consumer deal feed is ordered. "recommended" blends favorites, preferred categories, distance, and time left. */
+export const CONSUMER_DEAL_SORT_MODES = ["recommended", "nearest", "endingSoon", "newest"] as const;
+export type ConsumerDealSortMode = (typeof CONSUMER_DEAL_SORT_MODES)[number];
+export const DEFAULT_DEAL_SORT_MODE: ConsumerDealSortMode = "recommended";
+
 // Matches the hosted consumer push preference schema and v1 onboarding spec.
 export const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 3;
 
@@ -25,6 +30,7 @@ export type ConsumerPreferences = {
   locationMode: ConsumerLocationMode;
   zipCode: string;
   radiusMiles: ConsumerRadiusMiles;
+  dealSortMode: ConsumerDealSortMode;
   notificationPrefs: ConsumerNotificationPrefsV1;
   /** Last resolved coords for notifications / sorting (WGS84). */
   lastLatitude: number | null;
@@ -36,6 +42,7 @@ const DEFAULTS: ConsumerPreferences = {
   locationMode: "gps",
   zipCode: "",
   radiusMiles: DEFAULT_RADIUS_MILES,
+  dealSortMode: DEFAULT_DEAL_SORT_MODE,
   notificationPrefs: { v: 1, mode: "all_nearby" },
   lastLatitude: null,
   lastLongitude: null,
@@ -61,6 +68,7 @@ export async function getConsumerPreferences(): Promise<ConsumerPreferences> {
     locationMode,
     zipCode,
     radiusMiles,
+    dealSortMode,
     notificationPrefs,
     lastLatitude,
     lastLongitude,
@@ -69,6 +77,7 @@ export async function getConsumerPreferences(): Promise<ConsumerPreferences> {
     AsyncStorage.getItem(PREFIX + "location_mode"),
     AsyncStorage.getItem(PREFIX + "zip"),
     AsyncStorage.getItem(PREFIX + "radius_miles"),
+    AsyncStorage.getItem(PREFIX + "deal_sort_mode"),
     getJson<ConsumerNotificationPrefsV1>("notification_prefs"),
     AsyncStorage.getItem(PREFIX + "last_lat"),
     AsyncStorage.getItem(PREFIX + "last_lng"),
@@ -84,6 +93,9 @@ export async function getConsumerPreferences(): Promise<ConsumerPreferences> {
     locationMode: locationMode === "zip" ? "zip" : "gps",
     zipCode: zipCode ?? "",
     radiusMiles: radius,
+    dealSortMode: CONSUMER_DEAL_SORT_MODES.includes(dealSortMode as ConsumerDealSortMode)
+      ? (dealSortMode as ConsumerDealSortMode)
+      : DEFAULT_DEAL_SORT_MODE,
     notificationPrefs: notificationPrefs && notificationPrefs.v === 1 ? notificationPrefs : DEFAULTS.notificationPrefs,
     lastLatitude: lastLatitude != null && lastLatitude !== "" ? Number(lastLatitude) : null,
     lastLongitude: lastLongitude != null && lastLongitude !== "" ? Number(lastLongitude) : null,
@@ -104,6 +116,10 @@ export async function setConsumerZipCode(zip: string) {
 
 export async function setConsumerRadiusMiles(miles: ConsumerRadiusMiles) {
   await AsyncStorage.setItem(PREFIX + "radius_miles", String(miles));
+}
+
+export async function setConsumerDealSortMode(mode: ConsumerDealSortMode) {
+  await AsyncStorage.setItem(PREFIX + "deal_sort_mode", mode);
 }
 
 export async function setConsumerNotificationPrefs(prefs: ConsumerNotificationPrefsV1) {

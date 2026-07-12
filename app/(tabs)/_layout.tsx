@@ -1,4 +1,5 @@
 import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -15,8 +16,10 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import { appLocaleFromLanguage } from "@/lib/i18n/config";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { getTabBarMetrics, type TabBarPlatform } from "@/lib/screen-layout";
 import { useBusiness } from "@/hooks/use-business";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
@@ -63,6 +66,7 @@ function useOwnerPinLockedForBusiness(mode: TabMode, businessId: string | null):
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
+  const { i18n } = useTranslation();
   const { isLocked, loading: redemptionLoading } = useRedemptionMode();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -87,13 +91,21 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
         }
       })();
       void syncConsumerPrefsToServer(user.id);
+      void syncAppLocaleToServer(user.id, appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language));
     }
-  }, [forceBypass, session?.user]);
+  }, [forceBypass, i18n.language, i18n.resolvedLanguage, session?.user]);
 
-  // Prevent Android back button from exiting the app while on a tab screen.
+  // Prevent Android back button from exiting the app while a *root* tab screen
+  // is focused. When a screen is pushed above the tabs (create/*, deal/[id],
+  // business/[id], deal-analytics/[id], etc.) this navigator is no longer
+  // focused, so we must let the event propagate to the root stack's default
+  // handler — otherwise system back is swallowed on every pushed screen.
+  const isTabsFocused = useIsFocused();
+  const isTabsFocusedRef = useRef(isTabsFocused);
+  isTabsFocusedRef.current = isTabsFocused;
   useEffect(() => {
     if (Platform.OS !== "android") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => isTabsFocusedRef.current);
     return () => sub.remove();
   }, []);
 
@@ -128,6 +140,7 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const { mode } = useTabMode();
   const business = useBusiness();
+  const mobileBillingEnabled = isMobilePaidBillingEnabled();
   const ownerPinLocked = useOwnerPinLockedForBusiness(mode, business.businessId);
   const tabBarPlatform: TabBarPlatform =
     Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
@@ -148,7 +161,11 @@ export default function TabLayout() {
 
   return (
     <TabAuthGate>
-      <TabModeRedirect business={business} ownerPinLocked={ownerPinLocked} />
+      <TabModeRedirect
+        business={business}
+        ownerPinLocked={ownerPinLocked}
+        mobileBillingEnabled={mobileBillingEnabled}
+      />
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: theme.primary,
@@ -267,9 +284,11 @@ export default function TabLayout() {
 function TabModeRedirect({
   business,
   ownerPinLocked,
+  mobileBillingEnabled,
 }: {
   business: BusinessTabState;
   ownerPinLocked: boolean;
+  mobileBillingEnabled: boolean;
 }) {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
@@ -298,8 +317,8 @@ function TabModeRedirect({
   });
   const billingLoading = businessLoading || locationBillingLoading;
   const businessBillingBlocked =
-    PAID_BILLING_ENABLED &&
     mode === "business" &&
+    Boolean(businessId) &&
     !billingLoading &&
     billingBlocked;
 
@@ -352,7 +371,7 @@ function TabModeRedirect({
       lastRedirectRef.current = target;
       router.replace(target as Href);
     };
-    if (!PAID_BILLING_ENABLED && tab === "billing") {
+    if (!mobileBillingEnabled && tab === "billing") {
       redirectTo(mode === "business" ? "/(tabs)/account" : "/(tabs)");
       return;
     }
@@ -369,7 +388,7 @@ function TabModeRedirect({
     if (target) {
       redirectTo(target);
     }
-  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked, billingLoading, ownerPinLocked]);
+  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked, billingLoading, mobileBillingEnabled, ownerPinLocked]);
 
   if (checkingProfile) {
     return (

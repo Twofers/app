@@ -1,11 +1,19 @@
 # AI Ad Current State Audit
 
 Date: 2026-06-19
+Stale-fact refresh: 2026-06-29
 Branch: `codex/ai-ad-current-state-audit`
 Safety checkpoint: `7ecad89e`
 Plan source: `C:\Users\unvme\Downloads\TWOFER_AI_AD_GENERATION_MASTER_PLAN(1).md`
 
 This is the Phase 0 audit requested by the master plan. It documents the current repository state only. No production behavior, schema, prompt, model, or runtime path was changed.
+
+Refresh note: this document predates later local offer-version, native-renderer, localization,
+and AI Deal Studio foundation work. Current repo evidence now includes `OfferDefinitionV1`,
+`AdSpecV1`, `publish-offer-version`, `offer_definitions`, `offer_versions`,
+`ad_generation_jobs`, and `ad_creatives` in local code/migrations. Hosted production application
+or Edge redeploy state is still not verified here; code and the deployment docs remain the source
+of truth where this older audit conflicts with current files.
 
 ## Scope and Constraints
 
@@ -26,16 +34,21 @@ This is the Phase 0 audit requested by the master plan. It documents the current
 The current app is not a naive one-prompt image generator. The main AI ad path already has meaningful guardrails:
 
 - OpenAI calls happen in Supabase Edge Functions, not in the Expo client.
-- The active ad generator uses JSON-schema copy output, a deterministic `DealOfferContract`, validation, one bounded repair attempt, and deterministic fallback copy.
+- The active ad generator uses JSON-schema copy output, a deterministic `DealOfferContract`, validation, one bounded repair attempt, an AI-copy style gate, and deterministic fallback copy.
 - Main ad text is rendered in native UI; the active `ai-generate-ad-variants` image prompt explicitly asks for no text, logos, QR codes, or overlays.
 - Cost logging exists in `ai_generation_costs`; generation audit logging exists in `ai_generation_logs`.
 - Claim, QR, visual redemption, and release are server-side Edge Function flows.
 - Database migrations include atomic max-claims enforcement and active-claim uniqueness guards, but live deployment state is not verified here.
 - New AI Create and Quick create publishes now fail closed if an offer definition cannot be built and always use the `publish-offer-version` Edge Function. Existing-deal edit/update compatibility still writes directly to `deals`.
 
-The biggest plan gap is architectural persistence. The current source of truth is still mutable `deals` plus `deal_claims`. There is no persisted `OfferDefinitionV1`, no immutable `offer_versions`, no durable `AdSpecV1`, and no `ad_generations` / `ad_variants` tables. The strongest contract today, `DealOfferContract`, is built transiently inside code and then flattened into the `deals` row at publish time.
+The biggest remaining plan gap is no longer "no persistence exists"; it is hosted rollout and full
+end-to-end use of the persistence model. Local code/migrations now include `OfferDefinitionV1`,
+`AdSpecV1`, `offer_definitions`, `offer_versions`, `ad_generation_jobs`, and `ad_creatives`, and
+new publish paths call `publish-offer-version`. Remaining caveats: hosted migration/deploy state is
+not verified here, legacy rows and existing-deal edit/update compatibility may still flatten back to
+`deals`, and the full persisted review/quality/variant lifecycle is not complete.
 
-One doc/code conflict: older docs such as `docs/twofer-ai-ad-mvp.md` expect exactly three visible ad options. The current implementation returns a single selected ad with `variant_count` and `selected_variant_index` metadata. Per repo rules, code wins; the audit treats the single-ad pipeline as current reality.
+Current implementation returns a single selected ad with `variant_count`, `selected_variant_index`, and up to five merchant-facing `copy_alternatives` for copy review. Full persisted creative-review variants are still future work.
 
 ## Current Owner Offer Flows
 
@@ -148,6 +161,10 @@ Implemented or drafted entities:
 - `deal_claims`: current claim, wallet, QR token/hash, redemption state, and claim telemetry row.
 - `redemptions`: staff redemption-mode audit table.
 - `deal_shares`: Share Deal records.
+- `offer_definitions`: authoritative draft/source offer facts for versioned publish.
+- `offer_versions`: immutable published offer/ad specs, including native-renderer and localization metadata in later migrations.
+- `ad_generation_jobs`: persisted AI generation job records for the AI Studio/media-library foundation.
+- `ad_creatives`: persisted creative candidates/specs associated with AI generation jobs.
 - `app_analytics_events`: product/funnel events.
 - `ai_generation_logs`: AI generation audit, quota, prompt/model metadata, response payload.
 - `ai_generation_costs`: private cost ledger with per-call model, endpoint, usage, estimated cost, request ids, success/errors. Ledger insert failures log fixed error codes rather than raw database exception text.
@@ -156,10 +173,7 @@ Missing plan entities:
 
 - `merchant_brand_profiles`
 - `catalog_item_assets`
-- `offer_definitions`
-- `offer_versions`
-- `ad_generations`
-- `ad_variants`
+- Full production-hardened `ad_generations` / `ad_variants` equivalents beyond the current `ad_generation_jobs` / `ad_creatives` foundation.
 - `ad_assets`
 - `prompt_versions`
 - `quality_check_results`
@@ -186,22 +200,23 @@ Model and provider controls:
 
 - Chat model is resolved from Edge secret `OPENAI_MODEL` through `resolveOpenAiChatModel()`.
 - Allowlist: `gpt-4o-mini`, `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4`.
-- Default: `gpt-5.4-mini`.
+- Default: `gpt-5.5`.
 - Unsupported configured models throw `AI_TEXT_CONFIG_INVALID` instead of silently downgrading.
 - Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`; OpenAI/Gemini image generation and edit HTTP failures and catch-path exceptions log sanitized status/error codes rather than raw upstream response bodies or free-form exception text.
 - OpenAI API keys are read from Edge secrets only.
 
 Stages:
 
-- Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed.
-- Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
+- Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed, and is disabled entirely when `AI_AD_WEB_SEARCH_ENABLED=false`.
+- Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V5`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
-- Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, OpenAI primary, and Gemini fallback only when `AI_VISION_FALLBACK_ENABLED=true`.
+- Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, Gemini primary by default (`AI_VISION_PRIMARY_PROVIDER`, cheap/multimodal), and OpenAI fallback when `AI_VISION_FALLBACK_ENABLED=true` (default true).
 
 Validation/fallback:
 
 - `generateValidatedDealCopy()` validates against `DealOfferContract`.
+- AI-originated visible copy runs through `evaluateAdCopyStyleGate()`, which rejects generic AI phrases, weak `Try our...` echoes, bare item-only hooks, and awkward grammar such as `Buy an any...` before a candidate can be selected.
 - One repair attempt is allowed for invalid copy.
 - Deterministic fallback copy is used if model request, parse, or validation fails.
 - If image generation fails and no poster is produced, the call returns copy-only mode only when the request/policy permits that deterministic fallback path.
@@ -248,8 +263,8 @@ Current image behavior:
 
 - Uploaded original photo can be used as-is.
 - Uploaded photo can be enhanced with `touchup`, `cleanbg`, or `studiopolish`.
-- No-photo ad generation uses a generated food/product image.
-- Generated image QA checks required items for multi-item offers through the shared structured provider router, uses OpenAI vision first, can fall back to Gemini vision when `AI_VISION_FALLBACK_ENABLED=true`, and may regenerate once.
+- Main AI Create no-photo generation now uses a deterministic native fallback visual by default, avoiding image-provider latency and preserving copy-only publishability.
+- Generated image QA checks required items for multi-item offers through the shared structured provider router, uses Gemini vision first by default, can fall back to OpenAI vision when `AI_VISION_FALLBACK_ENABLED=true`, runs at low reasoning effort, and may regenerate once.
 - The active ad image prompt forbids text, logos, labels, signage, overlays, and QR codes.
 
 Gaps:
@@ -289,7 +304,7 @@ Inventory/race protections:
 
 Remaining gap:
 
-- Claims and redemptions point to `deals.id`, not to immutable `offer_versions`. If a deal row is materially edited after claims exist, the historical claim has no separate immutable offer snapshot to reference.
+- Local migrations now add `offer_definition_id` / `offer_version_id` columns and binding triggers for deals, claims, and redemptions, but hosted deployment state is not verified here. App and Edge flows still mostly reason through `deals.id`, so verify the applied migration chain before relying on immutable offer-version history for claims.
 
 ## Telemetry, Analytics, Latency, and Cost
 
@@ -316,9 +331,9 @@ Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-on
 
 Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents the Gemini text fallback, independent judge, image generation/edit data flow, sensitive data exclusions, and the public privacy/subprocessor activation gate. Text fallback must remain hosted with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
 
-Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It tries Gemini multimodal QA behind `AI_VISION_FALLBACK_ENABLED=true` after OpenAI vision failure. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
+Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It runs Gemini multimodal QA first by default (`AI_VISION_PRIMARY_PROVIDER=gemini`) at low reasoning effort and falls back to OpenAI vision (`AI_VISION_FALLBACK_ENABLED=true`, default true) when Gemini QA fails or its model is misconfigured. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
 
-Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet.
+Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet, and is disabled entirely when `AI_AD_WEB_SEARCH_ENABLED=false`.
 
 Menu OCR router follow-up: the app-facing base64 `ai-extract-menu` path now uses the shared structured provider router with image inputs, strict menu JSON schema, and provider-attempt cost telemetry. The legacy `image_url` request shape remains a direct OpenAI Responses path for compatibility because it lets the provider fetch a remote image URL rather than sending inline bytes.
 
@@ -337,9 +352,9 @@ Critical architecture gaps:
 
 - OfferDefinition/OfferVersion migrations and versioned publish code exist locally, but production application/deploy state is not verified here.
 - New publishes can carry durable `AdSpecV1` through `publish-offer-version`; legacy rows and existing-deal edits are not fully AdSpec-driven.
-- No `ad_variants` review state; the current generator selects one ad and returns metadata about variants rather than persisting reviewable variants.
+- No full merchant-facing persisted variant review workflow yet. The local `ad_generation_jobs` / `ad_creatives` foundation exists, but the current production owner flow still selects one ad and returns metadata about variants.
 - Versioned publish provides a server-side publish transaction for new deals when the migration/RPC is deployed; existing-deal edit/update compatibility remains outside that model.
-- Claims and QR redemption do not reference the exact offer version the consumer claimed.
+- Claim/redemption offer-version binding depends on the later migration chain being applied and verified; do not assume exact claimed-version history on a hosted project until that deployment state is confirmed.
 
 AI and quality gaps:
 
@@ -384,7 +399,7 @@ Gaps against the master plan eval target:
 
 - Existing fixture count is far below the plan's 250 structured scenarios and 75 visual scenarios.
 - Current evals focus mostly on copy mechanics, not full AdSpec render, accessibility, image mismatch, OCR/watermark checks, or end-to-end publish/claim consistency.
-- Manual validation docs are older than the current single-ad pipeline and still describe a three-option MVP.
+- Manual validation docs now target the current single-ad pipeline with up to five copy alternatives, but the fixture set remains smaller than the full eval target.
 
 ## Phase Gap Matrix
 
@@ -393,30 +408,33 @@ Gaps against the master plan eval target:
 Partially present:
 
 - `DealOfferContract` provides transient structured mechanics and canonical lines.
+- `OfferDefinitionV1` exists as a shared TypeScript contract and builder.
 - `deals` has eligibility columns for deal type, items, percentages, values, and statuses.
+- Local migrations define `offer_definitions`, `offer_versions`, and claim/redemption binding columns/triggers.
+- `publish-offer-version` provides the server-side publish path for new versioned publishes when deployed.
 - Claim-side inventory and active-claim guards exist in migrations.
 
 Missing:
 
-- `OfferDefinitionV1` schema as a stable exported contract.
-- Persisted offer definitions before model generation.
-- Immutable offer versions.
-- Claims and QR bound to offer version.
-- Publish idempotency and server-side publish transaction.
+- Hosted migration/function deployment verification.
+- Existing-deal edit/update semantics fully moved onto immutable offer versions.
+- Full claim/QR reliance on applied offer-version bindings in production.
+- Pre-generation server-side draft persistence for every owner flow.
 
 ### Phase 2 - Deterministic Ad Renderer and Safe Templates
 
 Partially present:
 
 - App renders text and CTA outside generated image in the main AI ad screen.
+- `AdSpecV1` exists and new publish paths build native-renderer ad specs.
 - `buildFallbackTemplateAd()` exists for local fallback ad copy.
 - AI Create renders a deterministic native fallback visual for no-image merchant previews.
 - Existing deal cards render poster plus native text.
 
 Missing:
 
-- AdSpec-driven feed/detail/claim renderer.
-- Controlled template library with safe zones, dimensions, contrast, and long-text rules.
+- Full AdSpec-driven feed/detail/claim renderer rollout after hosted migrations/functions are applied.
+- Production-hardened controlled template library with safe zones, dimensions, contrast, and long-text rules.
 - Static social-share renderer from the same AdSpec.
 - Visual snapshots and accessibility checks.
 - Always-publishable no-AI ad from every valid offer across every surface.
@@ -426,18 +444,18 @@ Missing:
 Partially present:
 
 - Strict JSON schema for copy.
-- Versioned prompt constant `AI_COPY_PROMPT_V4`.
-- Five lane-based candidate variants in one response, with validated selection.
+- Versioned prompt constant `AI_COPY_PROMPT_V5`.
+- Five lane-based candidate variants in one response, with validated selection and up to five merchant-facing copy alternatives.
 - Banned-claim/metadata-leak checks.
 - Bounded repair and deterministic fallback.
 - Per-call cost and metadata logging.
+- Local `ad_generation_jobs` / `ad_creatives` tables exist for the media-library / AI Studio foundation.
 
 Missing:
 
-- Persisted `CreativeBriefV1`.
-- Persisted `CreativeConceptSetV1`.
-- Merchant-facing three review variants.
-- First-class generation status and total latency budgets.
+- Production owner-flow persistence of `CreativeBriefV1` / `CreativeConceptSetV1` equivalents.
+- Full persisted creative-review variants beyond the current copy alternatives.
+- First-class generation status surfaced through the main owner flow and total latency budgets.
 - Full prompt/model release registry.
 
 ### Phase 4 - Product Asset Pipeline
@@ -484,19 +502,27 @@ Goal: introduce authoritative offer contracts without changing customer-visible 
 
 Proposed slice:
 
+The original vertical slice below has largely moved from proposal to local implementation:
+`OfferDefinitionV1`, canonical offer helpers, `AdSpecV1`, deterministic fallback/native renderer
+pieces, and versioned publish plumbing now exist locally. The next useful slice is to verify the
+hosted migration/function deploy state, then close the remaining legacy edit/update and persisted
+creative-review gaps.
+
+Original proposed slice:
+
 1. Add a shared `OfferDefinitionV1` TypeScript contract and builder that is derived from existing `DealEligibilityFormState`, selected location, schedule, quantity, cutoff, and business/menu item facts.
 2. Add deterministic `canonicalOfferSentence` and disclosure builder using existing `DealOfferContract` rules as the starting point.
 3. Add focused unit tests for same-item BOGO, different-item free reward, percent-off single item, quantity, cutoff, and location disclosures.
 4. Add a no-AI safe ad fallback builder that consumes `OfferDefinitionV1` and returns the current `GeneratedAd` shape, so the UI can publish without provider output.
 5. Wire the full AI and Quick flows to build this object in memory before calling AI, but do not persist or migrate yet.
 
-Why this slice first:
+Historical rationale:
 
 - It moves facts out of model output while avoiding a Supabase migration hard gate.
 - It reuses current UI and `deals` publish paths.
-- It gives tests a stable contract before adding `offer_definitions` and `offer_versions`.
+- It gave tests a stable contract before adding `offer_definitions` and `offer_versions`.
 - It creates the deterministic fallback needed for Phase 2 without redesigning the renderer yet.
 
-Follow-up slice after approval:
+Historical follow-up, now partially implemented locally:
 
-- Draft migrations for `offer_definitions` and `offer_versions`, plus a server-side publish Edge Function that writes `deals` from an approved offer version. This will require explicit approval before applying any migration.
+- Draft migrations for `offer_definitions` and `offer_versions`, plus a server-side publish Edge Function that writes `deals` from an approved offer version. Local migrations and `publish-offer-version` now exist; applying migrations or deploying functions remains hard-gated and requires explicit approval.

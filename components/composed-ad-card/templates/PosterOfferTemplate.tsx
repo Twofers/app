@@ -1,16 +1,17 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
-import { AdBrandRow } from "../AdBrandRow";
 import { AdCallToAction } from "../AdCallToAction";
+import { AdFavoriteButton } from "../AdFavoriteButton";
 import { AdStatusBadges } from "../AdStatusBadges";
-import { AdSupportingCopy } from "../AdSupportingCopy";
-import { LockedOfferLine } from "../LockedOfferLine";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
-  const { copy, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
-  const showTerms = surface !== "consumer_feed" && Boolean(offerFacts.termsLine);
+  const { contentLocale, copy, favoriteAction, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, posterSpec, presentation, secondaryAction, surface, tokens } = props;
+  // Only a real recurring schedule ("Weekdays 2–5 PM") belongs here; never fall back
+  // to the countdown, which the urgency line already carries.
+  const scheduleLine = offerFacts.scheduleSummary?.trim() || null;
+  const showMerchantLine = surface !== "consumer_feed";
 
   return (
     <Pressable
@@ -20,7 +21,10 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
       accessibilityLabel={props.accessibilityLabel}
       style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}
     >
-      <AdPosterCanvas spec={posterSpec} imageUri={imageUri} style={styles.poster} />
+      <View style={styles.posterWrap}>
+        <AdPosterCanvas spec={posterSpec} imageUri={imageUri} contentLocale={contentLocale} style={styles.poster} />
+        {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
+      </View>
       <View style={[styles.panel, { backgroundColor: tokens.panelBackground }]}>
         <AdStatusBadges
           liveState={liveState}
@@ -29,12 +33,14 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
           showQuantityRemaining={presentation.showQuantityRemaining}
           showTimeRemaining={presentation.showTimeRemaining}
         />
-        <AdBrandRow merchant={merchant} tokens={tokens} />
-        <LockedOfferLine tokens={tokens}>{offerFacts.primaryOfferLine}</LockedOfferLine>
-        {presentation.showSupportingCopy ? <AdSupportingCopy tokens={tokens}>{copy.supportingCopy}</AdSupportingCopy> : null}
-        {showTerms ? (
-          <Text numberOfLines={3} maxFontSizeMultiplier={1.15} style={[styles.terms, { color: tokens.panelMutedText }]}>
-            {offerFacts.termsLine}
+        {showMerchantLine ? (
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.merchant, { color: tokens.panelMutedText }]}>
+            {merchant.name}
+          </Text>
+        ) : null}
+        {scheduleLine ? (
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={[styles.schedule, { color: tokens.panelText }]}>
+            {scheduleLine}
           </Text>
         ) : null}
         <AdCallToAction
@@ -55,6 +61,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  posterWrap: {
+    position: "relative",
+  },
   poster: {
     borderRadius: 0,
   },
@@ -62,10 +71,17 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 9,
   },
-  terms: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "600",
+  merchant: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  schedule: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
     letterSpacing: 0,
   },
 });

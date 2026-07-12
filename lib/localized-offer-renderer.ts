@@ -95,6 +95,10 @@ function articleFor(nounPhrase: string): "a" | "an" {
   return /^[aeiou]/i.test(clean) ? "an" : "a";
 }
 
+function startsWithDeterminer(value: string): boolean {
+  return /^(?:a|an|any|the)\s+/i.test(cleanText(value));
+}
+
 function pluralizeWord(word: string): string {
   if (!word || /[^A-Za-z]$/.test(word)) return word;
   if (/(?:s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
@@ -115,20 +119,36 @@ function pluralizeItemPhrase(value: string): string {
 
 function enCountedItem(quantity: number, itemName: string): string {
   const item = stripLeadingArticle(itemName);
-  if (quantity === 1) return `one ${lowerFirst(item)}`;
+  if (quantity === 1) {
+    if (/^any\s+/i.test(item)) return lowerFirst(item);
+    return `one ${lowerFirst(item)}`;
+  }
   return `${enNumberWord(quantity)} ${pluralizeItemPhrase(item)}`;
 }
 
 function enPurchasePhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
-  if (quantity === 1) return `${articleFor(item)} ${lowerFirst(stripLeadingArticle(item))}`;
+  if (quantity === 1) {
+    if (startsWithDeterminer(item)) return lowerFirst(item);
+    return `${articleFor(item)} ${lowerFirst(stripLeadingArticle(item))}`;
+  }
   return `${enNumberWord(quantity)} ${pluralizeItemPhrase(item)}`;
 }
 
 function enFreeRewardPhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
-  if (quantity === 1) return `${articleFor(item)} free ${lowerFirst(stripLeadingArticle(item))}`;
+  if (quantity === 1) {
+    if (startsWithDeterminer(item)) return `${lowerFirst(item)} free`;
+    return `${articleFor(item)} free ${lowerFirst(stripLeadingArticle(item))}`;
+  }
   return `${enNumberWord(quantity)} free ${pluralizeItemPhrase(item)}`;
+}
+
+function enDiscountItemPhrase(itemName: string): string {
+  const item = cleanText(itemName);
+  if (!item) return "item";
+  if (startsWithDeterminer(item)) return lowerFirst(item);
+  return `one ${lowerFirst(stripLeadingArticle(item))}`;
 }
 
 function sameItem(left: string, right: string): boolean {
@@ -201,7 +221,7 @@ function termsForFacts(
 
 function renderEnglishLine(facts: OfferFacts, paidTerm: LocalizedOfferTerm, rewardTerm: LocalizedOfferTerm): string {
   if (facts.offerType === "percent_off_single_item") {
-    return `Get ${facts.discountPercent ?? 0}% off one ${lowerFirst(stripLeadingArticle(paidTerm.displayName))}`;
+    return `Get ${facts.discountPercent ?? 0}% off ${enDiscountItemPhrase(paidTerm.displayName)}`;
   }
   if (facts.offerType === "buy_one_get_one" || sameItem(paidTerm.displayName, rewardTerm.displayName)) {
     const rewardPhrase = facts.rewardQuantity === 1 ? "one free" : `${enNumberWord(facts.rewardQuantity)} free`;

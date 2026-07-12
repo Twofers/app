@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -76,12 +77,24 @@ export function DealEligibilityForm({
   compact = false,
 }: Props) {
   const eligibility = result ?? validateDealEligibility(dealEligibilityFormToInput(value));
+  // Only surface a field's red error after the merchant has interacted with it.
+  // Without this, resuming a draft (or switching offer type) flashes "Enter the
+  // single item…" on an empty field the user hasn't touched yet. The overall
+  // eligibility summary below still reflects readiness at all times, and the
+  // create flow re-validates before generate/publish.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const markTouched = (key: string) => setTouched((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
   const activeType = OFFER_TYPES.find((opt) => opt.id === value.dealType) ?? OFFER_TYPES[0]!;
   const textOnMuted = colorScheme === "dark" ? theme.text : Gray[800];
   const fieldPadding = compact ? 8 : 12;
   const fieldMarginTop = compact ? 3 : 6;
   const fieldMinWidth = compact ? 112 : 140;
   const rowGap = compact ? 6 : 10;
+  const fieldRowStyle = {
+    flexDirection: compact ? "column" : "row",
+    flexWrap: "wrap",
+    gap: rowGap,
+  } as const;
   const activeTypeHelper = t(`dealEligibility.type.${activeType.id}.helper`, {
     defaultValue: activeType.helper,
   });
@@ -102,13 +115,14 @@ export function DealEligibilityForm({
     >,
     placeholder = "0.00",
   ) {
-    const error = fieldError(stateKey);
+    const error = touched[stateKey] ? fieldError(stateKey) : null;
     return (
-      <View style={{ flex: 1, minWidth: fieldMinWidth }}>
+      <View style={{ flex: compact ? undefined : 1, width: compact ? "100%" : undefined, minWidth: compact ? undefined : fieldMinWidth }}>
         <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
         <TextInput
           value={value[stateKey]}
           onChangeText={(text) => set(stateKey, sanitizeDecimalInput(text))}
+          onBlur={() => markTouched(stateKey)}
           keyboardType="decimal-pad"
           inputAccessoryViewID={inputAccessoryViewID}
           returnKeyType="done"
@@ -137,13 +151,14 @@ export function DealEligibilityForm({
     >,
     placeholder: string,
   ) {
-    const error = fieldError(stateKey);
+    const error = touched[stateKey] ? fieldError(stateKey) : null;
     return (
       <View>
         <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
         <TextInput
           value={value[stateKey]}
           onChangeText={(text) => set(stateKey, text)}
+          onBlur={() => markTouched(stateKey)}
           placeholder={placeholder}
           placeholderTextColor={theme.mutedText}
           style={{
@@ -162,15 +177,16 @@ export function DealEligibilityForm({
   }
 
   function renderDiscountPercentField() {
-    const error = fieldError("discountPercent");
+    const error = touched.discountPercent ? fieldError("discountPercent") : null;
     return (
-      <View style={{ flex: 1, minWidth: fieldMinWidth }}>
+      <View style={{ flex: compact ? undefined : 1, width: compact ? "100%" : undefined, minWidth: compact ? undefined : fieldMinWidth }}>
         <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>
           {t("dealEligibility.discountLabel", { defaultValue: "Discount percent" })}
         </Text>
         <TextInput
           value={value.discountPercent}
           onChangeText={(text) => set("discountPercent", sanitizeDecimalInput(text))}
+          onBlur={() => markTouched("discountPercent")}
           keyboardType="decimal-pad"
           inputAccessoryViewID={inputAccessoryViewID}
           returnKeyType="done"
@@ -295,7 +311,7 @@ export function DealEligibilityForm({
             "itemDescription",
             t("dealEligibility.itemPlaceholder", { defaultValue: "Example: croissant" }),
           )}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: rowGap }}>
+          <View style={fieldRowStyle}>
             {renderDiscountPercentField()}
             {renderCurrencyField(
               t("dealEligibility.itemValueLabel", { defaultValue: "Retail value (optional)" }),
@@ -318,7 +334,7 @@ export function DealEligibilityForm({
                 t("dealEligibility.freeItemPlaceholder", { defaultValue: "Example: any pastry" }),
               )
             : null}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: rowGap }}>
+          <View style={fieldRowStyle}>
             {renderCurrencyField(
               t("dealEligibility.requiredValueLabel", { defaultValue: "Buy item value (optional)" }),
               "requiredItemRetailValue",

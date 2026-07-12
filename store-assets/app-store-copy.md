@@ -25,7 +25,7 @@ Discover live BOGO deals near you the moment they go live. Claim a deal in one t
 • Works offline — your QR code is always available in your wallet
 
 **For local business owners:**
-Post a BOGO deal in under 60 seconds. Set your discount, how many claims you allow, and when it expires — then watch customers walk through the door. No subscription, no commission.
+Post a BOGO deal in under 60 seconds. Set your discount, how many claims you allow, and when it expires — then watch customers walk through the door. Pilot plan access may vary by account; redemptions are not commission-based.
 
 • AI Compose: describe your offer in plain words (or snap a photo of your menu board) and let AI turn it into a polished deal
 • Real-time analytics: track claims, redemptions, and estimated new customers
@@ -65,7 +65,7 @@ Discover live BOGO deals near you the moment they go live. Claim a deal in one t
 ✓ Works offline — your QR code is always available in your wallet
 
 **For local business owners:**
-Post a BOGO deal in under 60 seconds. Set your discount, how many claims you allow, and when it expires — then watch customers walk through the door. No subscription, no commission on redemptions.
+Post a BOGO deal in under 60 seconds. Set your discount, how many claims you allow, and when it expires — then watch customers walk through the door. Pilot plan access may vary by account; redemptions are not commission-based.
 
 ★ AI Compose: describe your offer in plain words or snap a photo of your menu board — AI turns it into a polished, ready-to-post deal
 ★ Real-time analytics: see claims, redemptions, and estimated new customers live
@@ -81,7 +81,7 @@ Support local. Get a great deal. Open Twofer.
 Food & Drink
 
 ### Content Rating
-Everyone
+13+
 
 ### Tags / Store Topics
 Deals, Coupons, Local Business, Coffee, Food, Restaurants
@@ -97,9 +97,10 @@ Support: `https://www.twoferapp.com/support`
 Delete:  `https://www.twoferapp.com/delete-account`
 
 Minimum required disclosures:
-- Location data is used only to sort nearby deals; not stored or shared
+- Location data is used to sort nearby deals, map results, and alerts; ZIP and last-known location preferences may be stored for app functionality and are not sold
 - Camera access is used only to scan QR codes for deal redemption
 - Microphone access is used only for voice input in AI Compose; audio is sent to the app's AI transcription service to turn speech into offer text and is not sold
+- If billing is enabled for a build, subscription checkout is handled by Stripe; Twofer does not store card numbers
 - No personal data is sold to third parties
 
 ---

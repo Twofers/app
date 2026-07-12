@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -10,6 +11,7 @@ type ProfileCompletenessBarProps = {
 };
 
 export function ProfileCompletenessBar({ percentage, hint }: ProfileCompletenessBarProps) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const progress = useSharedValue(0);
@@ -23,16 +25,19 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
   }));
 
   const isComplete = percentage >= 100;
+  const label = isComplete
+    ? t("profileCompleteness.complete", { defaultValue: "100% complete" })
+    : t("profileCompleteness.incomplete", { percentage, defaultValue: "{{percentage}}% complete" });
 
   return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-        {isComplete ? "100% \u2014 looking great!" : `${percentage}% complete`}
+    <View style={{ gap: 5 }}>
+      <Text style={{ fontWeight: "800", fontSize: 12, lineHeight: 16, color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.08}>
+        {label}
       </Text>
       <View
         style={{
-          height: 8,
-          borderRadius: 4,
+          height: 6,
+          borderRadius: 3,
           backgroundColor: theme.border,
           overflow: "hidden",
         }}
@@ -40,8 +45,8 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
         <Reanimated.View
           style={[
             {
-              height: 8,
-              borderRadius: 4,
+              height: 6,
+              borderRadius: 3,
               backgroundColor: theme.primary,
             },
             barStyle,
@@ -49,7 +54,7 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
         />
       </View>
       {hint && !isComplete ? (
-        <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
+        <Text style={{ fontSize: 12, color: theme.mutedText, lineHeight: 16 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
           {hint}
         </Text>
       ) : null}

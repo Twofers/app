@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatValiditySummary, getDealClaimScheduleBlock } from "./deal-time";
+import { formatValiditySummary, getDealClaimScheduleBlock, shortTimeZoneLabel } from "./deal-time";
 
 const baseRecurringDeal = {
   is_recurring: true,
@@ -77,5 +77,56 @@ describe("formatValiditySummary", () => {
     );
 
     expect(result).toBe("Ends Jun 25, 2026, 2:00 AM");
+  });
+
+  it("renders recurring windows with a short, customer-friendly timezone (never raw IANA)", () => {
+    const result = formatValiditySummary(
+      {
+        is_recurring: true,
+        timezone: "America/Chicago",
+        days_of_week: [1, 2, 3, 4, 5],
+        window_start_minutes: 15 * 60 + 3,
+        window_end_minutes: 23 * 60 + 3,
+      },
+      { lang: "en-US" },
+    );
+
+    expect(result).toContain("(CT)");
+    expect(result).not.toContain("America/Chicago");
+  });
+
+  it("omits the timezone when showTimeZone is false", () => {
+    const result = formatValiditySummary(
+      {
+        is_recurring: true,
+        timezone: "America/Chicago",
+        days_of_week: [1, 2, 3, 4, 5],
+        window_start_minutes: 15 * 60 + 3,
+        window_end_minutes: 23 * 60 + 3,
+      },
+      { lang: "en-US", showTimeZone: false },
+    );
+
+    expect(result).not.toContain("(");
+  });
+});
+
+describe("shortTimeZoneLabel", () => {
+  it("collapses US standard/daylight abbreviations to a generic label", () => {
+    expect(shortTimeZoneLabel("America/Chicago")).toBe("CT");
+    expect(shortTimeZoneLabel("America/New_York")).toBe("ET");
+    expect(shortTimeZoneLabel("America/Los_Angeles")).toBe("PT");
+  });
+
+  it("leaves non-abbreviating zones as their short name", () => {
+    expect(shortTimeZoneLabel("UTC")).toBe("UTC");
+  });
+
+  it("keeps the US abbreviation in non-English locales (F-018)", () => {
+    // es/ko Intl returns a raw "GMT-5" offset for America/Chicago; the label
+    // must still collapse to "CT" instead of leaking the offset to the user.
+    expect(shortTimeZoneLabel("America/Chicago", "es")).toBe("CT");
+    expect(shortTimeZoneLabel("America/Chicago", "ko")).toBe("CT");
+    expect(shortTimeZoneLabel("America/New_York", "es")).toBe("ET");
   });
 });

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Login | Twofer</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links"><a href="/admin">Overview</a><a href="/support">Support</a></div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Restricted access</p>
+          <h1>Admin Login</h1>
+          <p class="lede">Admin access is limited to active users in the server-side admin allowlist.</p>
+        </div>
+      </div>
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Sign in</h2>
+          <form class="admin-form admin-login-form" data-admin-login-form novalidate>
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" inputmode="email" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <label class="check admin-session-choice">
+              <input name="remember" type="checkbox" checked />
+              <span>Keep me signed in on this browser</span>
+            </label>
+            <div class="admin-login-actions">
+              <button type="submit">Sign in to admin</button>
+              <button type="button" class="button button-secondary" data-admin-clear-session>Clear session</button>
+            </div>
+            <p class="status" data-admin-login-status role="status" aria-live="polite"></p>
+          </form>
+          <div class="admin-mfa-panel" data-mfa-panel hidden>
+            <div data-mfa-qr-block hidden>
+              <p>Scan this QR code with an authenticator app (Google Authenticator, 1Password, Authy), then enter the 6-digit code below to finish setup.</p>
+              <img
+                data-mfa-qr
+                alt="Authenticator app QR code"
+                width="200"
+                height="200"
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+              />
+              <p class="admin-note">Can't scan the code? Enter this setup key manually: <code data-mfa-secret></code></p>
+            </div>
+            <p data-mfa-prompt>Enter the 6-digit code from your authenticator app.</p>
+            <label>
+              Verification code
+              <input data-mfa-code type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+            </label>
+            <div class="admin-login-actions">
+              <button type="button" data-mfa-submit>Verify</button>
+            </div>
+            <p class="status" data-mfa-status role="status" aria-live="polite"></p>
+          </div>
+        </article>
+        <article class="admin-panel">
+          <h2>Authentication Boundary</h2>
+          <p>Sign in with the same Supabase Auth user that is active in the <code>admin_users</code> allowlist. When "keep me signed in" is checked, this browser stores a refresh token so the dashboard can renew the short-lived access token automatically.</p>
+          <p class="admin-note">Never paste service-role keys, Stripe keys, API keys, or production secrets into this page. This form only accepts your admin email and password.</p>
+        </article>
+        <article class="admin-panel">
+          <h2>Security Checks</h2>
+          <p>Every admin action must independently check authentication, active admin role, permission, valid target state, and audit logging. The UI is only a convenience layer.</p>
+          <a class="button" href="/admin">Open dashboard</a>
+        </article>
+      </section>
+    </main>
+    <script src="/admin/admin-login.js?v=20260701-admin-login"></script>
+  </body>
+</html>

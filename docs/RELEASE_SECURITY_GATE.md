@@ -81,11 +81,11 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
 6. **Authorization** — every write verifies authentication **and** ownership/role
    in the DB or Edge Function, not just in the UI.
 
-## Baseline (2026-06-17 diagnostic)
+## Baseline (2026-06-17 diagnostic; stale facts refreshed 2026-06-29)
 
 - **Secrets:** clean — no real secret in tree or history; `.env` untracked;
   `google-services.json` is Android client config (no service-account key).
-- **RLS:** mature (76 migrations, smoke probe in place); needs a live run of the
+- **RLS:** mature (99 local migrations, smoke probe in place); needs a live run of the
   three checks above to confirm against prod.
 - **Rate limiting:** AI ad/copy/translate gen capped (translate added
   2026-06-17, 30/mo per business). `deal-link` is a public QR/share landing page
@@ -97,4 +97,7 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
 - **Authorization:** `verify_jwt=false` on ~30 functions, each doing its own
   auth in the samples checked; confirm the pattern for all of them.
 
-Stripe hardening is deferred while billing is disabled (`PAID_BILLING_ENABLED=false`).
+Stripe hardening is no longer safely deferred on the assumption that billing is hidden:
+`PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true` in current code. Keep live
+charging off until Stripe test-mode QA, webhook verification, store-policy review, and the intended
+pilot/live posture are complete.

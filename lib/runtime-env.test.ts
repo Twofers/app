@@ -10,7 +10,10 @@ vi.mock("expo-constants", () => ({
   },
 }));
 
+import Constants from "expo-constants";
 import {
+  canLoadAiDealStudioDevRoutes,
+  getAiStudioDevStartupGuardError,
   getPublicEnvSnapshot,
   isAiV4AuthoritativeOfferCardEnabled,
   isAiV4ComposedAdCardEnabled,
@@ -34,7 +37,63 @@ import {
   isAiV5PersuasiveTranscreationEnabled,
   isAiV5SourceLocaleCreativeEnabled,
   isAiV5TranslationQaEnabled,
+  isPosterLookV2Enabled,
+  isPosterViewerLanguageEnabled,
 } from "./runtime-env";
+
+describe("runtime-env AI Studio dev production guard", () => {
+  const previous = {
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV,
+    EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING,
+  };
+  const previousExtra = { ...((Constants.expoConfig?.extra as Record<string, unknown> | undefined) ?? {}) };
+  const previousAndroid = Constants.expoConfig?.android ? { ...Constants.expoConfig.android } : undefined;
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    const mutableConstants = Constants as typeof Constants & {
+      expoConfig: NonNullable<typeof Constants.expoConfig>;
+    };
+    mutableConstants.expoConfig.extra = { ...previousExtra };
+    mutableConstants.expoConfig.android = previousAndroid;
+  });
+
+  function configureAiStudioDevWithProductionSupabase() {
+    const mutableConstants = Constants as typeof Constants & {
+      expoConfig: NonNullable<typeof Constants.expoConfig>;
+    };
+    mutableConstants.expoConfig.extra = {
+      appVariant: "ai-studio-dev",
+      androidPackage: "com.unvmex2.twoforone.dev",
+    };
+    mutableConstants.expoConfig.android = { package: "com.unvmex2.twoforone.dev" };
+    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://kvodhiqhdqnptqovovia.supabase.co";
+    process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV = "true";
+  }
+
+  it("allows the dev package to use production Supabase when publishing is disabled", () => {
+    configureAiStudioDevWithProductionSupabase();
+    process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING = "true";
+
+    expect(getAiStudioDevStartupGuardError()).toBeNull();
+    expect(canLoadAiDealStudioDevRoutes()).toBe(true);
+  });
+
+  it("blocks the dev package on production Supabase when publishing is not disabled", () => {
+    configureAiStudioDevWithProductionSupabase();
+    delete process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING;
+
+    expect(getAiStudioDevStartupGuardError()).toContain("publishing is disabled");
+    expect(canLoadAiDealStudioDevRoutes()).toBe(false);
+  });
+});
 
 describe("runtime-env retired offer rollout flags", () => {
   const previous = process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;
@@ -157,6 +216,10 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED;
     delete process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
+    delete process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+    delete process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED;
+    delete process.env.POSTER_LOOK_V2_ENABLED;
+    delete process.env.EXPO_PUBLIC_POSTER_LOOK_V2;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -180,6 +243,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(false);
     expect(isAiV5LocaleScreenshotQaEnabled()).toBe(false);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(false);
+    expect(isPosterViewerLanguageEnabled()).toBe(false);
+    expect(isPosterLookV2Enabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -205,6 +270,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED = "true";
+    process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED = "true";
+    process.env.EXPO_PUBLIC_POSTER_LOOK_V2 = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -228,5 +295,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(true);
     expect(isAiV5LocaleScreenshotQaEnabled()).toBe(true);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(true);
+    expect(isPosterViewerLanguageEnabled()).toBe(true);
+    expect(isPosterLookV2Enabled()).toBe(true);
   });
 });

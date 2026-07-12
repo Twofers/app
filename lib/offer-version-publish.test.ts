@@ -16,14 +16,17 @@ import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
 } from "./deal-offer-contract";
+import { validateDealEligibility, type DealEligibilityInput } from "./deal-eligibility";
 import {
   buildAuthoritativeDealDisplayCopy,
   buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   buildPublishMechanicsValidationCopy,
+  checkMerchantDealTitleAgainstOffer,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
 import { buildAdImageSelection } from "./merchant-image-selection";
+import { buildPosterSpecFromOfferDefinition } from "./poster/posterCopy";
 
 function buildDefinition() {
   const definition = buildOfferDefinitionV1({
@@ -63,7 +66,7 @@ describe("offer version publish client helpers", () => {
     ).toEqual({
       title: "Buy one latte and get one free",
       description:
-        "Purchase 1 latte to receive 1 latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
+        "Purchase one latte to receive one latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
     });
   });
 
@@ -115,6 +118,111 @@ describe("offer version publish client helpers", () => {
       valid: true,
       reasonCodes: [],
     });
+  });
+
+  it("keeps a fact-safe merchant-edited title over the canonical offer line", () => {
+    const definition = buildDefinition();
+
+    expect(
+      buildAuthoritativeDealDisplayCopy(
+        definition,
+        { title: "Latte time with a friend", description: "Body." },
+        { factSafeMerchantTitle: "Latte time with a friend" },
+      ).title,
+    ).toBe("Latte time with a friend");
+
+    // Absent or blank merchant title keeps the canonical line (unedited publishes unchanged).
+    expect(
+      buildAuthoritativeDealDisplayCopy(
+        definition,
+        { title: "AI coffee hook", description: "Body." },
+        { factSafeMerchantTitle: "   " },
+      ).title,
+    ).toBe("Buy one latte and get one free");
+  });
+
+  it("allows merchant titles that omit facts but blocks titles that contradict them", () => {
+    const percentOffEligibility: DealEligibilityInput = {
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "agujjim",
+      itemRetailValueCents: 2500,
+    };
+    const contract = buildDealOfferContract({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Seoul Table",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Seoul Table",
+      dealEligibility: percentOffEligibility,
+      eligibilityResult: validateDealEligibility(percentOffEligibility),
+      activeWindowHumanReadable: "Today, 5:00 PM-9:00 PM",
+      quantityLimit: 25,
+    });
+    if (!contract) throw new Error("Expected valid contract");
+
+    // Creative titles that omit facts are fine — the locked offer line carries them.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Seoul Table dinner night" }, contract).ok).toBe(true);
+    // The canonical line itself always passes.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Get 40% off one agujjim" }, contract).ok).toBe(true);
+    // Empty input and missing contract are no-ops.
+    expect(checkMerchantDealTitleAgainstOffer({ title: "" }, contract).ok).toBe(true);
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Free agujjim" }, null).ok).toBe(true);
+
+    // Contradictions block: "free" on a percent-off deal.
+    const freeCheck = checkMerchantDealTitleAgainstOffer({ title: "Free agujjim tonight" }, contract);
+    expect(freeCheck.ok).toBe(false);
+    expect(freeCheck.blockingCodes).toContain("FREE_OR_BOGO_LANGUAGE_NOT_ALLOWED");
+
+    // Wrong percent blocks.
+    const percentCheck = checkMerchantDealTitleAgainstOffer({ title: "50% off agujjim" }, contract);
+    expect(percentCheck.ok).toBe(false);
+    expect(percentCheck.blockingCodes).toContain("DISCOUNT_PERCENT_CHANGED");
+
+    // A contradicting subheadline blocks even when the title is clean.
+    const supportingCheck = checkMerchantDealTitleAgainstOffer(
+      { title: "Dinner night", supportingLine: "Buy one get one free agujjim" },
+      contract,
+    );
+    expect(supportingCheck.ok).toBe(false);
+
+    // Overlong merchant titles block instead of being silently clipped.
+    const longCheck = checkMerchantDealTitleAgainstOffer(
+      { title: `Agujjim night ${"very ".repeat(20)}special` },
+      contract,
+    );
+    expect(longCheck.ok).toBe(false);
+    expect(longCheck.blockingCodes).toContain("HEADLINE_TOO_LONG");
+  });
+
+  it("blocks merchant titles that change buy-one-get-something-free mechanics", () => {
+    const bogsfEligibility: DealEligibilityInput = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "egg sandwich",
+      requiredItemRetailValueCents: 700,
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    };
+    const contract = buildDealOfferContract({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Test Cafe",
+      dealEligibility: bogsfEligibility,
+      eligibilityResult: validateDealEligibility(bogsfEligibility),
+      activeWindowHumanReadable: "Today, 8:00 AM-10:00 AM",
+      quantityLimit: 50,
+    });
+    if (!contract) throw new Error("Expected valid contract");
+
+    expect(checkMerchantDealTitleAgainstOffer({ title: "Morning sandwich run" }, contract).ok).toBe(true);
+    const buyBothCheck = checkMerchantDealTitleAgainstOffer({ title: "Buy both and save big" }, contract);
+    expect(buyBothCheck.ok).toBe(false);
+    expect(buyBothCheck.blockingCodes).toContain("BUYS_BOTH_ITEMS");
   });
 
   it("falls back to cleaned AI copy when no offer definition is available", () => {
@@ -172,6 +280,48 @@ describe("offer version publish client helpers", () => {
     expect(spec.channels.feed.visual.imageSelection?.selectedStoragePath).toBe("biz/poster.png");
     expect(spec.channels.feed.visual.imageSelection?.sourceMode).toBe("merchant_original");
     expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
+  });
+
+  it("normalizes poster copy to English only in publish ad specs", () => {
+    const definition = buildOfferDefinitionV1({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "9460 N MacArthur Blvd, Irving, TX 75063, USA",
+      dealEligibility: {
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 50,
+        itemDescription: "Large americano",
+      },
+      eligibilityResult: { eligible: true, eligibilityStatus: "VALID", customerValuePercent: 50 },
+      activeWindowHumanReadable: "Today, 4:21 PM-5:21 PM",
+      quantityLimit: 10,
+    });
+    if (!definition) throw new Error("Expected valid definition");
+    const poster = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      sourceAssetPath: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
+      renderedAssetPath: null,
+      headline: "Large americano",
+      businessCategory: "Cafe",
+    });
+
+    const spec = buildOfferVersionPublishAdSpec("create_ai", definition, {
+      headline: "Large americano",
+      subheadline: "50% off today",
+      short_description: "50% off today",
+      cta: "Claim deal",
+      poster_storage_path: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
+      poster,
+    });
+
+    expect(Object.keys(poster.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
+    expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["en-US"]);
+    expect(spec.poster?.copy_by_language["en-US"]?.headline).toBe("LARGE AMERICANO");
+    expect(spec.creative_format).toBe("poster_v1");
   });
 
   it("embeds exact composed-card approval metadata when provided", () => {
@@ -349,6 +499,35 @@ describe("offer version publish client helpers", () => {
     ]);
     expect(JSON.stringify(spec.localization?.localizations)).not.toContain("exactOfferLine");
     expect(JSON.stringify(spec.localization?.localizations)).not.toContain("termsLine");
+  });
+
+  it("omits localization metadata when the caller explicitly suppresses it", () => {
+    const definition = buildDefinition();
+    const localizationBundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Latte run, cookie reward",
+        supportingCopy: "Your afternoon coffee comes with a little extra.",
+        imageAltText: "Latte and cookie on a cafe counter",
+      },
+      offerDefinition: definition,
+      protectedTerms: ["Cedar Bean", "latte"],
+    });
+
+    const spec = buildOfferVersionPublishAdSpec(
+      "create_ai",
+      definition,
+      {
+        headline: "Latte run, cookie reward",
+        subheadline: "Your afternoon coffee comes with a little extra.",
+        short_description: "Your afternoon coffee comes with a little extra.",
+        cta: "Claim deal",
+        localization_bundle: localizationBundle,
+      },
+      { localization: null },
+    );
+
+    expect(spec.localization).toBeUndefined();
   });
 
   it("builds screenshot QA publish snapshots from deterministic composite triggers", () => {

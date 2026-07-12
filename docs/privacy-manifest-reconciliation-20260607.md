@@ -1,11 +1,16 @@
 # Privacy manifest reconciliation
 
 Date: 2026-06-07
+Updated: 2026-06-29
 
-Scope: iOS App Store prep for the free v1 pilot. This note maps the app-level
+Scope: iOS App Store prep for v1. This note maps the app-level
 `ios.privacyManifests.NSPrivacyCollectedDataTypes` entries in `app.json` to real
-app flows. Tracking is declared false for every item. No purchase, payment, or
-subscription data is declared because paid billing is gated off for v1.
+app flows. Tracking is declared false for every item.
+
+Billing caveat: current code has billing surfaces enabled (`PAID_BILLING_ENABLED=true`) while
+pilot enforcement is bypassed (`PILOT_DISABLE_BILLING_GATE=true`). `app.json` does not currently
+declare purchase/payment/subscription data. Before store submission, either verify billing is not
+reachable in the exact review build or update the privacy answers/manifest after legal review.
 
 ## Declared collected data
 
@@ -36,7 +41,8 @@ subscription data is declared because paid billing is gated off for v1.
 ## Notes for App Privacy answers
 
 - Tracking: No.
-- Purchases/payment info: No for v1 because paid billing is gated off.
+- Purchases/payment info: Conditional. Card data should stay with Stripe Checkout, but any reachable
+  plan/subscription/trial status in the review build may require purchase/subscription disclosure.
 - Audio disclosure must say audio is sent to an AI transcription service.
 - Device ID should be answered as linked to the user for push-token storage.
 - Other Diagnostic Data should be answered as not linked to the user and used for App Functionality.

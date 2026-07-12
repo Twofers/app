@@ -76,7 +76,7 @@ export async function resolvePostAuthReplaceHref(params: {
       return "/business-setup" as Href;
     }
     if (next.startsWith("/(tabs)/billing") || next.startsWith("/(tabs)/account/billing")) {
-      return next as Href;
+      return "/(tabs)/account" as Href;
     }
     return "/(tabs)/create" as Href;
   }

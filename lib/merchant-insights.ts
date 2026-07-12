@@ -13,6 +13,39 @@ export type MerchantInsightsRow = {
   claims_by_hour_local: number[];
 };
 
+/** Redemption-confirmed repeat-visit aggregates (business_repeat_visit_stats RPC). */
+export type RepeatVisitStats = {
+  /** Distinct customers with at least one redeemed claim. */
+  redeemed_customers: number;
+  /** Distinct customers with 2+ redeemed claims — confirmed repeat visits. */
+  repeat_customers: number;
+  total_redemptions: number;
+  repeat_redemptions: number;
+};
+
+export function parseRepeatVisitStats(raw: unknown): RepeatVisitStats | null {
+  let v = raw;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const num = (k: string) => {
+    const n = typeof o[k] === "number" ? (o[k] as number) : Number(o[k]);
+    return Number.isFinite(n) ? n : 0;
+  };
+  return {
+    redeemed_customers: num("redeemed_customers"),
+    repeat_customers: num("repeat_customers"),
+    total_redemptions: num("total_redemptions"),
+    repeat_redemptions: num("repeat_redemptions"),
+  };
+}
+
 export function parseMerchantInsights(raw: unknown): MerchantInsightsRow | null {
   let v = raw;
   if (typeof v === "string") {

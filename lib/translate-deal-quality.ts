@@ -21,14 +21,14 @@ export function translateDealQualityBlock(
 
 /**
  * Language for AI `output_language` + deal-quality banners on create flows.
- * - `businessPreferredLocale === null` → same as app (i18n) language.
- * - Explicit `en` | `es` | `ko` on the business row → overrides app for those flows only.
+ * Create flows follow the active app language. A stored business preferred
+ * locale can be stale after customer/business QA account switches, so it must
+ * not override the language the business owner is currently using.
  * Matrix tests: `lib/resolve-deal-flow-language.locale.test.ts`.
  */
 export function resolveDealFlowLanguage(
-  businessPreferredLocale: string | null | undefined,
+  _businessPreferredLocale: string | null | undefined,
   appLanguage: string,
 ): AppLocale {
-  if (isAppLocale(businessPreferredLocale)) return businessPreferredLocale;
   return isAppLocale(appLanguage) ? appLanguage : "en";
 }

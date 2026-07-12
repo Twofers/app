@@ -28,6 +28,10 @@ import {
   getWalletClaimToken,
   saveWalletClaimToken,
 } from "./wallet-claim-token-cache";
+import {
+  type DealTranslationLocale,
+  type DealTranslationResult,
+} from "./deal-translation-fallback";
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = EDGE_FN_TIMEOUT_DEFAULT_MS;
@@ -132,7 +136,7 @@ export function parseFunctionError(error: unknown): string {
 }
 
 /** Thrown from AI edge invokes when the response body includes `error_code`. */
-export type ErrorWithCode = Error & { code?: string };
+export type ErrorWithCode = Error & { code?: string; waitSeconds?: number };
 
 function extractErrorCodeFromInvokeError(error: unknown): string | undefined {
   if (!isSupabaseFunctionInvokeError(error)) return undefined;
@@ -162,9 +166,31 @@ export function getErrorCode(e: unknown): string | undefined {
   return extractErrorCodeFromInvokeError(e);
 }
 
-export function throwInvokeError(message: string, code?: string): never {
+/**
+ * Seconds the caller should wait before retrying, for rate-limited AI edge
+ * calls (COOLDOWN_ACTIVE). Prefers the structured `waitSeconds` threaded from
+ * the 429 body; falls back to parsing "…12s…" out of the message so an older
+ * function build still drives a countdown. Callers default to a sane value
+ * (e.g. DEFAULT_COOLDOWN_SEC) when this returns undefined.
+ */
+export function getErrorWaitSeconds(e: unknown): number | undefined {
+  if (e && typeof e === "object" && e !== null && "waitSeconds" in e) {
+    const w = (e as ErrorWithCode).waitSeconds;
+    if (typeof w === "number" && Number.isFinite(w) && w > 0) return w;
+  }
+  const message = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  const match = message.match(/(\d+)\s*s\b/);
+  if (match) {
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+export function throwInvokeError(message: string, code?: string, waitSeconds?: number): never {
   const err = new Error(message) as ErrorWithCode;
   if (code) err.code = code;
+  if (typeof waitSeconds === "number" && Number.isFinite(waitSeconds)) err.waitSeconds = waitSeconds;
   throw err;
 }
 
@@ -263,6 +289,10 @@ export async function redeemToken(body: { token?: string; short_code?: string })
   return data as {
     ok: boolean;
     deal_title?: string;
+    deal_source_locale?: string | null;
+    deal_title_en?: string | null;
+    deal_title_es?: string | null;
+    deal_title_ko?: string | null;
     redeemed_at: string;
     claim_id?: string;
   };
@@ -327,6 +357,10 @@ export async function completeVisualRedeem(claimId: string) {
     already_redeemed?: boolean;
     redeemed_at: string;
     deal_title?: string | null;
+    deal_source_locale?: string | null;
+    deal_title_en?: string | null;
+    deal_title_es?: string | null;
+    deal_title_ko?: string | null;
     deal_id?: string;
   };
 }
@@ -392,6 +426,83 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
 
 export type { BusinessLookupResult } from "./business-lookup";
 
+export type BusinessOnboardingContext = {
+  ok: boolean;
+  business: null | {
+    id: string;
+    name: string | null;
+    contact_name?: string | null;
+    business_email?: string | null;
+    public_email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    location?: string | null;
+    category?: string | null;
+    hours_text?: string | null;
+    short_description?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    logo_url?: string | null;
+    status?: string | null;
+    access_level?: string | null;
+    verification_status?: string | null;
+    current_profile_version?: number | null;
+    profile_completion_score?: number | null;
+    website_url?: string | null;
+    instagram_url?: string | null;
+  };
+  contact_channels?: Array<Record<string, unknown>>;
+  slow_hours?: Array<Record<string, unknown>>;
+  promotable_items?: Array<Record<string, unknown>>;
+  setup_checklist?: Array<Record<string, unknown>>;
+  field_sources?: Array<Record<string, unknown>>;
+  terms_acceptances?: Array<Record<string, unknown>>;
+  first_offer_draft?: Record<string, unknown> | null;
+  access_state?: {
+    can_edit_profile?: boolean;
+    can_create_offer_draft?: boolean;
+    can_publish_offer?: boolean;
+    reason_code?: string;
+    friendly_status_message?: string;
+  };
+};
+
+export async function getBusinessOnboardingContext(): Promise<BusinessOnboardingContext> {
+  const { data, error } = await supabase.functions.invoke("get-business-onboarding-context", {
+    body: {},
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throw new Error(fromBody.message ?? parseFunctionError(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error(String((data as { error?: string }).error ?? "Could not load business onboarding."));
+  }
+  return data as BusinessOnboardingContext;
+}
+
+export async function updateBusinessProfileSection(body: {
+  business_id: string;
+  section_key: string;
+  profile_version: number;
+  payload: Record<string, unknown>;
+}): Promise<{ ok: boolean; business?: BusinessOnboardingContext["business"]; profile_version?: number; requires_review?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("update-business-profile-section", {
+    body,
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throwInvokeError(fromBody.message ?? parseFunctionError(error), fromBody.code ?? getErrorCode(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    const response = data as { error?: string; error_code?: string };
+    throwInvokeError(response.error ?? "Could not save business profile.", response.error_code);
+  }
+  return data as { ok: boolean; business?: BusinessOnboardingContext["business"]; profile_version?: number; requires_review?: boolean };
+}
+
 /** Look up verified Google Places candidates by business name. */
 export async function aiBusinessLookup(body: {
   business_name: string;
@@ -456,19 +567,7 @@ export async function aiBusinessLookupDetails(body: {
   return result;
 }
 
-/**
- * Fire-and-forget: translate deal title/description into es + ko.
- * Never throws — translations arrive asynchronously.
- */
-export type DealTranslationResult = {
-  source_locale: "en" | "es" | "ko";
-  title_en: string;
-  title_es: string;
-  title_ko: string;
-  description_en: string;
-  description_es: string;
-  description_ko: string;
-};
+export type { DealTranslationResult } from "./deal-translation-fallback";
 
 function parseDealTranslationResult(data: unknown): DealTranslationResult {
   if (!data || typeof data !== "object") {
@@ -506,7 +605,7 @@ export async function translateDealCopy(body: {
   business_id: string;
   title: string;
   description: string;
-  source_locale: "en" | "es" | "ko";
+  source_locale: DealTranslationLocale;
 }): Promise<DealTranslationResult> {
   const { data, error } = await supabase.functions.invoke("ai-translate-deal", {
     body,
@@ -514,7 +613,7 @@ export async function translateDealCopy(body: {
   });
   if (error) {
     const fromBody = await readInvokeErrorBody(error);
-    throw new Error(fromBody.message ?? parseFunctionError(error));
+    throwInvokeError(fromBody.message ?? parseFunctionError(error), fromBody.code ?? getErrorCode(error));
   }
   if (data && typeof data === "object" && "error" in data) {
     throw new Error(String((data as { error?: string }).error ?? "Translation failed."));
@@ -522,7 +621,11 @@ export async function translateDealCopy(body: {
   return parseDealTranslationResult(data);
 }
 
-export async function translateDeal(dealId: string, sourceLocale?: "en" | "es" | "ko"): Promise<void> {
+/**
+ * Fire-and-forget: translate deal title/description into es + ko.
+ * Never throws - translations arrive asynchronously.
+ */
+export async function translateDeal(dealId: string, sourceLocale?: DealTranslationLocale): Promise<void> {
   try {
     const { error } = await supabase.functions.invoke("ai-translate-deal", {
       body: { deal_id: dealId, ...(sourceLocale ? { source_locale: sourceLocale } : {}) },
@@ -762,16 +865,20 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
  */
 async function readInvokeErrorBody(
   error: unknown,
-): Promise<{ message?: string; code?: string }> {
+): Promise<{ message?: string; code?: string; waitSeconds?: number }> {
   const ctx = (error as { context?: unknown } | null)?.context;
   if (typeof Response !== "undefined" && ctx instanceof Response) {
     try {
       const data = await ctx.clone().json();
       if (data && typeof data === "object") {
-        const o = data as { error?: unknown; error_code?: unknown };
+        const o = data as { error?: unknown; error_code?: unknown; wait_seconds?: unknown };
         return {
           message: typeof o.error === "string" ? o.error : undefined,
           code: typeof o.error_code === "string" ? o.error_code : undefined,
+          waitSeconds:
+            typeof o.wait_seconds === "number" && Number.isFinite(o.wait_seconds)
+              ? o.wait_seconds
+              : undefined,
         };
       }
     } catch {
@@ -790,7 +897,7 @@ async function invokeAdEdge(payload: Record<string, unknown>): Promise<AiGenerat
     const fromBody = await readInvokeErrorBody(error);
     const code = fromBody.code ?? extractErrorCodeFromInvokeError(error);
     const message = fromBody.message ?? parseFunctionError(error);
-    throwInvokeError(message, code);
+    throwInvokeError(message, code, fromBody.waitSeconds);
   }
   throwIfEdgeResponseError(data);
   const d = data as { ad?: GeneratedAd; ads?: GeneratedAd[]; quota?: AdVariantsQuota };

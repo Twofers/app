@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.unvmex2.twoforone",
+      "sha256_cert_fingerprints": [
+        "92:65:79:9A:9D:FB:83:05:E6:B5:12:00:7F:6B:A4:4C:00:98:AB:DC:39:5E:69:47:72:55:5F:60:0B:92:C9:C0"
+      ]
+    }
+  }
+]

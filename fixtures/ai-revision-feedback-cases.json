@@ -1,0 +1,44 @@
+[
+  {
+    "id": "top-part-try-our-coffee",
+    "selectedTarget": "both",
+    "feedback": "The top part that says try our any large coffee doesn't make sense.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "wording-real-ad",
+    "selectedTarget": "both",
+    "feedback": "Change the wording so it sounds like a real ad based on the full offer.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "top-text-reads-weird",
+    "selectedTarget": "both",
+    "feedback": "The top text reads weird. Make it a real ad from the whole deal.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "generic-copy-read-right",
+    "selectedTarget": "both",
+    "feedback": "This copy feels generic and does not read right.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "inviting-less-generic",
+    "selectedTarget": "both",
+    "feedback": "Make it more inviting and less generic.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "photo-and-headline",
+    "selectedTarget": "both",
+    "feedback": "Make the photo brighter and fix the headline.",
+    "expectedTarget": "both"
+  },
+  {
+    "id": "explicit-image-target",
+    "selectedTarget": "image",
+    "feedback": "Fix the headline.",
+    "expectedTarget": "image"
+  }
+]

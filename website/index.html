@@ -1,53 +1,395 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Twofer</title>
-    <style>
-      body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      main {
-        flex: 1;
-        padding: 2rem 1.25rem;
-        max-width: 40rem;
-        margin: 0 auto;
-      }
-      footer {
-        border-top: 1px solid #e5e5e5;
-        padding: 1.25rem;
-        text-align: center;
-        font-size: 0.9rem;
-        color: #444;
-      }
-      footer a {
-        color: #2563eb;
-        text-decoration: none;
-        font-weight: 600;
-      }
-      footer a:hover {
-        text-decoration: underline;
-      }
-      footer .sep {
-        margin: 0 0.5rem;
-        color: #bbb;
-      }
-    </style>
+    <title data-i18n="home.title">Twofer - Live Local Specials</title>
+    <meta
+      name="description"
+      content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Launching in DFW."
+      data-i18n-content="home.meta"
+    />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="canonical" href="https://www.twoferapp.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Twofer" />
+    <meta property="og:title" content="Twofer - Live Local Specials" />
+    <meta property="og:description" content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Launching in DFW." />
+    <meta property="og:url" content="https://www.twoferapp.com/" />
+    <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/styles.css?v=20260707-launch-copy" />
+    <script src="/store-links.js?v=20260707-store3"></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Twofer?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Twofer is a live local specials app for customers and an AI-assisted promotion tool for local businesses." }
+        },
+        {
+          "@type": "Question",
+          "name": "Are the specials real?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The cards on this page are illustrated samples. When the app launches, you will see real specials from approved local businesses near you." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do businesses need to be approved?",
+          "acceptedAnswer": { "@type": "Answer", "text": "New business accounts are reviewed to keep published specials tied to real local businesses." }
+        },
+        {
+          "@type": "Question",
+          "name": "What kinds of promotions can businesses create?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Businesses can create local offers, bonus item offers, and limited-time specials with controlled time windows and quantities." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Twofer free for customers?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Twofer is free for customers." }
+        },
+        {
+          "@type": "Question",
+          "name": "Where is Twofer available?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Twofer is launching first in the Dallas-Fort Worth area, with more cities planned." }
+        }
+      ]
+    }
+    </script>
   </head>
-  <body>
+  <body id="top" data-launch-signup-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/submit-launch-signup">
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+          <span>Twofer</span>
+        </a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="#get-the-app" data-i18n="nav.getApp">Get the App</a>
+          <a href="#for-customers" data-i18n="nav.customers">For Customers</a>
+          <a href="#for-businesses" data-i18n="nav.businesses">For Businesses</a>
+          <a href="#how-it-works" data-i18n="nav.how">How It Works</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <a class="button button-small" href="/business/start-trial" data-i18n="nav.businessTrial">
+            Request Business Access
+          </a>
+          <button
+            class="nav-menu-button"
+            type="button"
+            aria-controls="site-nav-links"
+            aria-expanded="false"
+            data-site-menu-toggle
+            data-i18n="nav.menu"
+          >
+            Menu
+          </button>
+        </div>
+      </nav>
+    </header>
+
     <main>
-      <h1>Twofer</h1>
-      <p>Local deals — browse, claim, and redeem.</p>
+      <section id="get-the-app" class="hero-band">
+        <div class="hero container">
+          <div class="hero-copy">
+            <p class="status-pill" data-i18n="home.status">Launching in Dallas-Fort Worth</p>
+            <h1 data-i18n-html="home.hero">Live local <span>specials</span> for slow hours.</h1>
+            <p class="lede" data-i18n="home.lede">
+              Twofer is like an on-demand happy hour engine for local businesses: create a limited-time
+              local offer with AI, publish it nearby, and redeem customers in store by QR code.
+            </p>
+            <p class="availability-note" data-i18n="home.availability">
+              Coming soon to iPhone and Android. New business accounts are reviewed before they can publish.
+            </p>
+            <div class="cta-row">
+              <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">
+                Request Business Access
+              </a>
+              <a class="button button-dark" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="ios">
+                Get Twofer for iPhone
+              </a>
+              <a class="button button-dark" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="android">
+                Get Twofer for Android
+              </a>
+              <form class="launch-signup" data-launch-signup data-signup-source="website-hero" hidden novalidate>
+                <label class="visually-hidden" aria-hidden="true">
+                  <span>Company website</span>
+                  <input name="company_website" tabindex="-1" autocomplete="off" />
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  placeholder="you@email.com"
+                  data-i18n-placeholder="home.signupPlaceholder"
+                  aria-label="Email address"
+                  data-i18n-aria-label="home.signupAria"
+                />
+                <button class="button button-dark" type="submit" data-i18n="home.signupButton">Email me launch updates</button>
+                <p class="status" data-signup-status role="status" aria-live="polite"></p>
+              </form>
+            </div>
+            <div class="flow-note">
+              <strong data-i18n="home.flowTitle">See how it works</strong>
+              <span data-i18n="home.flowText">Browse a sample special below. When the app launches, claim real offers nearby, share with a friend, and redeem in store with a QR code.</span>
+            </div>
+          </div>
+
+          <aside class="phone-shell" aria-label="Twofer app preview">
+            <div class="phone-screen">
+              <div class="phone-topline">
+                <div>
+                  <span data-i18n="home.nearbyNow">Nearby now</span>
+                  <strong>Twofer</strong>
+                </div>
+                <span class="phone-badge" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+              </div>
+
+              <article class="app-offer-card">
+                <div class="sample-tag" data-i18n="home.sample">Sample</div>
+                <img
+                  src="/assets/photo-bakery-croissants.jpg"
+                  alt="Fresh croissants on a bakery tray"
+                  loading="lazy"
+                  decoding="async"
+                  onerror="this.closest('.app-offer-card').classList.add('media-unavailable'); this.remove();"
+                />
+                <div class="offer-card-row">
+                  <strong>Sunrise Bakery</strong>
+                  <span>0.3 mi</span>
+                </div>
+                <p data-i18n="home.offerCroissants">Buy 1 croissant, get 1 free</p>
+                <small>7:00 - 10:00 AM  |  DFW</small>
+              </article>
+
+              <article class="app-offer-card">
+                <div class="sample-tag" data-i18n="home.sample">Sample</div>
+                <img
+                  src="/assets/photo-cafe-coffee.jpg"
+                  alt="Coffee cups on a cafe table"
+                  loading="lazy"
+                  decoding="async"
+                  onerror="this.closest('.app-offer-card').classList.add('media-unavailable'); this.remove();"
+                />
+                <div class="offer-card-row">
+                  <strong>Corner Cafe</strong>
+                  <span>0.5 mi</span>
+                </div>
+                <p data-i18n="home.offerColdBrew">40% off cold brew</p>
+                <small>2:00 - 5:00 PM  |  DFW</small>
+              </article>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="for-customers" class="section-band light-band">
+        <div class="container customer-grid">
+          <div class="section-copy">
+            <p class="eyebrow" data-i18n="home.customersEyebrow">For customers</p>
+            <h2 data-i18n="home.customersTitle">Discover live local specials before they disappear</h2>
+            <p data-i18n="home.customersBody">
+              Find nearby local offers, bonus item offers, and limited-time specials, claim from your phone,
+              share with a friend, and redeem in store.
+            </p>
+            <div class="inline-cta">
+              <a class="button" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="ios">
+                Get Twofer for iPhone
+              </a>
+              <a class="button button-secondary" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="android">
+                Get Twofer for Android
+              </a>
+              <form class="launch-signup" data-launch-signup data-signup-source="website-customers" hidden novalidate>
+                <label class="visually-hidden" aria-hidden="true">
+                  <span>Company website</span>
+                  <input name="company_website" tabindex="-1" autocomplete="off" />
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  placeholder="you@email.com"
+                  data-i18n-placeholder="home.signupPlaceholder"
+                  aria-label="Email address"
+                  data-i18n-aria-label="home.signupAria"
+                />
+                <button class="button" type="submit" data-i18n="home.signupButton">Email me launch updates</button>
+                <p class="status" data-signup-status role="status" aria-live="polite"></p>
+              </form>
+              <span data-i18n="home.freeCustomers">Free for customers.</span>
+            </div>
+          </div>
+
+          <div class="feature-grid customer-features">
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">1</span>
+              <h3 data-i18n="home.findTitle">Find Live Specials</h3>
+              <p data-i18n="home.findBody">See timely offers from local cafes, bakeries, coffee shops, and more.</p>
+            </article>
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">2</span>
+              <h3 data-i18n="home.realtimeTitle">Real-Time Updates</h3>
+              <p data-i18n="home.realtimeBody">Sort by time, distance, availability, and location before the offer expires.</p>
+            </article>
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">3</span>
+              <h3 data-i18n="home.localTitle">Support Local</h3>
+              <p data-i18n="home.localBody">Try nearby businesses while helping local owners fill slow hours.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="for-businesses" class="section-band">
+        <div class="container business-layout">
+          <div>
+            <div class="section-copy">
+              <p class="eyebrow" data-i18n="home.businessEyebrow">For businesses</p>
+              <h2 data-i18n="home.businessTitle">An on-demand happy hour tool for slow hours</h2>
+              <p data-i18n="home.businessBody">
+                Create limited-time local offers, bonus item offers, or strong savings specials in under 2 minutes.
+                You control the window, quantity, terms, and when it goes live.
+              </p>
+            </div>
+
+            <div class="business-feature-grid">
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">1</span>
+                <h3 data-i18n="home.generateTitle">Generate the Ad</h3>
+                <p data-i18n="home.generateBody">Upload a photo or describe the item; AI drafts clear promotion copy you can edit.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">2</span>
+                <h3 data-i18n="home.reachTitle">Reach Nearby Customers</h3>
+                <p data-i18n="home.reachBody">Show timely specials to people already looking nearby.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">3</span>
+                <h3 data-i18n="home.controlTitle">Control the Offer</h3>
+                <p data-i18n="home.controlBody">Set the time window, quantity, terms, and pause or publish status.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">4</span>
+                <h3 data-i18n="home.accessTitle">Reviewed Before You Publish</h3>
+                <p data-i18n="home.accessBody">New business accounts are reviewed before publishing goes live.</p>
+              </article>
+            </div>
+
+            <div class="business-callout">
+              <div>
+                <strong data-i18n="home.ownBusiness">Own or manage a local business?</strong>
+                <p data-i18n="home.ownBusinessBody">New business accounts are reviewed before they can publish. Submit a business access request below or contact support@twoferapp.com.</p>
+              </div>
+              <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+            </div>
+          </div>
+
+          <aside class="promo-photo-card">
+            <img
+              src="/assets/photo-cafe-interior.jpg"
+              alt="Interior of a local cafe"
+              loading="lazy"
+              decoding="async"
+              onerror="this.closest('.promo-photo-card').classList.add('media-unavailable'); this.remove();"
+            />
+            <div>
+              <span data-i18n="home.promoKicker">AI-assisted promotion setup</span>
+              <strong data-i18n="home.promoText">Describe the item, review the ad, publish the special</strong>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="section-band dark-band">
+        <div class="container">
+          <h2 data-i18n="home.howTitle">How Twofer Works</h2>
+          <div class="step-grid">
+            <article>
+              <span>01</span>
+              <h3 data-i18n="home.step1Title">Create a live special</h3>
+              <p data-i18n="home.step1Body">Approved businesses describe an item or upload a photo, then AI drafts editable promotion copy.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3 data-i18n="home.step2Title">Set the controls</h3>
+              <p data-i18n="home.step2Body">Choose the offer type, time window, quantity, and terms before publishing.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3 data-i18n="home.step3Title">Claim and redeem</h3>
+              <p data-i18n="home.step3Body">Nearby customers claim in the app, share with a friend, and redeem in store with a QR code.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-band faq-band">
+        <div class="faq-wrap">
+          <h2 data-i18n="home.faqTitle">Frequently Asked Questions</h2>
+          <details>
+            <summary data-i18n="home.faqQ1">What is Twofer?</summary>
+            <p data-i18n="home.faqA1">Twofer is a live local specials app for customers and an AI-assisted promotion tool for local businesses.</p>
+          </details>
+          <details>
+            <summary data-i18n="home.faqQ2">Are the specials real?</summary>
+            <p data-i18n="home.faqA2">The cards on this page are illustrated samples. When the app launches, you will see real specials from approved local businesses near you.</p>
+          </details>
+          <details>
+            <summary data-i18n="home.faqQ3">Why do businesses need to be approved?</summary>
+            <p data-i18n="home.faqA3">New business accounts are reviewed to keep published specials tied to real local businesses.</p>
+          </details>
+          <details>
+            <summary data-i18n="home.faqQ4">What kinds of promotions can businesses create?</summary>
+            <p data-i18n="home.faqA4">Businesses can create local offers, bonus item offers, and limited-time specials with controlled time windows and quantities.</p>
+          </details>
+          <details>
+            <summary data-i18n="home.faqQ5">Is Twofer free for customers?</summary>
+            <p data-i18n="home.faqA5">Yes. Twofer is free for customers.</p>
+          </details>
+          <details>
+            <summary data-i18n="home.faqQ6">Where is Twofer available?</summary>
+            <p data-i18n="home.faqA6">Twofer is launching first in the Dallas-Fort Worth area, with more cities planned.</p>
+          </details>
+        </div>
+      </section>
     </main>
-    <footer>
-      <a href="https://www.twoferapp.com/privacy">Privacy Policy</a>
-      <span class="sep" aria-hidden="true">·</span>
-      <a href="https://www.twoferapp.com/terms">Terms of Service</a>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <a class="brand footer-brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+          <span>Twofer</span>
+        </a>
+        <p data-i18n="home.footerBody1">Live local specials for customers, with AI promotion tools and QR redemption controls for local businesses.</p>
+        <p data-i18n="home.footerBody2">Launching in DFW. New business accounts are reviewed before they publish.</p>
+        <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>
+        <div class="footer-links">
+          <a href="/privacy" data-i18n="site.privacy">Privacy Policy</a>
+          <a href="/terms" data-i18n="site.terms">Terms of Service</a>
+          <a href="/support" data-i18n="nav.support">Support</a>
+        </div>
+        <small>&copy; Twofer 2026</small>
+      </div>
     </footer>
+    <a class="back-to-top" href="#top" aria-label="Back to top">^</a>
+    <script src="/localization.js?v=20260707-launch-copy"></script>
+    <script src="/launch-signup.js?v=20260707-launch-signup"></script>
   </body>
 </html>

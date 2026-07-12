@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const PROD_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
-const REQUIRED_PROD_VERSION_CODE = 27;
+const REQUIRED_PROD_VERSION_CODE = 31;
 const EXPO_DEV_CLIENT_PLUGIN = "expo-dev-client";
 
 function expoConfig(envOverrides) {
@@ -92,7 +92,7 @@ assertCheck("AI Studio publishing is disabled", devPublishingDisabled, summary);
 assertCheck("dev config includes expo-dev-client plugin", devPlugins.includes(EXPO_DEV_CLIENT_PLUGIN), summary);
 assertCheck("production app name is Twofer", prodConfig.name === "Twofer", summary);
 assertCheck("production package is com.unvmex2.twoforone", prodConfig.android?.package === "com.unvmex2.twoforone", summary);
-assertCheck("production versionCode is 27", prodConfig.android?.versionCode === REQUIRED_PROD_VERSION_CODE, summary);
+assertCheck("production versionCode is 31", prodConfig.android?.versionCode === REQUIRED_PROD_VERSION_CODE, summary);
 assertCheck("production config excludes expo-dev-client plugin", !prodPlugins.includes(EXPO_DEV_CLIENT_PLUGIN), summary);
 
 console.log(JSON.stringify(summary, null, 2));

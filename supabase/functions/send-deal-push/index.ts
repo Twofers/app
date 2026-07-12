@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendExpoPushBatch } from "../_shared/expo-push.ts";
+import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
@@ -13,15 +13,10 @@ import {
   businessVerificationRequiredResponseBody,
   isBusinessLocationPublishVerified,
 } from "../_shared/business-verification.ts";
-import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
-  buildDealOfferContract,
-  buildDeterministicDealChannelCopy,
-} from "../../../lib/deal-offer-contract.ts";
-import {
-  validateDealEligibility,
-  type DealEligibilityInput,
-} from "../../../lib/deal-eligibility.ts";
+  buildDealReleasePushCopy,
+  fetchProfileLocaleByUserId,
+} from "../_shared/viewer-locale.ts";
 import {
   dealReleaseScheduledFor,
   resolveDealReleaseNotificationState,
@@ -32,6 +27,10 @@ const BASE_DEAL_SELECT = "id,title,business_id,location_id,start_time,end_time,i
 const STRUCTURED_DEAL_SELECT = [
   "id",
   "title",
+  "title_en",
+  "title_es",
+  "title_ko",
+  "source_locale",
   "business_id",
   "location_id",
   "start_time",
@@ -41,6 +40,7 @@ const STRUCTURED_DEAL_SELECT = [
   "deal_type",
   "applies_to",
   "discount_percent",
+  "customer_value_percent",
   "required_purchase_quantity",
   "free_item_quantity",
   "required_item_description",
@@ -50,7 +50,8 @@ const STRUCTURED_DEAL_SELECT = [
   "free_item_discount_percent",
   "item_description",
   "item_retail_value_cents",
-  "businesses(name,owner_id)",
+  "timezone",
+  "businesses(name,owner_id,location,address)",
 ].join(",");
 const DEAL_RELEASE_PUSH_KIND = "deal_release_push";
 const MAX_DUE_DEAL_PUSHES = 100;
@@ -102,15 +103,6 @@ function isUniqueViolation(error: { code?: string } | null | undefined): boolean
 
 function normalizeBusiness(deal: DealPushRow): DealPushBusiness | null {
   return Array.isArray(deal.businesses) ? deal.businesses[0] ?? null : deal.businesses;
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 async function isCronAuthorized(admin: any, provided: string | null): Promise<boolean> {
@@ -237,66 +229,17 @@ async function rescheduleDealPushEvent(admin: any, eventId: string, scheduledFor
   }
 }
 
-function dealEligibilityFromRow(row: Record<string, unknown>): DealEligibilityInput | null {
-  const dealType = typeof row.deal_type === "string" ? row.deal_type : "";
-  if (!dealType) return null;
-  return {
-    dealType,
-    appliesTo: typeof row.applies_to === "string" ? row.applies_to : "SINGLE_ITEM",
-    discountPercent: row.discount_percent as number | string | null | undefined,
-    requiredPurchaseQuantity: row.required_purchase_quantity as number | string | null | undefined,
-    freeItemQuantity: row.free_item_quantity as number | string | null | undefined,
-    requiredItemDescription: row.required_item_description as string | null | undefined,
-    requiredItemRetailValueCents: row.required_item_retail_value_cents as number | string | null | undefined,
-    freeItemDescription: row.free_item_description as string | null | undefined,
-    freeItemRetailValueCents: row.free_item_retail_value_cents as number | string | null | undefined,
-    freeItemDiscountPercent: row.free_item_discount_percent as number | string | null | undefined,
-    itemDescription: row.item_description as string | null | undefined,
-    itemRetailValueCents: row.item_retail_value_cents as number | string | null | undefined,
-  };
-}
-
-function buildPushCopy(row: Record<string, unknown>, businessName: string): { title: string; body: string } {
-  const fallbackTitle = getDealDisplayTitle(row, typeof row.title === "string" ? row.title : null) || "Limited-time local offer";
-  const eligibilityInput = dealEligibilityFromRow(row);
-  if (eligibilityInput) {
-    const eligibilityResult = validateDealEligibility(eligibilityInput);
-    const contract = buildDealOfferContract({
-      businessId: String(row.business_id ?? ""),
-      businessName,
-      locationName: businessName,
-      dealEligibility: eligibilityInput,
-      eligibilityResult,
-      quantityLimit: asNumber(row.max_claims),
-      activeWindowHumanReadable:
-        row.start_time && row.end_time ? `${String(row.start_time)} to ${String(row.end_time)}` : null,
-    });
-    if (contract) {
-      const copy = buildDeterministicDealChannelCopy(contract);
-      return { title: copy.pushTitle, body: copy.pushBody };
-    }
-  }
-  const hasLimit = asNumber(row.max_claims) != null;
-  return {
-    title: fallbackTitle,
-    body: hasLimit ? `Live now at ${businessName}. Claims are limited.` : `Live now at ${businessName}. Open Twofer for details.`,
-  };
-}
-
 async function sendDealPushToAudience(
   admin: any,
   deal: DealPushRow,
-  businessName: string,
   ownerUserId: string | null,
 ): Promise<DealPushAudienceResult> {
-  const pushCopy = buildPushCopy(deal, businessName);
-
   const { data: favRows } = await admin
     .from("favorites")
     .select("user_id")
     .eq("business_id", deal.business_id);
 
-  const favUserIds = new Set((favRows ?? []).map((r: { user_id: string }) => r.user_id));
+  const favUserIds = new Set<string>((favRows ?? []).map((r: { user_id: string }) => r.user_id));
 
   if (favUserIds.size === 0) {
     return {
@@ -316,7 +259,7 @@ async function sendDealPushToAudience(
     .eq("deal_alerts_enabled", true)
     .neq("notification_mode", "none");
 
-  const allUserIds = new Set((optedInRows ?? []).map((r: { user_id: string }) => r.user_id));
+  const allUserIds = new Set<string>((optedInRows ?? []).map((r: { user_id: string }) => r.user_id));
   if (ownerUserId) allUserIds.delete(ownerUserId);
 
   if (allUserIds.size === 0) {
@@ -332,14 +275,17 @@ async function sendDealPushToAudience(
 
   const { data: tokenRows } = await admin
     .from("push_tokens")
-    .select("expo_push_token")
+    .select("user_id,expo_push_token")
     .in("user_id", [...allUserIds]);
 
-  const tokens = (tokenRows ?? [])
-    .map((r: { expo_push_token: string }) => r.expo_push_token?.trim())
-    .filter((token: string | undefined): token is string => Boolean(token));
+  const tokenToUserId = new Map<string, string>();
+  for (const row of tokenRows ?? []) {
+    const token = (row as { expo_push_token?: string }).expo_push_token?.trim();
+    const userId = (row as { user_id?: string }).user_id;
+    if (token && userId && !tokenToUserId.has(token)) tokenToUserId.set(token, userId);
+  }
 
-  if (tokens.length === 0) {
+  if (tokenToUserId.size === 0) {
     return {
       sent: 0,
       errors: 0,
@@ -350,15 +296,28 @@ async function sendDealPushToAudience(
     };
   }
 
-  const result = await sendExpoPushBatch(tokens, pushCopy.title, pushCopy.body, {
-    dealId: deal.id,
-    path: `/deal/${deal.id}`,
+  const localeByUserId = await fetchProfileLocaleByUserId(admin, [...allUserIds]);
+  const messages: ExpoPushMessage[] = [...tokenToUserId.entries()].map(([token, userId]) => {
+    const pushCopy = buildDealReleasePushCopy(deal, localeByUserId.get(userId) ?? "en-US");
+    return {
+      to: token,
+      title: pushCopy.title,
+      body: pushCopy.body,
+      data: {
+        dealId: deal.id,
+        path: `/deal/${deal.id}`,
+      },
+      sound: "default",
+      channelId: "deal-alerts",
+    };
   });
+
+  const result = await sendExpoPushMessages(messages);
 
   return {
     ...result,
     audience: allUserIds.size,
-    tokens: tokens.length,
+    tokens: messages.length,
     status: result.sent > 0 ? "sent" : "send_error",
   };
 }
@@ -440,8 +399,7 @@ async function dispatchDueDealPushes(admin: any, dryRun: boolean): Promise<Recor
     }
 
     const business = normalizeBusiness(deal);
-    const businessName = business?.name ?? "a local business";
-    const result = await sendDealPushToAudience(admin, deal, businessName, business?.owner_id ?? null);
+    const result = await sendDealPushToAudience(admin, deal, business?.owner_id ?? null);
     sent += result.sent;
     errors += result.errors;
     audience += result.audience;
@@ -594,8 +552,7 @@ serve(async (req) => {
       });
     }
 
-    const businessName = biz.name ?? "a local business";
-    const result = await sendDealPushToAudience(admin as any, deal, businessName, user.id);
+    const result = await sendDealPushToAudience(admin as any, deal, user.id);
     await markDealPushEvent(admin as any, event.id, result.status, result.tokens, result.errors, {
       reason: result.reason ?? "merchant_publish_live_release",
     });

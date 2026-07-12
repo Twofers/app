@@ -2,7 +2,11 @@
 
 Date: 2026-06-07
 
-Billing posture: free v1 pilot. No in-app purchase, paid upgrade, external payment, or subscription flow is exposed.
+Updated billing note (2026-06-29): this is a historical free-pilot copy draft. Current code has
+billing surfaces enabled (`PAID_BILLING_ENABLED=true`) with pilot enforcement bypassed
+(`PILOT_DISABLE_BILLING_GATE=true`). Use this copy only for a review build where billing is
+verified hidden/disabled, or revise the copy to match the approved billing posture for that exact
+build.
 
 ## Name
 
@@ -32,10 +36,10 @@ For customers, Twofer shows nearby offers from participating businesses. You can
 
 For businesses, Twofer makes it easier to create clear offers. Add the deal details yourself, add a photo, or record a short voice note. Voice audio is sent to an AI transcription service so the app can turn it into draft offer text. AI-generated drafts are shown for review and editing before you publish.
 
-Twofer is free to use during this pilot. The first release is focused on local discovery, simple deal creation, wallet claims, redemption, alerts, and business performance basics.
+Twofer is focused on local discovery, simple deal creation, wallet claims, redemption, alerts, and business performance basics. For store review, make sure the submitted copy matches the exact build's approved billing posture.
 
 ## Notes
 
 - The description says audio is sent to an AI transcription service.
-- The copy avoids paid plan, upgrade, pricing, payment, or subscription language.
+- The copy avoids paid plan, upgrade, pricing, payment, or subscription language and should only be used if those paths are not exposed in the exact review build.
 - The copy does not claim production readiness.

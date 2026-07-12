@@ -6,6 +6,8 @@ import {
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
+import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
@@ -236,12 +238,19 @@ serve(async (req) => {
 
     const tokenRaw = body.token;
     const shortCodeRaw = body.short_code;
-    const shortCodeNorm =
+    let shortCodeNorm =
       typeof shortCodeRaw === "string"
         ? shortCodeRaw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
         : "";
     const tokenInput = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
     const tokenNorm = tokenInput ? normalizeQrToken(tokenInput) : "";
+    // Native wallet-pass barcodes encode the short code (twofer://redeem/sc/<CODE>).
+    // The scanner forwards raw scans as `token`, so route those through the existing
+    // short-code lookup — same credential staff type manually today.
+    if (shortCodeNorm.length === 0) {
+      const walletScanShortCode = parseShortCodeScanValue(tokenInput);
+      if (walletScanShortCode) shortCodeNorm = walletScanShortCode;
+    }
 
     const selectClaimNew = `
         *,
@@ -250,6 +259,10 @@ serve(async (req) => {
           business_id,
           location_id,
           title,
+          source_locale,
+          title_en,
+          title_es,
+          title_ko,
           is_demo,
           business:businesses!inner(id, owner_id)
         )
@@ -260,6 +273,10 @@ serve(async (req) => {
           id,
           business_id,
           title,
+          source_locale,
+          title_en,
+          title_es,
+          title_ko,
           is_demo,
           business:businesses!inner(id, owner_id)
         )
@@ -344,6 +361,10 @@ serve(async (req) => {
       business_id?: string | null;
       location_id?: string | null;
       title?: string | null;
+      source_locale?: string | null;
+      title_en?: string | null;
+      title_es?: string | null;
+      title_ko?: string | null;
       is_demo?: boolean | null;
       business?: { owner_id?: string };
       max_claims?: number | null;
@@ -395,7 +416,7 @@ serve(async (req) => {
       );
     }
 
-    await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+    await finalizeStaleVisualRedeemForClaim(supabaseAdmin, claimId, nowIso);
 
     const { data: freshRow } = await supabase
       .from("deal_claims")
@@ -442,7 +463,7 @@ serve(async (req) => {
         : 10;
     const expiresIso = (freshRow?.expires_at ?? claim.expires_at) as string;
     if (isPastRedeemDeadline(now.getTime(), expiresIso, grace)) {
-      await supabase.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
+      await supabaseAdmin.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
       await recordFailedAttempt("expired");
       return new Response(
         JSON.stringify({ error: "This token has expired" }),
@@ -465,7 +486,7 @@ serve(async (req) => {
       redeemed_at_business_id: deal.business_id ?? business.id,
       redeemed_at_location_id: dealLocationId ?? scannerLocationId,
     };
-    let updateResult = await supabase
+    let updateResult = await supabaseAdmin
       .from("deal_claims")
       .update(redeemUpdateRow)
       .eq("id", claimId)
@@ -473,7 +494,7 @@ serve(async (req) => {
       .select("redeemed_at")
       .single();
     if (isMissingNewRedeemColumn(updateResult.error)) {
-      updateResult = await supabase
+      updateResult = await supabaseAdmin
         .from("deal_claims")
         .update(omitNewRedeemUpdateColumns(redeemUpdateRow))
         .eq("id", claimId)
@@ -513,11 +534,19 @@ serve(async (req) => {
       console.error("[redeem-token] analytics insert failed", err);
     }
 
+    // Native wallet pass: flip the customer's Twofer Card to "Redeemed".
+    // Best-effort and flag-gated; a no-op until the customer added the card.
+    await syncWalletPassForUser(supabaseAdmin, (claim.user_id as string | null | undefined) ?? null);
+
     // ✅ Success
     return new Response(
       JSON.stringify({
         ok: true,
         deal_title: deal.title,
+        deal_source_locale: deal.source_locale ?? null,
+        deal_title_en: deal.title_en ?? null,
+        deal_title_es: deal.title_es ?? null,
+        deal_title_ko: deal.title_ko ?? null,
         redeemed_at: nowIso,
         deal_id: deal.id,
         claim_id: claimId,

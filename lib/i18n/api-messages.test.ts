@@ -79,10 +79,10 @@ describe("translateKnownApiMessage", () => {
     expect(translateKnownApiMessage(raw, t)).toBe("Claiming has closed. Cutoff was Mon, 3:00 PM");
   });
 
-  it("passes through unknown strings", async () => {
+  it("masks unknown backend strings", async () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);
-    expect(translateKnownApiMessage("Totally custom backend text", t)).toBe("Totally custom backend text");
+    expect(translateKnownApiMessage("Totally custom backend text", t)).toBe("Something went wrong. Try again.");
   });
 
   it("maps Postgres-style duplicate key to localized copy", async () => {

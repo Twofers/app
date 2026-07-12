@@ -82,6 +82,15 @@ const MEANINGFUL_FREE_PATTERNS: RegExp[] = [
   /\bfree\s+second\s+(item\s+)?with\b/i,
   /\bfree\s+2nd\s+with\b/i,
   /\bsecond\s+item\s+free\b/i,
+  // Canonical app-generated free-item terms line (deal-offer-contract.ts):
+  // "Purchase X to receive one Y free" / "…to receive one free Y". This wrapper
+  // is emitted deterministically for every free-item / same-item BOGO, so
+  // recognizing it keeps those deals publishable regardless of the reward word
+  // (which the named-reward lists below can miss) — the F-026 publish block.
+  // Requiring a quantity after "receive" keeps it a concrete reward, not vague.
+  /\breceive\s+(?:a|an|one|1|[2-9]|[1-9][0-9])\b[\w\s-]{0,40}?\bfree\b/i,
+  // Spanish canonical: "…para recibir uno gratis" / "…recibir un(a) X gratis".
+  /\brecibir\s+(?:un|una|uno|1|[2-9]|[1-9][0-9])\b[\wáéíóúñ\s-]{0,40}?\bgratis\b/i,
   /\bbebida\s+gratis\s+con\s+(la\s+)?compra\b/i,
   /\bacompa[nñ]amiento\s+gratis\s+con\s+(la\s+)?compra\b/i,
   /\bpostre\s+gratis\s+con\s+(la\s+)?compra\b/i,

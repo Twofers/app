@@ -4,13 +4,14 @@ import type { AdImageSelection } from "./merchant-image-selection";
 import type { OfferDefinitionV1 } from "./offer-definition";
 import { supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales";
 import { parsePosterSpecV1, validatePosterSpecV1 } from "./poster/posterAdSpec";
+import { normalizePosterSpecForPublish } from "./poster/posterCopy";
 import type { AdCreativeFormat, PosterSpecV1 } from "./poster/posterTypes";
 
 export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
 export const AD_SPEC_TEMPLATE_VERSION = "twofer-safe-templates-v1";
 export const AD_SPEC_V3_RENDERER_VERSION = "twofer-native-ad-renderer-v3";
 export const AD_SPEC_V3_MEDIA_SELECTION_VERSION = "twofer-media-selection-v1";
-export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V4";
+export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V5";
 
 export type AdSpecSource = "create_ai" | "create_quick";
 
@@ -313,9 +314,22 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
   };
 }
 
+/**
+ * Inlined rather than imported from `./runtime-env`: that module pulls in `expo-constants`
+ * (and transitively react-native), which breaks plain-Node vitest suites that import this
+ * pure-logic file without mocking expo-constants (e.g. offer-version-publish.test.ts).
+ */
+function posterViewerLanguageEnabled(): boolean {
+  return process.env.POSTER_VIEWER_LANGUAGE_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED === "true";
+}
+
 function posterSpecForAd(generatedAd?: GeneratedAd | null): PosterSpecV1 | null {
   if (!generatedAd?.poster?.enabled) return null;
-  return parsePosterSpecV1(generatedAd.poster);
+  const parsed = parsePosterSpecV1(generatedAd.poster);
+  if (!parsed) return null;
+  // Flag on: keep every localized copy variant so consumers can see the poster in their own
+  // app language. Flag off: preserve the original English-only publish shape unchanged.
+  return posterViewerLanguageEnabled() ? parsed : normalizePosterSpecForPublish(parsed);
 }
 
 function buildSlot(params: {

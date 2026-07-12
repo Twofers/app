@@ -53,7 +53,7 @@ Set these under **Project → Settings → Edge Functions → Secrets**:
 | Secret | Description |
 |--------|-------------|
 | `OPENAI_API_KEY` | OpenAI API key (required for all AI features) |
-| `OPENAI_MODEL` | Optional override — defaults to `gpt-4o-mini` |
+| `OPENAI_MODEL` | Optional override — defaults to `gpt-5.4-mini` |
 
 ### Debug flags (dev/preview only — NOT production)
 
@@ -155,7 +155,7 @@ Users get the update automatically in the background on next app launch.
 npx supabase login
 npx supabase link --project-ref <your-project-ref>
 
-# Deploy all functions
+# Deploy all functions listed in docs/deployment-command-plan.md
 npx supabase functions deploy
 
 # Or deploy one at a time
@@ -173,7 +173,9 @@ npx supabase functions deploy delete-user-account
 npx supabase functions deploy ingest-analytics-event
 ```
 
-After deploying, set edge function secrets (see Section 2 above).
+The command list above is illustrative and intentionally shorter than the current repo inventory.
+Use `docs/deployment-command-plan.md` and `docs/deployment-notes.md` for the exact current function
+set before any approved deploy. After deploying, set edge function secrets (see Section 2 above).
 
 ---
 
@@ -187,7 +189,7 @@ After deploying, set edge function secrets (see Section 2 above).
 - [ ] Description, subtitle, keywords filled in
 - [ ] Privacy policy URL entered: `https://www.twoferapp.com/privacy`
 - [ ] Support URL entered: `https://www.twoferapp.com/support`
-- [ ] Age rating completed (Everyone / 4+)
+- [ ] Age rating completed (target: 13+)
 
 ### Google Play Console setup
 - [ ] Package name registered: `com.unvmex2.twoforone`
@@ -214,14 +216,14 @@ After deploying, set edge function secrets (see Section 2 above).
 
 ## 9. App Version Management
 
-`eas.json` sets `"appVersionSource": "remote"` — version numbers are managed in the EAS dashboard, not in `app.json`. Bump the version before each release:
+`eas.json` sets `"appVersionSource": "remote"` — production build numbers are managed in EAS and may advance past `app.json`. Do not change version numbers or build numbers without explicit approval. After approval, inspect/set remote values with EAS:
 
 ```bash
 eas build:version:set --platform ios --version-code 2
 eas build:version:set --platform android --version-code 2
 ```
 
-Current version: `1.0.0` (build 1)
+Current app version: `1.0.0`. Current local Android `versionCode` in `app.json`: `30`; read EAS remote values before a release build.
 
 ---
 

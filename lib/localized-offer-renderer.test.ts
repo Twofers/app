@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LocalizedOfferTerm } from "./localized-offer-terms";
-import {
-  KOREAN_COUNTER_FREE_FALLBACK_TEMPLATE_ID,
-  resolveKoreanOfferTemplate,
-} from "./korean-offer-template-resolver";
+import { resolveKoreanOfferTemplate } from "./korean-offer-template-resolver";
 import {
   renderLocalizedOfferBundleFromDefinition,
   renderLocalizedOfferFromDefinition,
@@ -80,8 +77,8 @@ describe("localized offer renderer", () => {
 
     expect(bundle["en-US"].primaryOfferLine).toBe("Buy one latte and get one free");
     expect(bundle["es-US"].primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 latte gratis");
-    expect(bundle["ko-KR"].primaryOfferLine).toBe("구매 항목: latte × 1\n추가 혜택: latte × 1");
-    expect(bundle["ko-KR"].compactOfferLine).toBe("구매 항목: latte × 1 · 추가 혜택: latte × 1");
+    expect(bundle["ko-KR"].primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
+    expect(bundle["ko-KR"].compactOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1 \u00B7 \uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
     expect(bundle["es-US"].termsLine).toContain("Cedar Bean - Irving");
     expect(bundle["ko-KR"].termsLine).toContain("Cedar Bean - Irving");
   });
@@ -113,6 +110,51 @@ describe("localized offer renderer", () => {
       "reward:coffee:ko-KR:reviewed-term-v1",
     ]);
   });
+  it("renders English any-qualified offer facts without awkward articles", () => {
+    const coffeeCookie = renderLocalizedOfferFromDefinition(definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "any large coffee drink",
+      freeItemDescription: "cookie of your choice",
+    }), { locale: "en-US" });
+    const discount = renderLocalizedOfferFromDefinition(definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      itemDescription: "any croissant",
+      discountPercent: 40,
+    }), { locale: "en-US" });
+
+    expect(coffeeCookie.primaryOfferLine).toBe("Buy any large coffee drink and get a free cookie of your choice");
+    expect(discount.primaryOfferLine).toBe("Get 40% off any croissant");
+  });
+
+  it("localizes generic menu item terms in deterministic non-English offer lines", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "Large coffee",
+      freeItemDescription: "Large coffee",
+    });
+
+    const spanish = renderLocalizedOfferFromDefinition(definition, { locale: "es-US" });
+    const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
+
+    expect(spanish.primaryOfferLine).toBe("Al comprar 1 caf\u00E9 grande, recibes 1 caf\u00E9 grande gratis");
+    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1");
+    expect(korean.primaryOfferLine).not.toContain("Large coffee");
+  });
+
+  it("localizes common composed cafe drink terms in exact offer mechanics", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "iced latte",
+      freeItemDescription: "cookie",
+    });
+
+    const spanish = renderLocalizedOfferFromDefinition(definition, { locale: "es-US" });
+    const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
+
+    expect(spanish.primaryOfferLine).toBe("Al comprar 1 latte helado, recibes 1 galleta gratis");
+    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uC544\uC774\uC2A4 \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uCFE0\uD0A4 \u00D7 1");
+    expect(korean.primaryOfferLine).not.toContain("iced latte");
+  });
 
   it("keeps branded terms unchanged unless a localized name is provided", () => {
     const definition = definitionFor({
@@ -132,17 +174,33 @@ describe("localized offer renderer", () => {
     ]);
   });
 
-  it("uses counter-free Korean fallback until counters are reviewer-approved", () => {
+  it("uses reviewed Korean counters after native reviewer approval", () => {
     const paidTerm = term({
       entityId: "sku_paid",
       locale: "ko-KR",
-      displayName: "커피",
+      displayName: "coffee",
       koreanCounterId: "cup",
     });
     const resolution = resolveKoreanOfferTemplate({ paidTerm, rewardTerm: paidTerm });
 
-    expect(resolution.templateId).toBe(KOREAN_COUNTER_FREE_FALLBACK_TEMPLATE_ID);
+    expect(resolution.templateId).toBe("ko-KR.offer.reviewed-counter");
+    expect(resolution.counterFallbackUsed).toBe(false);
+    expect(resolution.usesCounters).toBe(true);
+    expect(resolution.reasonCodes).toEqual([]);
+  });
+
+  it("uses counter-free Korean fallback for unknown counters", () => {
+    const paidTerm = term({
+      entityId: "sku_paid",
+      locale: "ko-KR",
+      displayName: "coffee",
+      koreanCounterId: "unknown-counter",
+    });
+    const resolution = resolveKoreanOfferTemplate({ paidTerm, rewardTerm: paidTerm });
+
+    expect(resolution.templateId).toBe("ko-KR.offer.counter-free-fallback");
     expect(resolution.counterFallbackUsed).toBe(true);
+    expect(resolution.usesCounters).toBe(false);
     expect(resolution.reasonCodes).toContain("KOREAN_COUNTER_NOT_REVIEWED");
   });
 });

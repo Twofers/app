@@ -28,6 +28,8 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
+    /** Service role — deal_claims writes must not depend on the client RLS grant. See findings/02-deal-claims-self-redeem.md. */
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const {
       data: { user },
@@ -65,7 +67,7 @@ serve(async (req) => {
     const now = new Date();
     const nowIso = now.toISOString();
 
-    await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+    await finalizeStaleVisualRedeemForClaim(supabaseAdmin, claimId, nowIso);
 
     const { data: claim, error: fetchErr } = await supabase
       .from("deal_claims")
@@ -107,7 +109,7 @@ serve(async (req) => {
       : 10;
 
     if (isPastRedeemDeadline(now.getTime(), claim.expires_at as string, grace)) {
-      await supabase.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
+      await supabaseAdmin.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
       return new Response(JSON.stringify({ error: "This claim has expired" }), {
         status: 410,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -138,7 +140,7 @@ serve(async (req) => {
       });
     }
 
-    const { data: updatedRows, error: upErr } = await supabase
+    const { data: updatedRows, error: upErr } = await supabaseAdmin
       .from("deal_claims")
       .update({ claim_status: "redeeming", redeem_started_at: nowIso })
       .eq("id", claimId)

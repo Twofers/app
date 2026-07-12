@@ -1,0 +1,219 @@
+{
+  "lockVersion": 1,
+  "lockedAt": "2026-07-03",
+  "owner": "Dan",
+  "policyDocument": "docs/ai-poster-core-lock.md",
+  "initialApprovalRef": "2026-07-03 chat request: lock AI poster/ad-generation feature and require individual approval before changes",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Codex agent instructions must preserve the owner-approval gate for AI poster/ad-generation changes."
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Claude agent instructions must match AGENTS.md and preserve the same approval gate."
+    },
+    {
+      "path": "app/create/ai.tsx",
+      "sha256": "f2e0533fd1c3bbd8965d71a08f5568a4f4ab5dec1babd2ad7b444c6d6749abdd",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-07 chat approval (final-launch-audit fix cycle): F-006 auto-bump a past one-time start time to now on draft resume and at publish; F-024 stop the empty AI poster kicker from falling back to a generic 'Try our' eyebrow (posterEyebrowLabel = null) so it never renders 'Try our any muffin'; 2026-07-08 Dan chat directive: sync the poster spec headline to the selected copy option, remove the per-option Why-this-angle rationale box; 2026-07-08 Dan chat directive: single-variant flow — remove the multi-variant copy picker; show one variant + always-visible refine panel; 2026-07-09 Dan chat approval (Approve both): honor merchant-edited headline/subheadline/CTA at publish; 2026-07-09 Dan chat approval (follow this plan): AI-generate cooldown live countdown; 2026-07-10 Dan chat approval ('you have permission to do all the others', ai-ads-publish-unblock-plan): Phase 3 honest errors — friendlyGenerationError now routes a photo/image failure with NO merchant photo attached to createAi.errImageServiceDown (keeps friendlyPhoto only when a photo was attached), and the publish mechanics-guard message createAi.offerMechanicsInvalid was reworded to point at the offer fields instead of blaming ad copy; Phase 4 diagnostics — pickPhotoFromLibrary catch now console.warns the underlying error; Phase 2.4 — a new eligibilityTouchedRef records offer-form fields the merchant edits by hand and is passed as touchedFields to mergeInferredEligibilityForm so free-text hint auto-inference never overwrites a manually edited field or flips a manually chosen offer rule; 2026-07-10 Dan chat approval ('I approve both'/'Phase 5 + Phase 6'): Phase 5 deterministic no-image publish — the two 'Every deal needs an image' guards (useFallbackTemplateAd and publishDeal) now allow a poster-style deal to proceed with no image (gated on showPosterFormat), since the consumer feed's ComposedAdCard renders the offer natively (deterministic_fallback, no baked-in text) and the deal row stores a null poster; usePhotoAsFinal is only set when a real photo exists, and the existing poster-spec->Standard-card fallback keeps publish fail-safe if the server rejects the imageless poster spec. Standard-card format still requires an image. No generation, prompt, or poster-layout logic changed; Phase 6 nav-reset fix — the custom-image-edit instruction TextInput onChange no longer calls resetGenerationState() per keystroke (which nulled generatedAd, collapsing the review UI to Step 1 mid-type and leaving the field holding one character); it now calls invalidateAcceptedAdDraft() so the image stays visible and the instruction is applied on the next Generate, matching the copy fields; 2026-07-11 Dan-requested double-check pass (same Phase 5 approval scope) — reachability completion: the Phase 5 gate-softening was inert because three upstream client gates still dead-ended the no-image poster flow. hasFallbackTemplateSource() now counts poster format as a fallback source, the generateAd NO_IMAGE_RETURNED branch derives its outcome from hasFallbackTemplateSource() instead of hardcoding ai_failed_no_fallback (so the recovery card shows Use fallback template), and acceptAd's no-image block is scoped to !showPosterFormat (acceptAd is the exact-preview approval path; the composite QA already passes deterministic_fallback and the publish presentation already sends the pre-existing 'deterministic-fallback' imageAssetId sentinel, so server validation accepts the imageless publish). No generation, prompt, or poster-layout logic changed",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved changes preserve authoritative deal facts, retry publish as a Standard card when hosted poster validation rejects only the poster spec, ensure the localized-owner-UI authoring locale follows the active business app language rather than stale profile language, and (2026-07-06) pass the owner's app language as contentLocale to the owner poster preview so it renders in the owner's language once the poster viewer-language flag is on. 2026-07-07: the Try another style button is hidden while the poster preview is shown (the poster template stays fixed, so cycling composed presentations changed nothing visible), and Android hardware back on a dirty draft now shows the same branded Discard changes dialog as the header back arrow instead of leaving silently. 2026-07-07 (F-006): for one-time deals only, a start time that has slipped into the past is clamped up to now — on draft load/resume (so the shown schedule is not stale) and again when building the publish payload (safety net if the draft sat open); recurring deals unchanged. 2026-07-07 (F-024): the empty-kicker eyebrow fallback constant posterEyebrowLabel is now null instead of 'Try our', so a poster whose AI kicker (copy.subline) is empty renders no eyebrow rather than the ungrammatical 'Try our <headline>'; the AdPosterCanvas 'copy.subline || eyebrowLabel' render logic is unchanged. No generation, template, copy, prompt, or poster-layout logic changed. 2026-07-08 (Dan directive): selectCopyOption now mirrors the chosen option headline into generatedAd.poster.copy.headline so the poster preview and the published spec follow the selection (deterministic offer lines and kicker untouched), and the per-option Why-this-angle rationale box was removed from the copy-option cards (strategy chip + CTA line stay; copyStrategyReasonKey retained per source-test contract). 2026-07-08 (Dan directive, single-variant flow): removed the multi-variant copy-options picker (the copyAlternativeOptions list, selectCopyOption/copyOptionMatchesAd/copyOptionsRepresentSameCandidate, copyStrategyLabelKey/copyStrategyReasonKey/compactReviewText helpers, the \"N angles\" count, per-option select, and the \"Offer facts locked\" badge). The screen now shows the single generated variant, and the \"Ask AI for changes\" refine panel is always visible (showComposedRevisePanel = !adAccepted) instead of being gated behind \"Change words\" (that button was removed). The merchant refines the one variant by comment. No generation, prompt, poster-layout, or publish logic changed. 2026-07-09 (honor merchant edits): draft-editor fields the merchant actually changed vs the accepted AI baseline (title/promoLine/ctaText, compared through aiDraftBaselineRef) now thread into generatedAdForPublishSpec as headline/short_description+subheadline/cta, so the published AdSpec, localization bundle, and owner-language preview carry the merchant's words instead of silently reverting to the AI draft; deals.title uses the merchant title via buildAuthoritativeDealDisplayCopy factSafeMerchantTitle only after checkMerchantDealTitleAgainstOffer passes, and a headline/subheadline that contradicts the locked offer facts blocks publish with the localized errHeadlineContradictsOffer message rather than being silently replaced. Unedited fields keep prior behavior exactly (AI copy + canonical deals.title); locked offer/terms lines remain fact-derived. 2026-07-09 (cooldown countdown): a COOLDOWN_ACTIVE 429 from ai-generate-ad-variants now drives a live per-second countdown on the disabled Generate button (generateCooldownCta label + cooldownCaption line, from an epoch-ms cooldownUntil deadline that self-corrects across app background/resume) instead of freezing a static 'Please wait Ns' string in the recovery card; the generate/revise catch paths route COOLDOWN_ACTIVE to beginGenerationCooldown (no error card/banner) and generateAd/reviseAd/canReviseAd are guarded while active, reverting automatically at zero. friendlyGenerationError's COOLDOWN_ACTIVE branch now returns the localized cooldownCaption rather than the raw English server message. No generation, prompt, poster-layout, or publish logic changed."
+    },
+    {
+      "path": "components/poster/AdPosterCanvas.tsx",
+      "sha256": "aaa1ec3fcb7574e979cdb9cc752fb914fea49875bbe095e4b39289f09f2d985c",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md); 2026-07-08 Dan chat directive (F-024 deterministic): blank generic AI kickers (Try our / Our deal / Special offer / Menu pick) at render",
+      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement. 2026-07-06: added an optional contentLocale prop and a flag-gated locale-aware copy resolution path (posterCopyFromSpecForLocale, using the existing posterCopyForLocale helper) behind EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED; also added a sibling Poster Look v2 render path (PosterContentV2/TopCopyBlockV2/OfferBlockV2) behind EXPO_PUBLIC_POSTER_LOOK_V2 with Outfit_900Black/BlackHanSans_400Regular display typography, an offer-badge chip, and lighter top/bottom scrims. Both flags default off; the original PosterContent/TopCopyBlock/OfferBlock v1 components and constants are unmodified, so behavior is byte-identical with both flags off. 2026-07-08 (F-024 deterministic enforcement): sanitizedPosterEyebrow blanks exactly the generic kickers the generation prompt already forbids (Try our, Our deal, Special offer, Menu pick) on both the v1 and v2 top blocks, covering owner previews and already-stored consumer specs; all other kickers render unchanged."
+    },
+    {
+      "path": "components/poster/__tests__/AdPosterCanvas.test.ts",
+      "sha256": "4d58e4f181b0049aaa221c7b3a261e10a3854faf26e774d50ba895e6f58d3aba",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-08 Dan chat directive (F-024): assert the generic-kicker sanitizer exists on both top blocks",
+      "rationale": "Protects source-level expectations for the native poster canvas. 2026-07-08: added guards that sanitizedPosterEyebrow exists, is applied to both eyebrow computations, and covers the TRY OUR default."
+    },
+    {
+      "path": "components/poster/posterTemplates.ts",
+      "sha256": "79a12acaa63a9819bd8e664561fcbcf6a46c35907e219991644167a9783d6170",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Defines poster template ids and color treatments used by the locked renderer."
+    },
+    {
+      "path": "fixtures/ai-poster-copy-offers.json",
+      "sha256": "b33652596395eb3b39083555c2c7c8e5a0e346a75b67c54f0786234677277596",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Holds poster-copy regression fixtures for locked offer facts and expected poster copy."
+    },
+    {
+      "path": "lib/ad-spec.ts",
+      "sha256": "b04b43699943f5efe0c3bc36af0c41b571af1c55715dfe97a9887373e5b47df3",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-06 chat approval: poster quality v2 handoff (POSTER_QUALITY_V2_SONNET_HANDOFF.md)",
+      "rationale": "Builds and validates ad specs, including native poster specs used for publish. 2026-07-06: posterSpecForAd now keeps every localized poster copy variant at publish when a poster viewer-language flag is on (checked inline, not by importing lib/runtime-env, to avoid pulling expo-constants into plain-Node vitest suites); flag off keeps the original English-only normalizePosterSpecForPublish behavior unchanged."
+    },
+    {
+      "path": "lib/ad-variants.ts",
+      "sha256": "2226903e9c047889bf856350a49c3d0133550e9efcd5651bfdeb50724ab037a7",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-07 F-010: drop canonical offer line from offer_details when a promo line is present",
+      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation. F-010: adToDealDraft no longer emits the locked offer line into offer_details when short_description already carries the offer, so the stored deal description states the offer twice (promo + terms) instead of three times."
+    },
+    {
+      "path": "lib/ai-poster-core-lock.test.ts",
+      "sha256": "291a0be8f7fd6029bdef50bbcf3fb565296d1fb30f2817e684a0c035a54b0b5b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Ensures the core lock checker remains part of the normal test suite."
+    },
+    {
+      "path": "lib/create-ai-ux-source.test.ts",
+      "sha256": "0606bb0c5007887b19f38ff0e7395f5690cae3c52c4150294b9b38df0983e0f7",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-04 chat approval: update source guards for preserved image format switching and Standard consumer-feed-style preview; 2026-07-08 Dan chat directive: guard flipped — the Why-this-angle box must stay removed; 2026-07-08 Dan chat directive: guard the single-variant flow (picker removed, refine panel always visible)",
+      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior. Approved change guards the Standard image-led preview and ensures format switching does not discard the generated asset. 2026-07-08: assertions updated to guard the approved removal of the Why-this-angle rationale box (not.toContain on copyOptionReasonLabel and strategy_reason render) while keeping the five-lane, facts-locked, and CTA-line guards. 2026-07-08: source guards updated for the single-variant flow — assert the multi-variant picker apparatus stays removed and the refine panel is always visible; dropped the obsolete copy-option-selection tests."
+    },
+    {
+      "path": "lib/deal-offer-contract.ts",
+      "sha256": "17524d452be6f7a71ee73db74facd28d31b2ba26126cbe05c1d4833b49faf3da",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Keeps deal facts authoritative for AI generation and poster offer lines."
+    },
+    {
+      "path": "lib/deal-offer-contract.test.ts",
+      "sha256": "17aca4d12bff70bfeb579be7d316a37821d8696c8165477bbb73da7bfdef9a05",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression coverage for authoritative offer facts used by AI and poster copy."
+    },
+    {
+      "path": "lib/functions.ts",
+      "sha256": "77054bc879fdf9625f6553d4cdf1581eb81411a902ceb8246690cfd79ebf3324",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-09 Dan chat approval (follow this plan): thread wait_seconds for the cooldown countdown",
+      "rationale": "Client API wrapper for AI ad generation and poster request payloads. 2026-07-09: readInvokeErrorBody now also reads the numeric wait_seconds from the 429 body and invokeAdEdge threads it through throwInvokeError onto the thrown ErrorWithCode; new getErrorWaitSeconds(e) reads that field (falling back to parsing 'Ns' from the message) so the AI create screen can render a live cooldown countdown. No request payload or generation logic changed."
+    },
+    {
+      "path": "lib/offer-version-publish.test.ts",
+      "sha256": "a96b303729bcdd9c388ca12d3ce8ef1f3ec5afc39ccfa002308f15757a8d42d9",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-09 Dan chat approval (Approve both): honor merchant-edited headline at publish",
+      "rationale": "Protects publish-time handling of generated poster specs. 2026-07-09: added regression coverage for the merchant-edited-title path — factSafeMerchantTitle wins over the canonical offer line in buildAuthoritativeDealDisplayCopy, and checkMerchantDealTitleAgainstOffer allows fact-omitting creative titles while blocking contradictions (free/BOGO language on percent-off, wrong percent, buy-both on BOGSF, overlong titles, contradicting subheadlines)."
+    },
+    {
+      "path": "lib/poster-canvas-source.test.ts",
+      "sha256": "e9adb66b63c02293866ecf063a9b20e8c4312d992b5b1f93ff97186f30c6e243",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Protects source-level expectations for the poster canvas."
+    },
+    {
+      "path": "lib/poster/posterCopy.ts",
+      "sha256": "b284131879ec964bfe195ec2f61ac55954977c3c13231842fd90fb4b41cd31df",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Builds poster offer lines and native poster specs from locked offer definitions."
+    },
+    {
+      "path": "lib/poster/posterPolicy.ts",
+      "sha256": "70db8cc59e14b571716f43133c3804e09c545c03eac158c5621d706e9e6ad5ae",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Enforces poster text safety, no app CTAs, no scarcity, and no forbidden terms."
+    },
+    {
+      "path": "lib/poster/posterTypes.ts",
+      "sha256": "4e43558722af3fe42ed2d950e9f225d791f434fd996f00c4c59494ac5b44ec18",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Defines poster copy/spec contract for AI, renderer, and publish paths."
+    },
+    {
+      "path": "lib/poster/__tests__/posterPolicy.test.ts",
+      "sha256": "17448cfc434286610f0c988292e283559b6bd020cdf9626e706ecb0d8e691076",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for poster copy, offer lines, and policy behavior."
+    },
+    {
+      "path": "scripts/check-ai-poster-core-lock.mjs",
+      "sha256": "73d4f82c12640a5ee251f7421363201b3bd1799a27f25197076e05c6a0c79f47",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Implements the hash-based approval gate for protected AI poster files."
+    },
+    {
+      "path": "scripts/evaluate-ai-promotional-copy.mjs",
+      "sha256": "29f60626216db06c955ecc1434c195a5033a52159f506b117d3cdcd489779314",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Evaluates AI promotional and poster copy fixtures."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/index.ts",
+      "sha256": "bd3eba1d149ec2f0df505d61a53f773caeaf46671d301d7abff8cbdb3cf8bdd7",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-07 chat approval: ad_copy reasoningLevel medium->low to fix OPENAI_FETCH_FAILED (gpt-5.4-mini exceeded the ~12s text timeout, dropping the AI image); Part B add AI_IMAGE_MAX_GENERATIONS_PER_REQUEST cap so a missing-item QA verdict never buys a second image (default 2 preserves current behavior)",
+      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior. 2026-07-07: the ad copy call's reasoningLevel changed medium->low so gpt-5.4-mini returns the same validated 5-variant copy in ~10.5s instead of being aborted at ~16s. 2026-07-07 (Part B): a new MAX_IMAGE_GENERATIONS_PER_REQUEST constant (env AI_IMAGE_MAX_GENERATIONS_PER_REQUEST, default 2) gates the QA-triggered image_generation_retry on BOTH the OpenAI and Gemini paths; at 1 a missing-item QA verdict skips the paid regeneration and the first image or existing safe fallback is used, and QA still runs once. No prompt, schema, poster-spec, or publish logic changed; default preserves prior behavior."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/prompt.ts",
+      "sha256": "64e8e3d128eb1c75a7e47e1dd5b76d09b5b8c2d58262e4d8c245ec0c6915bb79",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-09 Dan chat approval (Approve both): fix coffee-bias — item-congruence rule + category-aware kicker guidance",
+      "rationale": "AI ad-copy prompt, including poster headline and poster kicker guidance. 2026-07-09 (coffee-bias fix, root cause of 'Make it a coffee break' on a 40%-off agujjim deal): the app framing no longer enumerates coffee shops/cafes/bakeries; a VOICE rule requires every customer moment/daypart/occasion to fit the actual item and business category; the posterKicker rule drops the hardcoded coffee-first example list (Coffee break, Lunch pick, Smoothie run, Date night) and instead points at the business's own CATEGORY PLAYBOOK natural customer moments; and a percent-off non-cafe EXAMPLES case teaches the wrong-occasion failure directly. Offer mechanics rules, schema, deal contracts, and all other examples unchanged."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/prompt.test.ts",
+      "sha256": "be1af248305e57538658e3163004c8323b998b73f6ca058fa9ef95dc8b0e5f79",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-09 Dan chat approval (Approve both): coffee-bias regression tests",
+      "rationale": "Regression tests for AI ad prompt rules and poster-format instructions. 2026-07-09: added congruence coverage — a Korean-restaurant percent-off prompt must resolve the restaurant_food playbook, carry the item-congruence rules, and no longer contain the hardcoded coffee-first kicker examples or the coffee-shop-only app framing."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-generate-ad-variants-poster-copy-source.test.ts",
+      "sha256": "0c44aab2061c2377801bcc6ddd56acdc3982fae1db79ead2d0f1c6fbf0d3e967",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Source-level guard for poster copy handling inside AI generation."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-image-provider.ts",
+      "sha256": "2763f389066b92eb3bbe2d0073d4c0061c61aa0d0bd2f563bbccc6cfcc5ba649",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Shared AI image generation provider behavior for poster visuals."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-image-provider.test.ts",
+      "sha256": "27cf42229c4848894203cd7fec89df4be764c86d149cf2834a576cc4d03d2bbe",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for shared AI image provider behavior."
+    },
+    {
+      "path": "supabase/functions/_shared/dalle-image.ts",
+      "sha256": "58606cc608841804a0398d7fa9978e8e2ff108b50786c5e932e53a3d94df471f",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-07 chat approval: remove gpt-image-2 from the image-model allowlist so the failing primary attempt is skipped (root cause of ai-generate-ad-variants exceeding the 150s edge worker limit)",
+      "rationale": "OpenAI image generation prompt and image handling for poster visuals. 2026-07-07: removed 'gpt-image-2' from OPENAI_IMAGE_MODEL_ALLOWLIST — in prod it fails every request with FETCH_ERROR (hangs to the per-call timeout) before falling back to gpt-image-1, burning the whole image budget and pushing the request past the ~150s worker limit (confirmed via ai_generation_costs: gpt-image-2 ok=false FETCH_ERROR, gpt-image-1 ok=true on every OpenAI image gen). The dashboard OPENAI_IMAGE_MODEL* secret points at gpt-image-2, so dropping it from the allowlist makes pickGenerateModel() fall through to gpt-image-1 directly. IMAGE_CALL_TIMEOUT_MS and all prompts/handling are unchanged from the initial lock."
+    },
+    {
+      "path": "supabase/functions/_shared/dalle-image.test.ts",
+      "sha256": "756c521b15f4a8ef5d14263e2786f69d31d1231f585432b13dd801b714a08a77",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-07 chat approval: update the model-selection regression test to assert gpt-image-2 is rejected and falls back to gpt-image-1",
+      "rationale": "Regression tests for OpenAI image generation prompt behavior. 2026-07-07: the model-secret test now asserts a gpt-image-2 generate-model secret falls back to gpt-image-1 (gpt-image-2 removed from the allowlist because it fails every prod request)."
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import {
   adToDealDraft,
   buildFallbackTemplateAd,
   buildOfferDefinitionFallbackAd,
+  composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
   type GeneratedAd,
 } from "./ad-variants";
@@ -27,6 +28,86 @@ describe("adToDealDraft", () => {
       cta_text: "Claim deal",
       offer_details: "Buy one iced vanilla latte, get one blueberry muffin free. 20 available.",
     });
+  });
+
+  it("keeps timing metadata out of accepted draft details because the app renders schedule separately", () => {
+    const ad: GeneratedAd = {
+      headline: "Large coffee drink + cookie",
+      subheadline: "A large coffee drink comes with your cookie pick.",
+      short_description: "Buy a large coffee drink and get a free cookie.",
+      cta: "Use this ad",
+      locked_offer_line: "Buy a large coffee drink and get a free cookie of your choice",
+      locked_terms_line:
+        "Redeem only at 123 Dev Smoke St. Limited to 50 available. Offer window: One-time: 6/28/2026, 5:47:46 PM \u2192 6/28/2026, 7:47:46 PM. Claims close 15 minutes before the deal ends. Limit one claim per customer. Schedule: One-time: 6/28/2026, 5:47:46 PM \u2192 6/28/2026, 7:47:46 PM. Max claims: 50",
+    };
+
+    const draft = adToDealDraft(ad, "");
+
+    // F-010: the promo line already states the offer, so the canonical offer line
+    // is dropped from offer_details (kept only the precise terms).
+    expect(draft.offer_details).not.toContain("Buy a large coffee drink and get a free cookie of your choice");
+    expect(draft.offer_details).toContain("Redeem only at 123 Dev Smoke St.");
+    expect(draft.offer_details).toContain("Limited to 50 available.");
+    expect(draft.offer_details).toContain("Limit one claim per customer.");
+    expect(draft.offer_details).not.toContain("Offer window:");
+    expect(draft.offer_details).not.toContain("Claims close");
+    expect(draft.offer_details).not.toContain("Schedule:");
+    expect(draft.offer_details).not.toContain("Max claims:");
+    expect(draft.offer_details).not.toContain("5:47:46 PM");
+  });
+
+  it("drops the offer line from details when a promo line already carries it (F-010)", () => {
+    const ad: GeneratedAd = {
+      headline: "Get 40% off one large ice tea",
+      subheadline: "Save 40% on one large ice tea.",
+      short_description: "Save 40% on one large ice tea.",
+      cta: "Claim deal",
+      locked_offer_line: "Get 40% off one large ice tea",
+      locked_terms_line:
+        "Get 40% off one large ice tea. Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
+    };
+
+    // Previously offer_details led with the offer line, which then stacked onto the
+    // promo line in composeListingDescription and repeated the offer. Now only the
+    // precise terms remain.
+    expect(adToDealDraft(ad, "").offer_details).toBe(
+      "Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
+    );
+  });
+
+  it("keeps the offer line when there is no promo line to carry it", () => {
+    const ad: GeneratedAd = {
+      headline: "Get 40% off one large ice tea",
+      subheadline: "",
+      short_description: "",
+      cta: "Claim deal",
+      locked_offer_line: "Get 40% off one large ice tea",
+      locked_terms_line: "Redeem only at 9460 N MacArthur Blvd. Limited to 50 available.",
+    };
+
+    expect(adToDealDraft(ad, "").offer_details).toBe(
+      "Get 40% off one large ice tea\nRedeem only at 9460 N MacArthur Blvd. Limited to 50 available.",
+    );
+  });
+
+  it("stores the offer once, not three times, in the final listing description (F-010)", () => {
+    const ad: GeneratedAd = {
+      headline: "Coffee + cookie",
+      subheadline: "A large coffee drink comes with a free cookie.",
+      short_description: "Buy any large coffee drink and get a free cookie of your choice.",
+      cta: "Claim deal",
+      locked_offer_line: "Buy any large coffee drink and get a free cookie of your choice",
+      locked_terms_line:
+        "Purchase any large coffee drink to receive one free cookie. Redeem only at 12 Test St. Limited to 25 available.",
+    };
+
+    const draft = adToDealDraft(ad, "");
+    const stored = composeListingDescription(draft.promo_line, "", draft.offer_details);
+
+    // The offer headline phrase appears once (the promo line), and the precise
+    // restatement appears once (the terms line) — not the old promo+offer+terms 3×.
+    expect(stored.match(/get a free cookie of your choice/gi)?.length ?? 0).toBe(1);
+    expect(stored).toContain("Purchase any large coffee drink to receive one free cookie.");
   });
 
   it("keeps legacy subheadline behavior for older generated ads", () => {
@@ -56,6 +137,52 @@ describe("normalizeGeneratedAdDisplayCopy", () => {
 
     expect(ad.headline).toBe("Buy one cold brew and get one free");
     expect(ad.push_notification).toBe("Buy one cold brew and get one free");
+  });
+
+  it("keeps up to five generated copy alternatives", () => {
+    const ad = normalizeGeneratedAdDisplayCopy({
+      headline: "Coffee + cookie",
+      subheadline: "Buy coffee and get a cookie.",
+      cta: "Claim deal",
+      copy_alternatives: Array.from({ length: 6 }, (_, index) => ({
+        candidate_id: `candidate_${index + 1}`,
+        strategy_id: "value_clarity",
+        headline: `Coffee option ${index + 1}`,
+        short_description: `Buy coffee and get a cookie option ${index + 1}.`,
+      })),
+    });
+
+    expect(ad.copy_alternatives).toHaveLength(5);
+    expect(ad.copy_alternatives?.map((option) => option.candidate_id)).toEqual([
+      "candidate_1",
+      "candidate_2",
+      "candidate_3",
+      "candidate_4",
+      "candidate_5",
+    ]);
+  });
+
+  it("trims copy alternative review metadata", () => {
+    const ad = normalizeGeneratedAdDisplayCopy({
+      headline: "Coffee + cookie",
+      subheadline: "Buy coffee and get a cookie.",
+      cta: "Claim deal",
+      copy_alternatives: [
+        {
+          candidate_id: "candidate_1",
+          strategy_id: " value_clarity ",
+          strategy_reason: "  Leads with the coffee-cookie value.  ",
+          headline: " Coffee + cookie ",
+          short_description: " Buy coffee and get a cookie. ",
+        },
+      ],
+    });
+
+    expect(ad.copy_alternatives?.[0]).toMatchObject({
+      strategy_id: "value_clarity",
+      strategy_reason: "Leads with the coffee-cookie value.",
+      short_description: "Buy coffee and get a cookie.",
+    });
   });
 });
 

@@ -2,11 +2,7 @@ import { useMemo } from "react";
 
 import { useBusinessLocations, type SubscriptionTier } from "@/hooks/use-business-locations";
 import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
-import {
-  PAID_BILLING_ENABLED,
-  PILOT_DISABLE_BILLING_GATE,
-  canCreateDealWithLocationBilling,
-} from "@/lib/billing/access";
+import { getMerchantAccessForBillingSummary } from "@/lib/merchant-access";
 
 type BillingGateParams = {
   businessId: string | null;
@@ -21,37 +17,39 @@ export function usePrimaryLocationBillingGate({
   isLoggedIn,
   bypass = false,
 }: BillingGateParams) {
-  const enforcementEnabled = PAID_BILLING_ENABLED && !PILOT_DISABLE_BILLING_GATE;
-  const gatedBusinessId = enforcementEnabled ? businessId : null;
   const {
     visibleLocations,
     loading: locationsLoading,
     error: locationsError,
-  } = useBusinessLocations(gatedBusinessId, subscriptionTier);
+  } = useBusinessLocations(bypass ? null : businessId, subscriptionTier);
   const primaryLocationId = visibleLocations[0]?.id ?? null;
   const {
     summary,
     loading: summaryLoading,
     error: summaryError,
     refresh,
-  } = useLocationBillingSummary(enforcementEnabled ? primaryLocationId : null);
+  } = useLocationBillingSummary(bypass ? null : primaryLocationId);
 
-  const blocked = useMemo(
+  const access = useMemo(
     () =>
-      !canCreateDealWithLocationBilling({
+      getMerchantAccessForBillingSummary({
         isLoggedIn,
-        status: summary.status,
-        purchaseSurface: summary.purchaseSurface,
-        trialEndsAt: summary.trialEndsAt,
-        currentPeriodEndsAt: summary.currentPeriodEndsAt,
+        businessId,
+        summary,
         bypass,
       }),
-    [bypass, isLoggedIn, summary.currentPeriodEndsAt, summary.purchaseSurface, summary.status, summary.trialEndsAt],
+    [businessId, bypass, isLoggedIn, summary],
+  );
+
+  const blocked = useMemo(
+    () => !access.canAccessMerchantTools,
+    [access.canAccessMerchantTools],
   );
 
   return {
     blocked,
-    loading: enforcementEnabled && (locationsLoading || summaryLoading),
+    access,
+    loading: !bypass && Boolean(businessId) && (locationsLoading || summaryLoading),
     primaryLocationId,
     summary,
     locationsError,

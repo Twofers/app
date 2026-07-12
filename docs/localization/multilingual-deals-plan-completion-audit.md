@@ -8,7 +8,7 @@ Safety checkpoint: `07f6e0ba` (`Align multilingual deployment docs`)
 
 Source plan: `TWOFER_MULTILINGUAL_DEALS_CODEX_PLAN_V1_1.md`
 
-Current status: local implementation checkpoint. Not production ready.
+Current status: local implementation checkpoint with Spanish and Korean reviewer sign-off recorded. Not deployed to production.
 
 ## Purpose
 
@@ -19,18 +19,18 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 ## Status Vocabulary
 
 - Local evidence present: code, tests, docs, or scripts in this repo support the requirement for local/internal validation.
-- Operationally blocked: the remaining work needs named reviewers, native sign-off, real-device QA, or Dan-owned store/production actions.
+- Operationally blocked: the remaining work needs Dan-owned store, hosted backend, deployment, or production actions.
 - Hard-gated: the action requires explicit approval before Codex can run it, such as applying migrations, redeploying Edge Functions, changing hosted flags, or building a release.
 
 ## Overall Result
 
 | Area | Status | Evidence |
 | --- | --- | --- |
-| PR 1 locale foundation | Local evidence present; production wording still depends on native review. | `lib/supported-locales.ts`, `lib/localized-offer-renderer.ts`, `lib/korean-counter-registry.ts`, `lib/offer-locale-templates.ts`, `docs/localization/native-review-log.md` |
+| PR 1 locale foundation | Local evidence present; production wording has Spanish and Korean reviewer sign-off recorded. | `lib/supported-locales.ts`, `lib/localized-offer-renderer.ts`, `lib/korean-counter-registry.ts`, `lib/offer-locale-templates.ts`, `docs/localization/native-review-log.md` |
 | PR 2 owner UI and customer switching | Local evidence present; real-device typography remains operationally blocked. | `docs/localization/multilingual-deals-pr2-locale-switching.md`, `app/create/ai.tsx`, `app/deal/[id].tsx`, `app/(tabs)/wallet.tsx`, `lib/localized-deal-display.ts` |
 | PR 3 source creative and transcreation | Local evidence present behind default-off flags; hosted activation remains hard-gated. | `supabase/functions/_shared/ai-localization-provider.ts`, `lib/ad-localization.ts`, `lib/ad-translation-qa.ts`, `lib/ad-locale-presentation-resolver.ts`, `lib/ad-localization-storage.ts` |
-| PR 4 approval binding and cleanup | Local evidence present for approval, publish enforcement, customer rendering, rollout dashboards, acceptance packet, and no-multilingual-push guard. Native acceptance and real-device QA remain blocked. | `lib/ad-localization-approval.ts`, `supabase/functions/publish-offer-version/index.ts`, `lib/customer-deal-localizations.ts`, `scripts/check-localization-rollout-gates.mjs`, `scripts/generate-localization-rollout-dashboard.mjs`, `docs/localization/multilingual-deals-native-acceptance-packet.md` |
-| Broad production readiness | Not achieved. | `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` is expected to fail until reviewer, template, Korean counter, and screenshot QA blockers are cleared. |
+| PR 4 approval binding and cleanup | Local evidence present for approval, publish enforcement, customer rendering, rollout dashboards, acceptance packet, reviewer sign-off, and viewer-language push/Share Deal guards. | `lib/ad-localization-approval.ts`, `supabase/functions/publish-offer-version/index.ts`, `lib/customer-deal-localizations.ts`, `scripts/check-localization-rollout-gates.mjs`, `scripts/generate-localization-rollout-dashboard.mjs`, `docs/localization/multilingual-deals-native-acceptance-packet.md` |
+| Broad localization readiness | Reviewer blockers cleared locally. | `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` is expected to pass after Juan and June sign-off records are present. Production deployment still requires explicit approval. |
 
 ## PR 1 Matrix
 
@@ -41,8 +41,8 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | Merchant localization profile | Local evidence present | `lib/merchant-localization-profile.ts`, `lib/merchant-localization-profile.test.ts`. |
 | Localized term model | Local evidence present | `lib/localized-offer-terms.ts`, `lib/ad-localization-storage.ts`. |
 | Deterministic offer renderers | Local evidence present | `lib/localized-offer-renderer.ts`, `lib/localized-offer-renderer.test.ts`. |
-| Native-reviewed template versioning | Local evidence present for versioning; operationally blocked for Spanish/Korean review | `lib/offer-locale-templates.ts`, `docs/localization/native-review-log.md`, `lib/localization-rollout-gate.ts`. |
-| Korean counter registry and fallback | Local evidence present; Korean approval blocked | `lib/korean-counter-registry.ts`, `docs/localization/korean-counter-registry.md`, `lib/localization-rollout-gate.test.ts`. |
+| Native-reviewed template versioning | Local evidence present for versioning; Spanish/Korean reviewer sign-off recorded | `lib/offer-locale-templates.ts`, `docs/localization/native-review-log.md`, `lib/localization-rollout-gate.ts`. |
+| Korean counter registry and fallback | Local evidence present; Korean approval recorded | `lib/korean-counter-registry.ts`, `docs/localization/korean-counter-registry.md`, `lib/localization-rollout-gate.test.ts`. |
 | UTF-8 and font checks | Local source/test evidence present; real-device QA blocked | `lib/localized-offer-renderer.test.ts`, `lib/ad-locale-presentation-resolver.test.ts`, `docs/localization/multilingual-deals-pr4-locale-screenshot-qa.md`. |
 | Feature flags | Local evidence present | `.env.example`, `lib/runtime-env.ts`, `lib/runtime-env.test.ts`, `docs/localization/multilingual-deals-production-approval-runbook.md`. |
 
@@ -58,7 +58,7 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | Deal-detail language selector | Local evidence present | `app/deal/[id].tsx` renders `SUPPORTED_LOCALES` controls and persists selection through customer locale storage. |
 | Shared renderer integration | Local evidence present | `lib/localized-deal-display.ts`, `components/composed-ad-card/ComposedAdCard.tsx`, `lib/localized-deal-display.test.ts`. |
 | Locale telemetry | Local evidence present | `app/deal/[id].tsx`, `app/create/ai.tsx`, `supabase/functions/publish-offer-version/index.ts`. |
-| Real-device typography tests | Operationally blocked | Windows local environment cannot perform iOS device QA; Android emulator QA/screenshots require explicit request. The gate records this as screenshot QA pending. |
+| Real-device typography tests | Local reviewer evidence recorded for the localization gate | Android screenshot QA evidence was packaged under `qa-artifacts/`; iOS release QA remains a separate store-readiness activity. |
 
 ## PR 3 Matrix
 
@@ -82,11 +82,11 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | Exact localization and term-snapshot hashes | Local evidence present | `lib/ad-localization-storage.ts`, `lib/ad-localization-approval.ts`, `lib/localization-approval-validation.test.ts`. |
 | Publish enforcement | Local evidence present; Edge redeploy hard-gated | `supabase/functions/publish-offer-version/index.ts`, `supabase/functions/_shared/publish-offer-version-function.test.ts`, `docs/localization/multilingual-deals-pr4-server-enforcement.md`. |
 | Selective per-locale screenshot QA | Local evidence present for trigger/gate; real screenshot capture blocked | `lib/ad-locale-presentation-resolver.ts`, `app/create/ai.tsx`, `docs/localization/multilingual-deals-pr4-locale-screenshot-qa.md`. |
-| Native review workflow and logs | Local evidence present; Spanish/Korean sign-off blocked | `docs/localization/native-review-log.md`, `lib/localization-rollout-gate.ts`, `lib/localization-rollout-gate.test.ts`. |
+| Native review workflow and logs | Local evidence present; Spanish/Korean sign-off recorded | `docs/localization/native-review-log.md`, `lib/localization-rollout-gate.ts`, `lib/localization-rollout-gate.test.ts`. |
 | Full real-device suite | Operationally blocked | Requires Dan-controlled real-device QA. No release build or TestFlight action was started. |
 | Rollout dashboards | Local evidence present | `scripts/generate-localization-rollout-dashboard.mjs`, `lib/localization-rollout-dashboard.test.ts`, `docs/localization/multilingual-deals-pr4-rollout-dashboard.md`. |
 | Removal of legacy untranslated customer paths | Local evidence present | `docs/localization/multilingual-deals-pr4-legacy-customer-paths.md`, `lib/customer-localized-paths-source.test.ts`. |
-| Native-speaker acceptance review | Operationally blocked | The acceptance packet exists at `docs/localization/multilingual-deals-native-acceptance-packet.md`, but Spanish and Korean reviewers are still `TBD`; Korean counters and templates are pending native review. |
+| Native-speaker acceptance review | Reviewer sign-off recorded | Juan and June reported no issues on 2026-07-03; Korean counters and Spanish/Korean templates are marked reviewed. |
 | Operational handoff | Local evidence present | `docs/localization/multilingual-deals-production-approval-runbook.md`, `docs/localization/multilingual-deals-native-acceptance-packet.md`, `docs/deployment-command-plan.md`, `docs/production-deploy-checklist.md`. |
 
 ## Required Automated Test Coverage
@@ -102,23 +102,19 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | 28.7 Owner UI | `lib/ad-owner-language-preview.test.ts`, `lib/ad-owner-language-preview-source.test.ts`, `app/create/ai.tsx` source guards via existing tests. |
 | 28.8 Presentation | `lib/ad-locale-presentation-resolver.test.ts`, `lib/ad-presentation-spec.test.ts`, `lib/ad-text-fit.test.ts`. |
 | 28.9 Approval and publishing | `lib/ad-localization-approval.test.ts`, `lib/localization-approval-validation.test.ts`, `supabase/functions/_shared/publish-offer-version-function.test.ts`. |
-| 28.10 No multilingual push | `supabase/functions/_shared/send-deal-push-source.test.ts`, `docs/localization/multilingual-deals-pr4-no-multilingual-push.md`. |
+| 28.10 Viewer-language push and Share Deal | `supabase/functions/_shared/send-deal-push-source.test.ts`, `supabase/functions/_shared/weekly-deal-digest-source.test.ts`, `supabase/functions/_shared/deal-link-viewer-locale-source.test.ts`, `supabase/functions/_shared/viewer-locale.test.ts`, `docs/localization/viewer-language-invariant-plan.md`. |
 
 ## Completion Blockers
 
-The local implementation can be internally validated, but the plan is not complete for broad production until all of the following are true:
+The localization reviewer blockers are clear. The plan is not deployed to production until all of the following production-changing actions are approved and completed:
 
-1. U.S. Spanish reviewer is named and final sign-off is recorded.
-2. Korean reviewer is named and final sign-off is recorded.
-3. Korean counter metadata is approved by the Korean reviewer.
-4. Real-device screenshot and typography QA is recorded for representative Spanish and Korean cases.
-5. The PR4 native acceptance packet is completed and reconciled into the native review log.
-6. Dan explicitly approves applying the localization migrations.
-7. Dan explicitly approves redeploying affected Edge Functions.
-8. Dan explicitly approves hosted feature flag changes.
-9. Dan explicitly approves any future release build or store submission.
+1. Dan explicitly approves applying the localization migrations.
+2. Dan explicitly approves redeploying affected Edge Functions.
+3. Dan explicitly approves hosted feature flag changes.
+4. Dan explicitly approves any future release build or store submission.
+5. iOS/TestFlight and store-release QA are completed through the release checklist.
 
-Until those are complete, `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` should fail.
+With reviewer signoff recorded, `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` should pass. That pass is not deployment approval.
 
 ## Audit Command
 

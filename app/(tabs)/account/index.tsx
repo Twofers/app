@@ -18,12 +18,13 @@ import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import type { AppLocale } from "@/lib/i18n/config";
+import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { useTabMode } from "@/lib/tab-mode";
 import { LegalExternalLinks } from "@/components/legal-external-links";
-import { deleteUserAccount } from "@/lib/functions";
+import { deleteUserAccount, updateBusinessProfileSection } from "@/lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -33,8 +34,9 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { clearLocalAuthSessionState } from "@/lib/auth-local-session-state";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import {
   isBusinessProfileEditorDirty,
@@ -50,6 +52,8 @@ import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
+import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
+import { localizedBusinessCategoryLabel } from "@/lib/business-category-label";
 
 type RepeatClaimPolicyType = "NONE" | "COOLDOWN_DAYS" | "FOREVER";
 
@@ -80,9 +84,20 @@ export default function AccountScreen() {
     businessOwnershipAmbiguous,
     businessProfile,
     businessName,
+    subscriptionTier,
     loading,
     refresh,
   } = useBusiness();
+  const mobileBillingEnabled = isMobilePaidBillingEnabled();
+  const {
+    blocked: merchantAccessBlocked,
+    loading: merchantAccessLoading,
+    access: merchantAccess,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+  });
   const deleteMayIncludeBusinessData = Boolean(businessId || businessOwnershipAmbiguous);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
@@ -130,6 +145,7 @@ export default function AccountScreen() {
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
   const supportEmail = getSupportEmail();
+  const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   const visibleBusinessContactName = businessProfile?.contact_name?.trim() || null;
   const visibleBusinessEmail = businessProfile?.business_email?.trim() || null;
 
@@ -147,6 +163,7 @@ export default function AccountScreen() {
     businessProfileSnapshot?.address?.trim() ||
     null;
   const businessSummaryCategory = businessProfile?.category?.trim() || null;
+  const businessSummaryCategoryLabel = localizedBusinessCategoryLabel(businessSummaryCategory, t);
   const savedBusinessProfileDraft = useMemo<BusinessProfileEditorDraft>(
     () => ({
       name: businessProfile?.name ?? "",
@@ -682,9 +699,11 @@ export default function AccountScreen() {
         hours: hrs,
       } = profileValidation.values;
       const addr = ad;
-      const { error } = await supabase
-        .from("businesses")
-        .update({
+      await updateBusinessProfileSection({
+        business_id: businessId,
+        section_key: "account_profile",
+        profile_version: Number(businessProfile?.current_profile_version ?? 1),
+        payload: {
           name: nm,
           contact_name: cn || null,
           business_email: em || null,
@@ -698,9 +717,8 @@ export default function AccountScreen() {
           preferred_locale: profilePreferredLocale,
           phone: ph || null,
           hours_text: hrs || null,
-        })
-        .eq("id", businessId);
-      if (error) throw error;
+        },
+      });
       await refresh();
       setBanner({ message: t("account.profileSaved"), tone: "success" });
     } catch (e: unknown) {
@@ -730,8 +748,9 @@ export default function AccountScreen() {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
     await setCustomerPreferredDealLocaleFromAppLanguage(locale);
+    await syncAppLocaleToServer(userId, locale);
     await i18n.changeLanguage(locale);
-    setBanner({ message: t("account.languageSaved"), tone: "success" });
+    setBanner({ message: String(i18n.t("account.languageSaved", { lng: locale })), tone: "success" });
   }
 
   function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
@@ -773,43 +792,50 @@ export default function AccountScreen() {
         style={{
           borderWidth: 1,
           borderColor: selected ? theme.primary : theme.border,
-          borderRadius: Radii.lg,
-          padding: Spacing.sm,
+          borderRadius: Radii.md,
+          paddingVertical: 10,
+          paddingHorizontal: 10,
           flexDirection: "row",
-          alignItems: "flex-start",
-          gap: Spacing.sm,
+          alignItems: helper && selected ? "flex-start" : "center",
+          gap: 8,
           backgroundColor: selected ? PrimaryTint.surface : theme.surface,
         }}
       >
         <View
           style={{
-            width: 18,
-            height: 18,
-            borderRadius: 9,
+            width: 16,
+            height: 16,
+            borderRadius: 8,
             borderWidth: 2,
             borderColor: selected ? theme.primary : theme.border,
             alignItems: "center",
             justifyContent: "center",
-            marginTop: 1,
+            marginTop: helper && selected ? 1 : 0,
           }}
         >
           {selected ? (
             <View
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
+                width: 7,
+                height: 7,
+                borderRadius: 3.5,
                 backgroundColor: theme.primary,
               }}
             />
           ) : null}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontWeight: "800", lineHeight: 19 }} numberOfLines={2}>
+          <Text
+            style={{ color: theme.text, fontWeight: "800", fontSize: 14, lineHeight: 18 }}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            maxFontSizeMultiplier={1.08}
+          >
             {label}
           </Text>
-          {helper ? (
-            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 2 }} numberOfLines={3}>
+          {helper && selected ? (
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 2 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
               {helper}
             </Text>
           ) : null}
@@ -865,69 +891,94 @@ export default function AccountScreen() {
             style={{
               borderWidth: 1,
               borderColor: theme.border,
-              borderRadius: Radii.lg,
+              borderRadius: Radii.md,
               padding: Spacing.md,
-              gap: Spacing.sm,
+              gap: Spacing.xs,
+              backgroundColor: theme.surface,
             }}
           >
-            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
-            <Text style={{ fontWeight: "700", color: theme.text }}>{sessionEmail}</Text>
-            <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
+            <Text style={{ opacity: 0.7, fontSize: 12, color: theme.text }} maxFontSizeMultiplier={1.08}>
+              {t("account.loggedInAsLabel")}
+            </Text>
+            <Text
+              style={{ fontWeight: "800", fontSize: 15, lineHeight: 20, color: theme.text }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+              maxFontSizeMultiplier={1.08}
+            >
+              {sessionEmail}
+            </Text>
+            <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} style={{ marginTop: Spacing.xs }} />
           </View>
 
           <View
             style={{
               borderWidth: 1,
               borderColor: theme.border,
-              borderRadius: Radii.lg,
+              borderRadius: Radii.md,
               padding: Spacing.md,
-              gap: Spacing.sm,
+              gap: Spacing.xs,
+              backgroundColor: theme.surface,
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("supportContact.sectionTitle")}</Text>
-            <Text style={{ opacity: 0.7, color: theme.text, fontSize: 14, lineHeight: 20 }}>
+            <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+              {t("supportContact.sectionTitle")}
+            </Text>
+            <Text style={{ opacity: 0.7, color: theme.text, fontSize: 13, lineHeight: 18 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
               {t("supportContact.sectionHelp")}
             </Text>
             <SecondaryButton
               title={t("supportContact.contactSupportCta")}
               onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
               accessibilityLabel={t("supportContact.emailA11y")}
+              style={{ marginTop: Spacing.xs }}
             />
-            <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
+            <Text
+              style={{ color: theme.accentText, fontWeight: "800", fontSize: 13, lineHeight: 17 }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              maxFontSizeMultiplier={1.08}
+            >
+              {supportEmail}
+            </Text>
           </View>
 
           {tabMode === "business" ? (
             <View
               style={{
-                borderRadius: Radii.lg,
+                borderRadius: Radii.md,
                 padding: Spacing.md,
                 backgroundColor: theme.surface,
                 borderWidth: 1,
                 borderColor: theme.border,
-                gap: Spacing.sm,
+                gap: Spacing.xs,
               }}
             >
-              <Text style={{ fontWeight: "700", fontSize: 18, color: theme.text }}>{t("account.bizCardTitle")}</Text>
+              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+                {t("account.bizCardTitle")}
+              </Text>
               {businessProfileCheckLoading ? (
                 <Text style={{ opacity: 0.7, color: theme.text }}>{t("createHub.loading")}</Text>
               ) : (
                 <>
-                  <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
+                  <Text style={{ opacity: 0.86, fontSize: 14, lineHeight: 18, fontWeight: "700", color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
                     {businessSummaryName ?? t("account.bizYourBusiness")}
                   </Text>
-                  <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                  <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
                     {businessSummaryAddress ?? t("account.bizNoAddress")}
                   </Text>
-                  <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
-                    {t("account.bizCategory")}: {businessSummaryCategory ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
+                  <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
+                    {t("account.bizCategory")}: {businessSummaryCategoryLabel ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
                   </Text>
                   {visibleBusinessContactName ? (
-                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                    <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
                       {t("account.fieldContactName")}: {visibleBusinessContactName}
                     </Text>
                   ) : null}
                   {visibleBusinessEmail ? (
-                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                    <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} maxFontSizeMultiplier={1.08}>
                       {t("account.fieldBusinessEmail")}: {visibleBusinessEmail}
                     </Text>
                   ) : null}
@@ -947,7 +998,11 @@ export default function AccountScreen() {
             </View>
           ) : null}
 
-          {PAID_BILLING_ENABLED && tabMode === "business" && businessId ? (
+          {tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
+            <MerchantAccessBlockedCard status={merchantAccess.status} />
+          ) : null}
+
+          {mobileBillingEnabled && tabMode === "business" && businessId ? (
             <Pressable
               onPress={() => router.push("/(tabs)/account/billing" as Href)}
               accessibilityRole="button"
@@ -958,7 +1013,7 @@ export default function AccountScreen() {
                   {t("account.billingRowSubtitle")}
                 </Text>
                 <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
-                  {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
+                  {t("billing.goToBilling", { defaultValue: "Open billing" })} →
                 </Text>
               </CardShell>
             </Pressable>
@@ -968,17 +1023,22 @@ export default function AccountScreen() {
             style={{
               borderWidth: 1,
               borderColor: theme.border,
-              borderRadius: Radii.lg,
+              borderRadius: Radii.md,
               padding: Spacing.md,
-              gap: Spacing.sm,
+              gap: Spacing.xs,
+              backgroundColor: theme.surface,
             }}
           >
-            <Text style={{ fontWeight: "700", color: theme.text }}>{t("language.sectionApp")}</Text>
-            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("language.sectionAppHelp")}</Text>
+            <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+              {t("language.sectionApp")}
+            </Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+              {t("language.sectionAppHelp")}
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
-              {localeChip(t("language.english"), "en", i18n.language === "en", () => chooseAppLocale("en"))}
-              {localeChip(t("language.spanish"), "es", i18n.language === "es", () => chooseAppLocale("es"))}
-              {localeChip(t("language.korean"), "ko", i18n.language === "ko", () => chooseAppLocale("ko"))}
+              {localeChip(t("language.english"), "en", currentAppLocale === "en", () => chooseAppLocale("en"))}
+              {localeChip(t("language.spanish"), "es", currentAppLocale === "es", () => chooseAppLocale("es"))}
+              {localeChip(t("language.korean"), "ko", currentAppLocale === "ko", () => chooseAppLocale("ko"))}
             </View>
           </View>
 
@@ -989,16 +1049,20 @@ export default function AccountScreen() {
               style={{
                 borderWidth: 1,
                 borderColor: theme.border,
-                borderRadius: Radii.lg,
+                borderRadius: Radii.md,
                 padding: Spacing.md,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}
             >
-              <View>
-                <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
-                <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
+              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+                  {t("account.dealAlertsTitle")}
+                </Text>
+                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+                  {t("account.dealAlertsSubtitle")}
+                </Text>
               </View>
               <BrandedSwitch
                 value={alertsEnabled}
@@ -1017,7 +1081,7 @@ export default function AccountScreen() {
               style={{
                 borderWidth: 1,
                 borderColor: theme.border,
-                borderRadius: Radii.lg,
+                borderRadius: Radii.md,
                 padding: Spacing.md,
                 flexDirection: "row",
                 justifyContent: "space-between",
@@ -1025,8 +1089,12 @@ export default function AccountScreen() {
               }}
             >
               <View style={{ flex: 1, paddingRight: Spacing.sm }}>
-                <Text style={{ fontWeight: "700" }}>{t("account.bizClaimNotifTitle")}</Text>
-                <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.bizClaimNotifSubtitle")}</Text>
+                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+                  {t("account.bizClaimNotifTitle")}
+                </Text>
+                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+                  {t("account.bizClaimNotifSubtitle")}
+                </Text>
               </View>
               <BrandedSwitch
                 value={bizClaimNotif}
@@ -1045,19 +1113,18 @@ export default function AccountScreen() {
               style={{
                 borderWidth: 1,
                 borderColor: theme.border,
-                borderRadius: Radii.lg,
+                borderRadius: Radii.md,
                 padding: Spacing.md,
-                gap: Spacing.sm,
+                gap: Spacing.xs,
                 backgroundColor: theme.surface,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>
+              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
                 {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
               </Text>
-              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }} numberOfLines={3}>
+              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 17 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
                 {t("account.repeatPolicyHelp", {
-                  defaultValue:
-                    "Use this if your goal is to bring in new customers instead of giving the same customer a deal every day.",
+                  defaultValue: "Limit repeat claims when you want more first-time customers.",
                 })}
               </Text>
               {repeatPolicyOption(
@@ -1066,10 +1133,9 @@ export default function AccountScreen() {
               )}
               {repeatPolicyOption(
                 "COOLDOWN_DAYS",
-                t("account.repeatPolicyCooldown", { defaultValue: "Customers can claim again after X days" }),
+                t("account.repeatPolicyCooldown", { defaultValue: "Claim again after X days" }),
                 t("account.repeatPolicyCooldownHelp", {
-                  defaultValue:
-                    "A customer who redeems a deal from your business must wait this many days before claiming another deal from your business.",
+                  defaultValue: "Redeemed customers wait this many days before claiming again.",
                 }),
               )}
               {repeatPolicyType === "COOLDOWN_DAYS" ? (
@@ -1104,11 +1170,10 @@ export default function AccountScreen() {
               {repeatPolicyOption(
                 "FOREVER",
                 t("account.repeatPolicyForever", {
-                  defaultValue: "Customers can claim only once ever from my business",
+                  defaultValue: "Claim once ever",
                 }),
                 t("account.repeatPolicyForeverHelp", {
-                  defaultValue:
-                    "New-customer-only mode: once a customer redeems a deal from your business, they cannot claim another deal from your business again.",
+                  defaultValue: "After one redemption, that customer cannot claim another deal here.",
                 }),
               )}
               <SecondaryButton
@@ -1119,6 +1184,7 @@ export default function AccountScreen() {
                 }
                 onPress={() => void saveRepeatPolicy()}
                 disabled={repeatPolicySaving}
+                style={{ minHeight: 44, paddingVertical: 8 }}
               />
             </View>
           ) : null}
@@ -1129,38 +1195,45 @@ export default function AccountScreen() {
             <View
               style={{
                 backgroundColor: theme.surface,
-                borderRadius: Radii.lg,
+                borderRadius: Radii.md,
                 padding: Spacing.md,
                 borderWidth: 1,
                 borderColor: theme.border,
-                gap: Spacing.sm,
+                gap: Spacing.xs,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>{t("language.sectionBusiness")}</Text>
-              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+                {t("language.sectionBusiness")}
+              </Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
                 {t("language.sectionBusinessHelp")}
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 2 }}>
                 <Pressable
                   onPress={() => setProfilePreferredLocale(null)}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityLabel={t("language.useAppLanguage")}
                   accessibilityRole="button"
                   style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    paddingHorizontal: 11,
                     borderRadius: Radii.pill,
                     backgroundColor: profilePreferredLocale == null ? theme.primary : theme.surfaceMuted,
-                    marginRight: 8,
-                    marginBottom: 8,
+                    marginRight: 6,
+                    marginBottom: 6,
+                    maxWidth: "100%",
                   }}
                 >
                   <Text
                     style={{
                       color: profilePreferredLocale == null ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
-                      fontWeight: "600",
-                      fontSize: 13,
+                      fontWeight: "700",
+                      fontSize: 12,
                     }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    maxFontSizeMultiplier={1.08}
                   >
                     {t("language.useAppLanguage")}
                   </Text>
@@ -1173,20 +1246,24 @@ export default function AccountScreen() {
                     accessibilityLabel={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
                     accessibilityRole="button"
                     style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      paddingHorizontal: 11,
                       borderRadius: Radii.pill,
                       backgroundColor: profilePreferredLocale === loc ? theme.primary : theme.surfaceMuted,
-                      marginRight: 8,
-                      marginBottom: 8,
+                      marginRight: 6,
+                      marginBottom: 6,
                     }}
                   >
                     <Text
                       style={{
                         color: profilePreferredLocale === loc ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
-                        fontWeight: "600",
-                        fontSize: 13,
+                        fontWeight: "700",
+                        fontSize: 12,
                       }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                      maxFontSizeMultiplier={1.08}
                     >
                       {loc === "en"
                         ? t("language.english")
@@ -1198,10 +1275,14 @@ export default function AccountScreen() {
                 ))}
               </View>
 
-              <Text style={{ fontWeight: "700", marginTop: 8 }}>{t("account.bizProfileHeader")}</Text>
-              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("account.bizProfileHelp")}</Text>
-              <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: Spacing.sm }}>
-                <Text style={{ color: theme.accentText, fontWeight: "800" }}>
+              <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text, marginTop: 4 }} maxFontSizeMultiplier={1.08}>
+                {t("account.bizProfileHeader")}
+              </Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+                {t("account.bizProfileHelp")}
+              </Text>
+              <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: 6, alignSelf: "flex-start" }}>
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
                   {bizProfileExpanded ? t("account.collapseBizProfile") : t("account.expandBizProfile")}
                 </Text>
               </Pressable>
@@ -1557,7 +1638,11 @@ export default function AccountScreen() {
           ) : null}
 
           {businessId ? (
-            <PrimaryButton title={t("account.businessDashboard")} onPress={() => router.push("/(tabs)/dashboard")} />
+            <SecondaryButton
+              title={t("account.businessDashboard")}
+              onPress={() => router.push("/(tabs)/dashboard")}
+              style={{ minHeight: 44, paddingVertical: 8 }}
+            />
           ) : (
             <View
               style={{
@@ -1576,9 +1661,9 @@ export default function AccountScreen() {
 
           <Pressable
             onPress={() => setAdvancedOpen((v) => !v)}
-            style={{ paddingVertical: Spacing.sm, alignSelf: "flex-start" }}
+            style={{ paddingVertical: 6, alignSelf: "flex-start" }}
           >
-            <Text style={{ fontWeight: "800", color: theme.accentText, fontSize: 15 }}>
+            <Text style={{ fontWeight: "800", color: theme.accentText, fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
               {advancedOpen ? "− " : "+ "}
               {t("account.advancedOptions")}
             </Text>
@@ -1602,29 +1687,32 @@ export default function AccountScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#FECACA",
-              borderRadius: Radii.lg,
+              borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
+              borderRadius: Radii.md,
               padding: Spacing.md,
-              gap: Spacing.sm,
-              backgroundColor: "#FEF2F2",
+              gap: Spacing.xs,
+              backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
             }}
           >
             <Text
               style={{
-                fontWeight: "700",
-                color: "#B91C1C",
+                fontWeight: "800",
+                fontSize: 16,
+                lineHeight: 20,
+                color: colorScheme === "dark" ? theme.dangerText : "#B91C1C",
               }}
+              maxFontSizeMultiplier={1.08}
             >
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.85, color: Gray[600] }}>
+            <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
               {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
             </Text>
             <PrimaryButton
               title={t("deleteAccount.cta")}
               onPress={confirmDeleteAccount}
               disabled={busy || loading}
-              style={{ backgroundColor: theme.danger }}
+              style={{ backgroundColor: theme.danger, minHeight: 44, paddingVertical: 8, marginTop: Spacing.xs }}
             />
           </View>
         </ScrollView>

@@ -33,6 +33,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { useBusiness } from "@/hooks/use-business";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import {
   mergeDealsById,
   readBusinessCoordinates,
@@ -40,9 +41,19 @@ import {
 } from "@/lib/consumer-feed-visibility";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
+import { compactLocationLabel } from "@/lib/display-format";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
+import {
+  getConsumerPreferences,
+  setLastKnownConsumerCoords,
+  setConsumerNotificationPrefs,
+  setConsumerDealSortMode,
+  DEFAULT_RADIUS_MILES,
+  DEFAULT_DEAL_SORT_MODE,
+  CONSUMER_DEAL_SORT_MODES,
+  type ConsumerDealSortMode,
+} from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
@@ -60,19 +71,30 @@ import {
   fetchCustomerDealPosterSpecs,
   type CustomerDealPosterSpec,
 } from "@/lib/customer-deal-poster-specs";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_FEED_BASE_SELECT,
   DEAL_FEED_SELECT,
   isMissingStructuredDisplayColumnError,
   type Deal,
 } from "@/lib/deal-feed-schema";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+  type RepeatPolicyFields,
+} from "@/lib/repeat-claim-visibility";
+import { loadHiddenBusinessIds } from "@/lib/hidden-businesses";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
-import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
+import { collectBusinessesPageByPage, mergeBusinessRowsById } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
@@ -113,16 +135,21 @@ type BusinessRow = {
 };
 
 function dealStatusForUser(
-  dealId: string,
+  deal: Pick<Deal, "id" | "end_time">,
   map: Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>,
   now: number,
 ): ConsumerDealStatusKey {
-  const row = map.get(dealId);
-  if (!row) return "live";
-  if (row.redeemed_at) return "redeemed";
-  const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
-  if (isPastClaimRedeemDeadline(row.expires_at, now, g)) return "expired";
-  return "claimed";
+  const row = map.get(deal.id);
+  if (row?.redeemed_at) return "redeemed";
+  if (row) {
+    const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
+    // An unredeemed claim still inside its redeem window keeps the card "claimed".
+    if (!isPastClaimRedeemDeadline(row.expires_at, now, g)) return "claimed";
+    // Otherwise the prior claim lapsed. A lapsed claim does NOT consume the deal,
+    // so fall through and reflect the deal's own status — a live deal stays
+    // re-claimable ("live"), never "expired" just because an old claim timed out.
+  }
+  return new Date(deal.end_time).getTime() > now ? "live" : "expired";
 }
 
 async function fetchActiveDealsForFeed(nowIso: string, limit = 80) {
@@ -193,10 +220,12 @@ export default function HomeScreen() {
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
+  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [claimingDealId, setClaimingDealId] = useState<string | null>(null);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
+  const [lastClaimId, setLastClaimId] = useState<string | null>(null);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
   const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<string | null>(null);
   const [loadingDeals, setLoadingDeals] = useState(true);
@@ -214,7 +243,16 @@ export default function HomeScreen() {
   >(() => new Map());
   /** Total non-canceled claims per capped deal (deal_claim_counts RPC). Empty until the RPC is deployed. */
   const [claimCountsByDeal, setClaimCountsByDeal] = useState<Map<string, number>>(() => new Map());
+  /** Repeat-claim policy per business + this user's last redemption per business, used to hide
+   *  deals the customer is currently restricted from. Empty maps => nothing hidden. */
+  const [repeatPolicyByBusiness, setRepeatPolicyByBusiness] = useState<Map<string, RepeatPolicyFields>>(() => new Map());
+  const [lastRedeemedByBusiness, setLastRedeemedByBusiness] = useState<Map<string, string>>(() => new Map());
+  /** Businesses this customer has hidden ("block" control). Their deals are filtered out of the
+   *  feed and the shops list. Empty set => nothing hidden. */
+  const [hiddenBusinessIds, setHiddenBusinessIds] = useState<Set<string>>(() => new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favoritesExpanded, setFavoritesExpanded] = useState(false);
+  const [sortMode, setSortMode] = useState<ConsumerDealSortMode>(DEFAULT_DEAL_SORT_MODE);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
@@ -402,6 +440,27 @@ export default function HomeScreen() {
     [userId],
   );
 
+  /** Load repeat-claim policy + this user's per-business redemption history for the visible
+   *  deal set, so restricted deals can be hidden. Best-effort: on any failure the maps stay
+   *  empty and nothing is hidden (the claim-deal edge function still enforces the limit). */
+  const loadRepeatVisibility = useCallback(
+    async (dealBusinessIds: string[]) => {
+      const ids = Array.from(new Set(dealBusinessIds.filter(Boolean)));
+      if (ids.length === 0) {
+        setRepeatPolicyByBusiness(new Map());
+        setLastRedeemedByBusiness(new Map());
+        return;
+      }
+      const [policies, redemptions] = await Promise.all([
+        loadBusinessRepeatPolicies(ids),
+        loadBusinessRedemptionMap(userId, ids),
+      ]);
+      setRepeatPolicyByBusiness(policies);
+      setLastRedeemedByBusiness(redemptions);
+    },
+    [userId],
+  );
+
   const loadDeals = useCallback(async () => {
     setLoadingDeals(true);
     const geo = geoRef.current;
@@ -452,7 +511,10 @@ export default function HomeScreen() {
       }
       const filtered = rows.filter((deal) => isDealActiveNow(deal));
       setDeals(filtered);
-      await loadUserClaims(filtered.map((d) => d.id));
+      await Promise.all([
+        loadUserClaims(filtered.map((d) => d.id)),
+        loadRepeatVisibility(filtered.map((d) => d.business_id)),
+      ]);
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown deals load error" };
       logPostgrestError("home screen deals", err);
@@ -461,7 +523,7 @@ export default function HomeScreen() {
     } finally {
       setLoadingDeals(false);
     }
-  }, [loadUserClaims, t]);
+  }, [loadUserClaims, loadRepeatVisibility, t]);
 
   // Re-fetch the nearby deal set when location changes (the user's own radius filter
   // is applied client-side over the fetched set, so radius changes don't need a reload).
@@ -488,11 +550,26 @@ export default function HomeScreen() {
           p_favorite_ids: favoriteIdsRef.current,
         });
         if (!error && Array.isArray(data)) {
-          setBusinesses(
-            (data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]).map(
-              (r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude }),
-            ) as BusinessRow[],
-          );
+          const nearbyBusinesses = (
+            data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]
+          ).map((r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude })) as BusinessRow[];
+          let unlocatedBusinesses: BusinessRow[] = [];
+          try {
+            unlocatedBusinesses = (await collectBusinessesPageByPage(async ({ from, to }) => {
+              return await supabase
+                .from("businesses")
+                .select("id,name,location,latitude,longitude")
+                .or("latitude.is.null,longitude.is.null")
+                .order("name", { ascending: true })
+                .range(from, to);
+            })) as BusinessRow[];
+          } catch (unlocatedError) {
+            if (__DEV__) {
+              const msg = unlocatedError instanceof Error ? unlocatedError.message : String(unlocatedError);
+              console.warn("[home] unlocated businesses load:", msg);
+            }
+          }
+          setBusinesses(mergeBusinessRowsById(nearbyBusinesses, unlocatedBusinesses));
           setLoadingBiz(false);
           return;
         }
@@ -534,9 +611,14 @@ export default function HomeScreen() {
     setFavoriteBusinessIds((data ?? []).map((row) => row.business_id));
   }, []);
 
+  const loadHidden = useCallback(async (currentUserId: string | null) => {
+    setHiddenBusinessIds(await loadHiddenBusinessIds(currentUserId));
+  }, []);
+
   const hydrateLocationFromPrefs = useCallback(async () => {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
+    setSortMode(prefs.dealSortMode);
     setFavoritesOnly(prefs.notificationPrefs.mode === "favorites_only");
     setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
     const coords = await resolveConsumerCoordinates(prefs);
@@ -570,7 +652,8 @@ export default function HomeScreen() {
       void loadDeals();
       void loadBusinesses();
       void loadFavorites(userId);
-    }, [loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]),
+      void loadHidden(userId);
+    }, [loadDeals, loadBusinesses, loadFavorites, loadHidden, userId, hydrateLocationFromPrefs]),
   );
 
   useEffect(() => {
@@ -655,7 +738,10 @@ export default function HomeScreen() {
 
         const out = await claimDeal(dealId);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
-        if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
+        if (out.claim_id) {
+          setClaimToastVariant("claimed");
+          setClaimSuccessToastNonce((n) => n + 1);
+        }
         trackAppAnalyticsEvent({
           event_name: "deal_claimed",
           claim_id: out.claim_id ?? null,
@@ -667,6 +753,7 @@ export default function HomeScreen() {
         setQrExpires(out.expires_at);
         setQrShortCode(out.short_code ?? null);
         setLastClaimDealId(dealId);
+        setLastClaimId(out.claim_id ?? null);
         setUserClaimsByDeal((prev) => {
           const next = new Map(prev);
           next.set(dealId, {
@@ -692,7 +779,10 @@ export default function HomeScreen() {
                 : claimedDeal,
               locale: customerDealLocalizationLocale,
               localeResolutionSource: customerDealLocalizationResolution.source,
-              useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+              useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+                customerDealLocalizationLocale,
+                localizedOfferRendererEnabled,
+              ),
               fallbackLanguage: i18n.language,
             })
           : null;
@@ -730,7 +820,6 @@ export default function HomeScreen() {
       customerDealLocalizationLocale,
       customerDealLocalizationResolution.source,
       customerDealLocalizationsByDealId,
-      customerLocaleResolutionEnabled,
       i18n.language,
       localizedOfferRendererEnabled,
     ],
@@ -741,6 +830,34 @@ export default function HomeScreen() {
     setClaimingDealId(null);
     void loadUserClaims(dealsRef.current.map((d) => d.id));
   }, [loadUserClaims]);
+
+  // While the claim QR is on screen, watch it so a counter scan flips the deal card to
+  // redeemed and closes the modal on its own (redemption UPDATEs aren't broadcast via
+  // Realtime in this project — see the hook).
+  useClaimRedeemedWatch({
+    claimId: lastClaimId,
+    enabled: qrVisible && !!lastClaimId,
+    onRedeemed: () => {
+      const dealId = lastClaimDealId;
+      setClaimToastVariant("redeemed");
+      setClaimSuccessToastNonce((n) => n + 1);
+      setTimeout(() => {
+        setQrVisible(false);
+        if (dealId) {
+          setClaimStatus((prev) => {
+            const next = { ...prev };
+            delete next[dealId];
+            return next;
+          });
+        }
+        void loadUserClaims(dealsRef.current.map((d) => d.id));
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      void loadUserClaims(dealsRef.current.map((d) => d.id));
+    },
+  });
 
   async function refreshQr() {
     if (!lastClaimDealId) {
@@ -754,6 +871,7 @@ export default function HomeScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setLastClaimId(out.claim_id ?? null);
     } catch (e: unknown) {
       const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
       setBanner(mapClaimError(msg));
@@ -762,9 +880,53 @@ export default function HomeScreen() {
     }
   }
 
+  const onSelectSortMode = useCallback((mode: ConsumerDealSortMode) => {
+    setSortMode(mode);
+    void setConsumerDealSortMode(mode);
+  }, []);
+
+  const sortModeLabel = useCallback(
+    (mode: ConsumerDealSortMode) => {
+      switch (mode) {
+        case "nearest":
+          return t("consumerHome.sortNearest");
+        case "endingSoon":
+          return t("consumerHome.sortEndingSoon");
+        case "newest":
+          return t("consumerHome.sortNewest");
+        default:
+          return t("consumerHome.sortForYou");
+      }
+    },
+    [t],
+  );
+
+  // Hide deals the customer can't/won't see: businesses they've hidden ("block" control), and
+  // deals they're currently repeat-restricted from (so they never see a deal they can't claim).
+  // Applied upstream of search/radius/sort (and any realtime-added deals). When nothing is hidden
+  // and no business in view has an active limit, this is a no-op.
+  const repeatVisibleDeals = useMemo(() => {
+    const hasHidden = hiddenBusinessIds.size > 0;
+    const hasRepeatLimits = repeatPolicyByBusiness.size > 0;
+    if (!hasHidden && !hasRepeatLimits) return deals;
+    return deals.filter((d) => {
+      if (hasHidden && hiddenBusinessIds.has(d.business_id)) return false;
+      if (
+        hasRepeatLimits &&
+        isDealHiddenByRepeatPolicy({
+          policy: repeatPolicyByBusiness.get(d.business_id),
+          lastRedeemedAt: lastRedeemedByBusiness.get(d.business_id) ?? null,
+          nowMs: nowTick,
+        })
+      )
+        return false;
+      return true;
+    });
+  }, [deals, repeatPolicyByBusiness, lastRedeemedByBusiness, nowTick, hiddenBusinessIds]);
+
   const searchFilteredDeals = useMemo(
-    () => deals.filter((d) => dealMatchesSearch(d, searchQuery)),
-    [deals, searchQuery],
+    () => repeatVisibleDeals.filter((d) => dealMatchesSearch(d, searchQuery)),
+    [repeatVisibleDeals, searchQuery],
   );
 
   const dealsWithinRadius = useMemo(() => {
@@ -784,28 +946,49 @@ export default function HomeScreen() {
     if (favoritesOnly) {
       list = list.filter((d) => favoriteBusinessIds.includes(d.business_id));
     }
+    const distanceOf = (deal: Deal) => {
+      if (!userGeo) return Number.POSITIVE_INFINITY;
+      const c = readBusinessCoordinates(deal.businesses);
+      return c ? haversineMiles(userGeo.lat, userGeo.lng, c.lat, c.lng) : Number.POSITIVE_INFINITY;
+    };
+    const endOf = (deal: Deal) => new Date(deal.end_time).getTime();
+    // Deals from before the created_at column was selected sort as oldest.
+    const createdOf = (deal: Deal) => (deal.created_at ? new Date(deal.created_at).getTime() : 0);
     return [...list].sort((a, b) => {
+      if (sortMode === "nearest") {
+        const da = distanceOf(a);
+        const db = distanceOf(b);
+        if (da !== db) return da - db;
+        return endOf(a) - endOf(b);
+      }
+      if (sortMode === "endingSoon") {
+        const ea = endOf(a);
+        const eb = endOf(b);
+        if (ea !== eb) return ea - eb;
+        return distanceOf(a) - distanceOf(b);
+      }
+      if (sortMode === "newest") {
+        const ca = createdOf(a);
+        const cb = createdOf(b);
+        if (ca !== cb) return cb - ca;
+        return distanceOf(a) - distanceOf(b);
+      }
+      // "recommended": favorites, then preferred categories, then distance, then
+      // ending soonest — the first feed feels personalized without hiding anything.
       const aFav = favoriteBusinessIds.includes(a.business_id) ? 0 : 1;
       const bFav = favoriteBusinessIds.includes(b.business_id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
-      // Soft relevance boost: deals from the consumer's chosen categories rank
-      // ahead of others (but after favorites, and before distance) so the first
-      // feed feels personalized without hiding anything.
       if (preferredCategories.length) {
         const aCat = preferredCategories.includes((a.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
         const bCat = preferredCategories.includes((b.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
         if (aCat !== bCat) return aCat - bCat;
       }
-      if (userGeo) {
-        const ca = readBusinessCoordinates(a.businesses);
-        const cb = readBusinessCoordinates(b.businesses);
-        const da = ca ? haversineMiles(userGeo.lat, userGeo.lng, ca.lat, ca.lng) : Number.POSITIVE_INFINITY;
-        const db = cb ? haversineMiles(userGeo.lat, userGeo.lng, cb.lat, cb.lng) : Number.POSITIVE_INFINITY;
-        if (da !== db) return da - db;
-      }
-      return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
+      const da = distanceOf(a);
+      const db = distanceOf(b);
+      if (da !== db) return da - db;
+      return endOf(a) - endOf(b);
     });
-  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo, preferredCategories]);
+  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo, preferredCategories, sortMode]);
 
   // Impressions are tracked from real viewport visibility via the FlatList's
   // onViewableItemsChanged (see onViewableDealsChangedRef), deduped per session.
@@ -814,6 +997,9 @@ export default function HomeScreen() {
 
   const businessesDisplay = useMemo(() => {
     let list = businesses;
+    if (hiddenBusinessIds.size > 0) {
+      list = list.filter((b) => !hiddenBusinessIds.has(b.id));
+    }
     if (favoritesOnly) {
       list = list.filter((b) => favoriteBusinessIds.includes(b.id));
     }
@@ -839,7 +1025,7 @@ export default function HomeScreen() {
       });
     }
     return list;
-  }, [businesses, favoritesOnly, favoriteBusinessIds, userGeo]);
+  }, [businesses, favoritesOnly, favoriteBusinessIds, userGeo, hiddenBusinessIds]);
 
   const shopsForList = useMemo(() => {
     let list = businessesDisplay;
@@ -878,13 +1064,19 @@ export default function HomeScreen() {
     if (refreshingFeed) return;
     setRefreshingFeed(true);
     try {
-      await Promise.all([loadDeals(), loadBusinesses(), loadFavorites(userId), hydrateLocationFromPrefs()]);
+      await Promise.all([
+        loadDeals(),
+        loadBusinesses(),
+        loadFavorites(userId),
+        loadHidden(userId),
+        hydrateLocationFromPrefs(),
+      ]);
       lastFeedFocusHydrateAtRef.current = Date.now();
       lastFeedFocusHydrateUserIdRef.current = userId ?? null;
     } finally {
       setRefreshingFeed(false);
     }
-  }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]);
+  }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, loadHidden, userId, hydrateLocationFromPrefs]);
 
   const formatTimeLeft = useCallback(
     (endTimeIso: string) => {
@@ -910,7 +1102,7 @@ export default function HomeScreen() {
               distance: formattedDistance,
             })
           : undefined;
-      const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
+      const st = dealStatusForUser(item, userClaimsByDeal, nowTick);
       // Scarcity: "Only N left" when a capped deal is nearly gone (1-5 remaining).
       // Shows nothing when plentiful, sold out, or counts are unavailable.
       const cap = typeof item.max_claims === "number" && item.max_claims > 0 ? item.max_claims : null;
@@ -940,7 +1132,10 @@ export default function HomeScreen() {
           : item,
         locale: resolvedDisplayLocale.locale,
         localeResolutionSource: resolvedDisplayLocale.source,
-        useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+        useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+          resolvedDisplayLocale.locale,
+          localizedOfferRendererEnabled,
+        ),
         fallbackLanguage: i18n.language,
       });
       const offerText = localizedDisplay.title || t("dealDetail.dealFallback");
@@ -1029,6 +1224,7 @@ export default function HomeScreen() {
             <ComposedAdCard
               imageUri={posterUri}
               posterSpec={posterSpec}
+              contentLocale={resolvedDisplayLocale.locale}
               offerFacts={offerFacts}
               merchant={merchant}
               copy={copy}
@@ -1038,7 +1234,7 @@ export default function HomeScreen() {
               fallbackVisualLabel={t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
               onCardPress={() => router.push(`/deal/${item.id}`)}
               onPrimaryAction={() => void doClaim(item.id)}
-              secondaryAction={{
+              favoriteAction={{
                 label: isFavorite ? t("dealsBrowse.cardSaved") : t("dealsBrowse.cardSaveFavorite"),
                 selected: isFavorite,
                 onPress: () => void toggleFavorite(item.business_id),
@@ -1273,7 +1469,7 @@ export default function HomeScreen() {
       return (
         <BusinessRowCard
           name={b.name}
-          address={b.location}
+          address={compactLocationLabel(b.location)}
           hasLiveDeal={liveDealIds.has(b.id)}
           isFavorite={favoriteBusinessIds.includes(b.id)}
           distanceLabel={distanceLabel}
@@ -1283,6 +1479,18 @@ export default function HomeScreen() {
       );
     },
     [feedSegment, renderDealItem, userGeo, t, liveDealIds, favoriteBusinessIds, router, toggleFavorite],
+  );
+
+  // Resolve favorite ids to loaded business rows once, so the dropdown's count
+  // badge always matches the rows it renders (ids that haven't hydrated yet are
+  // excluded from both). Alphabetical so the list is scannable.
+  const favoriteBusinesses = useMemo(
+    () =>
+      favoriteBusinessIds
+        .map((fid) => businesses.find((x) => x.id === fid))
+        .filter((b): b is BusinessRow => !!b)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [favoriteBusinessIds, businesses],
   );
 
   const listHeader = useMemo(
@@ -1454,6 +1662,46 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: Spacing.md }}
+              contentContainerStyle={{ flexDirection: "row", gap: Spacing.sm }}
+              accessibilityLabel={t("consumerHome.sortDeals")}
+            >
+              {CONSUMER_DEAL_SORT_MODES.map((mode) => {
+                const selected = sortMode === mode;
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => onSelectSortMode(mode)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={sortModeLabel(mode)}
+                    style={{
+                      borderRadius: Radii.pill,
+                      borderWidth: 1,
+                      borderColor: selected ? theme.primary : theme.border,
+                      backgroundColor: selected ? theme.primary : theme.surfaceMuted,
+                      paddingVertical: Spacing.sm,
+                      paddingHorizontal: Spacing.md,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: selected ? theme.primaryText : theme.text,
+                      }}
+                      maxFontSizeMultiplier={1.15}
+                    >
+                      {sortModeLabel(mode)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
             {favoritesOnly ? (
               <Text style={{ fontSize: 13, marginBottom: Spacing.md, lineHeight: 18, color: theme.mutedText }}>
                 {t("consumerHome.favoritesOnlyActive")}
@@ -1522,49 +1770,85 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {favoriteBusinessIds.length > 0 ? (
+        {favoriteBusinesses.length > 0 ? (
           <View
             style={{
               marginBottom: Spacing.lg,
-              ...(favoritesOnly
-                ? {
-                    backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
-                    borderRadius: Radii.lg,
-                    padding: Spacing.md,
-                    borderWidth: 1,
-                    borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
-                  }
-                : {}),
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              overflow: "hidden",
             }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "700", marginBottom: Spacing.sm, color: theme.mutedText }}>
-              {t("consumerHome.favoritesStripTitle")}
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-              {favoriteBusinessIds.map((fid) => {
-                const b = businesses.find((x) => x.id === fid);
-                if (!b) return null;
-                return (
-                  <Pressable
-                    key={fid}
-                    onPress={() => router.push(businessDetailHref(fid))}
-                    style={{
-                      paddingVertical: Spacing.sm,
-                      paddingHorizontal: Spacing.md,
-                      borderRadius: Radii.pill,
-                      backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      maxWidth: 160,
-                    }}
-                  >
-                    <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-                      {b.name}
-                    </Text>
-                  </Pressable>
-                );
+            <Pressable
+              onPress={() => setFavoritesExpanded((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: favoritesExpanded }}
+              accessibilityLabel={t("consumerHome.favoritesStripTitle")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: Spacing.sm,
+                paddingVertical: Spacing.md,
+                paddingHorizontal: Spacing.md,
+                backgroundColor: pressed ? theme.surfaceMuted : "transparent",
               })}
-            </ScrollView>
+            >
+              <MaterialIcons name="favorite" size={18} color={theme.favorite} />
+              <Text style={{ flex: 1, fontSize: 15, fontWeight: "700", color: theme.text }}>
+                {t("consumerHome.favoritesStripTitle")}
+              </Text>
+              <View
+                style={{
+                  minWidth: 24,
+                  height: 22,
+                  borderRadius: Radii.pill,
+                  paddingHorizontal: 7,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: theme.surfaceMuted,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.mutedText }} maxFontSizeMultiplier={1.2}>
+                  {favoriteBusinesses.length}
+                </Text>
+              </View>
+              <MaterialIcons
+                name={favoritesExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                size={24}
+                color={theme.mutedText}
+              />
+            </Pressable>
+
+            {favoritesExpanded ? (
+              <View style={{ paddingHorizontal: Spacing.sm, paddingBottom: Spacing.sm }}>
+                {favoriteBusinesses.map((b) => {
+                  return (
+                    <Pressable
+                      key={b.id}
+                      onPress={() => router.push(businessDetailHref(b.id))}
+                      accessibilityRole="button"
+                      accessibilityLabel={b.name}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: Spacing.sm,
+                        paddingVertical: Spacing.sm + 2,
+                        paddingHorizontal: Spacing.sm,
+                        borderRadius: Radii.md,
+                        backgroundColor: pressed ? theme.surfaceMuted : "transparent",
+                      })}
+                    >
+                      <Text numberOfLines={1} style={{ flex: 1, fontWeight: "600", fontSize: 15, color: theme.text }}>
+                        {b.name}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -1576,11 +1860,14 @@ export default function HomeScreen() {
       userGeo,
       radiusMiles,
       favoritesOnly,
+      sortMode,
+      onSelectSortMode,
+      sortModeLabel,
       emptyNearbyLive,
       showDealsSkeleton,
       feedSegment,
-      favoriteBusinessIds,
-      businesses,
+      favoriteBusinesses,
+      favoritesExpanded,
       colorScheme,
       theme,
     ],
@@ -1648,6 +1935,7 @@ export default function HomeScreen() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
+        successToastVariant={claimToastVariant}
         onHide={hideClaimQrModal}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

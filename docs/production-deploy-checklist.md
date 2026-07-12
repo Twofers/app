@@ -24,6 +24,13 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260728123000_customer_deal_localization_projection.sql` | Customer-safe localization projection RPC; no direct app-role access to `ad_localizations`. |
 | `20260730120000_deals_owner_delete_ended.sql` | Allows owners to delete their own ended deals from My offers. |
 | `20260730121000_customer_deal_poster_spec_projection.sql` | Customer-safe native poster spec projection RPC; no direct app-role access to `offer_versions`. |
+| `20260730123000_business_applications.sql` | RLS-closed website business access-request intake table for reviewed onboarding. |
+| `20260730124000_business_onboarding_workflow.sql` | Deterministic website onboarding tier/risk metadata and field-invite placeholders. |
+| `20260730125000_admin_dashboard_foundation.sql` | Internal admin allowlist, audit log, launch areas, feature flags, and publish eligibility helper. |
+| `20260730126000_website_app_onboarding_sync.sql` | Shared website-to-app onboarding pipeline, membership linkage, field sources, revision log, checklist, and terms acceptance. |
+| `20260730127000_stripe_business_billing_reconnection.sql` | Business billing profiles, subscriptions, billing events, Stripe checkout/portal audit tables, sync jobs, reminders, billing tokens, and publish helper subscription checks. |
+| `20260730128000_admin_ai_quota_resets.sql` | Admin-only AI quota reset ledger and reset-aware compose quota display. |
+| `20260730129000_admin_onboarding_service_role_invite_gate.sql` | Keeps client business signups invite-gated while allowing reviewed website/admin onboarding to materialize businesses server-side. |
 
 **Also verify:**
 
@@ -62,9 +69,15 @@ supabase functions deploy <function-name>
 - `delete-user-account`
 - `ingest-analytics-event`
 - `publish-offer-version`
+- `submit-business-application`
+- `admin-dashboard-summary`
+- `admin-ai-usage`
+- `admin-business-applications`
+- `get-business-onboarding-context`
+- `update-business-profile-section`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`
 - `ai-create-deal` (legacy disabled endpoint; should return HTTP 410)
-- Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
+- Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-backfill-customers`, `stripe-webhook`, `billing-checkout-redirect`, and any legacy QA helpers your environment still uses. These are web/admin/server billing paths; mobile billing routes should stay closed.
 
 After deploy, hit each critical path once from a dedicated smoke/test account (claim, redeem, AI create). Demo content may remain visible for testers, but do not rely on a shared demo login.
 
@@ -78,12 +91,16 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 |--------|---------|
 | `OPENAI_API_KEY` | Real GPT / vision for non-demo AI paths. |
 | `SUPABASE_URL` | Usually injected by platform; confirm present for Deno functions. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-side Supabase client in Edge Functions. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side Supabase client in Edge Functions, including website business intake. |
 | `GOOGLE_PLACES_API_KEY` | Optional but recommended for real `ai-business-lookup` results. |
+| `STRIPE_SECRET_KEY` | Required for approved web/admin Stripe billing functions. |
+| `STRIPE_WEBHOOK_SECRET` | Required for verified Stripe webhook sync. |
+| `STRIPE_PRICE_ID_TWOFER_PRO_MONTHLY` / `STRIPE_TWOFER_BUSINESS_PRICE_ID` | Required if runtime billing config does not already provide the monthly business price id. |
+| `SITE_URL` | Optional website base URL for billing return pages. |
 
 **Optional / model tuning:**
 
-- `OPENAI_MODEL` (optional; default `gpt-5.4-mini`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
+- `OPENAI_MODEL` (optional; default `gpt-5.5`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
 - `GEMINI_API_KEY` (required only when Gemini text fallback, judging, vision QA, or image generation is enabled)
 - `GEMINI_TEXT_MODEL` and `GEMINI_JUDGE_MODEL` (optional; default `gemini-3.5-flash`)
@@ -91,7 +108,8 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 - `AI_TEXT_PRIMARY_TIMEOUT_MS`, `AI_TEXT_FALLBACK_TIMEOUT_MS`, `AI_TRANSIENT_RETRY_MAX`, and `AI_RETRY_AFTER_FULL_TIMEOUT` (shared text timeout/retry tuning)
 - `AI_CIRCUIT_BREAKER_ENABLED` (requires the circuit-breaker migration before production activation)
 - `AI_V3_INDEPENDENT_JUDGE_ENABLED` (Gemini independent candidate judging)
-- `AI_VISION_FALLBACK_ENABLED`, `AI_VISION_FALLBACK_PROVIDER`, `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, and `AI_STOCK_QA_CANDIDATE_LIMIT` (ad image QA fallback/tuning)
+- `AI_VISION_PRIMARY_PROVIDER` (default `gemini`), `AI_VISION_FALLBACK_ENABLED` (default `true`), `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, and `AI_STOCK_QA_CANDIDATE_LIMIT` (ad image QA provider/fallback/tuning)
+- `AI_AD_WEB_SEARCH_ENABLED` (default `true`; set `false` to disable the paid `gpt-4o-search-preview` unfamiliar-item lookup)
 - `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, and `AI_REVISION_COST_HARD_LIMIT_USD` (AI cost-budget guardrails)
 - `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, and `OPENAI_IMAGE_MODEL_EDIT` (OpenAI image model overrides; default `gpt-image-1`)
 - `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, and `AI_IMAGE_STOCK_FALLBACK_ENABLED` (ad-image provider/fallback controls)
@@ -146,7 +164,7 @@ Run against **hosted** Supabase + production-like env (can reuse scenarios from 
 
 ## 8. Known risks (manual verification still required)
 
-- **Stripe / billing:** `PILOT_DISABLE_BILLING_GATE` in app may extend trials for pilot; confirm billing Edge functions and webhooks match your go-live plan before turning enforcement on.
+- **Stripe / billing:** Mobile billing remains closed; confirm web/admin Checkout, portal, webhook, failed-payment, cancellation, and refund flows in Stripe test mode before turning live billing on.
 - **Google Places:** Without `GOOGLE_PLACES_API_KEY`, lookup may fall back to OpenAI-only or error — confirm messaging matches product expectations.
 - **AI quotas / cost:** `ai_generation_logs` and any monthly caps — verify limits in Dashboard and owner-facing copy.
 - **Push / deep links:** `send-deal-push`, scheduled deal release pushes, and email confirmation redirects — test on real devices.

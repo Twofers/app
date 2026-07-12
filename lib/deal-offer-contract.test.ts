@@ -75,6 +75,17 @@ describe("buildDealOfferContract", () => {
     expect(canonicalizeOfferItem("Test Cafa").canonical).toBe("Test Cafa");
   });
 
+  it("spellchecks common food words inside multi-word item names", () => {
+    expect(canonicalizeOfferItem("Hot fudge sunday")).toEqual({
+      original: "Hot fudge sunday",
+      canonical: "hot fudge sundae",
+      confidence: "high",
+      source: "spellcheck",
+    });
+    expect(canonicalizeOfferItem("everything bagle sandwich").canonical).toBe("everything bagel sandwich");
+    expect(canonicalizeOfferItem("Sunday brunch").canonical).toBe("Sunday brunch");
+  });
+
   it("builds canonical copy for BUY_ONE_GET_ONE_FREE", () => {
     const contract = contractFor({
       dealType: "BUY_ONE_GET_ONE_FREE",
@@ -89,12 +100,30 @@ describe("buildDealOfferContract", () => {
     });
 
     expect(contract.canonicalOfferLine).toBe("Buy one coffee and get one free");
-    expect(contract.canonicalShortTerms).toContain("Purchase 1 coffee to receive 1 coffee free.");
+    expect(contract.canonicalShortTerms).toContain("Purchase one coffee to receive one coffee free.");
   });
 
   it("builds canonical copy for BUY_ONE_GET_SOMETHING_FREE", () => {
     expect(coffeeBagelContract.canonicalOfferLine).toBe("Buy a coffee and get a free bagel");
-    expect(coffeeBagelContract.canonicalShortTerms).toContain("Purchase 1 coffee to receive 1 bagel free.");
+    expect(coffeeBagelContract.canonicalShortTerms).toContain("Purchase one coffee to receive one bagel free.");
+  });
+
+  it("keeps any-qualified purchase terms natural", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "any large coffee drink",
+      requiredItemRetailValueCents: 599,
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie of your choice",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.canonicalShortTerms).toContain(
+      "Purchase any large coffee drink to receive one cookie of your choice free.",
+    );
   });
 
   it("builds the required golden canonical headlines", () => {
@@ -133,6 +162,22 @@ describe("buildDealOfferContract", () => {
   });
 
   it("handles articles, quantities, capitalization, hyphens, and long item names", () => {
+    expect(buildCanonicalHeadlineFromFacts({
+      merchantName: "Cafe",
+      buyQuantity: 1,
+      buyItem: "any large coffee drink",
+      rewardQuantity: 1,
+      rewardItem: "cookie of your choice",
+      rewardType: "free",
+    })).toBe("Buy any large coffee drink and get a free cookie of your choice");
+    expect(buildCanonicalHeadlineFromFacts({
+      merchantName: "Cafe",
+      buyQuantity: 1,
+      buyItem: "any latte",
+      rewardQuantity: 1,
+      rewardItem: "any latte",
+      rewardType: "free",
+    })).toBe("Buy any latte and get one free");
     expect(buildCanonicalHeadlineFromFacts({
       merchantName: "Cafe",
       buyQuantity: 1,
@@ -286,6 +331,12 @@ describe("validateAiCopyAgainstOffer", () => {
       const result = validateAiCopyAgainstOffer(copy({ headline: validText, push_notification: validText }), coffeeBagelContract);
       expect(result.valid, validText).toBe(true);
     }
+    expect(validateAiCopyAgainstOffer(copy({
+      headline: "Coffee run bonus",
+      short_description: "Buy a coffee and the bagel is on us.",
+      push_notification: "Buy a coffee and get a free bagel.",
+      social_caption: "Coffee run bonus: buy a coffee and get a free bagel.",
+    }), coffeeBagelContract).valid).toBe(true);
   });
 
   it("rejects buy-one-get-something-free copy that becomes generic BOGO", () => {
@@ -414,6 +465,7 @@ describe("validateAiCopyAgainstOffer", () => {
           strategyId: "value_clarity",
           strategyReason: "Lead with the exchange.",
           headlineAlternative: "Coffee gets the bagel",
+          posterKicker: "Morning deal",
           description: "Buy a coffee and the bagel is on us.",
           pushTitle: "Coffee + bagel",
           pushBody: "Buy a coffee and get a free bagel.",
@@ -486,6 +538,8 @@ describe("validateAiCopyAgainstOffer", () => {
       preliminary_score: 82,
       judge_score: 110,
       cta: "Claim deal",
+      poster_kicker: "Morning deal",
+      image_brief: "Coffee and bagel on a cafe table.",
     });
   });
 });
@@ -499,7 +553,7 @@ describe("generateValidatedDealCopy", () => {
       social_caption: "Buy coffee and bagel and get one free.",
     });
     const good = copy({
-      headline: "Buy a coffee and get a free bagel",
+      headline: "Coffee run bonus",
       short_description: "Buy a coffee and the bagel is on us.",
       push_notification: "Claim the coffee deal and get a free bagel.",
       social_caption: "Buy a coffee and get a free bagel at Merit Coffee.",
@@ -515,7 +569,7 @@ describe("generateValidatedDealCopy", () => {
     expect(requestCopy).toHaveBeenCalledTimes(2);
     expect(result.copy_source).toBe("AI_RETRY_VALIDATED");
     expect(result.locked_offer_line).toBe("Buy a coffee and get a free bagel");
-    expect(result.headline).toBe("Buy a coffee and get a free bagel");
+    expect(result.headline).toBe("Coffee run bonus");
     expect(`${result.headline} ${result.short_description} ${result.push_notification}`).not.toMatch(/\bBOGO\b/i);
     expect(result.short_description).not.toMatch(/buy (?:a )?coffee and bagel/i);
   });

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Import Prospects | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-section="prospect_import"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-prospect-import-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-prospect-import"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects" aria-current="page">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Admin-only import</p>
+          <h1>Import Prospects</h1>
+          <p class="lede">Create unclaimed prospect records with source provenance. Imported prospects do not create businesses or live offers.</p>
+        </div>
+        <div class="admin-actions">
+          <a class="button button-small" href="/admin/prospects">Back to Prospects</a>
+        </div>
+      </div>
+
+      <section class="admin-panel">
+        <form class="admin-form" data-prospect-import-form novalidate>
+          <label>
+            Business name
+            <input name="display_name" autocomplete="off" required maxlength="160" />
+          </label>
+          <label>
+            Category
+            <input name="category" autocomplete="off" maxlength="80" placeholder="Coffee shop" />
+          </label>
+          <label>
+            Address
+            <input name="address_line1" autocomplete="off" maxlength="200" />
+          </label>
+          <label>
+            City
+            <input name="city" autocomplete="off" maxlength="80" placeholder="Irving" />
+          </label>
+          <label>
+            State
+            <input name="state" autocomplete="off" maxlength="40" value="TX" />
+          </label>
+          <label>
+            ZIP
+            <input name="postal_code" autocomplete="off" maxlength="20" inputmode="numeric" />
+          </label>
+          <label>
+            Source type
+            <select name="source_type">
+              <option value="manual">Manual</option>
+              <option value="csv">CSV</option>
+              <option value="places">Places</option>
+              <option value="web">Web</option>
+            </select>
+          </label>
+          <label>
+            Source URL
+            <input name="source_url" autocomplete="off" maxlength="500" />
+          </label>
+          <label>
+            Review status
+            <select name="review_status">
+              <option value="needs_review">Needs review</option>
+              <option value="approved">Approved for public-safe projection</option>
+              <option value="verified">Verified</option>
+            </select>
+          </label>
+          <label class="full">
+            Private contact JSON
+            <textarea name="private_contact_json" placeholder='{"manager_email":"not public"}'></textarea>
+          </label>
+          <label class="full">
+            CSV bulk import
+            <textarea name="csv" placeholder="display_name,category,address_line1,city,state,postal_code&#10;Sample Cafe,Cafe,123 Main,Irving,TX,75039"></textarea>
+          </label>
+          <label class="full">
+            Reason
+            <input name="reason" autocomplete="off" maxlength="500" placeholder="Irving launch seed list" />
+          </label>
+          <div class="admin-ai-actions full">
+            <button type="submit" class="button">Import</button>
+          </div>
+          <p class="status full" data-import-status role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+    <script src="/admin/prospects.js?v=20260802-prospects"></script>
+  </body>
+</html>

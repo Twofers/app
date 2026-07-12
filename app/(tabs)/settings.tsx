@@ -31,9 +31,10 @@ import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
   registerPushTokenWithResult,
 } from "@/lib/push-token";
-import type { AppLocale } from "@/lib/i18n/config";
+import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -53,6 +54,11 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { deleteUserAccount } from "@/lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
+import {
+  loadHiddenBusinessesWithNames,
+  unhideBusiness,
+  type HiddenBusinessRow,
+} from "@/lib/hidden-businesses";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
@@ -68,6 +74,7 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -80,12 +87,17 @@ export default function SettingsScreen() {
   const [consumerSession, setConsumerSession] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [hiddenBusinesses, setHiddenBusinesses] = useState<HiddenBusinessRow[]>([]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setLoadFailed(false);
     try {
-      const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
+      const [a, p, hidden] = await Promise.all([
+        getAlertsEnabled(),
+        getConsumerPreferences(),
+        loadHiddenBusinessesWithNames(session?.user?.id ?? null),
+      ]);
       setAlertsEnabledState(a);
       setLocationModeState(p.locationMode);
       setZip(sanitizeUsZipInput(p.zipCode));
@@ -93,6 +105,7 @@ export default function SettingsScreen() {
       setRadius(p.radiusMiles);
       setNotifModeState(p.notificationPrefs.mode);
       setConsumerSession(!!session?.user);
+      setHiddenBusinesses(hidden);
     } catch (err: unknown) {
       devWarn("[settings] reload failed", err);
       setLoadFailed(true);
@@ -287,6 +300,18 @@ export default function SettingsScreen() {
     }
   }
 
+  async function unhideOne(businessId: string) {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    const previous = hiddenBusinesses;
+    setHiddenBusinesses((rows) => rows.filter((r) => r.businessId !== businessId));
+    const res = await unhideBusiness({ userId: uid, businessId });
+    if (!res.ok) {
+      setHiddenBusinesses(previous);
+      showSettingsSaveError();
+    }
+  }
+
   async function applyRadius(m: ConsumerRadiusMiles) {
     const previous = radius;
     setRadius(m);
@@ -317,6 +342,7 @@ export default function SettingsScreen() {
     try {
       await setUiLocalePreference(locale, { manual: true });
       await setCustomerPreferredDealLocaleFromAppLanguage(locale);
+      await syncAppLocaleToServer(session?.user?.id, locale);
       await i18n.changeLanguage(locale);
     } catch (err: unknown) {
       devWarn("[settings] locale update failed", err);
@@ -625,6 +651,59 @@ export default function SettingsScreen() {
           <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 18 }}>{t("consumerSettings.notifFavoritesOverride")}</Text>
         </View>
 
+        {consumerSession ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>
+              {t("hiddenBusinesses.sectionTitle", { defaultValue: "Hidden businesses" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+              {t("hiddenBusinesses.sectionHelp", { defaultValue: "Businesses you hide won't appear in your feed." })}
+            </Text>
+            {hiddenBusinesses.length === 0 ? (
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20, marginTop: Spacing.xs }}>
+                {t("hiddenBusinesses.empty", { defaultValue: "You haven't hidden any businesses." })}
+              </Text>
+            ) : (
+              hiddenBusinesses.map((row) => (
+                <View
+                  key={row.businessId}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: Spacing.md,
+                    paddingVertical: Spacing.sm,
+                    borderTopWidth: 1,
+                    borderTopColor: theme.border,
+                  }}
+                >
+                  <Text style={{ flex: 1, color: theme.text, fontWeight: "700", fontSize: 15 }} numberOfLines={1}>
+                    {row.name || t("hiddenBusinesses.unnamed", { defaultValue: "This business" })}
+                  </Text>
+                  <Pressable
+                    onPress={() => void unhideOne(row.businessId)}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm }}
+                  >
+                    <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>
+                      {t("hideBusiness.unhide", { defaultValue: "Unhide" })}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
+          </View>
+        ) : null}
+
         <View
           style={{
             borderWidth: 1,
@@ -638,7 +717,7 @@ export default function SettingsScreen() {
           <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("language.sectionAppHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: Spacing.sm }}>
             {(["en", "es", "ko"] as const).map((loc) => {
-              const active = i18n.language === loc;
+              const active = currentAppLocale === loc;
               return (
                 <Pressable
                   key={loc}
@@ -689,17 +768,17 @@ export default function SettingsScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#FECACA",
+              borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               gap: Spacing.sm,
-              backgroundColor: "#FEF2F2",
+              backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17, color: "#B91C1C" }}>
+            <Text style={{ fontWeight: "800", fontSize: 17, color: colorScheme === "dark" ? theme.dangerText : "#B91C1C" }}>
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: Gray[600] }}>
+            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }}>
               {t("deleteAccount.sectionBodyConsumer")}
             </Text>
             <PrimaryButton
@@ -782,10 +861,10 @@ export default function SettingsScreen() {
         ) : null}
 
         {isDebugPanelEnabled() ? (
-          <PrimaryButton
+          <SecondaryButton
             title="Diagnostics (build / env)"
             onPress={() => router.push("/debug-diagnostics")}
-            style={{ marginTop: Spacing.md, backgroundColor: "#222" }}
+            style={{ marginTop: Spacing.md }}
           />
         ) : null}
         </>

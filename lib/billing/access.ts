@@ -1,14 +1,43 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
 import type { BillingStatus, PurchaseSurface } from "@/lib/billing/entitlements";
+import { isMerchantAccessAllowedStatus } from "@/lib/merchant-access";
 
-/** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
+/** Backend/web billing remains enabled in the codebase. Mobile purchase UI is gated separately below. */
 export const PAID_BILLING_ENABLED = true;
 
 /**
- * While true, billing is visible for checkout testing but does not block setup
- * or deal creation.
+ * Legacy pilot switch. Only gates the dead canCreateDeal() path below (it has
+ * no callers anywhere in the app — the real merchant gate is
+ * usePrimaryLocationBillingGate / get_location_billing_summary, which this
+ * flag does not touch). Flipped to false once billing enforcement was
+ * verified end-to-end (2026-07-06 QA pass): trial/paid publish succeeds,
+ * canceled/expired/suspended publish is blocked with LOCATION_BILLING_SUSPENDED.
  */
-export const PILOT_DISABLE_BILLING_GATE = true;
+export const PILOT_DISABLE_BILLING_GATE = false;
+
+export function isMobileStripeEnabled(): boolean {
+  return false;
+}
+
+export function isMobileSubscriptionCtaEnabled(): boolean {
+  return false;
+}
+
+export function isBusinessSelfServeMobileEnabled(): boolean {
+  return false;
+}
+
+export function isMobilePricingPageEnabled(): boolean {
+  return false;
+}
+
+export function isMobileBillingLinksEnabled(): boolean {
+  return false;
+}
+
+export function isMobilePaidBillingEnabled(): boolean {
+  return false;
+}
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {
   if (!__DEV__) return false;
@@ -60,8 +89,6 @@ export function canCreateDealWithLocationBilling(params: {
 }): boolean {
   if (!params.isLoggedIn) return false;
   if (params.bypass) return true;
-  if (PILOT_DISABLE_BILLING_GATE) return true;
-  if (params.purchaseSurface === "disabled") return true;
 
   switch (params.status) {
     case "trial_active":
@@ -76,7 +103,7 @@ export function canCreateDealWithLocationBilling(params: {
     case "paid_canceling":
       return isCurrentOrMissing(params.currentPeriodEndsAt);
     default:
-      return false;
+      return isMerchantAccessAllowedStatus(params.status);
   }
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
+import { AppState, Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -25,10 +25,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { QrModal } from "@/components/qr-modal";
+import { AddToWalletButton } from "@/components/add-to-wallet-button";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
 import { useBusiness } from "@/hooks/use-business";
+import { useSaveBusinessPrompt } from "@/hooks/use-save-business-prompt";
 import { useSecondTick } from "@/hooks/use-second-tick";
+import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -37,7 +40,11 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -153,6 +160,8 @@ export default function WalletScreen() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
+  const [qrClaimId, setQrClaimId] = useState<string | null>(null);
+  const [qrRedeemedNonce, setQrRedeemedNonce] = useState(0);
   const [qrGraceMinutes, setQrGraceMinutes] = useState(DEFAULT_CLAIM_GRACE_MINUTES);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -170,6 +179,11 @@ export default function WalletScreen() {
     () => new Map(),
   );
   const deviceDealLocaleRef = useRef(getDeviceDealLocale());
+  // Return path: claim ids that were active/redeeming on the previous load. When one
+  // of them shows up redeemed (QR scan at the counter or the in-app visual pass),
+  // offer to save the business. Starts empty, so the first load never prompts.
+  const prevActiveClaimIdsRef = useRef<Set<string>>(new Set());
+  const { maybePromptSaveBusiness, saveBusinessPromptElement } = useSaveBusinessPrompt({ userId });
   const resolvedDealDisplayLocale = customerLocaleResolutionEnabled
     ? resolveDealDisplayLocale({
         customerPreferredLocale: customerPreferredDealLocale,
@@ -269,6 +283,28 @@ export default function WalletScreen() {
         }),
       );
       setClaims(rowsWithCachedTokens);
+
+      const justRedeemed = rowsWithCachedTokens.find(
+        (row) =>
+          (row.redeemed_at || row.claim_status === "redeemed") &&
+          prevActiveClaimIdsRef.current.has(row.id),
+      );
+      prevActiveClaimIdsRef.current = new Set(
+        rowsWithCachedTokens
+          .filter(
+            (row) =>
+              !row.redeemed_at &&
+              (row.claim_status === "active" || row.claim_status === "redeeming"),
+          )
+          .map((row) => row.id),
+      );
+      if (justRedeemed?.deals?.business_id && !isDemoOffer(justRedeemed.deals)) {
+        void maybePromptSaveBusiness({
+          businessId: justRedeemed.deals.business_id,
+          businessName: justRedeemed.deals.businesses?.name ?? null,
+          context: "redeem",
+        });
+      }
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown wallet load error" };
       logPostgrestError("wallet deal_claims", err);
@@ -277,7 +313,7 @@ export default function WalletScreen() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [maybePromptSaveBusiness, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -286,6 +322,38 @@ export default function WalletScreen() {
       void loadClaims();
     }, [loadClaims]),
   );
+
+  // Safety net for the backgrounded-scan case: if the phone was locked or the app was
+  // switched away right after a counter scan, reload claims on the way back so the
+  // redeemed deal is reflected without a manual pull-to-refresh.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && userId) void loadClaims();
+    });
+    return () => sub.remove();
+  }, [loadClaims, userId]);
+
+  // While the QR modal is open, watch that claim so a counter scan (a redemption UPDATE,
+  // which Realtime does not broadcast in this project) makes the QR disappear on its own.
+  useClaimRedeemedWatch({
+    claimId: qrClaimId,
+    enabled: qrVisible && !!qrClaimId,
+    onRedeemed: ({ claimId }) => {
+      // Flash the in-modal "Redeemed" confirmation (confetti + toast), then close and
+      // reload — loadClaims() moves the card to Ended → Redeemed and fires the existing
+      // save-this-business prompt for the just-redeemed claim.
+      setQrRedeemedNonce((n) => n + 1);
+      void clearWalletClaimToken(claimId);
+      setTimeout(() => {
+        setQrVisible(false);
+        void loadClaims();
+      }, 1400);
+    },
+    onEnded: () => {
+      setQrVisible(false);
+      void loadClaims();
+    },
+  });
 
   async function onRefresh() {
     setRefreshing(true);
@@ -312,6 +380,7 @@ export default function WalletScreen() {
     setQrToken(row.token);
     setQrShortCode(row.short_code);
     setQrExpires(row.expires_at);
+    setQrClaimId(row.id);
     setQrGraceMinutes(row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES);
     setActiveDealId(row.deal_id);
     setQrVisible(true);
@@ -343,6 +412,7 @@ export default function WalletScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setQrClaimId(out.claim_id ?? null);
       setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       await loadClaims();
     } catch (e: unknown) {
@@ -380,6 +450,7 @@ export default function WalletScreen() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setQrClaimId(out.claim_id ?? row.id);
       setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       setActiveDealId(row.deal_id);
       setQrVisible(true);
@@ -446,7 +517,10 @@ export default function WalletScreen() {
       },
       locale: resolvedDealDisplayLocale.locale,
       localeResolutionSource: resolvedDealDisplayLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedDealDisplayLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return localizedDisplay.title || t("consumerWallet.dealFallback");
@@ -648,6 +722,9 @@ export default function WalletScreen() {
               ? ("released" as const)
               : ("expired" as const);
     const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
+    const activeClaim = bucket === "active" && !redeemed && !tokenDead;
+    const posterWidth = activeClaim ? 72 : 88;
+    const posterHeight = activeClaim ? 88 : 110;
 
     return (
       <View
@@ -671,23 +748,24 @@ export default function WalletScreen() {
           ...Shadows.soft,
         }}
       >
-        {bucket === "active" && !redeemed && !tokenDead && countdown ? (
+        {activeClaim && countdown ? (
           <View
             style={{
               borderRadius: Radii.md,
               backgroundColor: urgent ? "#7c2d12" : Gray[900],
-              paddingVertical: Spacing.sm,
-              paddingHorizontal: Spacing.md,
-              marginBottom: Spacing.md,
+              paddingVertical: Spacing.xs,
+              paddingHorizontal: Spacing.sm,
+              marginBottom: Spacing.sm,
               borderWidth: 1,
               borderColor: urgent ? "#ea580c" : theme.primary,
             }}
           >
             <Text
+              maxFontSizeMultiplier={1.15}
               style={{
                 fontSize: 11,
                 fontWeight: "800",
-                letterSpacing: 0.6,
+                letterSpacing: 0,
                 textTransform: "uppercase",
                 color: urgent ? "#ffedd5" : "#FFD9A8",
               }}
@@ -695,17 +773,24 @@ export default function WalletScreen() {
               {urgent ? t("consumerWallet.redeemSoon") : t("consumerWallet.timeLeftHeading")}
             </Text>
             <Text
+              maxFontSizeMultiplier={1.15}
               style={{
-                fontSize: 32,
-                marginTop: 2,
+                fontSize: 24,
+                marginTop: 1,
                 fontWeight: "900",
                 color: "#fff",
-                letterSpacing: -0.5,
+                letterSpacing: 0,
               }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
             >
               {countdown}
             </Text>
-            <Text style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#FFD9A8", marginTop: 2 }}>
+            <Text
+              maxFontSizeMultiplier={1.15}
+              style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#FFD9A8", marginTop: 1 }}
+              numberOfLines={2}
+            >
               {t("consumerWallet.redeemByCaption", { datetime: expiryShown })}
             </Text>
           </View>
@@ -717,20 +802,20 @@ export default function WalletScreen() {
           disabled={!row.deals?.id}
           style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
         >
-          <View style={{ flexDirection: "row", gap: Spacing.md }}>
+          <View style={{ flexDirection: "row", gap: activeClaim ? Spacing.sm : Spacing.md }}>
             {(() => {
               const posterUri = resolveDealPosterDisplayUri(row.deals?.poster_url, row.deals?.poster_storage_path);
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
-                  style={{ width: 88, height: 110, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
+                  style={{ width: posterWidth, height: posterHeight, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
                   contentFit="cover"
                 />
               ) : (
                 <View
                   style={{
-                    width: 88,
-                    height: 110,
+                    width: posterWidth,
+                    height: posterHeight,
                     borderRadius: Radii.lg,
                     backgroundColor: Gray[100],
                     alignItems: "center",
@@ -750,40 +835,31 @@ export default function WalletScreen() {
                   <DemoOfferNotice compact />
                 </View>
               ) : null}
-              <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }} numberOfLines={2}>
+              <Text style={{ fontWeight: "700", fontSize: activeClaim ? 15 : 16, color: theme.text }} numberOfLines={2}>
                 {dealTitle(row)}
               </Text>
               <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, color: theme.text }} numberOfLines={1}>
                 {businessName(row)}
               </Text>
-              {bucket === "active" ? (
-                <View style={{ marginTop: Spacing.sm }}>
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
-                    {t("consumerWallet.redeemAtLabel", { defaultValue: "Redeem at:" })}
-                  </Text>
-                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
-                    {redeemLocationLabel(row)}
-                  </Text>
-                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
-                    {t("consumerWallet.locationLockedQr", {
-                      defaultValue: "This QR code only works at this location.",
+              {activeClaim ? (
+                <Text
+                  style={{ marginTop: Spacing.xs, fontSize: 12, lineHeight: 16, color: theme.text, opacity: 0.72 }}
+                  numberOfLines={2}
+                >
+                  {t("consumerWallet.redeemAtLabel", { defaultValue: "Redeem at:" })} {redeemLocationLabel(row)}
+                </Text>
+              ) : (
+                <>
+                  <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
+                    {t("consumerWallet.claimedRecord", {
+                      datetime: formatAppDateTime(row.created_at, i18n.language),
                     })}
                   </Text>
-                </View>
-              ) : null}
-              <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
-                {t("consumerWallet.claimedRecord", {
-                  datetime: formatAppDateTime(row.created_at, i18n.language),
-                })}
-              </Text>
-              <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12, color: theme.text }}>
-                {t("consumerWallet.expiresAtLabel", { datetime: expiryShown })}
-              </Text>
-              {bucket === "active" ? (
-                <Text style={{ marginTop: Spacing.sm, fontSize: 13, fontWeight: "700", letterSpacing: 1, color: theme.text }}>
-                  {t("consumerWallet.cardCodeLine", { code: shortLabel })}
-                </Text>
-              ) : null}
+                  <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12, color: theme.text }}>
+                    {t("consumerWallet.expiresAtLabel", { datetime: expiryShown })}
+                  </Text>
+                </>
+              )}
               {row.redeem_method === "visual" && bucket === "redeemed" ? (
                 <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55 }}>
                   {t("consumerWallet.redeemedViaVisual")}
@@ -794,16 +870,29 @@ export default function WalletScreen() {
                   {t("consumerWallet.redeemedViaQr")}
                 </Text>
               ) : null}
-              <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }}>
-                {bucket === "active" && !redeemed && !tokenDead
-                  ? t("consumerWallet.redeemByCaption", { datetime: expiryShown })
-                  : t("consumerWallet.expiresLocal", { datetime: expiryShown })}
-              </Text>
+              {bucket !== "active" ? (
+                <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }}>
+                  {t("consumerWallet.expiresLocal", { datetime: expiryShown })}
+                </Text>
+              ) : null}
             </View>
           </View>
         </Pressable>
-        {bucket === "active" && !redeemed && !tokenDead ? (
+        {activeClaim ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+            <PrimaryButton
+              title={
+                rowIsDemo
+                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
+                  : useDealBusy
+                    ? t("redeem.redeeming")
+                    : isRedeeming
+                      ? t("consumerWallet.continueUseDeal")
+                      : t("consumerWallet.useDealCta")
+              }
+              onPress={() => void startUseDealFlow(row)}
+              disabled={rowIsDemo || useDealBusy}
+            />
             <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
@@ -813,7 +902,7 @@ export default function WalletScreen() {
               pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => ({
                 width: "100%",
-                minHeight: 136,
+                minHeight: 108,
                 borderRadius: Radii.md,
                 borderWidth: 1,
                 borderColor: pressed ? theme.primary : "#fed7aa",
@@ -824,7 +913,7 @@ export default function WalletScreen() {
               })}
             >
               <View pointerEvents="none">
-                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
+                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0, color: "#9a3412" }}>
                   {t("consumerWallet.scanQrAtCounter")}
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
@@ -847,7 +936,7 @@ export default function WalletScreen() {
                     <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
                       {t("consumerWallet.verifyCodeLabel")}
                     </Text>
-                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: Gray[900] }}>
+                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 0, marginTop: 2, color: Gray[900] }}>
                       {shortLabel}
                     </Text>
                   </View>
@@ -857,19 +946,7 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </NativePressable>
-            <PrimaryButton
-              title={
-                rowIsDemo
-                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
-                  : useDealBusy
-                    ? t("redeem.redeeming")
-                    : isRedeeming
-                      ? t("consumerWallet.continueUseDeal")
-                      : t("consumerWallet.useDealCta")
-              }
-              onPress={() => void startUseDealFlow(row)}
-              disabled={rowIsDemo || useDealBusy}
-            />
+            {!rowIsDemo ? <AddToWalletButton /> : null}
             {shareDealEnabled ? (
               <NativePressable
                 onPress={() => void shareWalletDeal(row)}
@@ -916,27 +993,6 @@ export default function WalletScreen() {
                 {releasingClaimId === row.id
                   ? t("consumerWallet.releasingDeal", { defaultValue: "Releasing..." })
                   : t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
-              </Text>
-            </NativePressable>
-            <NativePressable
-              onPress={() => openVerifyForClaim(row)}
-              disabled={verifyDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => ({
-                minHeight: 50,
-                borderRadius: Radii.lg,
-                borderWidth: 1.5,
-                borderColor: theme.primary,
-                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: verifyDisabled ? 0.45 : 1,
-              })}
-            >
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
-                {t("consumerWallet.qrFallbackLabel")}
               </Text>
             </NativePressable>
             {hasDirectionsTarget(row.deals?.businesses) ? (
@@ -1152,6 +1208,8 @@ export default function WalletScreen() {
         shortCode={qrShortCode}
         expiresAt={qrExpires}
         graceMinutes={qrGraceMinutes}
+        successToastNonce={qrRedeemedNonce}
+        successToastVariant="redeemed"
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
@@ -1159,6 +1217,8 @@ export default function WalletScreen() {
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
       />
+
+      {saveBusinessPromptElement}
     </View>
   );
 }

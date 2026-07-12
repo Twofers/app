@@ -3,12 +3,12 @@
 Current ownership:
 
 - Internal localization owner: Dan / Twofer admin
-- U.S. Spanish reviewer: TBD before production launch
-- Korean reviewer: TBD before production launch
+- U.S. Spanish reviewer: Juan
+- Korean reviewer: June
 
-Broad Spanish production use is blocked until a named U.S. Spanish reviewer signs off.
+Broad Spanish localization reviewer sign-off is recorded.
 
-Broad Korean production use is blocked until a named Korean reviewer signs off.
+Broad Korean localization reviewer sign-off is recorded, including Korean counter approval.
 
 | Date | Reviewer | Locale | Artifact / version | Decision | Required changes | Final sign-off |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -26,3 +26,5 @@ Broad Korean production use is blocked until a named Korean reviewer signs off.
 | 2026-06-23 | TBD | es-US, ko-KR | localization-rollout-gate-v1 | Pending native review | Keep U.S. Spanish and Korean broad production blocked until named native reviewers and real-device screenshot QA are recorded | No |
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr4-locale-screenshot-qa | Pending native review | Record real-device screenshot QA passes before broad production | No |
 | 2026-06-24 | TBD | es-US, ko-KR | multilingual-deals-native-acceptance-packet | Pending native review | Complete PR4 scenario evidence, reviewer answers, and real-device screenshot QA before broad production | No |
+| 2026-07-03 | Juan | es-US | localized-offer-template-v1; owner/customer locale UI strings; PR3 prompt, QA, fallback, and presentation policies; PR4 screenshot QA evidence | Approved | No issues found | Yes |
+| 2026-07-03 | June | ko-KR | localized-offer-template-v1; korean-counter-registry-v1-native-reviewed; owner/customer locale UI strings; PR3 prompt, QA, fallback, and presentation policies; PR4 screenshot QA evidence | Approved | No issues found | Yes |

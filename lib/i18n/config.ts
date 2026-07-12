@@ -28,6 +28,11 @@ export function isAppLocale(value: string | null | undefined): value is AppLocal
   return value === "en" || value === "es" || value === "ko";
 }
 
+export function appLocaleFromLanguage(value: string | null | undefined): AppLocale {
+  const normalized = value?.toLowerCase().replace("_", "-") ?? "";
+  return APP_LOCALES.find((locale) => normalized === locale || normalized.startsWith(`${locale}-`)) ?? "en";
+}
+
 void i18n.use(initReactI18next).init({
   compatibilityJSON: "v4",
   resources: {

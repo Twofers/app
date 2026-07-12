@@ -47,6 +47,26 @@ describe("deal quality — English regression", () => {
     expect(r.tier).toBe("strong");
   });
 
+  it("accepts the canonical 'receive one X free' terms line as strong (F-026)", () => {
+    // The app-generated canonical terms (deal-offer-contract) read
+    // "Purchase X to receive one Y free" — a real same-item BOGO that was
+    // wrongly blocked by CLARIFY_VALUE because it says "receive", not "get".
+    const sameItem = assessDealQuality({
+      title: "Muffin for your coffee run",
+      description:
+        "Buy any muffin and one muffin comes free with it. Purchase any muffin to receive one muffin free. Redeem only at 9460 N MacArthur Blvd. Limited to 10 available.",
+    });
+    expect(sameItem.blocked).toBe(false);
+    expect(sameItem.tier).toBe("strong");
+
+    const differentItem = assessDealQuality({
+      title: "Cookie with your coffee",
+      description: "Purchase any large coffee drink to receive one free cookie. Redeem only at 12 Test St. Limited to 25 available.",
+    });
+    expect(differentItem.blocked).toBe(false);
+    expect(differentItem.tier).toBe("strong");
+  });
+
   it("accepts two for one (English words) as strong", () => {
     const r = assessDealQuality({
       title: "Latte two for one special",

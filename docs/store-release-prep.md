@@ -17,23 +17,30 @@ It does **not** replace the other release docs — it points at them:
 
 ---
 
-## 1. Current Owner-Demo Candidate
+## 1. Current V1 Rollout State
 
 | Field | Value |
 |---|---|
-| Git tag | `owner-demo-v15` |
-| HEAD commit | `bf9e73d` (Validate final owner demo polish) |
-| Branch | `fix/production-clean-copy` |
+| Repo checkpoint | `feature/ai-deal-studio-dev-foundation` at `e2d6207a` (`Fix AI poster copy revision flow`) |
+| Working tree | Active local changes and untracked QA/store artifacts are present. This is **not** a clean release-candidate snapshot. |
 | versionName | `1.0.0` |
-| versionCode | `15` (owner-demo candidate) |
+| Local Android versionCode | `31` in `app.json` |
 | App package / bundle ID | `com.unvmex2.twoforone` (Android `package` and iOS `bundleIdentifier` match) |
 | EAS project ID | `cf448cfe-fabd-4c32-8afd-88104bb59cbe` (owner `unvmex2`) |
 | App display name | Twofer |
+| Stack | Expo SDK 54, React Native 0.81.5, React 19.1.0, Expo Router 6.0.24 |
+| Share Deal | Enabled in production/apk/preview EAS profiles through `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true` |
+| Billing posture | Billing UI is enabled in code (`PAID_BILLING_ENABLED=true`), while pilot enforcement is bypassed (`PILOT_DISABLE_BILLING_GATE=true`). Do not describe the current app as having all billing surfaces hidden. |
+| AI Deal Studio dev variant | Separate Android dev package `com.unvmex2.twoforone.dev`; publishing disabled by `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true` |
+| Localization | English, U.S. Spanish, and Korean code paths exist. Broad Spanish/Korean production remains blocked until native review and screenshot QA gates pass. |
 
 > **versionCode note:** `eas.json` sets `appVersionSource: "remote"` and the `production`
 > profile uses `autoIncrement: true`, so the store build's Android versionCode is managed by
-> EAS and may advance past `15`. `15` is the current owner-demo APK candidate; the actual
-> store-build number comes from EAS at build time. iOS uses the same remote version source.
+> EAS and may advance past the local `app.json` value. Treat `30` as the current local config,
+> not a promise about the next Play build number. iOS uses the same remote version source.
+>
+> Historical note: `owner-demo-v15` was the June 5 owner-demo APK checkpoint. It is no longer
+> the current rollout state.
 
 ---
 
@@ -50,7 +57,7 @@ Console: <https://play.google.com/console>
 - [ ] Feature graphic (1024×500 PNG/JPG) uploaded.
 - [ ] Phone screenshots uploaded (min 2; 1080×1920 or 9:16 recommended).
 - [ ] Privacy Policy URL entered (see §4).
-- [ ] Content rating questionnaire completed (target: Everyone).
+- [ ] Content rating questionnaire completed (target: 13+).
 - [ ] **Data safety** form completed (see §7).
 - [ ] App access: consumer and business reviewer logins + instructions provided (see §6 / §9).
 - [ ] Ads declaration: app currently has **no third-party ads** → declare "No ads".
@@ -140,7 +147,7 @@ Authoritative copy lives in `store-assets/app-store-copy.md`. Key values:
 | Privacy Policy URL | `https://www.twoferapp.com/privacy` |
 | Terms URL | `https://www.twoferapp.com/terms` |
 | App icon | iOS 1024×1024 (no alpha); Play 512×512. Source: `assets/images/icon.png` + adaptive icon assets |
-| Google feature graphic | 1024×500 — **needs to be produced** (no source asset found in repo) |
+| Google feature graphic | 1024×500 local candidate: `store-assets/google-play-feature-graphic-1024x500.png`; still needs human upload/approval |
 | Android screenshots | Phone min 1080×1920; tablet 1200×1920 optional |
 | iOS screenshots | 6.9" 1320×2868 / 6.7" 1290×2796; iPad screenshots not required while tablet support is off |
 | Reviewer accounts | Dan-provided consumer and business reviewer accounts; paste passwords only into store consoles |
@@ -153,7 +160,7 @@ Recommended 8-screenshot flow (consumer + business) is listed in `store-assets/a
 - [ ] Support email set to `support@twoferapp.com` and matches the in-app value.
 - [ ] Support / Privacy / Terms URLs entered and verified live.
 - [ ] App icon uploaded (correct size + no alpha on iOS).
-- [ ] Google feature graphic produced and uploaded.
+- [ ] Google feature graphic reviewed and uploaded.
 - [ ] Android + iOS screenshots captured and uploaded.
 - [ ] Reviewer account logins + instructions entered in store review fields.
 
@@ -187,12 +194,14 @@ and `lib/legal-urls.ts`.
 
 ## 8. Billing Policy Risk Note (read before enabling billing in a store build)
 
-**Merchant billing screens must remain demo/pilot only unless the payment flow is both
-production-ready and store-policy-ready.**
+**Merchant billing screens are currently enabled in code. Live charging must stay off unless the
+payment flow is both production-ready and store-policy-ready.**
 
-Current state (`docs/stripe-setup.md`): Stripe Checkout / webhook / customer-portal functions are
-built, but the pilot runs Stripe in **test mode** (no real money moves). The Premium card and live
-charging are intentionally gated for the pilot.
+Current state: `lib/billing/access.ts` has `PAID_BILLING_ENABLED=true`, and pilot publish
+enforcement is bypassed with `PILOT_DISABLE_BILLING_GATE=true`. Stripe Checkout / webhook /
+customer-portal functions exist, but Stripe mode, webhook readiness, store-policy posture, and
+review-build behavior must be confirmed before any public release. Do not reuse old language that
+says billing/pricing/checkout is fully hidden by setting `PAID_BILLING_ENABLED` to false.
 
 Store-policy risk to resolve before shipping billing in a public store build:
 
@@ -200,8 +209,8 @@ Store-policy risk to resolve before shipping billing in a public store build:
   for digital subscriptions that unlock in-app functionality. A Stripe Checkout subscription that
   unlocks app features can be rejected unless it qualifies for an exception (e.g., B2B / "reader" /
   physical-service positioning), which is **not yet confirmed** for Twofer.
-- Until that is resolved, keep billing **demo/pilot-only** (Stripe test mode, Premium gated), or
-  hide/disable the Subscribe path for store-review builds.
+- Until that is resolved, keep billing **demo/pilot-only** (Stripe test mode and no real money), or
+  hide/disable the Subscribe path for store-review builds with a verified build-specific mechanism.
 - Production guardrails already expected (per `docs/beta-release-checklist.md`):
   `BILLING_SIMULATE_SUBSCRIBE` absent/false, and Stripe in the intended mode for the build.
 
@@ -231,7 +240,8 @@ Paste into Google Play "App access" and App Store Connect "App Review Informatio
 > 3. Claim a posted deal if the account is claim-clean.
 > 4. Sign out, then log in using the business reviewer account.
 > 5. Open Dashboard, Create, Active Deals, Redeem, Analytics, Business Profile, and Settings.
-> 6. Billing, pricing, upgrade, checkout, and subscription surfaces are hidden in this free pilot.
+> 6. Billing/pricing surfaces are pilot-only. Do not enter real payment credentials during review
+>    unless Dan has explicitly approved a live billing review path for this exact build.
 > 7. Location is used to show nearby offers and map results (you may allow or deny location;
 >    the app still works without it).
 
@@ -239,9 +249,10 @@ Reviewer-account caveats (verify before submitting):
 
 - [ ] The deleted demo-login helper is not present in production builds. Reviewers sign in through
   the normal email/password form.
-- [ ] The consumer reviewer account must be claim-clean before review. A user can create only one
-  fresh claim per business per local day (America/Chicago), so repeated same-day claim tests against
-  the same business are expected to be blocked.
+- [ ] The consumer reviewer account must be claim-clean before review. A user can hold only one
+  active claim at a time app-wide (claiming the same deal again returns the same ticket), so a second
+  claim test is expected to be blocked until the first claim is redeemed, released, or expires.
+  There is no per-day limit; see `docs/claim-rules.md` for the full current rules.
 - [ ] The business reviewer account owns a pilot business with posted deals and can reach the
   dashboard, create, active-deals, redeem, analytics, profile, and settings flows.
 - [ ] Paste reviewer passwords only into the store review fields. Do not commit them.
@@ -256,16 +267,18 @@ Documented, not changed (this pass is store-prep docs only):
    Before review, verify the live website privacy/support pages show the same public support email.
 2. **Legal/support/delete pages must be live.** URLs are configured but must be publicly reachable
    at `twoferapp.com` before review (§4).
-3. **Google feature graphic missing.** No 1024×500 source asset in the repo; required by Play (§6).
-4. **Billing store-policy risk** (§8) — paid surfaces must remain hidden for the free v1 pilot.
+3. **Google feature graphic approval/upload.** A local 1024×500 candidate exists under
+   `store-assets/`, but Play still needs the final human-approved upload (§6).
+4. **Billing store-policy risk** (§8) — paid surfaces are enabled in code and must remain
+   demo/pilot-only, hidden for review, or explicitly approved for live billing before submission.
 5. **iPad support is off** (`ios.supportsTablet: false`), so iPad screenshots are not part of the
    current iPhone-only submission path.
 6. **versionCode is EAS-remote/auto-increment** — the store build number will come from EAS, not
-   necessarily `15` (§1).
+   necessarily the local `app.json` value `30` (§1).
 7. **Reviewer accounts** must be created and verified on the review environment: one claim-clean
    consumer account and one business account with posted deals (§9).
 
-No code/behavior, secrets, identifiers, or build numbers were changed in this pass.
+No app code/behavior, secrets, identifiers, or build numbers are changed by this document.
 
 ---
 

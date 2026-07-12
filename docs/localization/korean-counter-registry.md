@@ -1,23 +1,23 @@
 # Korean Counter Registry
 
-Status: pending native reviewer. No counter is approved for production use yet.
+Status: native reviewer signed off on 2026-07-03.
 
 Current ownership:
 
 - Internal localization owner: Dan / Twofer admin
-- Korean reviewer: TBD before production launch
+- Korean reviewer: June
 
 ## Current Registry State
 
 | Counter ID | Display | Candidate categories | Reviewer approved | Reviewer |
 | --- | --- | --- | --- | --- |
-| cup | 잔 | coffee, drink, tea | No | TBD |
-| piece | 개 | pastry, retail item | No | TBD |
-| serving | 인분 | meal | No | TBD |
+| cup | 잔 | coffee, drink, tea | Yes | June |
+| piece | 개 | pastry, retail item | Yes | June |
+| serving | 인분 | meal | Yes | June |
 
 ## Rules
 
-- Application code may use a Korean counter only when the counter entry is reviewer-approved.
+- Application code may use these Korean counters when the counter entry is reviewer-approved.
 - A model may not infer counters at view time.
 - Unknown or unapproved counters must use the counter-free fallback template.
 - Every counter addition requires Korean reviewer sign-off and fixture coverage.

@@ -57,7 +57,9 @@ describe("buildAdCopyPrompt", () => {
   it("includes anti-generic instructions and banned vague phrases", () => {
     expect(basePrompt.system).toContain("generic image caption");
     expect(basePrompt.system).toContain("This is an ad, not a legal deal description");
+    expect(basePrompt.system).toContain("Owner-provided notes and revision feedback are instructions and context");
     expect(basePrompt.system).toContain("Avoid generic marketing language");
+    expect(basePrompt.system).toContain('Say "Buy any large coffee drink", not "Buy an any large coffee drink"');
     expect(basePrompt.system).toContain("don't miss out");
     expect(basePrompt.system).toContain("qualifying purchase");
     expect(basePrompt.system).toContain("included after");
@@ -85,6 +87,52 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Buy one latte and get one free");
   });
 
+  it("adds poster-specific creative direction and previous poster context for revisions", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      creativeFormat: "poster_v1",
+      revisionFeedback: "The top part does not make sense. Make it sound like a real ad.",
+      previousAd: {
+        headline: "Any large coffee drink",
+        short_description: "Buy any large coffee drink and the cookie is on us.",
+        push_notification: "Buy any large coffee drink and get a free cookie.",
+        terms_summary: "Purchase any large coffee drink to receive one cookie free.",
+        poster: {
+          copy: {
+            headline: "ANY LARGE COFFEE DRINK",
+            offer_line_1: "BUY ANY LARGE COFFEE DRINK",
+            offer_line_2: "GET 1 COOKIE OF YOUR CHOICE",
+            subline: "TODAY",
+          },
+        },
+      },
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "Any large coffee drink",
+        requiredItemRetailValueCents: 500,
+        freeItemQuantity: 1,
+        freeItemDescription: "Cookie of your choice",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.userText).toContain("Requested ad format: poster_v1");
+    expect(prompt.userText).toContain("POSTER FORMAT DIRECTION");
+    expect(prompt.userText).toContain("posterKicker and headlineAlternative");
+    expect(prompt.userText).toContain("bottom offer lines and schedule line");
+    expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
+    expect(prompt.userText).toContain("revise headlineAlternative and posterKicker first");
+    expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
+    expect(prompt.system).toContain("posterKicker is the small top kicker");
+    expect(prompt.system).toContain("Derive it from the specific product, customer moment, merchant context, or deal angle");
+    expect(prompt.system).toContain("Do not use generic defaults such as Try our");
+    expect(prompt.system).not.toContain("Coffee + Cookie Break");
+    expect(prompt.system).not.toContain("Bad poster headlines are Any large coffee drink");
+  });
+
   it("passes the locked contract while keeping metadata out of generated fields", () => {
     expect(basePrompt.userText).toContain("Customer buys 1 coffee.");
     expect(basePrompt.userText).toContain("Customer gets 1 bagel free.");
@@ -93,6 +141,7 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Terms, location, schedule, and quantity are app metadata");
     expect(basePrompt.system).not.toContain("Locked terms line:");
     expect(basePrompt.userText).toContain("Do not include business name, address, availability, or quantity");
+    expect(basePrompt.userText).toContain("Owner-provided notes, context only, do not paste verbatim");
     expect(basePrompt.userText).not.toContain("Address context:");
     expect(basePrompt.userText).not.toContain("Time window:");
     expect(basePrompt.userText).not.toContain("Quantity scarcity:");
@@ -110,6 +159,7 @@ describe("buildAdCopyPrompt", () => {
       "strategyId",
       "strategyReason",
       "headlineAlternative",
+      "posterKicker",
       "description",
       "pushTitle",
       "pushBody",
@@ -119,6 +169,42 @@ describe("buildAdCopyPrompt", () => {
       "merchantSpecificContextLimited",
     ]);
     expect(schema.properties.creativeBrief.required).toContain("targetCustomerMoment");
+  });
+
+  it("keeps customer moments congruent with the actual item and category", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("40% off agujjim", "agujjim"),
+      businessName: "Seoul Table",
+      businessContext: {
+        category: "Korean restaurant",
+        location: "Carrollton",
+        tone: "warm and direct",
+        description: "Family-run Korean restaurant.",
+      },
+      offerContract: contractFor({
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 40,
+        itemDescription: "agujjim",
+        itemRetailValueCents: 2500,
+      }),
+    });
+
+    // Category playbook resolves to the actual business type, not a cafe default.
+    expect(prompt.system).toContain("restaurant_food");
+    // Congruence rules: occasion must match the item; kickers come from the
+    // business's own category playbook instead of a hardcoded coffee-first list.
+    expect(prompt.system).toContain("must fit the actual item");
+    expect(prompt.system).toContain("never use a moment that belongs to a different business category");
+    expect(prompt.system).toContain("Never borrow a moment from a different kind of business");
+    expect(prompt.system).not.toContain("Good examples: Coffee break");
+    // Regression: the percent-off example teaches the wrong-occasion failure directly.
+    expect(prompt.system).toContain("Bad posterKicker: Coffee break");
+  });
+
+  it("no longer frames every business as a coffee shop", () => {
+    expect(basePrompt.system).not.toContain("coffee shops, cafes, bakeries");
+    expect(basePrompt.system).toContain("local businesses publish limited local deals");
   });
 
   it("tells the model not to invent missing facts", () => {

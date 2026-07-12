@@ -3,6 +3,10 @@ import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadRuntimeBillingConfig, safeGetString, type RuntimeBillingConfig } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  applyBusinessBillingAccessState,
+  ensurePrimaryBusinessLocationId,
+} from "../_shared/business-location-entitlement-sync.ts";
 
 type Metadata = Record<string, string>;
 
@@ -624,6 +628,318 @@ async function syncSubscriptionState(params: {
     .eq("business_location_id", locationId);
 }
 
+function stripeCustomerIdFrom(obj: any, subscription: any): string | null {
+  return safeGetString(obj?.customer) ?? safeGetString(subscription?.customer) ?? safeGetString(obj?.id);
+}
+
+/**
+ * A Stripe Dispute object has no `.customer` field, unlike charges/invoices/
+ * subscriptions. Resolve it from the underlying charge (or, failing that, the
+ * payment intent) so `businessIdForStripeCustomer` can find the business for
+ * `charge.dispute.created`. See findings/03-chargeback-not-handled.md.
+ */
+async function stripeCustomerIdForDispute(stripe: Stripe, dispute: any): Promise<string | null> {
+  const direct = safeGetString(dispute?.customer);
+  if (direct) return direct;
+
+  const chargeId = typeof dispute?.charge === "string" ? dispute.charge : safeGetString(dispute?.charge?.id);
+  if (chargeId) {
+    try {
+      const charge = await stripe.charges.retrieve(chargeId);
+      const customerId = safeGetString(charge?.customer);
+      if (customerId) return customerId;
+    } catch (err) {
+      console.error("[stripe-webhook] dispute charge lookup failed:", err);
+    }
+  }
+
+  const paymentIntentId =
+    typeof dispute?.payment_intent === "string" ? dispute.payment_intent : safeGetString(dispute?.payment_intent?.id);
+  if (paymentIntentId) {
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const customerId = safeGetString(paymentIntent?.customer);
+      if (customerId) return customerId;
+    } catch (err) {
+      console.error("[stripe-webhook] dispute payment_intent lookup failed:", err);
+    }
+  }
+
+  return null;
+}
+
+async function businessIdForStripeCustomer(supabase: any, customerId: string | null): Promise<string | null> {
+  if (!customerId) return null;
+  const { data, error } = await supabase
+    .from("business_billing_profiles")
+    .select("business_id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  if (error) throw error;
+  return safeGetString(data?.business_id);
+}
+
+function businessAccessForStripeStatus(status: string, cancelAtPeriodEnd: boolean): {
+  billingStatus: string;
+  appAccessStatus: string;
+} {
+  if (status === "active") return { billingStatus: "active", appAccessStatus: "active" };
+  if (status === "trialing") return { billingStatus: "trialing", appAccessStatus: "trialing" };
+  if (status === "past_due" || status === "unpaid") return { billingStatus: "past_due", appAccessStatus: "past_due_grace" };
+  if (status === "canceled") return { billingStatus: "canceled", appAccessStatus: "canceled" };
+  if (status === "paused") return { billingStatus: "paused", appAccessStatus: "suspended" };
+  if (status === "incomplete_expired") return { billingStatus: "incomplete_expired", appAccessStatus: "expired" };
+  if (status === "incomplete") return { billingStatus: "incomplete", appAccessStatus: "pending" };
+  // Finding 07: fail closed on any status Stripe adds that we don't
+  // recognize yet -- never grant access on an unrecognized status, even with
+  // cancel_at_period_end true. A real active/trialing subscription with
+  // auto-renew off is already handled by the explicit branches above; this
+  // line is unreachable for any of Stripe's current subscription statuses.
+  return { billingStatus: "none", appAccessStatus: "pending" };
+}
+
+function invoiceSummary(invoice: any): Record<string, unknown> {
+  return compactRecord({
+    last_invoice_id: safeGetString(invoice?.id),
+    last_invoice_url: safeGetString(invoice?.hosted_invoice_url),
+    last_invoice_pdf: safeGetString(invoice?.invoice_pdf),
+    last_invoice_status: safeGetString(invoice?.status),
+    last_invoice_amount_due_cents: typeof invoice?.amount_due === "number" ? invoice.amount_due : null,
+    last_invoice_amount_paid_cents: typeof invoice?.amount_paid === "number" ? invoice.amount_paid : null,
+    last_payment_error: safeGetString(invoice?.last_payment_error?.message),
+  });
+}
+
+async function syncBusinessSubscriptionFromStripe(params: {
+  supabase: any;
+  businessId: string;
+  event: Stripe.Event;
+  subscription: any | null;
+  invoice?: any | null;
+  checkoutSession?: any | null;
+  forcePaymentFailure?: boolean;
+  /** Chargeback (charge.dispute.created): force an immediate suspension regardless of Stripe subscription status. Never auto-restored — see findings/03-chargeback-not-handled.md. */
+  forceChargebackSuspend?: boolean;
+}) {
+  const { supabase, businessId, event, subscription, invoice, checkoutSession } = params;
+  const status = safeGetString(subscription?.status) ?? (params.forcePaymentFailure ? "past_due" : "none");
+  const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
+  const access = params.forceChargebackSuspend
+    ? { billingStatus: "chargeback", appAccessStatus: "suspended" }
+    : businessAccessForStripeStatus(status, cancelAtPeriodEnd);
+
+  // Finding 07: only grantPaidPeriod/activateTrialFromCheckout (the location
+  // path) asserted the subscription is on the expected Twofer price before
+  // granting access. Do the same here before writing active/trialing for the
+  // business path -- a subscription on an unexpected price must not grant
+  // access. Throws (like the location path) so the event is recorded failed.
+  if (subscription && (access.appAccessStatus === "active" || access.appAccessStatus === "trialing")) {
+    const priceConfig = await loadRuntimeBillingConfig(supabase as any);
+    assertExpectedPrice(priceConfig, subscription);
+  }
+  const customerId = stripeCustomerIdFrom(checkoutSession ?? invoice ?? {}, subscription);
+  const subscriptionId = safeGetString(subscription?.id) ?? safeGetString(checkoutSession?.subscription);
+  const priceId = firstSubscriptionPriceId(subscription);
+  const graceDays = Math.max(0, Number(Deno.env.get("PAST_DUE_GRACE_DAYS") ?? "3") || 3);
+  const now = new Date();
+  const graceUntil = params.forcePaymentFailure || access.appAccessStatus === "past_due_grace"
+    ? new Date(now.getTime() + graceDays * 86400000).toISOString()
+    : null;
+
+  const { data: previous } = await supabase
+    .from("business_subscriptions")
+    .select("billing_status,app_access_status,trial_type")
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  // Preserve "was this ever a paying/trialing subscription" across terminal
+  // events: Stripe's own status on a canceled subscription no longer says
+  // "active" or "trialing", so trial_type would otherwise collapse to null
+  // right when the downgrade path needs it most.
+  const trialType = status === "trialing"
+    ? "stripe_trial"
+    : status === "active"
+      ? "paid"
+      : safeGetString(previous?.trial_type);
+  const trialStartIso = unixSecondsToIso(subscription?.trial_start);
+  const trialEndIso = unixSecondsToIso(subscription?.trial_end);
+  const currentPeriodStartIso = unixSecondsToIso(subscription?.current_period_start);
+  const currentPeriodEndIso = unixSecondsToIso(subscription?.current_period_end);
+
+  await supabase.from("business_subscriptions").upsert(
+    {
+      business_id: businessId,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscriptionId,
+      stripe_product_id: safeGetString(subscription?.items?.data?.[0]?.price?.product),
+      stripe_price_id: priceId,
+      billing_mode: "web_stripe",
+      billing_status: access.billingStatus,
+      app_access_status: access.appAccessStatus,
+      trial_type: trialType,
+      trial_start: trialStartIso,
+      trial_end: trialEndIso,
+      current_period_start: currentPeriodStartIso,
+      current_period_end: currentPeriodEndIso,
+      cancel_at_period_end: cancelAtPeriodEnd,
+      canceled_at: unixSecondsToIso(subscription?.canceled_at),
+      ended_at: unixSecondsToIso(subscription?.ended_at),
+      grace_period_until: graceUntil,
+      past_due_since: access.billingStatus === "past_due" ? now.toISOString() : null,
+      payment_method_status: access.billingStatus === "past_due" ? "failed" : "unknown",
+      ...invoiceSummary(invoice),
+      source: "stripe_webhook",
+      metadata: compactRecord({
+        stripe_event_type: event.type,
+        checkout_session_id: safeGetString(checkoutSession?.id),
+      }),
+      updated_at: now.toISOString(),
+    },
+    { onConflict: "business_id" },
+  );
+
+  if (customerId) {
+    await supabase
+      .from("business_billing_profiles")
+      .update({
+        stripe_customer_id: customerId,
+        stripe_customer_livemode: event.livemode,
+        stripe_sync_status: "synced",
+        stripe_sync_error: null,
+        last_synced_from_stripe_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("business_id", businessId);
+  }
+
+  if (checkoutSession?.id) {
+    await supabase
+      .from("stripe_checkout_sessions")
+      .update({
+        stripe_subscription_id: subscriptionId,
+        status: event.type === "checkout.session.completed" ? "completed" : "opened",
+        completed_at: event.type === "checkout.session.completed" ? now.toISOString() : null,
+        updated_at: now.toISOString(),
+      })
+      .eq("stripe_checkout_session_id", checkoutSession.id);
+  }
+
+  await supabase.from("billing_events").upsert(
+    {
+      business_id: businessId,
+      stripe_event_id: event.id,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscriptionId,
+      stripe_checkout_session_id: safeGetString(checkoutSession?.id),
+      stripe_invoice_id: safeGetString(invoice?.id),
+      stripe_payment_intent_id: stripeReferenceId(invoice?.payment_intent),
+      event_source: "stripe",
+      event_type: event.type,
+      event_created_at: unixSecondsToIso(event.created),
+      status_before: safeGetString(previous?.billing_status),
+      status_after: access.billingStatus,
+      app_access_before: safeGetString(previous?.app_access_status),
+      app_access_after: access.appAccessStatus,
+      processing_status: "processed",
+      raw_event: event,
+      processed_at: now.toISOString(),
+    },
+    { onConflict: "stripe_event_id" },
+  );
+
+  // Keeps businesses.access_level, businesses.status, and location_entitlements
+  // (what the app gate and publish checks actually read) in sync with the
+  // business_subscriptions row just written above. Canceled/expired/past-due
+  // statuses now explicitly downgrade instead of being skipped.
+  await applyBusinessBillingAccessState({
+    supabase,
+    businessId,
+    provider: "stripe",
+    appAccessStatus: access.appAccessStatus,
+    trialType,
+    trialStart: trialStartIso,
+    trialEnd: trialEndIso,
+    currentPeriodStart: currentPeriodStartIso,
+    currentPeriodEnd: currentPeriodEndIso,
+    cancelAtPeriodEnd,
+  });
+
+  // No-card trial bookkeeping: mark this physical location's trial as used
+  // the moment a real trialing subscription is confirmed, mirroring what
+  // admin_grant_location_trial / activateTrialFromCheckout already do for
+  // their own paths. This is what stripe-create-checkout-session's reuse
+  // guard checks before granting a second no-card trial to the same
+  // storefront. (Unlike admin_grant_location_trial's raw SQL COALESCE, this
+  // upsert overwrites trial_used_at on every trialing event; harmless in
+  // practice since trial_start doesn't change mid-trial, and all the reuse
+  // guard needs is non-null.)
+  if (access.appAccessStatus === "trialing") {
+    const locationId = await ensurePrimaryBusinessLocationId(supabase, businessId);
+    if (locationId) {
+      await supabase.from("business_location_identity").upsert(
+        {
+          business_location_id: locationId,
+          trial_used_at: trialStartIso ?? now.toISOString(),
+          updated_at: now.toISOString(),
+        },
+        { onConflict: "business_location_id" },
+      );
+    }
+  }
+}
+
+async function syncBusinessCustomerProfileFromStripe(params: {
+  supabase: any;
+  businessId: string;
+  event: Stripe.Event;
+  customer: any;
+}) {
+  const customer = params.customer;
+  const address = customer?.address ?? {};
+  await params.supabase
+    .from("business_billing_profiles")
+    .update({
+      billing_name: safeGetString(customer?.name),
+      billing_email: safeGetString(customer?.email),
+      billing_phone: safeGetString(customer?.phone),
+      billing_address_line1: safeGetString(address.line1),
+      billing_address_line2: safeGetString(address.line2),
+      billing_city: safeGetString(address.city),
+      billing_state: safeGetString(address.state),
+      billing_postal_code: safeGetString(address.postal_code),
+      billing_country: safeGetString(address.country) ?? "US",
+      stripe_sync_status: "synced",
+      last_synced_from_stripe_at: new Date().toISOString(),
+      billing_fields_source: {
+        billing_name: "stripe_portal",
+        billing_email: "stripe_portal",
+        billing_phone: "stripe_portal",
+        billing_address_line1: "stripe_portal",
+        billing_city: "stripe_portal",
+        billing_state: "stripe_portal",
+        billing_postal_code: "stripe_portal",
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", params.businessId);
+
+  await params.supabase.from("billing_events").upsert(
+    {
+      business_id: params.businessId,
+      stripe_event_id: params.event.id,
+      stripe_customer_id: safeGetString(customer?.id),
+      event_source: "stripe",
+      event_type: params.event.type,
+      event_created_at: unixSecondsToIso(params.event.created),
+      status_after: "customer_profile_synced",
+      processing_status: "processed",
+      raw_event: params.event,
+      processed_at: new Date().toISOString(),
+    },
+    { onConflict: "stripe_event_id" },
+  );
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -687,6 +1003,76 @@ serve(async (req) => {
   try {
     const metadataLocationId = safeGetString(mergedMetadata.business_location_id);
     const metadataBillingAccountId = safeGetString(mergedMetadata.billing_account_id);
+    const eventCustomerId =
+      event.type === "charge.dispute.created"
+        ? await stripeCustomerIdForDispute(stripe, obj)
+        : stripeCustomerIdFrom(obj, subscription);
+    const metadataBusinessId = safeGetString(mergedMetadata.business_id);
+    const businessId = metadataBusinessId ?? await businessIdForStripeCustomer(supabase, eventCustomerId);
+
+    if (businessId && !isRefundWebhookEvent(event.type)) {
+      if (event.type === "customer.updated") {
+        await syncBusinessCustomerProfileFromStripe({ supabase, businessId, event, customer: obj });
+      } else if (event.type === "checkout.session.completed") {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          checkoutSession: obj,
+        });
+      } else if (
+        event.type === "invoice.paid" ||
+        event.type === "customer.subscription.created" ||
+        event.type === "customer.subscription.updated" ||
+        event.type === "customer.subscription.deleted"
+      ) {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          invoice: event.type === "invoice.paid" ? obj : null,
+        });
+      } else if (event.type === "invoice.payment_failed") {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          invoice: obj,
+          forcePaymentFailure: true,
+        });
+        await supabase.from("billing_reminders").insert({
+          business_id: businessId,
+          reminder_type: "payment_failed",
+          channel: "email",
+          status: "pending",
+          scheduled_for: new Date().toISOString(),
+          idempotency_key: `payment_failed:${event.id}`,
+          metadata: {
+            stripe_invoice_id: safeGetString(obj?.id),
+            stripe_subscription_id: safeGetString(subscription?.id),
+          },
+        });
+      } else if (event.type === "charge.dispute.created") {
+        // Chargeback: suspend immediately. NO auto-restore on
+        // charge.dispute.closed (Dan confirmed 2026-07-06) -- that event type
+        // is intentionally not handled here, so it falls through to
+        // markProviderEvent below for audit logging only, with no state change.
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          forceChargebackSuspend: true,
+        });
+      }
+
+      await markProviderEvent(supabase, providerEvent.id, "processed");
+      return jsonResponse(req, { received: true, business_id: businessId });
+    }
+
     if (isRefundWebhookEvent(event.type)) {
       const refundContext = await recordRefundWebhookDetails({
         supabase,

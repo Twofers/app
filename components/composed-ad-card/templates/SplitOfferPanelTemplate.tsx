@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AdBrandRow } from "../AdBrandRow";
 import { AdCallToAction } from "../AdCallToAction";
+import { AdFavoriteButton } from "../AdFavoriteButton";
 import { AdHeadline } from "../AdHeadline";
 import { AdImageLayer } from "../AdImageLayer";
 import { AdStatusBadges } from "../AdStatusBadges";
@@ -10,7 +11,7 @@ import { LockedOfferLine } from "../LockedOfferLine";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function SplitOfferPanelTemplate(props: ComposedAdTemplateProps) {
-  const { copy, fallbackVisualLabel, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, surface, tokens } = props;
+  const { copy, fallbackVisualLabel, favoriteAction, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, surface, tokens } = props;
   const showTerms = surface !== "consumer_feed" && Boolean(offerFacts.termsLine);
 
   return (
@@ -31,6 +32,7 @@ export function SplitOfferPanelTemplate(props: ComposedAdTemplateProps) {
           tokens={tokens}
           fallbackVisualLabel={fallbackVisualLabel}
         />
+        {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
       </View>
       <View style={[styles.panel, { backgroundColor: tokens.panelBackground }]}>
         <AdStatusBadges

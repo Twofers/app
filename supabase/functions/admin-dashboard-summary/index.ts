@@ -1,0 +1,1556 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { isAal2 } from "../_shared/admin-mfa.ts";
+import {
+  AI_QUOTA_SCOPES,
+  countAiQuotaUsage,
+  type AiQuotaScope,
+} from "../_shared/ai-quota-resets.ts";
+import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
+
+type AdminRole =
+  | "owner"
+  | "admin"
+  | "support"
+  | "sales"
+  | "finance"
+  | "moderator"
+  | "developer"
+  | "read_only";
+
+function json(req: Request, body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  });
+}
+
+function hasReadableAdminRole(role: unknown): role is AdminRole {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "support" ||
+    role === "sales" ||
+    role === "finance" ||
+    role === "moderator" ||
+    role === "developer" ||
+    role === "read_only"
+  );
+}
+
+async function countRows(query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> {
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+// Like countRows but never throws: a missing table or transient error yields 0.
+// Used for soft metrics (e.g. content-report queue) that must not be able to take
+// down the whole dashboard summary if their table isn't present in every env yet.
+async function countRowsSafe(query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> {
+  try {
+    const { count, error } = await query;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+const SECTION_NAMES = [
+  "businesses",
+  "offers",
+  "billing_events",
+  "audit_log",
+  "settings",
+  "business_detail",
+  "prospects",
+  "prospect_detail",
+] as const;
+type SectionName = (typeof SECTION_NAMES)[number];
+
+function isSectionName(value: unknown): value is SectionName {
+  return typeof value === "string" && (SECTION_NAMES as readonly string[]).includes(value);
+}
+
+async function readPayload(req: Request): Promise<Record<string, unknown>> {
+  try {
+    return await req.json();
+  } catch {
+    return {};
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function ownerEmailsForBusinesses(
+  supabaseAdmin: any,
+  businessIds: string[],
+): Promise<Map<string, string>> {
+  const emails = new Map<string, string>();
+  if (!businessIds.length) return emails;
+  const { data, error } = await supabaseAdmin
+    .from("business_applications")
+    .select("business_id,email")
+    .in("business_id", businessIds);
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<{ business_id?: string; email?: string }>) {
+    if (row.business_id && row.email && !emails.has(row.business_id)) {
+      emails.set(row.business_id, row.email);
+    }
+  }
+  return emails;
+}
+
+function cleanText(value: unknown, max = 100): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function latestById(rows: Array<Record<string, unknown>>, key: string): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    const id = typeof row[key] === "string" ? row[key] as string : "";
+    if (id && !map.has(id)) map.set(id, row);
+  }
+  return map;
+}
+
+function sumDemandByTarget(rows: Array<Record<string, unknown>>, key: "prospect_id" | "business_id") {
+  const map = new Map<string, { demand_count: number; unique_users_count: number }>();
+  for (const row of rows) {
+    const id = typeof row[key] === "string" ? row[key] as string : "";
+    if (!id) continue;
+    const current = map.get(id) ?? { demand_count: 0, unique_users_count: 0 };
+    current.demand_count +=
+      (Number(row.favorites_count) || 0) +
+      (Number(row.requests_count) || 0) +
+      (Number(row.views_count) || 0);
+    current.unique_users_count = Math.max(current.unique_users_count, Number(row.unique_users_count) || 0);
+    map.set(id, current);
+  }
+  return map;
+}
+
+function dateOrNull(value: unknown): Date | null {
+  if (typeof value !== "string" || !value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function latestIso(current: string | null, candidate: unknown): string | null {
+  const candidateDate = dateOrNull(candidate);
+  if (!candidateDate) return current;
+  const currentDate = dateOrNull(current);
+  return !currentDate || candidateDate.getTime() > currentDate.getTime() ? candidateDate.toISOString() : current;
+}
+
+function earliestIso(current: string | null, candidate: unknown): string | null {
+  const candidateDate = dateOrNull(candidate);
+  if (!candidateDate) return current;
+  const currentDate = dateOrNull(current);
+  return !currentDate || candidateDate.getTime() < currentDate.getTime() ? candidateDate.toISOString() : current;
+}
+
+function daysBetween(fromIso: string | null, to: Date): number | null {
+  const from = dateOrNull(fromIso);
+  if (!from) return null;
+  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function daysUntil(toIso: string | null, now: Date): number | null {
+  const to = dateOrNull(toIso);
+  if (!to) return null;
+  return Math.ceil((to.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+type OfferEffectiveStatus = "live" | "scheduled" | "expired" | "inactive";
+
+// Deals have no separate status enum -- only is_active plus start/end timestamps.
+// A stored is_active=true never means "live" on its own: an end_time in the past
+// always wins (expired), and a start_time in the future always wins (scheduled).
+function offerEffectiveStatus(
+  deal: { is_active?: unknown; start_time?: unknown; end_time?: unknown },
+  now: Date,
+): OfferEffectiveStatus {
+  const start = dateOrNull(deal.start_time);
+  const end = dateOrNull(deal.end_time);
+  if (end && end.getTime() <= now.getTime()) return "expired";
+  if (start && start.getTime() > now.getTime()) return "scheduled";
+  return deal.is_active === true ? "live" : "inactive";
+}
+
+function rate(numerator: number, denominator: number): number {
+  if (!denominator) return 0;
+  return Number((numerator / denominator).toFixed(4));
+}
+
+function quotaLimitForScope(scope: AiQuotaScope, supabaseAdmin: any, businessId: string): Promise<number> | number {
+  if (scope === "deal_translate") return resolveDealTranslateMonthlyLimit(supabaseAdmin, businessId);
+  const envName = {
+    ad_generation: "AI_MONTHLY_LIMIT",
+    compose_offer: "AI_MONTHLY_LIMIT",
+    deal_copy: "AI_COPY_MONTHLY_LIMIT",
+    deal_suggestions: "AI_INSIGHTS_MONTHLY_LIMIT",
+    deal_translate: "AI_TRANSLATE_MONTHLY_LIMIT",
+  }[scope];
+  const value = Number(Deno.env.get(envName) ?? "30");
+  return Number.isFinite(value) && value > 0 ? value : 30;
+}
+
+async function aiQuotaSummaryForBusiness(supabaseAdmin: any, businessId: string) {
+  let maxUsed = 0;
+  let limitForMax = 0;
+  for (const scope of AI_QUOTA_SCOPES) {
+    const counted = await countAiQuotaUsage(supabaseAdmin, { businessId, scope });
+    const limit = await quotaLimitForScope(scope, supabaseAdmin, businessId);
+    if (counted.used > maxUsed || (counted.used === maxUsed && limit > limitForMax)) {
+      maxUsed = counted.used;
+      limitForMax = limit;
+    }
+  }
+  const ratio = limitForMax > 0 ? maxUsed / limitForMax : 0;
+  return {
+    used: maxUsed,
+    limit: limitForMax,
+    risk: ratio >= 0.8 ? "high" : ratio >= 0.6 ? "watch" : "normal",
+  };
+}
+
+type HealthSignalInputs = {
+  liveOfferCount: number;
+  redemptions30d: number;
+  redemptions7d: number;
+  claims30d: number;
+  lastOfferAt: string | null;
+  lastRedeemedAt: string | null;
+  firstRedeemedAt: string | null;
+  hasPendingApplication: boolean;
+  businessStatus: string;
+  activeTrial: boolean;
+  trialDaysRemaining: number | null;
+  aiQuotaRisk: "high" | "watch" | "normal";
+  aiCostAvailable: boolean;
+  aiMonthCostUsd: number | null;
+};
+
+// Single source of truth for the health/attention-score formula, shared by the
+// aggregate Business Health list and the single-business detail drilldown so the
+// two views can never silently drift apart.
+function deriveHealthSignals(input: HealthSignalInputs, now: Date) {
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const reasonCodes: string[] = [];
+  let attentionScore = 0;
+  if (input.liveOfferCount > 0 && input.redemptions30d === 0) {
+    attentionScore += 45;
+    reasonCodes.push("live_offers_no_redemptions");
+  }
+  if (input.claims30d > 0 && input.redemptions30d === 0) {
+    attentionScore += 40;
+    reasonCodes.push("claims_no_redemptions");
+  }
+  if (input.hasPendingApplication) {
+    attentionScore += 35;
+    reasonCodes.push("pending_trial_request");
+  }
+  if (input.activeTrial && input.trialDaysRemaining !== null && input.trialDaysRemaining >= 0 && input.trialDaysRemaining <= 7) {
+    attentionScore += 30;
+    reasonCodes.push("trial_ending_soon");
+  }
+  const noRecentOffers = (input.businessStatus === "active" || input.businessStatus === "trialing" || input.businessStatus === "limited_trial") &&
+    (!input.lastOfferAt || (dateOrNull(input.lastOfferAt)?.getTime() ?? 0) < fourteenDaysAgo.getTime());
+  if (noRecentOffers) {
+    attentionScore += 25;
+    reasonCodes.push("no_recent_offers");
+  }
+  if (input.aiQuotaRisk === "high") {
+    attentionScore += 20;
+    reasonCodes.push("ai_quota_high");
+  }
+  if (input.aiCostAvailable && (input.aiMonthCostUsd ?? 0) >= 10) {
+    attentionScore += 15;
+    reasonCodes.push("ai_cost_high");
+  }
+  const recentRedemption = (dateOrNull(input.lastRedeemedAt)?.getTime() ?? 0) >= fortyEightHoursAgo.getTime();
+  if (recentRedemption) attentionScore = Math.max(0, attentionScore - 20);
+
+  const firstRedemptionRecent = (dateOrNull(input.firstRedeemedAt)?.getTime() ?? 0) >= sevenDaysAgo.getTime();
+  const isCelebrate = input.redemptions7d >= 3 || firstRedemptionRecent;
+  const healthLabel = isCelebrate
+    ? "celebrate"
+    : attentionScore >= 45
+      ? "needs_attention"
+      : attentionScore > 0
+        ? "watch"
+        : "healthy";
+  const primaryReason = reasonCodes.includes("live_offers_no_redemptions")
+    ? "Live offers have no recent redemptions"
+    : reasonCodes.includes("claims_no_redemptions")
+      ? "Claims are not turning into redemptions"
+      : reasonCodes.includes("pending_trial_request")
+        ? "Trial request is waiting for review"
+        : reasonCodes.includes("trial_ending_soon")
+          ? "Active trial is nearing expiration"
+          : reasonCodes.includes("no_recent_offers")
+            ? "No recent offers are available"
+            : reasonCodes.includes("ai_quota_high")
+              ? "AI usage is close to quota"
+              : isCelebrate
+                ? "Recent redemption activity is worth celebrating"
+                : "No business health issues found";
+
+  return {
+    reasonCodes,
+    attentionScore,
+    healthLabel,
+    primaryReason,
+    suggestedReadOnlyAction: isCelebrate
+      ? "Celebrate recent redemption momentum"
+      : attentionScore > 0
+        ? "Review offer performance and merchant setup"
+        : "Monitor current business activity",
+  };
+}
+
+async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<string, unknown>>> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    businessesResult,
+    dealsResult,
+    claimsResult,
+    redemptionsResult,
+    applicationsResult,
+    subscriptionsResult,
+    costResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("businesses")
+      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabaseAdmin
+      .from("deals")
+      .select("id,business_id,is_active,start_time,end_time,created_at")
+      .gte("created_at", new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString())
+      .limit(10000),
+    supabaseAdmin
+      .from("deal_claims")
+      .select("id,business_id,deal_id,claim_status,created_at")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .limit(10000),
+    supabaseAdmin
+      .from("admin_redemption_facts_v1")
+      .select("claim_id,business_id,deal_id,redeemed_at")
+      .limit(10000),
+    supabaseAdmin
+      .from("business_applications")
+      .select("business_id,status,created_at,email")
+      .in("status", ["pending_review", "pending_verification", "review_required"])
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("business_id,app_access_status,trial_end,current_period_end,updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(1000),
+    supabaseAdmin
+      .from("ai_generation_costs")
+      .select("business_id,estimated_cost_usd")
+      .gte("created_at", new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString())
+      .limit(10000),
+  ]);
+
+  if (businessesResult.error) throw businessesResult.error;
+  if (dealsResult.error) throw dealsResult.error;
+  if (claimsResult.error) throw claimsResult.error;
+  if (redemptionsResult.error) throw redemptionsResult.error;
+  if (applicationsResult.error) throw applicationsResult.error;
+  if (subscriptionsResult.error) throw subscriptionsResult.error;
+
+  const businesses = (businessesResult.data ?? []) as Array<Record<string, unknown>>;
+  const businessIds = businesses.map((row) => String(row.id)).filter(Boolean);
+  const ownerEmails = await ownerEmailsForBusinesses(supabaseAdmin, businessIds);
+
+  const stats = new Map<string, {
+    liveOfferCount: number;
+    activeOrScheduledOfferCount: number;
+    lastOfferAt: string | null;
+    claims7d: number;
+    claims30d: number;
+    unredeemedClaims30d: number;
+    redemptions7d: number;
+    redemptions30d: number;
+    lastRedeemedAt: string | null;
+    firstRedeemedAt: string | null;
+    aiMonthCostUsd: number | null;
+  }>();
+  for (const id of businessIds) {
+    stats.set(id, {
+      liveOfferCount: 0,
+      activeOrScheduledOfferCount: 0,
+      lastOfferAt: null,
+      claims7d: 0,
+      claims30d: 0,
+      unredeemedClaims30d: 0,
+      redemptions7d: 0,
+      redemptions30d: 0,
+      lastRedeemedAt: null,
+      firstRedeemedAt: null,
+      aiMonthCostUsd: costResult.error ? null : 0,
+    });
+  }
+
+  const dealToBusiness = new Map<string, string>();
+  for (const deal of (dealsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(deal.business_id ?? "");
+    const dealId = String(deal.id ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    if (dealId) dealToBusiness.set(dealId, businessId);
+    const row = stats.get(businessId)!;
+    const effectiveStatus = offerEffectiveStatus(deal, now);
+    const isCurrent = effectiveStatus === "live";
+    const isScheduled = effectiveStatus === "scheduled";
+    if (isCurrent) row.liveOfferCount += 1;
+    if (isCurrent || isScheduled) row.activeOrScheduledOfferCount += 1;
+    row.lastOfferAt = latestIso(row.lastOfferAt, deal.created_at || deal.start_time);
+  }
+
+  for (const claim of (claimsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(claim.business_id ?? dealToBusiness.get(String(claim.deal_id ?? "")) ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    const createdAt = dateOrNull(claim.created_at);
+    if (!createdAt) continue;
+    const row = stats.get(businessId)!;
+    row.claims30d += 1;
+    if (createdAt.getTime() >= sevenDaysAgo.getTime()) row.claims7d += 1;
+    if (claim.claim_status !== "redeemed") row.unredeemedClaims30d += 1;
+  }
+
+  for (const redemption of (redemptionsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const businessId = String(redemption.business_id ?? dealToBusiness.get(String(redemption.deal_id ?? "")) ?? "");
+    if (!businessId || !stats.has(businessId)) continue;
+    const redeemedAt = dateOrNull(redemption.redeemed_at);
+    if (!redeemedAt) continue;
+    const row = stats.get(businessId)!;
+    row.firstRedeemedAt = earliestIso(row.firstRedeemedAt, redemption.redeemed_at);
+    row.lastRedeemedAt = latestIso(row.lastRedeemedAt, redemption.redeemed_at);
+    if (redeemedAt.getTime() >= thirtyDaysAgo.getTime()) row.redemptions30d += 1;
+    if (redeemedAt.getTime() >= sevenDaysAgo.getTime()) row.redemptions7d += 1;
+  }
+
+  if (!costResult.error) {
+    for (const cost of (costResult.data ?? []) as Array<Record<string, unknown>>) {
+      const businessId = String(cost.business_id ?? "");
+      if (!businessId || !stats.has(businessId)) continue;
+      const businessStats = stats.get(businessId)!;
+      businessStats.aiMonthCostUsd = (businessStats.aiMonthCostUsd ?? 0) + (Number(cost.estimated_cost_usd) || 0);
+    }
+  }
+
+  const applicationByBusiness = latestById((applicationsResult.data ?? []) as Array<Record<string, unknown>>, "business_id");
+  const subscriptionByBusiness = latestById((subscriptionsResult.data ?? []) as Array<Record<string, unknown>>, "business_id");
+  const rows = await Promise.all(businesses.map(async (business) => {
+    const businessId = String(business.id);
+    const row = stats.get(businessId)!;
+    const application = applicationByBusiness.get(businessId) ?? null;
+    const subscription = subscriptionByBusiness.get(businessId) ?? null;
+    const trialEnd = latestIso(null, subscription?.trial_end || subscription?.current_period_end);
+    const trialDaysRemaining = daysUntil(trialEnd, now);
+    const activeTrial = subscription?.app_access_status === "trialing" || subscription?.app_access_status === "trial_limited";
+    const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
+    const status = String(business.status ?? "");
+    const aiMonthCostUsd = row.aiMonthCostUsd;
+    const aiCostAvailable = aiMonthCostUsd !== null;
+
+    const signals = deriveHealthSignals({
+      liveOfferCount: row.liveOfferCount,
+      redemptions30d: row.redemptions30d,
+      redemptions7d: row.redemptions7d,
+      claims30d: row.claims30d,
+      lastOfferAt: row.lastOfferAt,
+      lastRedeemedAt: row.lastRedeemedAt,
+      firstRedeemedAt: row.firstRedeemedAt,
+      hasPendingApplication: Boolean(application),
+      businessStatus: status,
+      activeTrial,
+      trialDaysRemaining,
+      aiQuotaRisk: quota.risk as "high" | "watch" | "normal",
+      aiCostAvailable,
+      aiMonthCostUsd,
+    }, now);
+
+    return {
+      business_id: businessId,
+      business_name: business.name ?? businessId,
+      owner_email: ownerEmails.get(businessId) ?? null,
+      status: business.status ?? null,
+      access_level: business.access_level ?? null,
+      verification_status: business.verification_status ?? null,
+      risk_level: business.risk_level ?? null,
+      live_offer_count: row.liveOfferCount,
+      active_or_scheduled_offer_count: row.activeOrScheduledOfferCount,
+      last_offer_at: row.lastOfferAt,
+      days_since_last_offer: daysBetween(row.lastOfferAt, now),
+      claims_7d: row.claims7d,
+      claims_30d: row.claims30d,
+      unredeemed_claims_30d: row.unredeemedClaims30d,
+      redemptions_7d: row.redemptions7d,
+      redemptions_30d: row.redemptions30d,
+      last_redeemed_at: row.lastRedeemedAt,
+      claim_to_redemption_rate_30d: rate(row.redemptions30d, row.claims30d),
+      trial_request_status: application?.status ?? null,
+      trial_request_created_at: application?.created_at ?? null,
+      trial_app_access_status: subscription?.app_access_status ?? null,
+      trial_ends_at: trialEnd,
+      trial_days_remaining: trialDaysRemaining,
+      ai_month_used_max: quota.used,
+      ai_month_limit_for_max: quota.limit,
+      ai_quota_risk: quota.risk,
+      ai_month_cost_usd: aiCostAvailable ? Number(aiMonthCostUsd.toFixed(6)) : null,
+      ai_cost_available: aiCostAvailable,
+      health_label: signals.healthLabel,
+      primary_reason: signals.primaryReason,
+      reason_codes: signals.reasonCodes,
+      attention_score: signals.attentionScore,
+      suggested_read_only_action: signals.suggestedReadOnlyAction,
+    };
+  }));
+
+  return rows
+    .filter((row) => row.health_label !== "healthy" || Number(row.attention_score) > 0)
+    .sort((left, right) => {
+      const scoreDiff = Number(right.attention_score) - Number(left.attention_score);
+      if (scoreDiff) return scoreDiff;
+      const leftTrial = left.trial_days_remaining === null || left.trial_days_remaining === undefined
+        ? Number.POSITIVE_INFINITY
+        : Number(left.trial_days_remaining);
+      const rightTrial = right.trial_days_remaining === null || right.trial_days_remaining === undefined
+        ? Number.POSITIVE_INFINITY
+        : Number(right.trial_days_remaining);
+      if (leftTrial !== rightTrial) return leftTrial - rightTrial;
+      return (dateOrNull(right.last_redeemed_at)?.getTime() ?? 0) -
+        (dateOrNull(left.last_redeemed_at)?.getTime() ?? 0);
+    })
+    .slice(0, 50);
+}
+
+// Per-business version of the health signal computation used by the Business Health
+// Detail Drilldown. Scoped entirely to one business_id so it stays cheap regardless of
+// how many businesses exist, and reuses deriveHealthSignals so the drilldown numbers can
+// never disagree with the aggregate Business Health list above.
+async function loadBusinessHealthDetail(
+  supabaseAdmin: any,
+  businessId: string,
+  businessStatus: string,
+  applications: Array<Record<string, unknown>>,
+): Promise<{
+  health: Record<string, unknown>;
+  offer_activity: Record<string, unknown>;
+  claims_and_redemptions: Record<string, unknown>;
+  trial_and_access: Record<string, unknown>;
+  ai_usage: Record<string, unknown>;
+}> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+
+  const [dealsResult, subscriptionResult] = await Promise.all([
+    supabaseAdmin
+      .from("deals")
+      .select("id,title,is_active,start_time,end_time,created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("app_access_status,trial_end,current_period_end,updated_at")
+      .eq("business_id", businessId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (dealsResult.error) throw dealsResult.error;
+  if (subscriptionResult.error) throw subscriptionResult.error;
+
+  const deals = (dealsResult.data ?? []) as Array<Record<string, unknown>>;
+  const dealIds = deals.map((deal) => String(deal.id ?? "")).filter(Boolean);
+
+  const [claimsResult, redemptionsResult, costResult] = await Promise.all([
+    dealIds.length
+      ? supabaseAdmin.from("deal_claims").select("id,deal_id,claim_status,created_at").in("deal_id", dealIds).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
+    dealIds.length
+      ? supabaseAdmin.from("admin_redemption_facts_v1").select("claim_id,deal_id,redeemed_at").in("deal_id", dealIds).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseAdmin
+      .from("ai_generation_costs")
+      .select("estimated_cost_usd")
+      .eq("business_id", businessId)
+      .gte("created_at", monthStart.toISOString())
+      .limit(5000),
+  ]);
+  if (claimsResult.error) throw claimsResult.error;
+  if (redemptionsResult.error) throw redemptionsResult.error;
+
+  const claimsByDeal = new Map<string, number>();
+  let claims7d = 0;
+  let claims30d = 0;
+  let unredeemedClaims30d = 0;
+  for (const claim of (claimsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(claim.deal_id ?? "");
+    if (dealId) claimsByDeal.set(dealId, (claimsByDeal.get(dealId) ?? 0) + 1);
+    const createdAt = dateOrNull(claim.created_at);
+    if (!createdAt || createdAt.getTime() < thirtyDaysAgo.getTime()) continue;
+    claims30d += 1;
+    if (createdAt.getTime() >= sevenDaysAgo.getTime()) claims7d += 1;
+    if (claim.claim_status !== "redeemed") unredeemedClaims30d += 1;
+  }
+
+  const redemptionsByDeal = new Map<string, number>();
+  let redemptions7d = 0;
+  let redemptions30d = 0;
+  let lastRedeemedAt: string | null = null;
+  let firstRedeemedAt: string | null = null;
+  for (const redemption of (redemptionsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(redemption.deal_id ?? "");
+    if (dealId) redemptionsByDeal.set(dealId, (redemptionsByDeal.get(dealId) ?? 0) + 1);
+    lastRedeemedAt = latestIso(lastRedeemedAt, redemption.redeemed_at);
+    firstRedeemedAt = earliestIso(firstRedeemedAt, redemption.redeemed_at);
+    const redeemedAt = dateOrNull(redemption.redeemed_at);
+    if (!redeemedAt) continue;
+    if (redeemedAt.getTime() >= thirtyDaysAgo.getTime()) redemptions30d += 1;
+    if (redeemedAt.getTime() >= sevenDaysAgo.getTime()) redemptions7d += 1;
+  }
+
+  let liveOfferCount = 0;
+  let activeOrScheduledOfferCount = 0;
+  let lastOfferAt: string | null = null;
+  const offerRows: Array<Record<string, unknown>> = [];
+  for (const deal of deals) {
+    const dealId = String(deal.id ?? "");
+    const effectiveStatus = offerEffectiveStatus(deal, now);
+    const isCurrent = effectiveStatus === "live";
+    const isScheduled = effectiveStatus === "scheduled";
+    if (isCurrent) liveOfferCount += 1;
+    if (isCurrent || isScheduled) activeOrScheduledOfferCount += 1;
+    lastOfferAt = latestIso(lastOfferAt, deal.created_at || deal.start_time);
+    if (isCurrent || isScheduled) {
+      offerRows.push({
+        id: dealId,
+        title: deal.title ?? "",
+        start_time: deal.start_time ?? null,
+        end_time: deal.end_time ?? null,
+        status: isCurrent ? "live" : "scheduled",
+        claim_count: claimsByDeal.get(dealId) ?? 0,
+        redemption_count: redemptionsByDeal.get(dealId) ?? 0,
+      });
+    }
+  }
+  offerRows.sort((a, b) =>
+    (dateOrNull(b.start_time as string)?.getTime() ?? 0) - (dateOrNull(a.start_time as string)?.getTime() ?? 0));
+
+  const aiCostAvailable = !costResult.error;
+  const aiMonthCostUsd = aiCostAvailable
+    ? ((costResult.data ?? []) as Array<Record<string, unknown>>).reduce(
+      (sum, costRow) => sum + (Number(costRow.estimated_cost_usd) || 0),
+      0,
+    )
+    : null;
+
+  const subscription = subscriptionResult.data as Record<string, unknown> | null;
+  const trialEnd = latestIso(null, subscription?.trial_end || subscription?.current_period_end);
+  const trialDaysRemaining = daysUntil(trialEnd, now);
+  const canonicalAppAccessStatus = (subscription?.app_access_status as string | undefined) ?? null;
+  const activeTrial = canonicalAppAccessStatus === "trialing" || canonicalAppAccessStatus === "trial_limited";
+
+  const pendingStatuses = ["pending_review", "pending_verification", "review_required"];
+  const hasPendingApplication = applications.some((application) => pendingStatuses.includes(String(application.status ?? "")));
+  const latestApplication = applications[0] ?? null;
+
+  // The application/trial-request row is a point-in-time decision record and is never
+  // rewritten when billing later cancels or expires access, so it can go stale (e.g. it
+  // still reads "trial_active" after app_access_status moves to "canceled"). Canonical
+  // current access always comes from business_subscriptions.app_access_status, so flag
+  // this as a display-only mismatch rather than treating the application row as live state.
+  const NON_CURRENT_ACCESS_STATUSES = new Set(["canceled", "expired", "suspended", "none", "blocked"]);
+  const accessIsNonCurrent = canonicalAppAccessStatus
+    ? NON_CURRENT_ACCESS_STATUSES.has(canonicalAppAccessStatus)
+    : true;
+  const applicationStatus = latestApplication?.status ? String(latestApplication.status) : null;
+  const ACTIVE_LOOKING_APPLICATION_STATUSES = new Set(["trial_active", "trial_limited", "approved_not_billed", "active"]);
+  const accessMismatch = accessIsNonCurrent && Boolean(applicationStatus) &&
+    ACTIVE_LOOKING_APPLICATION_STATUSES.has(applicationStatus as string);
+
+  const quota = await aiQuotaSummaryForBusiness(supabaseAdmin, businessId);
+
+  const signals = deriveHealthSignals({
+    liveOfferCount,
+    redemptions30d,
+    redemptions7d,
+    claims30d,
+    lastOfferAt,
+    lastRedeemedAt,
+    firstRedeemedAt,
+    hasPendingApplication,
+    businessStatus,
+    activeTrial,
+    trialDaysRemaining,
+    aiQuotaRisk: quota.risk as "high" | "watch" | "normal",
+    aiCostAvailable,
+    aiMonthCostUsd,
+  }, now);
+
+  return {
+    health: {
+      health_label: signals.healthLabel,
+      attention_score: signals.attentionScore,
+      primary_reason: signals.primaryReason,
+      reason_codes: signals.reasonCodes,
+      suggested_read_only_action: signals.suggestedReadOnlyAction,
+    },
+    offer_activity: {
+      live_offer_count: liveOfferCount,
+      active_or_scheduled_offer_count: activeOrScheduledOfferCount,
+      last_offer_at: lastOfferAt,
+      days_since_last_offer: daysBetween(lastOfferAt, now),
+      offers: offerRows.slice(0, 20),
+    },
+    claims_and_redemptions: {
+      claims_7d: claims7d,
+      claims_30d: claims30d,
+      unredeemed_claims_30d: unredeemedClaims30d,
+      redemptions_7d: redemptions7d,
+      redemptions_30d: redemptions30d,
+      last_redeemed_at: lastRedeemedAt,
+    },
+    trial_and_access: {
+      trial_request_status: latestApplication?.status ?? null,
+      trial_request_created_at: latestApplication?.created_at ?? null,
+      app_access_status: canonicalAppAccessStatus,
+      // Only surface trial timing when the canonical status is actually trialing;
+      // otherwise a canceled business would still show "N days left" from a stale trial.
+      trial_ends_at: activeTrial ? trialEnd : null,
+      trial_days_remaining: activeTrial ? trialDaysRemaining : null,
+      access_mismatch: accessMismatch,
+      access_mismatch_note: accessMismatch
+        ? `Current app access is ${canonicalAppAccessStatus ?? "none"}. This business's application record still shows "${applicationStatus}", which reflects the original trial request, not current access.`
+        : null,
+    },
+    ai_usage: {
+      ai_month_used_max: quota.used,
+      ai_month_limit_for_max: quota.limit,
+      ai_quota_risk: quota.risk,
+      ai_month_cost_usd: aiCostAvailable && aiMonthCostUsd !== null ? Number(aiMonthCostUsd.toFixed(6)) : null,
+      ai_cost_available: aiCostAvailable,
+    },
+  };
+}
+
+// Read-only per-tab data for the admin site. Every view is audited; mutations
+// stay in their dedicated admin edge functions.
+async function loadSection(
+  supabaseAdmin: any,
+  section: SectionName,
+  payload: Record<string, unknown>,
+  canViewAdminUsers: boolean,
+): Promise<Record<string, unknown>> {
+  if (section === "businesses") {
+    const { data, error } = await supabaseAdmin
+      .from("businesses")
+      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const emails = await ownerEmailsForBusinesses(
+      supabaseAdmin,
+      rows.map((row) => String(row.id)),
+    );
+    return {
+      businesses: rows.map((row) => ({ ...row, owner_email: emails.get(String(row.id)) ?? null })),
+    };
+  }
+
+  if (section === "offers") {
+    const { data, error } = await supabaseAdmin
+      .from("deals")
+      .select("id,title,business_id,is_active,start_time,end_time,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const businessIds = [...new Set(rows.map((row) => String(row.business_id)).filter(Boolean))];
+    const names = new Map<string, string>();
+    if (businessIds.length) {
+      const { data: businesses, error: businessError } = await supabaseAdmin
+        .from("businesses")
+        .select("id,name")
+        .in("id", businessIds);
+      if (businessError) throw businessError;
+      for (const business of (businesses ?? []) as Array<{ id: string; name?: string }>) {
+        names.set(business.id, business.name ?? business.id);
+      }
+    }
+    const now = new Date();
+    return {
+      offers: rows.map((row) => ({
+        ...row,
+        business_name: names.get(String(row.business_id)) ?? null,
+        effective_status: offerEffectiveStatus(row, now),
+      })),
+    };
+  }
+
+  if (section === "billing_events") {
+    const { data, error } = await supabaseAdmin
+      .from("billing_provider_events")
+      .select("id,provider,event_type,processing_status,received_at,processed_at,error_message")
+      .order("received_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return { billing_events: data ?? [] };
+  }
+
+  if (section === "audit_log") {
+    const { data, error } = await supabaseAdmin
+      .from("admin_audit_log")
+      .select("id,admin_email,action,target_type,business_id,reason,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return { audit_log: data ?? [] };
+  }
+
+  if (section === "settings") {
+    const [launchAreas, featureFlags, adminUsers] = await Promise.all([
+      supabaseAdmin
+        .from("launch_areas")
+        .select("id,name,slug,city,state,status,timezone")
+        .order("name", { ascending: true }),
+      supabaseAdmin
+        .from("feature_flags")
+        .select("id,key,description,enabled,updated_at")
+        .order("key", { ascending: true }),
+      canViewAdminUsers
+        ? supabaseAdmin
+          .from("admin_users")
+          .select("id,email,role,is_active,require_mfa,display_name,last_admin_login_at")
+          .order("email", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (launchAreas.error) throw launchAreas.error;
+    if (featureFlags.error) throw featureFlags.error;
+    if (adminUsers.error) throw adminUsers.error;
+    return {
+      launch_areas: launchAreas.data ?? [],
+      feature_flags: featureFlags.data ?? [],
+      admin_users: adminUsers.data ?? [],
+      admin_users_visible: canViewAdminUsers,
+    };
+  }
+
+  if (section === "prospects") {
+    const search = cleanText(payload.search, 120);
+    const city = cleanText(payload.city, 80);
+    const status = cleanText(payload.status, 40);
+    const reviewStatus = cleanText(payload.review_status, 40);
+    const scoreTierRaw = cleanText(payload.score_tier, 40);
+    const scoreTier = scoreTierRaw.toLowerCase() === "do_not_contact" || scoreTierRaw.toLowerCase() === "do not contact"
+      ? "Do Not Contact"
+      : scoreTierRaw.toUpperCase();
+    let query = supabaseAdmin
+      .from("business_prospects")
+      .select("id,display_name,city,state,postal_code,category,public_label_state,status,review_status,linked_business_id,duplicate_of_prospect_id,last_verified_at,updated_at,created_at")
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    if (search) query = query.ilike("display_name", `%${search}%`);
+    if (city) query = query.ilike("city", city);
+    if (status) query = query.eq("status", status);
+    if (reviewStatus) query = query.eq("review_status", reviewStatus);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const prospectIds = rows.map((row) => String(row.id)).filter(Boolean);
+    const linkedBusinessIds = rows.map((row) => String(row.linked_business_id ?? "")).filter(Boolean);
+    const [demand, scores, sales, businesses] = await Promise.all([
+      prospectIds.length
+        ? supabaseAdmin
+          .from("business_demand_rollups")
+          .select("prospect_id,favorites_count,requests_count,views_count,unique_users_count")
+          .in("prospect_id", prospectIds)
+          .gte("rollup_date", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+        : Promise.resolve({ data: [], error: null }),
+      prospectIds.length
+        ? supabaseAdmin
+          .from("business_prospect_scores")
+          .select("prospect_id,total_score,tier,recommended_next_action,created_at")
+          .in("prospect_id", prospectIds)
+          .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      prospectIds.length
+        ? supabaseAdmin
+          .from("sales_accounts")
+          .select("prospect_id,assigned_admin_user_id,stage,priority,next_action,next_action_at,last_contact_at,outcome,updated_at")
+          .in("prospect_id", prospectIds)
+        : Promise.resolve({ data: [], error: null }),
+      linkedBusinessIds.length
+        ? supabaseAdmin
+          .from("businesses")
+          .select("id,name,status,access_level")
+          .in("id", linkedBusinessIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (demand.error) throw demand.error;
+    if (scores.error) throw scores.error;
+    if (sales.error) throw sales.error;
+    if (businesses.error) throw businesses.error;
+
+    const demandByProspect = sumDemandByTarget((demand.data ?? []) as Array<Record<string, unknown>>, "prospect_id");
+    const scoreByProspect = latestById((scores.data ?? []) as Array<Record<string, unknown>>, "prospect_id");
+    const salesByProspect = latestById((sales.data ?? []) as Array<Record<string, unknown>>, "prospect_id");
+    const businessById = latestById((businesses.data ?? []) as Array<Record<string, unknown>>, "id");
+    const enriched = rows.map((row) => {
+      const demandStats = demandByProspect.get(String(row.id)) ?? { demand_count: 0, unique_users_count: 0 };
+      const score = scoreByProspect.get(String(row.id)) ?? null;
+      const salesAccount = salesByProspect.get(String(row.id)) ?? null;
+      const linkedBusiness = row.linked_business_id ? businessById.get(String(row.linked_business_id)) ?? null : null;
+      return {
+        ...row,
+        demand_count: demandStats.demand_count,
+        unique_users_count: demandStats.unique_users_count,
+        score,
+        sales_account: salesAccount,
+        linked_business: linkedBusiness,
+      };
+    }).filter((row) => !scoreTier || String((row.score as Record<string, unknown> | null)?.tier ?? "").toUpperCase() === scoreTier);
+
+    return { prospects: enriched };
+  }
+
+  if (section === "prospect_detail") {
+    const prospectId = typeof payload.prospect_id === "string" ? payload.prospect_id.trim() : "";
+    if (!UUID_RE.test(prospectId)) {
+      return {
+        prospect: null,
+        sources: [],
+        enrichments: [],
+        scores: [],
+        demand_rollups: [],
+        sales_account: null,
+        sales_activities: [],
+        claim_links: [],
+        conversions: [],
+        audit_log: [],
+      };
+    }
+
+    const [
+      prospect,
+      sources,
+      enrichments,
+      scores,
+      demandRollups,
+      salesAccount,
+      salesActivities,
+      claimLinks,
+      conversions,
+      audit,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("business_prospects")
+        .select("id,display_name,normalized_name,category,subcategory,address_line1,address_line2,city,state,postal_code,country,latitude,longitude,source_type,source_confidence,public_label_state,status,review_status,linked_business_id,duplicate_of_prospect_id,private_contact_json,created_at,updated_at,last_verified_at")
+        .eq("id", prospectId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("business_prospect_sources")
+        .select("id,provider,source_url,source_payload_hash,confidence,fetched_at,stale_at,created_by_admin_user_id,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("business_prospect_enrichments")
+        .select("id,provider,model,prompt_version,enrichment_json,confidence,review_status,reviewed_by_admin_user_id,reviewed_at,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("business_prospect_scores")
+        .select("id,score_version,total_score,tier,score_inputs_json,recommended_next_action,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("business_demand_rollups")
+        .select("id,rollup_date,rollup_window,city,favorites_count,requests_count,views_count,unique_users_count,notification_enabled_count,created_at,updated_at")
+        .eq("prospect_id", prospectId)
+        .order("rollup_date", { ascending: false })
+        .limit(60),
+      supabaseAdmin
+        .from("sales_accounts")
+        .select("id,assigned_admin_user_id,stage,priority,next_action,next_action_at,last_contact_at,outcome,objections_json,notes,created_at,updated_at")
+        .eq("prospect_id", prospectId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("sales_activities")
+        .select("id,activity_type,summary,outcome,created_by_admin_user_id,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabaseAdmin
+        .from("business_claim_links")
+        .select("id,prospect_id,business_id,expires_at,max_uses,uses_count,accepted_by_user_id,accepted_at,revoked_at,created_by_admin_user_id,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("prospect_to_business_links")
+        .select("id,business_application_id,business_onboarding_request_id,business_id,conversion_type,created_by_admin_user_id,created_at")
+        .eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("admin_audit_log")
+        .select("id,admin_email,action,target_type,reason,created_at")
+        .eq("target_id", prospectId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
+    if (prospect.error) throw prospect.error;
+    if (sources.error) throw sources.error;
+    if (enrichments.error) throw enrichments.error;
+    if (scores.error) throw scores.error;
+    if (demandRollups.error) throw demandRollups.error;
+    if (salesAccount.error) throw salesAccount.error;
+    if (salesActivities.error) throw salesActivities.error;
+    if (claimLinks.error) throw claimLinks.error;
+    if (conversions.error) throw conversions.error;
+    if (audit.error) throw audit.error;
+
+    let linkedBusiness: Record<string, unknown> | null = null;
+    let billing: Record<string, unknown> | null = null;
+    const prospectRow = prospect.data as Record<string, unknown> | null;
+    if (prospectRow?.linked_business_id) {
+      const [businessResult, subscriptionResult] = await Promise.all([
+        supabaseAdmin
+          .from("businesses")
+          .select("id,name,status,access_level,verification_status,created_at")
+          .eq("id", prospectRow.linked_business_id as string)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("business_subscriptions")
+          .select("id,billing_status,app_access_status,trial_start,trial_end,current_period_end,updated_at")
+          .eq("business_id", prospectRow.linked_business_id as string)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      if (businessResult.error) throw businessResult.error;
+      if (subscriptionResult.error) throw subscriptionResult.error;
+      linkedBusiness = businessResult.data ?? null;
+      billing = subscriptionResult.data ?? null;
+    }
+
+    return {
+      prospect: prospect.data ?? null,
+      linked_business: linkedBusiness,
+      billing,
+      sources: sources.data ?? [],
+      enrichments: enrichments.data ?? [],
+      scores: scores.data ?? [],
+      demand_rollups: demandRollups.data ?? [],
+      sales_account: salesAccount.data ?? null,
+      sales_activities: salesActivities.data ?? [],
+      claim_links: claimLinks.data ?? [],
+      conversions: conversions.data ?? [],
+      audit_log: audit.data ?? [],
+    };
+  }
+
+  // business_detail
+  const businessId = typeof payload.business_id === "string" ? payload.business_id.trim() : "";
+  if (!UUID_RE.test(businessId)) {
+    return {
+      business: null,
+      applications: [],
+      audit_log: [],
+      health: null,
+      offer_activity: null,
+      claims_and_redemptions: null,
+      trial_and_access: null,
+      ai_usage: null,
+      business_health_error: null,
+    };
+  }
+  const [business, applications, audit] = await Promise.all([
+    supabaseAdmin
+      .from("businesses")
+      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .eq("id", businessId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("business_applications")
+      .select("id,business_name,contact_name,email,phone,address,business_type,launch_area,status,access_tier,verification_status,risk_score,trial_days,trial_offer_limit,trial_claim_limit,admin_notes,reviewed_at,created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabaseAdmin
+      .from("admin_audit_log")
+      .select("id,admin_email,action,target_type,reason,created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
+  if (business.error) throw business.error;
+  if (applications.error) throw applications.error;
+  if (audit.error) throw audit.error;
+
+  const ownerEmails = await ownerEmailsForBusinesses(supabaseAdmin, [businessId]);
+  const businessRow = business.data
+    ? { ...business.data, owner_email: ownerEmails.get(businessId) ?? null }
+    : null;
+
+  let healthDetail: Awaited<ReturnType<typeof loadBusinessHealthDetail>> | null = null;
+  let businessHealthError: string | null = null;
+  if (businessRow) {
+    try {
+      healthDetail = await loadBusinessHealthDetail(
+        supabaseAdmin,
+        businessId,
+        String(businessRow.status ?? ""),
+        (applications.data ?? []) as Array<Record<string, unknown>>,
+      );
+    } catch (healthErr) {
+      businessHealthError = "Business health drilldown could not be loaded.";
+      console.warn("[admin-dashboard-summary] business_detail health error:", healthErr);
+    }
+  }
+
+  return {
+    business: businessRow,
+    applications: applications.data ?? [],
+    audit_log: audit.data ?? [],
+    health: healthDetail?.health ?? null,
+    offer_activity: healthDetail?.offer_activity ?? null,
+    claims_and_redemptions: healthDetail?.claims_and_redemptions ?? null,
+    trial_and_access: healthDetail?.trial_and_access ?? null,
+    ai_usage: healthDetail?.ai_usage ?? null,
+    business_health_error: businessHealthError,
+  };
+}
+
+function utcMonthStart(offsetMonths = 0): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offsetMonths, 1, 0, 0, 0, 0));
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function usd(value: unknown): number {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? Number(numberValue.toFixed(6)) : 0;
+}
+
+async function sumDailyAiCost(
+  supabaseAdmin: any,
+  startInclusive: Date,
+  endExclusive: Date,
+): Promise<{ totalUsd: number; attempts: number }> {
+  const { data, error } = await supabaseAdmin
+    .from("ai_generation_cost_daily")
+    .select("total_ai_cost_usd,generated_ad_attempts")
+    .gte("day", isoDate(startInclusive))
+    .lt("day", isoDate(endExclusive));
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ total_ai_cost_usd?: unknown; generated_ad_attempts?: unknown }>;
+  return rows.reduce(
+    (acc, row) => ({
+      totalUsd: usd(acc.totalUsd + usd(row.total_ai_cost_usd)),
+      attempts: acc.attempts + (Number(row.generated_ad_attempts) || 0),
+    }),
+    { totalUsd: 0, attempts: 0 },
+  );
+}
+
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST" && req.method !== "GET") {
+    return json(req, { error: "Method not allowed." }, 405);
+  }
+
+  const requestId = crypto.randomUUID();
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return json(req, { error: "Admin dashboard is not configured." }, 500);
+    }
+
+    const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseUser.auth.getUser();
+
+    if (userError || !user) {
+      return json(req, { error: "Unauthorized." }, 401);
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
+    }
+
+    const { data: adminUser, error: adminError } = await supabaseAdmin
+      .from("admin_users")
+      .select("id,email,role,is_active,require_mfa,display_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (adminError) throw adminError;
+    if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
+      await supabaseAdmin.from("admin_audit_log").insert({
+        admin_user_id: user.id,
+        admin_email: user.email ?? null,
+        action: "admin_dashboard_denied",
+        target_type: "admin_dashboard",
+        reason: "not_active_admin",
+        request_id: requestId,
+      });
+      return json(req, { error: "Forbidden." }, 403);
+    }
+    if (adminUser.require_mfa && !isAal2(bearerToken)) {
+      return json(req, { error: "MFA verification required." }, 403);
+    }
+
+    const payload = req.method === "POST" ? await readPayload(req) : {};
+    if (isSectionName(payload.section)) {
+      const canViewAdminUsers = adminUser.role === "owner" || adminUser.role === "admin";
+      const sectionData = await loadSection(supabaseAdmin, payload.section, payload, canViewAdminUsers);
+      await supabaseAdmin.from("admin_audit_log").insert({
+        admin_user_id: user.id,
+        admin_email: adminUser.email ?? user.email ?? null,
+        action: `admin_${payload.section}_viewed`,
+        target_type: "admin_dashboard",
+        target_id: payload.section === "business_detail" && typeof payload.business_id === "string" &&
+            UUID_RE.test(payload.business_id)
+          ? payload.business_id
+          : null,
+        request_id: requestId,
+      });
+      return json(req, {
+        ok: true,
+        request_id: requestId,
+        admin: {
+          email: adminUser.email,
+          role: adminUser.role,
+          display_name: adminUser.display_name,
+          require_mfa: adminUser.require_mfa,
+        },
+        section: payload.section,
+        ...sectionData,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date();
+    weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+    const sevenDaysOut = new Date();
+    sevenDaysOut.setUTCDate(sevenDaysOut.getUTCDate() + 7);
+    const currentMonthStart = utcMonthStart(0);
+    const nextMonthStart = utcMonthStart(1);
+    const priorMonthStart = utcMonthStart(-1);
+
+    const [
+      activeBusinesses,
+      pendingBusinesses,
+      suspendedBusinesses,
+      trialRequests,
+      highRiskRequests,
+      liveOffers,
+      offersNeedingReview,
+      claimsToday,
+      redemptionsToday,
+      trialingLocations,
+      trialsEndingSoon,
+      pastDueLocations,
+      pastDueBusinesses,
+      missingStripeCustomers,
+      stripeWebhookErrors,
+      failedAdminActions,
+      newConsumersThisWeek,
+      currentMonthAiSpend,
+      priorMonthAiSpend,
+      openProspects,
+      readyProspects,
+      acceptedClaimLinks,
+      openBusinessReports,
+      openUserReports,
+    ] = await Promise.all([
+      countRows(
+        supabaseAdmin
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["active", "trialing", "limited_trial"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending_verification"),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["suspended", "disabled"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_applications")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["pending_review", "pending_verification", "review_required"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_applications")
+          .select("id", { count: "exact", head: true })
+          .lte("risk_score", 39)
+          .in("status", ["pending_review", "pending_verification", "review_required"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deals")
+          .select("id", { count: "exact", head: true })
+          .eq("is_active", true)
+          .or(`end_time.is.null,end_time.gt.${nowIso}`),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deals")
+          .select("id", { count: "exact", head: true })
+          .eq("is_active", false)
+          .gt("end_time", nowIso),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deal_claims")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("admin_redemption_facts_v1")
+          .select("claim_id", { count: "exact", head: true })
+          .gte("redeemed_at", dayStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("location_entitlements")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["trial_active", "admin_trial_active"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("location_entitlements")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["trial_active", "admin_trial_active"])
+          .lte("trial_ends_at", sevenDaysOut.toISOString())
+          .gte("trial_ends_at", nowIso),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("location_entitlements")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["payment_failed_suspended", "trial_expired_payment_failed_suspended"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_subscriptions")
+          .select("id", { count: "exact", head: true })
+          .in("app_access_status", ["past_due_grace", "blocked", "suspended", "canceled", "expired"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_billing_profiles")
+          .select("id", { count: "exact", head: true })
+          .is("stripe_customer_id", null),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("billing_provider_events")
+          .select("id", { count: "exact", head: true })
+          .eq("processing_status", "failed"),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("admin_audit_log")
+          .select("id", { count: "exact", head: true })
+          .ilike("action", "%failed%")
+          .gte("created_at", weekStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("consumer_profiles")
+          .select("user_id", { count: "exact", head: true })
+          .gte("created_at", weekStart.toISOString()),
+      ),
+      sumDailyAiCost(supabaseAdmin, currentMonthStart, nextMonthStart),
+      sumDailyAiCost(supabaseAdmin, priorMonthStart, currentMonthStart),
+      countRows(
+        supabaseAdmin
+          .from("business_prospects")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["new", "imported", "enriched", "ready_to_contact"]),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_prospects")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ready_to_contact"),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("business_claim_links")
+          .select("id", { count: "exact", head: true })
+          .not("accepted_at", "is", null)
+          .gte("accepted_at", currentMonthStart.toISOString()),
+      ),
+      countRowsSafe(
+        supabaseAdmin
+          .from("business_reports")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "open"),
+      ),
+      countRowsSafe(
+        supabaseAdmin
+          .from("user_reports")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "open"),
+      ),
+    ]);
+
+    const { data: recentApplications, error: applicationsError } = await supabaseAdmin
+      .from("business_applications")
+      .select("id,business_name,contact_name,email,business_type,launch_area,status,access_tier,risk_score,created_at")
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (applicationsError) throw applicationsError;
+
+    const { data: recentAudit, error: auditError } = await supabaseAdmin
+      .from("admin_audit_log")
+      .select("id,admin_email,action,target_type,business_id,reason,created_at")
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (auditError) throw auditError;
+
+    let businessHealth: Array<Record<string, unknown>> = [];
+    let businessHealthError: string | null = null;
+    try {
+      businessHealth = await loadBusinessHealthRows(supabaseAdmin);
+    } catch (healthErr) {
+      businessHealthError = "Business health could not be loaded.";
+      console.warn("[admin-dashboard-summary] business health error:", healthErr);
+    }
+
+    await supabaseAdmin.from("admin_audit_log").insert({
+      admin_user_id: user.id,
+      admin_email: adminUser.email ?? user.email ?? null,
+      action: "admin_dashboard_summary_viewed",
+      target_type: "admin_dashboard",
+      request_id: requestId,
+    });
+
+    return json(req, {
+      ok: true,
+      request_id: requestId,
+      admin: {
+        email: adminUser.email,
+        role: adminUser.role,
+        display_name: adminUser.display_name,
+        require_mfa: adminUser.require_mfa,
+      },
+      summary: {
+        businesses: {
+          active: activeBusinesses,
+          pendingVerification: pendingBusinesses,
+          suspended: suspendedBusinesses,
+          trialingLocations,
+          trialsEndingSoon,
+        },
+        trialRequests: {
+          open: trialRequests,
+          highRisk: highRiskRequests,
+        },
+        offers: {
+          live: liveOffers,
+          needsReview: offersNeedingReview,
+        },
+        activity: {
+          claimsToday,
+          redemptionsToday,
+          newConsumersThisWeek,
+        },
+        billing: {
+          pastDueLocations,
+          pastDueBusinesses,
+          missingStripeCustomers,
+          stripeWebhookErrors,
+        },
+        security: {
+          failedAdminActions,
+        },
+        apiSpend: {
+          currentMonthUsd: currentMonthAiSpend.totalUsd,
+          currentMonthAttempts: currentMonthAiSpend.attempts,
+          currentMonthStart: currentMonthStart.toISOString(),
+          priorMonthUsd: priorMonthAiSpend.totalUsd,
+          priorMonthAttempts: priorMonthAiSpend.attempts,
+          priorMonthStart: priorMonthStart.toISOString(),
+          priorMonthEnd: currentMonthStart.toISOString(),
+          updatedAt: nowIso,
+        },
+        prospects: {
+          open: openProspects,
+          readyToContact: readyProspects,
+          acceptedClaimLinksThisMonth: acceptedClaimLinks,
+        },
+        moderation: {
+          openReports: openBusinessReports + openUserReports,
+        },
+      },
+      businessHealth,
+      businessHealthError,
+      recentApplications: recentApplications ?? [],
+      recentAudit: recentAudit ?? [],
+    });
+  } catch (err) {
+    console.error("[admin-dashboard-summary] error:", err);
+    return json(req, { error: "Failed to load admin dashboard summary.", request_id: requestId }, 500);
+  }
+});

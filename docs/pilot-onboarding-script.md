@@ -59,7 +59,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 
 > "Tap **Create → New Deal**. Use the voice button to describe your offer. Try: *'Buy one oat milk latte, get one free, Tuesday afternoons 2 to 5'*."
 
-- AI generates 3 ad variants: **Value**, **Neighborhood**, **Premium**. They pick one.
+- AI generates a ready ad plus up to 5 copy options. They pick the wording they like or type a revision comment.
 - They tap **Schedule** and confirm date/time. Defaults work for one-off deals.
 - They tap **Publish**. The deal is live.
 - **Show them the consumer feed on YOUR phone** (logged in as a separate consumer test account). Their deal appears with a countdown.

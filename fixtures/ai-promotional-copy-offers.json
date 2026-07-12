@@ -1,5 +1,17 @@
 [
   {
+    "id": "any-large-coffee-cookie",
+    "merchantName": "Trailhead Coffee",
+    "buyQuantity": 1,
+    "buyItem": "any large coffee drink",
+    "rewardQuantity": 1,
+    "rewardItem": "cookie of your choice",
+    "rewardType": "free",
+    "expectedFacts": ["any large coffee drink", "cookie of your choice", "buyQuantity=1", "rewardQuantity=1", "rewardType=free"],
+    "oldHeadline": "any large coffee drink with free cookie",
+    "preferredHeadline": "Buy any large coffee drink and get a free cookie of your choice"
+  },
+  {
     "id": "egg-sandwich-coffee",
     "merchantName": "Cedar & Bean Cafe",
     "buyQuantity": 1,
@@ -314,6 +326,26 @@
     "rewardValue": 60,
     "expectedFacts": ["cake slice", "rewardType=percent_off", "rewardValue=60"],
     "preferredHeadline": "Get 60% off one cake slice"
+  },
+  {
+    "id": "agujjim-40-off",
+    "merchantName": "Seoul Table",
+    "buyQuantity": 1,
+    "buyItem": "agujjim",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "expectedFacts": ["agujjim", "rewardType=percent_off", "rewardValue=40"],
+    "preferredHeadline": "Get 40% off one agujjim"
+  },
+  {
+    "id": "oil-change-25-off",
+    "merchantName": "Main Street Auto",
+    "buyQuantity": 1,
+    "buyItem": "oil change",
+    "rewardType": "percent_off",
+    "rewardValue": 25,
+    "expectedFacts": ["oil change", "rewardType=percent_off", "rewardValue=25"],
+    "preferredHeadline": "Get 25% off one oil change"
   },
   {
     "id": "long-seasonal-sandwich-coffee",

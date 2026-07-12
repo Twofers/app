@@ -75,10 +75,10 @@ describe("resolvePostAuthReplaceHref", () => {
     expect(h.getBusinessProfileAccessForCurrentUser).not.toHaveBeenCalled();
   });
 
-  it("preserves billing-under-account deep links for complete business accounts", async () => {
+  it("routes billing-under-account deep links to account for complete business accounts", async () => {
     await expect(
       resolvePostAuthReplaceHref({ role: "business", nextParam: "/(tabs)/account/billing?checkout=success" }),
-    ).resolves.toBe("/(tabs)/account/billing?checkout=success");
+    ).resolves.toBe("/(tabs)/account");
     expect(h.getBusinessProfileAccessForCurrentUser).toHaveBeenCalledTimes(1);
   });
 });

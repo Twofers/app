@@ -110,8 +110,8 @@ export function isProductionSupabaseUrlConfigured(): boolean {
 
 export function getAiStudioDevStartupGuardError(): string | null {
   if (!isAiStudioDevAppVariant()) return null;
-  if (isProductionSupabaseUrlConfigured()) {
-    return "Twofer Dev cannot start with the production Supabase project configured. Set EXPO_PUBLIC_SUPABASE_URL to the separate development project.";
+  if (isProductionSupabaseUrlConfigured() && !isAiStudioPublishingDisabled()) {
+    return "Twofer Dev cannot start with the production Supabase project unless AI Studio publishing is disabled.";
   }
   return null;
 }
@@ -133,6 +133,13 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: process.env.EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_SITE_IMPORT: process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_MOBILE_STRIPE: process.env.EXPO_PUBLIC_ENABLE_MOBILE_STRIPE ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA: process.env.EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE: process.env.EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE: process.env.EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS: process.env.EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS ?? "(unset)",
     EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV ?? "(unset)",
     EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING ?? "(unset)",
     EXPO_PUBLIC_APP_VARIANT: process.env.EXPO_PUBLIC_APP_VARIANT ?? "(unset)",
@@ -182,6 +189,10 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
     AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
+    POSTER_VIEWER_LANGUAGE_ENABLED: process.env.POSTER_VIEWER_LANGUAGE_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED: process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED ?? "(unset)",
+    POSTER_LOOK_V2_ENABLED: process.env.POSTER_LOOK_V2_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_POSTER_LOOK_V2: process.env.EXPO_PUBLIC_POSTER_LOOK_V2 ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -194,6 +205,16 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+/** Native wallet pass ("Twofer Card" in Apple/Google Wallet). Default off; server has its own kill switch. */
+export function isNativeWalletPassEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS === "true";
+}
+
+/** Website-import at business onboarding (logo + menu prefill). Default off. */
+export function isSiteImportEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT === "true";
 }
 
 export function isAiDealStudioDevEnabled(): boolean {
@@ -298,6 +319,16 @@ export function isAiV5LocaleScreenshotQaEnabled(): boolean {
 
 export function isAiV5AutomaticVerifiedBundleApprovalEnabled(): boolean {
   return process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true";
+}
+
+/** Poster spec keeps all locales at publish and renders the viewer's locale. Off = English-only poster, unchanged. */
+export function isPosterViewerLanguageEnabled(): boolean {
+  return process.env.POSTER_VIEWER_LANGUAGE_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED === "true";
+}
+
+/** Poster Look v2 render path (typography/layout only). Off = current poster renderer, byte-identical. */
+export function isPosterLookV2Enabled(): boolean {
+  return process.env.POSTER_LOOK_V2_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_LOOK_V2 === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

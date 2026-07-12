@@ -4,6 +4,7 @@ import {
   buildLocalizedDealDisplay,
   buildOfferDefinitionFromDealDisplay,
   resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
   type LocalizedDealDisplayFields,
 } from "./localized-deal-display";
 
@@ -65,11 +66,13 @@ describe("localized deal display", () => {
     });
 
     expect(spanish.source).toBe("localized_offer_renderer");
-    expect(spanish.title).toBe("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(spanish.title).toBe("Al comprar 1 latte, recibes 1 galleta gratis");
     expect(spanish.description).toContain("Hay 25 reclamos disponibles.");
     expect(korean.source).toBe("localized_offer_renderer");
-    expect(korean.title).toContain("latte");
-    expect(korean.title).toContain("cookie");
+    expect(korean.title).toContain("\uB77C\uB5BC");
+    expect(korean.title).toContain("\uCFE0\uD0A4");
+    expect(korean.title).not.toContain("latte");
+    expect(korean.title).not.toContain("cookie");
     expect(korean.title).not.toBe(spanish.title);
   });
 
@@ -109,11 +112,88 @@ describe("localized deal display", () => {
     });
 
     expect(spanish.source).toBe("localized_offer_renderer");
-    expect(spanish.title).toBe("Recibe 40% de descuento en 1 mango lassi");
+    expect(spanish.title).toBe("Recibe 40% de descuento en 1 lassi de mango");
     expect(korean.source).toBe("localized_offer_renderer");
     expect(korean.title).toContain("40");
-    expect(korean.title).toContain("mango lassi");
+    expect(korean.title).toContain("\uB9DD\uACE0 \uB77C\uC2DC");
+    expect(korean.title).not.toContain("mango lassi");
     expect(korean.title).not.toBe("Get 40% off one mango lassi");
+  });
+
+  it("localizes legacy free-reward titles for non-English customers when the rollout flag is absent", () => {
+    const legacyFreeRewardDeal: LocalizedDealDisplayFields = {
+      ...structuredDeal,
+      title: "Buy a coffee and get a free bagel",
+      title_en: null,
+      title_es: null,
+      title_ko: null,
+      description: "",
+      description_en: null,
+      description_es: null,
+      description_ko: null,
+      deal_type: null,
+      discount_percent: null,
+      item_description: null,
+      required_purchase_quantity: null,
+      required_item_description: null,
+      free_item_quantity: null,
+      free_item_description: null,
+    };
+
+    const korean = buildLocalizedDealDisplay({
+      deal: legacyFreeRewardDeal,
+      locale: "ko-KR",
+      localeResolutionSource: "app_language",
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer("ko-KR", false),
+      fallbackLanguage: "ko",
+    });
+
+    expect(shouldUseCustomerLocalizedOfferRenderer("en-US", false)).toBe(false);
+    expect(shouldUseCustomerLocalizedOfferRenderer("es-US", false)).toBe(true);
+    expect(shouldUseCustomerLocalizedOfferRenderer("ko-KR", false)).toBe(true);
+    expect(korean.source).toBe("localized_offer_renderer");
+    expect(korean.title).toContain("\uCEE4\uD53C");
+    expect(korean.title).toContain("\uBCA0\uC774\uAE00");
+    expect(korean.title).not.toContain("Buy a coffee");
+    expect(korean.title).not.toContain("bagel");
+  });
+
+  it("keeps common composed paid items localized in customer deal detail copy", () => {
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        required_item_description: "iced latte",
+        free_item_description: "cookie",
+      },
+      locale: "ko-KR",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    expect(display.source).toBe("localized_offer_renderer");
+    expect(display.title).toContain("\uC544\uC774\uC2A4 \uB77C\uB5BC");
+    expect(display.title).toContain("\uCFE0\uD0A4");
+    expect(display.title).not.toContain("iced latte");
+    expect(display.lockedOfferContent?.primaryOfferLine).toBe(display.title);
+  });
+
+  it("localizes house pastry wallet copy instead of preserving the English item", () => {
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        required_item_description: "house pastry",
+        free_item_description: "house pastry",
+      },
+      locale: "ko-KR",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    expect(display.source).toBe("localized_offer_renderer");
+    expect(display.title).toContain("\uD558\uC6B0\uC2A4 \uD398\uC774\uC2A4\uD2B8\uB9AC");
+    expect(display.title).not.toContain("house pastry");
   });
 
   it("prefers approved customer localization rows while retaining exact mechanics", () => {
@@ -145,10 +225,10 @@ describe("localized deal display", () => {
     expect(display.source).toBe("approved_localization_storage");
     expect(display.title).toBe("Tu latte viene con una galleta");
     expect(display.description).toContain("Pide tu latte favorito");
-    expect(display.description).toContain("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(display.description).toContain("Al comprar 1 latte, recibes 1 galleta gratis");
     expect(display.description).toContain("Hay 25 reclamos disponibles.");
     expect(display.localizedCreative?.localizationHash).toBe("adlocrow_12345678");
-    expect(display.lockedOfferContent?.primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(display.lockedOfferContent?.primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 galleta gratis");
   });
 
   it("uses approved customer localization rows when exact rendering is off or unavailable", () => {
@@ -222,8 +302,10 @@ describe("localized deal display", () => {
     });
 
     expect(display.source).toBe("localized_offer_renderer");
-    expect(display.title).toContain("latte");
-    expect(display.title).toContain("cookie");
+    expect(display.title).toContain("\uB77C\uB5BC");
+    expect(display.title).toContain("\uCFE0\uD0A4");
+    expect(display.title).not.toContain("latte");
+    expect(display.title).not.toContain("cookie");
     expect(display.localizedCreative).toBeUndefined();
   });
 
@@ -294,7 +376,8 @@ describe("localized deal display", () => {
     expect(approved.source).toBe("approved_localization_storage");
     expect(approved.title).toBe("라떼에 쿠키까지");
     expect(approved.description).toContain("Cedar Bean");
-    expect(approved.description).toContain("latte");
+    expect(approved.description).toContain("\uB77C\uB5BC");
+    expect(approved.description).not.toContain("latte");
     expect(tampered.source).toBe("localized_offer_renderer");
   });
 
@@ -322,10 +405,10 @@ describe("localized deal display", () => {
     });
 
     expect(disabled.source).toBe("legacy_localized_fields");
-    expect(disabled.title).toBe("Buy a latte and get a free cookie");
-    expect(disabled.description).toBe("");
+    expect(disabled.title).toBe("Legacy Spanish title");
+    expect(disabled.description).toBe("Legacy Spanish description");
     expect(missingStructuredFacts.source).toBe("legacy_localized_fields");
-    expect(missingStructuredFacts.title).toBe("Legacy spanish title");
+    expect(missingStructuredFacts.title).toBe("Legacy Spanish title");
   });
 
   it("resolves customer display locale without changing the deal identity or inventory", () => {

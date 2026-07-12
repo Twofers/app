@@ -1,11 +1,11 @@
 # Twofer es-US Style Guide
 
-Status: pending native reviewer.
+Status: native reviewer signed off on 2026-07-03.
 
 Current ownership:
 
 - Internal localization owner: Dan / Twofer admin
-- U.S. Spanish reviewer: TBD before production launch
+- U.S. Spanish reviewer: Juan
 
 ## Exact Offer Mechanics
 
@@ -25,4 +25,4 @@ Current ownership:
 
 ## Production Gate
 
-Spanish may be used for development and internal preview while the reviewer is TBD. Broad Spanish production use is blocked until a named U.S. Spanish reviewer signs off on templates, fallback copy, UI strings, accessibility labels, and representative screenshots.
+Juan reviewed the Spanish localization package and reported no issues on 2026-07-03. Broad Spanish localization reviewer blockers are cleared; production migrations, hosted flags, builds, deployments, and store submissions remain separately hard-gated.

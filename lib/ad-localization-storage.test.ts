@@ -71,10 +71,11 @@ describe("ad localization storage snapshot", () => {
       qaDecision: "not_required",
     });
     expect(rows["es-US"]?.localizationHash).toMatch(/^adlocrow_[0-9a-f]{8}$/);
-    expect(rows["es-US"]?.preservedTerms).toEqual(expect.arrayContaining(["Cedar Bean", "latte", "cookie"]));
+    expect(rows["es-US"]?.preservedTerms).toEqual(expect.arrayContaining(["Cedar Bean", "latte"]));
+    expect(rows["es-US"]?.preservedTerms).not.toContain("cookie");
     expect(JSON.stringify(rows)).not.toContain("exactOfferLine");
     expect(JSON.stringify(rows)).not.toContain("termsLine");
-    expect(JSON.stringify(rows)).not.toContain("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(JSON.stringify(rows)).not.toContain("Al comprar 1 latte, recibes 1 galleta gratis");
   });
 
   it("builds an offer-version localization snapshot with term and presentation metadata", () => {

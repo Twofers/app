@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const vitestBin = path.join(root, "node_modules", "vitest", "vitest.mjs");
 
 const checks = [
   {
@@ -34,6 +36,69 @@ const checks = [
     name: "AdSpec builder keeps critical text native",
     file: "lib/ad-spec.ts",
     pattern: /criticalTextRenderedNatively:\s*true[\s\S]+dynamicBindings[\s\S]+remainingClaims/,
+  },
+  {
+    name: "copy evaluator includes poster headline regressions",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /ai-poster-copy-offers\.json/,
+      /poster fixtures:/,
+      /accepted_weak_headline/,
+    ],
+  },
+  {
+    name: "copy evaluator includes revision feedback regressions",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /ai-revision-feedback-cases\.json/,
+      /revision fixtures:/,
+      /revision_target_mismatch/,
+    ],
+  },
+  {
+    name: "copy evaluator uses production copy helpers",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /buildCanonicalHeadlineFromFacts/,
+      /buildPosterCopyFromOfferDefinition/,
+      /copyOnlyRevisionTargetForFeedback/,
+    ],
+  },
+  {
+    name: "poster copy fixture covers coffee-cookie weak headline",
+    file: "fixtures/ai-poster-copy-offers.json",
+    patterns: [
+      /large-coffee-cookie-poster/,
+      /Try our any large coffee drink/,
+      /COFFEE \+ COOKIE BREAK/,
+    ],
+  },
+  {
+    name: "revision feedback fixture covers top headline comments",
+    file: "fixtures/ai-revision-feedback-cases.json",
+    patterns: [
+      /top part that says try our any large coffee/i,
+      /"expectedTarget": "copy"/,
+    ],
+  },
+  {
+    name: "style gate rejects echoed AI hooks",
+    file: "lib/ad-copy-style-gate.ts",
+    patterns: [
+      /BARE_SPECIFIC_TERM/,
+      /WEAK_TRY_OUR_PHRASE/,
+      /isBareSpecificTerm/,
+      /isWeakTryOurPhrase/,
+    ],
+  },
+  {
+    name: "deterministic revision fallback rewrites no-op copy",
+    file: "lib/ai-revision-fallback-copy.ts",
+    patterns: [
+      /buildDeterministicRevisionFallbackCopy/,
+      /deterministic_revision_fallback/,
+      /avoidHeadlines/,
+    ],
   },
   {
     name: "versioned publish is idempotent",
@@ -67,6 +132,29 @@ const checks = [
   },
 ];
 
+const commandChecks = [
+  {
+    name: "copy evaluator passes",
+    command: process.execPath,
+    args: ["scripts/evaluate-ai-promotional-copy.mjs"],
+  },
+  {
+    name: "AI revision loop tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ai-revision-target.test.ts", "lib/ai-revision-change.test.ts", "--reporter=dot"],
+  },
+  {
+    name: "AI copy style gate tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ad-copy-style-gate.test.ts", "--reporter=dot"],
+  },
+  {
+    name: "AI deterministic revision fallback tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ai-revision-fallback-copy.test.ts", "--reporter=dot"],
+  },
+];
+
 let failed = 0;
 for (const check of checks) {
   const filePath = path.join(root, check.file);
@@ -76,6 +164,21 @@ for (const check of checks) {
   console.log(`${ok ? "PASS" : "FAIL"} ${check.name}`);
   if (!ok) {
     console.log(`  ${check.file}`);
+    failed += 1;
+  }
+}
+
+for (const check of commandChecks) {
+  const result = spawnSync(check.command, check.args, {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const ok = result.status === 0 && !result.error;
+  console.log(`${ok ? "PASS" : "FAIL"} ${check.name}`);
+  if (!ok) {
+    if (result.stdout) console.log(result.stdout.trim());
+    if (result.stderr) console.error(result.stderr.trim());
+    if (result.error) console.error(result.error.message);
     failed += 1;
   }
 }

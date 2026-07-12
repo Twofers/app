@@ -1,10 +1,14 @@
 # App Store Connect answer sheets
 
 Date: 2026-06-07
+Updated: 2026-06-29
 
-Scope: iOS App Store submission answer drafts for the free v1 pilot. These are
-ready for Dan to paste into App Store Connect after the reviewer logins are verified. They match the trimmed privacy
-manifest in `app.json` and `docs/privacy-manifest-reconciliation-20260607.md`.
+Scope: iOS App Store submission answer drafts for v1. These are **not paste-ready until the
+exact review build's billing posture is confirmed**. Current code has billing surfaces enabled
+(`PAID_BILLING_ENABLED=true`) and pilot enforcement bypassed (`PILOT_DISABLE_BILLING_GATE=true`),
+so old "no payment path is exposed" language is only valid for a build that has billing hidden or
+disabled by a verified review-build mechanism. They match the trimmed privacy manifest in
+`app.json` and `docs/privacy-manifest-reconciliation-20260607.md` for non-billing data.
 
 ## App Privacy
 
@@ -15,7 +19,9 @@ Answer: No, this app does not use data for tracking.
 Notes:
 - `NSPrivacyTracking` is false.
 - No advertising identifier, cross-app advertising network, or third-party ad SDK is used.
-- No purchase or payment data is collected in v1 because paid billing is gated off.
+- Purchase/payment answers depend on the exact build: current app code includes billing surfaces.
+  If a review build exposes subscriptions, update App Privacy answers for purchase/subscription
+  status even though card data is handled by Stripe Checkout and not stored by the app.
 
 ### Data Linked to the User
 
@@ -43,10 +49,8 @@ Notes:
 
 ### Data Not Collected
 
-Answer No for these unless the app changes before submission:
+Answer No for these unless the exact review build exposes a related flow:
 
-- Purchases
-- Payment Info
 - Credit Info
 - Advertising Data
 - Contacts
@@ -56,6 +60,12 @@ Answer No for these unless the app changes before submission:
 - Search History
 - Crash Data
 - Performance Data
+
+Billing caveat:
+- `Payment Info`: normally No for the app itself if card entry happens only in Stripe Checkout and
+  card numbers are not stored by Twofer.
+- `Purchases`: Conditional. If subscription, trial, plan, or Stripe customer/subscription status is
+  reachable in the review build, do not answer "No" without a fresh privacy/legal review.
 
 ## Age Rating
 
@@ -82,7 +92,7 @@ Recommended draft answers:
 | UGC controls | Report tools exist. No user-facing block feature is currently exposed. No open chat. |
 | Unrestricted web access | No. External links are limited to policy/support URLs, maps/directions, and share links. |
 | Advertising | No. |
-| Commerce or payments | No in-app purchase or payment path in v1. |
+| Commerce or payments | Conditional. Current code has billing surfaces enabled; answer No only for a build where payment/subscription paths are verified hidden or disabled. |
 | Alcohol, tobacco, drug references | Infrequent or Mild. Alcohol-related deal references are allowed on the platform, but expected to be infrequent. Tobacco and drug references remain No by design. |
 | Gambling or contests | No. |
 | Profanity or crude humor | No by design. UGC could contain inappropriate text, so reports are available. |
@@ -117,7 +127,9 @@ Paste-ready draft:
 Twofer uses email and password login. There is no social login.
 There is no email link login or one-time code login for reviewer access.
 
-This first iOS release is a free pilot. No in-app purchase, paid upgrade, external payment, or subscription flow is exposed.
+This first iOS release is intended as a pilot. Billing/pricing surfaces are pilot-only unless Dan
+explicitly approves a live billing review path for this exact build. Do not use real payment
+credentials during review unless that approval exists.
 
 Please use these reviewer logins:
 
@@ -154,7 +166,7 @@ Before pasting:
 | Content rights | The app displays business-provided deal text, photos, logos, and AI-assisted drafts. Business users are responsible for content they publish. |
 | Ads | No. |
 | Third-party content | Yes, user/business-generated deal content. |
-| In-app purchases | No for v1. |
+| In-app purchases | Conditional for the exact build. Current code enables billing surfaces; confirm before answering. |
 | Financial services | No. |
 | Health data | No. |
 | Government services | No. |

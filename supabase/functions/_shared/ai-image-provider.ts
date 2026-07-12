@@ -31,6 +31,7 @@ export type GenerateAdImageInput = {
   dealType?: string;
   ownerPhotoUrl?: string | null;
   referenceImages?: AiImageReference[];
+  creativeDirection?: string | null;
   customEditInstruction?: string;
   stylePreset: AiImageStylePreset;
   aspectRatio: AiImageAspectRatio;
@@ -178,6 +179,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const businessCategory = cleanText(input.businessCategory, 80) || "local cafe";
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
+  const creativeDirection = cleanText(input.creativeDirection, 280);
   const visualItems = [...new Set([paid, free].filter(Boolean))];
   const framing =
     input.aspectRatio === "4:5"
@@ -197,6 +199,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     `Offer mechanics: ${offerMechanics(input)}`,
     "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
+    creativeDirection ? `Selected AI ad concept for composition only, never render as text: ${creativeDirection}` : "",
     referenceInstruction,
     customInstruction,
     "",

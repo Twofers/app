@@ -182,7 +182,7 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 function posterText(value: unknown, fallback: string, max: number): string {
-  const cleaned = stripPosterBrand(typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "");
+  const cleaned = stripPosterFiller(typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "");
   const base = cleaned || fallback;
   if (base.length <= max) return base.toUpperCase();
   const clipped = base.slice(0, max + 1);
@@ -195,20 +195,126 @@ function stripPosterBrand(value: string): string {
   return value.replace(/\btwofer\b/gi, "").replace(/\s{2,}/g, " ").trim();
 }
 
-function productKeyword(productName: string): string {
-  const words = productName
-    .replace(/[^a-zA-Z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  return (words[words.length - 1] ?? words[0] ?? "OFFER").toUpperCase().slice(0, 12);
+function stripAwkwardAnyDeterminer(value: string): string {
+  return value.replace(/\b(?:a|an|the|our|your)\s+(any\b)/gi, "$1");
 }
 
-function posterRewardLine(offerTerms: string): string {
-  const normalized = offerTerms.toLowerCase();
-  if (normalized.includes("free coffee")) return "GET FREE COFFEE";
-  if (normalized.includes("coffee")) return "GET COFFEE";
-  if (normalized.includes("free")) return "GET 1 FREE";
+function stripPosterFiller(value: string): string {
+  return stripAwkwardAnyDeterminer(stripPosterBrand(value))
+    .replace(/^try\s+our\b[:\s-]*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function normalizePosterWords(value: string | null | undefined): string {
+  return typeof value === "string"
+    ? value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9%+\s-]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
+}
+
+const POSTER_ITEM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "any",
+  "choice",
+  "drink",
+  "hot",
+  "iced",
+  "large",
+  "medium",
+  "of",
+  "one",
+  "regular",
+  "small",
+  "the",
+  "your",
+]);
+
+const POSTER_ITEM_WORDS = [
+  "coffee",
+  "latte",
+  "espresso",
+  "cappuccino",
+  "cookie",
+  "bagel",
+  "sandwich",
+  "muffin",
+  "croissant",
+  "pastry",
+  "scone",
+  "tea",
+  "taco",
+  "dessert",
+  "entree",
+  "pizza",
+  "burger",
+  "salad",
+  "bowl",
+  "smoothie",
+];
+
+function posterItemLabel(value: string | null | undefined): string {
+  const normalized = normalizePosterWords(value);
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const known = POSTER_ITEM_WORDS.find((word) => words.includes(word));
+  if (known) return known === "drink" && words.includes("coffee") ? "coffee" : known;
+  const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  return meaningful.length > 0 ? meaningful.slice(-2).join(" ") : words.slice(0, 2).join(" ");
+}
+
+function productKeyword(productName: string): string {
+  return (posterItemLabel(productName) || "offer").toUpperCase().slice(0, 12);
+}
+
+function posterRewardLabel(offerTerms: string, productName: string): string {
+  const freeMatch = offerTerms.match(/\bfree\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80})/i);
+  const getFreeMatch = offerTerms.match(/\bget\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80}?)(?:\s+of your choice)?\s+free\b/i);
+  const freePhrase = (freeMatch?.[1] ?? getFreeMatch?.[1])
+    ?.replace(/\b(?:of your choice|when|with|today|while|for|redeem|only)\b[\s\S]*$/i, "")
+    .replace(/[.,;:!?]+$/g, "")
+    .trim();
+  const reward = posterItemLabel(freePhrase || offerTerms);
+  const product = posterItemLabel(productName);
+  if (reward && reward !== product) return reward.toUpperCase().slice(0, 12);
+  if (/\bfree\b/i.test(offerTerms)) return "FREE";
+  return "";
+}
+
+function posterRewardLine(offerTerms: string, productName: string): string {
+  const reward = posterRewardLabel(offerTerms, productName);
+  if (reward && reward !== "FREE") return `GET 1 ${reward}`;
+  if (reward === "FREE") return "GET 1 FREE";
   return "GET 1 MORE";
+}
+
+function posterHeadlineFromOffer(productName: string, offerTerms: string): string {
+  const product = productKeyword(productName);
+  const reward = posterRewardLabel(offerTerms, productName);
+  if (reward && reward !== "FREE" && reward !== product) {
+    const pair = `${product} + ${reward}`;
+    return pair.length <= 22 ? `${pair} BREAK` : pair;
+  }
+  return `${product} BONUS`;
+}
+
+function isBareItemHeadline(value: string, label: string): boolean {
+  const normalized = normalizePosterWords(value);
+  const labelWords = new Set(normalizePosterWords(label).split(/\s+/).filter(Boolean));
+  if (!normalized || labelWords.size === 0 || /[+&]/.test(value)) return false;
+  const meaningful = normalized.split(/\s+/).filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  return meaningful.length > 0 && meaningful.every((word) => labelWords.has(word));
+}
+
+function isWeakPosterHeadline(value: unknown, fallback: PosterCreative): boolean {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const cleaned = stripPosterFiller(raw);
+  if (!cleaned) return true;
+  if (/^try\s+our\b/i.test(raw)) return true;
+  const productLabel = normalizePosterWords(fallback.offerLine1).replace(/^buy\s+\d+\s+/, "");
+  const rewardLabel = normalizePosterWords(fallback.offerLine2).replace(/^get\s+\d+\s+/, "").replace(/^get\s+/, "");
+  return isBareItemHeadline(cleaned, productLabel) || isBareItemHeadline(cleaned, rewardLabel);
 }
 
 function formatPosterTimeLabel(start: string | null, end: string | null): string {
@@ -292,11 +398,11 @@ function fallbackPoster(params: {
 }): PosterCreative {
   const product = productKeyword(params.productName);
   return {
-    kicker: "TRY OUR",
-    headline: posterText(`${product} TIME`, "LATTE TIME", 28),
+    kicker: "LOCAL DEAL",
+    headline: posterText(posterHeadlineFromOffer(params.productName, params.offerTerms), "LOCAL DEAL", 28),
     supportingLine: "LIMITED-TIME LOCAL DEAL",
     offerLine1: posterText(`BUY 1 ${product}`, "BUY 1", 18),
-    offerLine2: posterText(posterRewardLine(params.offerTerms), "GET 1 FREE", 20),
+    offerLine2: posterText(posterRewardLine(params.offerTerms, params.productName), "GET 1 FREE", 20),
     scarcityLabel: "",
     timeLabel: formatPosterTimeLabel(params.startTime, params.endTime),
     cta: DEFAULT_CTA,
@@ -306,7 +412,7 @@ function fallbackPoster(params: {
 function sanitizePosterCreative(value: Record<string, unknown>, fallback: PosterCreative): PosterCreative {
   return {
     kicker: posterText(value.kicker, fallback.kicker, 24),
-    headline: posterText(value.headline, fallback.headline, 28),
+    headline: posterText(isWeakPosterHeadline(value.headline, fallback) ? "" : value.headline, fallback.headline, 28),
     supportingLine: posterText(value.supporting_line, fallback.supportingLine, 42),
     offerLine1: posterText(value.offer_line_1, fallback.offerLine1, 18),
     offerLine2: posterText(value.offer_line_2, fallback.offerLine2, 20),
@@ -500,6 +606,8 @@ async function generateCopyWithTextProvider(params: {
     "For a BOGO latte offer, prefer lines like BUY 1 LATTE and GET 1 FREE.",
     "The offer facts below are locked. Do not change, reinterpret, round, shorten, translate, or invent product, offer terms, time window, quantity, price, or business name.",
     "Never use the word Twofer in any poster field.",
+    "Never use 'Try our' as the kicker or headline. Prefer a compact campaign idea from the full offer, like COFFEE + COOKIE BREAK.",
+    "If a locked product starts with 'any', never put a, an, the, our, or your before it. Say BUY 1 COFFEE or BUY ANY LARGE COFFEE DRINK, not BUY AN ANY LARGE COFFEE DRINK.",
     "Headline, kicker, supporting_line, and supporting_copy may be persuasive, but must preserve the locked facts exactly when mentioned.",
     "The image_prompt is for a commercial image only. It must not include offer copy or any text to render.",
     "The image_prompt must explicitly include: no text, no letters, no logo, no watermark, negative space for native overlay copy, and 4:5 mobile composition.",

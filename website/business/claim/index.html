@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="claim.title">Claim Business Profile | Twofer</title>
+    <meta name="description" content="Review and start a verified Twofer business claim." data-i18n-content="claim.meta" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+  </head>
+  <body class="trial-page" data-claim-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/business-claim-link">
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+          <span>Twofer</span>
+        </a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="/#for-customers" data-i18n="nav.customers">For Customers</a>
+          <a href="/#for-businesses" data-i18n="nav.businesses">For Businesses</a>
+          <a href="/support" data-i18n="nav.support">Support</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button
+            class="nav-menu-button"
+            type="button"
+            aria-controls="site-nav-links"
+            aria-expanded="false"
+            data-site-menu-toggle
+            data-i18n="nav.menu"
+          >
+            Menu
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="trial-main">
+      <p class="trial-kicker" data-i18n="claim.kicker">Business claim</p>
+      <h1 class="trial-heading" data-i18n="claim.heading">Claim Business Profile</h1>
+      <p class="trial-lede" data-i18n="claim.lede">Review the profile below and start a verified claim. A profile is not active on Twofer until an owner or manager completes setup.</p>
+
+      <div class="trial-shell">
+        <section class="trial-panel" aria-label="Claim preview" data-i18n-aria-label="claim.previewLabel">
+          <h2 data-claim-business-name data-i18n="claim.loading">Loading profile</h2>
+          <p data-claim-business-meta></p>
+          <p class="admin-badge warning" data-claim-public-state data-i18n="claim.checking">Checking link</p>
+          <p data-claim-statement data-i18n="claim.statement">This profile is not active on Twofer until you claim and complete setup.</p>
+        </section>
+
+        <form class="trial-form" data-claim-form novalidate>
+          <div class="form-grid">
+            <label>
+              <span data-i18n="claim.contactName">Owner or manager name</span>
+              <input name="contact_name" autocomplete="name" required maxlength="120" />
+            </label>
+            <label>
+              <span data-i18n="claim.businessEmail">Business email</span>
+              <input name="owner_email" type="email" autocomplete="email" required maxlength="254" />
+            </label>
+            <label>
+              <span data-i18n="claim.phone">Phone</span>
+              <input name="phone" autocomplete="tel" maxlength="40" />
+            </label>
+            <label class="check full">
+              <input name="authority_confirmed" type="checkbox" required />
+              <span data-i18n="claim.authority">I am authorized to start this business claim.</span>
+            </label>
+          </div>
+          <div class="trial-actions">
+            <button type="submit" data-i18n="claim.submit">Start verified claim</button>
+            <a class="button button-secondary" href="/support" data-i18n="trial.contactSupport">Contact support</a>
+          </div>
+          <p id="claim-status" class="status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </main>
+
+    <script src="/localization.js?v=20260702-site"></script>
+    <script src="/business/claim/claim.js?v=20260802-claim"></script>
+  </body>
+</html>

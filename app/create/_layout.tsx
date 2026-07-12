@@ -8,7 +8,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
+import { isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateLayout() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -37,15 +37,7 @@ export default function CreateLayout() {
   }
 
   if (blocked) {
-    return (
-      <Redirect
-        href={
-          PAID_BILLING_ENABLED
-            ? ({ pathname: "/(tabs)/account/billing", params: { reason: "reactivate" } } as unknown as Href)
-            : "/(tabs)/account"
-        }
-      />
-    );
+    return <Redirect href={"/(tabs)/account" as Href} />;
   }
 
   return (

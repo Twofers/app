@@ -11,7 +11,7 @@ Plain-English overview aligned with `supabase/migrations/` (including `202603271
 
 - **What**: One row per business, owned by one auth user (`owner_id`).
 - **Relationships**: Many `deals`; referenced by `favorites.business_id`.
-- **Account deletion:** In-app self-delete is **not** offered when the user owns at least one business row (or ownership cannot be confirmed); they are directed to **support** instead. Edge `delete-user-account` enforces the same before `auth.admin.deleteUser`.
+- **Account deletion:** Consumers and business owners can use in-app delete-account flows after destructive confirmation. Business owners are warned that their business, deals, and related claim history are also removed; `delete-user-account` then calls `auth.admin.deleteUser` and relies on schema cleanup/cascade behavior plus best-effort purge/storage cleanup.
 
 ## deals
 

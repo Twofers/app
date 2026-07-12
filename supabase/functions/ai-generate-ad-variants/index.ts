@@ -7,7 +7,7 @@
  * - Stage 3: image — enhance the cafe's uploaded photo (touchup / cleanbg / studiopolish)
  *            OR generate a photoreal hero via the configured GPT image model when no photo is provided.
  *
- * The app renders the headline/subline/CTA ABOVE the image — text is never baked in.
+ * The app renders poster text natively; live schedule/status/CTA stay outside exported poster pixels.
  *
  * Returns a single ad. For backward compatibility with old clients, the response also
  * includes `ads: [ad]` so existing UI that expects an array does not crash.
@@ -16,6 +16,7 @@
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
+import { countAiQuotaUsage } from "../_shared/ai-quota-resets.ts";
 import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhotoWithTelemetry,
@@ -72,8 +73,10 @@ import {
   type AiDealCopyVariant,
   type AiDealCopySource,
   type DealOfferContract,
+  type ValidatedDealCopy,
 } from "../../../lib/deal-offer-contract.ts";
 import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import { buildDeterministicRevisionFallbackCopy } from "../../../lib/ai-revision-fallback-copy.ts";
 import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
 import {
   CANDIDATE_JUDGE_PROMPT_VERSION,
@@ -150,6 +153,14 @@ const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
+// Part B: hard cap on paid image generations per creation. Default 2 preserves
+// today's behavior (one QA-triggered regeneration on a missing-item verdict).
+// Set AI_IMAGE_MAX_GENERATIONS_PER_REQUEST=1 in prod so a QA miss never buys a
+// second image — the first image (or the existing safe fallback) is used instead.
+const MAX_IMAGE_GENERATIONS_PER_REQUEST = Math.max(
+  1,
+  Number.parseInt(Deno.env.get("AI_IMAGE_MAX_GENERATIONS_PER_REQUEST") ?? "2", 10) || 2,
+);
 const ITEM_RESEARCH_PROMPT_VERSION = "AI_ITEM_RESEARCH_V1";
 const ITEM_RESEARCH_SCHEMA = {
   name: "item_research",
@@ -178,6 +189,19 @@ const VALID_REVISION_TARGETS = new Set(["copy", "image", "both"] as const);
 
 type RevisionTarget = "copy" | "image" | "both";
 
+type AdCopyAlternative = {
+  candidate_id?: string;
+  strategy_id?: string;
+  strategy_reason?: string;
+  variant_index?: number | null;
+  headline: string;
+  short_description: string;
+  push_notification?: string;
+  social_caption?: string;
+  cta?: string;
+  selected?: boolean;
+};
+
 type SingleAd = {
   /** Short, item-forward (≤40 chars). */
   headline: string;
@@ -187,11 +211,14 @@ type SingleAd = {
   push_notification: string;
   terms_summary: string;
   social_caption?: string;
+  image_brief?: string;
+  poster_kicker?: string;
   locked_offer_line?: string;
   locked_terms_line?: string;
   copy_source?: AiDealCopySource;
   variant_count?: number;
   selected_variant_index?: number | null;
+  copy_alternatives?: AdCopyAlternative[];
   validation_reason_codes?: string[];
   /** Verb-first action (≤26 chars). */
   cta: string;
@@ -266,6 +293,16 @@ function dealNotEligibleForAiResponse(
 // ─── Stage 1: research ─────────────────────────────────────────────────────
 
 /**
+ * Live web-search research (Stage 1b) is the only remaining OpenAI call on the
+ * ad hot path. It is already double-gated (Gemini familiarity + common-item
+ * list), but this flag lets it be disabled entirely for full cost control.
+ * Default on so unfamiliar-item copy quality is preserved unless opted out.
+ */
+function webSearchResearchEnabled(): boolean {
+  return envFlag("AI_AD_WEB_SEARCH_ENABLED", true);
+}
+
+/**
  * Research the menu item with web search. Returns description if useful, blank if unfamiliar.
  * Failures are silent — the copy stage works fine without research context.
  */
@@ -314,7 +351,11 @@ async function researchMenuItem(params: {
     return fallbackResult ?? { item_name: cleanHint.slice(0, 60), description: "", is_familiar: true };
   }
 
-  // Stage 1b: use search only for unfamiliar, ambiguous, local, or branded items.
+  // Stage 1b: paid web search, only for unfamiliar/ambiguous/local/branded items.
+  // Skipped entirely when web-search research is disabled.
+  if (!webSearchResearchEnabled()) {
+    return fallbackResult ?? { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
+  }
   const webSearchResult = await callResearchModel({
     openAiKey,
     geminiApiKey,
@@ -513,8 +554,9 @@ async function generateCopy(params: {
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: SingleAd;
+  creativeFormat?: "standard_card" | "poster_v1";
   costContext: AiCostContext;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
   fallback_reason?: string;
   generator_version?: string;
   copy_latency_ms?: number;
@@ -527,6 +569,7 @@ async function generateCopy(params: {
   judge_attempts?: ProviderAttempt[];
   judge_provider?: string;
   judge_model?: string;
+  copy_alternatives?: AdCopyAlternative[];
 }> {
   const {
     openAiKey,
@@ -543,6 +586,7 @@ async function generateCopy(params: {
     revisionPreset,
     revisionFeedback,
     previousAd,
+    creativeFormat = "standard_card",
     costContext,
   } = params;
 
@@ -559,6 +603,7 @@ async function generateCopy(params: {
   let judgeModel: string | undefined;
   let providerFallbackUsed = false;
   let providerFallbackReason: string | undefined;
+  let latestPreparedVariants: AiDealCopyVariant[] = [];
   const merchantProfile = buildMerchantCreativeProfile({
     businessId: offerContract.businessId,
     businessName,
@@ -570,7 +615,7 @@ async function generateCopy(params: {
     itemHint,
     research,
   });
-  const selected = await generateValidatedDealCopy({
+  let selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
       const { system, userText, jsonSchema } = buildAdCopyPrompt({
@@ -588,6 +633,7 @@ async function generateCopy(params: {
         offerContract,
         validationFeedback,
         merchantCreativeProfile: merchantProfile,
+        creativeFormat,
       });
 
       let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
@@ -601,7 +647,10 @@ async function generateCopy(params: {
           timeoutMs: 12_000,
           generationRunId: costContext.requestGroupId,
           promptVersion: AD_COPY_PROMPT_VERSION,
-          reasoningLevel: "medium",
+          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call
+          // and is aborted by the ~12s text timeout (OPENAI_FETCH_FAILED). "low"
+          // reasoning returns the same validated 5 variants in ~10.5s, inside budget.
+          reasoningLevel: "low",
         }, {
           openAiApiKey: openAiKey,
           geminiApiKey,
@@ -642,12 +691,42 @@ async function generateCopy(params: {
           merchantProfile,
           offerContract,
           costContext,
+          creativeFormat,
         });
         copyQuality.push(prepared.telemetry);
         judgeAttempts.push(...prepared.judgeAttempts);
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
-        return prepared.variants;
+        latestPreparedVariants = prepared.variants;
+        if (!isRevision || !previousAd) return prepared.variants;
+        const changed = prepared.variants.filter((variant) => hasVisibleRevisionCopyChange(variant, previousAd));
+        const feedbackMatched = filterRevisionCandidatesByFeedback({
+          candidates: changed,
+          previousAd,
+          revisionFeedback,
+        });
+        latestPreparedVariants = feedbackMatched;
+        if (changed.length === 0) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads_v2",
+              event: "revision_no_visible_copy_change",
+              attemptNumber,
+              businessId: offerContract.businessId,
+            }),
+          );
+        }
+        if (changed.length > 0 && feedbackMatched.length === 0) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads_v2",
+              event: "revision_feedback_no_candidate_match",
+              attemptNumber,
+              businessId: offerContract.businessId,
+            }),
+          );
+        }
+        return feedbackMatched;
       } catch {
         console.log(
           JSON.stringify({
@@ -674,8 +753,65 @@ async function generateCopy(params: {
       );
     },
   });
+  if (
+    isRevision &&
+    previousAd &&
+    shouldUseDeterministicRevisionCopyFallback({
+      selected,
+      previousAd,
+      revisionFeedback,
+    })
+  ) {
+    const revisionFallback = buildDeterministicRevisionFallbackCopy({
+      contract: offerContract,
+      feedback: revisionFeedback,
+      avoidHeadlines: [
+        previousAd.headline,
+        previousAd.poster?.copy?.headline,
+        selected.headline,
+      ],
+    });
+    const fallbackValidation = validateAiCopyAgainstOffer(revisionFallback, offerContract);
+    if (fallbackValidation.valid && hasVisibleRevisionCopyChange(revisionFallback, previousAd)) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "revision_deterministic_copy_fallback",
+          businessId: offerContract.businessId,
+          previousCopySource: selected.copy_source,
+        }),
+      );
+      selected = {
+        ...selected,
+        ...revisionFallback,
+        push_notification: revisionFallback.push_body || revisionFallback.push_notification,
+        push_body: revisionFallback.push_body || revisionFallback.push_notification,
+        terms_summary: offerContract.canonicalShortTerms,
+        locked_offer_line: offerContract.canonicalOfferLine,
+        locked_terms_line: offerContract.canonicalShortTerms,
+        copy_source: "DETERMINISTIC_FALLBACK" satisfies AiDealCopySource,
+        selected_variant_index: null,
+        validation_reason_codes: [
+          ...new Set([
+            ...selected.validation_reason_codes,
+            "REVISION_DETERMINISTIC_FALLBACK",
+          ]),
+        ],
+        fallback_reason: [
+          selected.fallback_reason,
+          "REVISION_NO_VISIBLE_COPY_CHANGE",
+        ].filter(Boolean).join(","),
+      };
+    }
+  }
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
+  const copyAlternatives = buildCopyAlternatives({
+    variants: latestPreparedVariants,
+    selected,
+    offerContract,
+    cta: defaultCta(outputLanguage),
+  });
 
   return {
     headline: clip(selected.headline, DEAL_COPY_LIMITS.headline),
@@ -684,6 +820,8 @@ async function generateCopy(params: {
     push_notification: clip(selected.push_body || selected.push_notification, DEAL_COPY_LIMITS.pushBody),
     terms_summary: clip(selected.terms_summary, DEAL_COPY_LIMITS.terms),
     social_caption: selected.social_caption ? clip(selected.social_caption, DEAL_COPY_LIMITS.socialCaption) : undefined,
+    image_brief: selected.image_brief ? clip(selected.image_brief, 260) : undefined,
+    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, 32) : undefined,
     locked_offer_line: selected.locked_offer_line,
     locked_terms_line: selected.locked_terms_line,
     copy_source: selected.copy_source,
@@ -702,8 +840,72 @@ async function generateCopy(params: {
     judge_attempts: judgeAttempts,
     judge_provider: judgeProvider,
     judge_model: judgeModel,
+    copy_alternatives: copyAlternatives,
     cta: defaultCta(outputLanguage),
   };
+}
+
+function cleanForComparison(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
+}
+
+function copyKey(copy: Pick<AiDealCopyVariant, "headline" | "short_description" | "push_notification">): string {
+  return [
+    cleanForComparison(copy.headline),
+    cleanForComparison(copy.short_description),
+    cleanForComparison(copy.push_notification),
+  ].join("|");
+}
+
+function sameCopy(left: AiDealCopyVariant, right: AiDealCopyVariant): boolean {
+  const leftId = typeof left.candidate_id === "string" ? left.candidate_id.trim() : "";
+  const rightId = typeof right.candidate_id === "string" ? right.candidate_id.trim() : "";
+  if (leftId && rightId && leftId === rightId) return true;
+  return copyKey(left) === copyKey(right);
+}
+
+function buildCopyAlternatives(params: {
+  variants: AiDealCopyVariant[];
+  selected: ValidatedDealCopy;
+  offerContract: DealOfferContract;
+  cta: string;
+}): AdCopyAlternative[] {
+  if (params.selected.copy_source === "DETERMINISTIC_FALLBACK") return [];
+
+  const valid: AiDealCopyVariant[] = [];
+  const seen = new Set<string>();
+  const originalIndexes = new Map<string, number>();
+  params.variants.forEach((variant, index) => {
+    const key = copyKey(variant);
+    if (key && !originalIndexes.has(key)) originalIndexes.set(key, index);
+  });
+  for (const variant of params.variants) {
+    if (!validateAiCopyAgainstOffer(variant, params.offerContract).valid) continue;
+    const key = copyKey(variant);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    valid.push(variant);
+  }
+
+  const selectedIndex = valid.findIndex((variant) => sameCopy(variant, params.selected));
+  const ordered = selectedIndex >= 0
+    ? [valid[selectedIndex]!, ...valid.filter((_, index) => index !== selectedIndex)]
+    : [params.selected, ...valid.filter((variant) => !sameCopy(variant, params.selected))];
+
+  const alternatives = ordered.slice(0, 5).map((variant, index) => ({
+    ...(variant.candidate_id ? { candidate_id: clip(variant.candidate_id, 64) } : {}),
+    ...(variant.strategy_id ? { strategy_id: clip(variant.strategy_id, 64) } : {}),
+    ...(variant.strategy_reason ? { strategy_reason: clip(variant.strategy_reason, 180) } : {}),
+    variant_index: originalIndexes.get(copyKey(variant)) ?? (sameCopy(variant, params.selected) ? params.selected.selected_variant_index : index),
+    headline: clip(variant.headline, DEAL_COPY_LIMITS.headline),
+    short_description: clip(variant.short_description, DEAL_COPY_LIMITS.description),
+    push_notification: clip(variant.push_body || variant.push_notification, DEAL_COPY_LIMITS.pushBody),
+    ...(variant.social_caption ? { social_caption: clip(variant.social_caption, DEAL_COPY_LIMITS.socialCaption) } : {}),
+    cta: clip(variant.cta || params.cta, 26),
+    selected: sameCopy(variant, params.selected),
+  }));
+
+  return alternatives.length > 1 ? alternatives : [];
 }
 
 function defaultCta(lang: OutputLanguage): string {
@@ -963,6 +1165,255 @@ async function logTextProviderAttempts(
   }
 }
 
+function normalizeRevisionCopyText(value: string | null | undefined): string {
+  return typeof value === "string"
+    ? value.toLowerCase().replace(/[^a-z0-9%+\s-]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
+}
+
+function hasVisibleRevisionCopyChange(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
+  const nextHeadline = normalizeRevisionCopyText(candidate.headline);
+  const nextDescription = normalizeRevisionCopyText(candidate.short_description);
+  const nextPush = normalizeRevisionCopyText(candidate.push_body || candidate.push_notification);
+  const previousHeadlines = [
+    previousAd.headline,
+    previousAd.poster?.copy?.headline,
+  ].map(normalizeRevisionCopyText).filter(Boolean);
+  const previousDescription = normalizeRevisionCopyText(previousAd.short_description || previousAd.subheadline);
+  const previousPush = normalizeRevisionCopyText(previousAd.push_notification);
+
+  return (
+    (nextHeadline.length > 0 && !previousHeadlines.includes(nextHeadline)) ||
+    (nextDescription.length > 0 && nextDescription !== previousDescription) ||
+    (nextPush.length > 0 && nextPush !== previousPush)
+  );
+}
+
+type RevisionFeedbackIntent = {
+  active: boolean;
+  requiresHeadlineChange: boolean;
+  wantsShorter: boolean;
+  wantsDirect: boolean;
+  wantsLocal: boolean;
+  wantsWarmer: boolean;
+  wantsPremium: boolean;
+  bannedTerms: string[];
+};
+
+const REVISION_BANNED_TERM_STOPLIST = new Set([
+  "it",
+  "that",
+  "this",
+  "copy",
+  "text",
+  "wording",
+  "headline",
+  "title",
+  "poster",
+  "top part",
+]);
+
+function extractBannedRevisionTerms(feedback: string): string[] {
+  const phrases = new Set<string>();
+  const patterns = [
+    /\b(?:do not|dont|don't)\s+(?:say|use|include|mention|write)\s+"?([^".,;!?]+)"?/gi,
+    /\b(?:remove|avoid|drop)\s+(?:the\s+)?(?:word|phrase|copy|text)?\s*"?([^".,;!?]+)"?/gi,
+    /\b(?:without|no)\s+"?([^".,;!?]{3,60})"?/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of feedback.matchAll(pattern)) {
+      const phrase = normalizeRevisionCopyText(match[1]);
+      if (!phrase || REVISION_BANNED_TERM_STOPLIST.has(phrase)) continue;
+      if (phrase.split(/\s+/).length > 6) continue;
+      phrases.add(phrase);
+    }
+  }
+  return [...phrases].slice(0, 4);
+}
+
+function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeedbackIntent {
+  const normalized = normalizeRevisionCopyText(feedback);
+  if (!normalized) {
+    return {
+      active: false,
+      requiresHeadlineChange: false,
+      wantsShorter: false,
+      wantsDirect: false,
+      wantsLocal: false,
+      wantsWarmer: false,
+      wantsPremium: false,
+      bannedTerms: [],
+    };
+  }
+  return {
+    active: true,
+    requiresHeadlineChange:
+      /\b(?:ad copy|caption|headline|heading|hero|main copy|main line|main message|opening|poster copy|poster headline|poster text|tagline|title|top|top copy|top text|wording)\b/.test(normalized),
+    wantsShorter: /\b(?:shorter|too long|less text|fewer words|trim|tighten|concise)\b/.test(normalized),
+    wantsDirect: /\b(?:actual ad|awkward|boring|clear|confusing|direct|doesn t make sense|doesn t read right|full offer|generic|make sense|natural|plain|read right|reads weird|real ad|simple|sounds off|whole deal|whole offer)\b/.test(normalized),
+    wantsLocal: /\b(?:local|nearby|neighborhood|neighbourhood|regulars|community|around here)\b/.test(normalized),
+    wantsWarmer: /\b(?:appetizing|appealing|friendlier|friendly|inviting|less cold|more human|tasty|warmer)\b/.test(normalized),
+    wantsPremium: /\b(?:premium|professional|upscale|classy|elevated|polished|less cheap)\b/.test(normalized),
+    bannedTerms: extractBannedRevisionTerms(feedback ?? ""),
+  };
+}
+
+function revisionFeedbackMentionsImageOnly(feedback: string | undefined): boolean {
+  const normalized = normalizeRevisionCopyText(feedback);
+  if (!normalized) return false;
+  const mentionsImage = /\b(?:image|photo|picture|pic|background|crop|lighting|angle|composition|visual|brighter|darker)\b/.test(normalized);
+  if (!mentionsImage) return false;
+  const intent = parseRevisionFeedbackIntent(feedback);
+  return !intent.requiresHeadlineChange &&
+    !intent.wantsShorter &&
+    !intent.wantsDirect &&
+    !intent.wantsLocal &&
+    !intent.wantsWarmer &&
+    !intent.wantsPremium;
+}
+
+function shouldUseDeterministicRevisionCopyFallback(params: {
+  selected: AiDealCopyVariant;
+  previousAd: SingleAd;
+  revisionFeedback?: string;
+}): boolean {
+  if (revisionFeedbackMentionsImageOnly(params.revisionFeedback)) return false;
+  const intent = parseRevisionFeedbackIntent(params.revisionFeedback);
+  if (intent.requiresHeadlineChange && !revisionHeadlineChanged(params.selected, params.previousAd)) return true;
+  if (hasVisibleRevisionCopyChange(params.selected, params.previousAd)) return false;
+  return true;
+}
+
+function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
+  const nextHeadline = normalizeRevisionCopyText(candidate.headline);
+  if (!nextHeadline) return false;
+  const previousHeadlines = [
+    previousAd.headline,
+    previousAd.poster?.copy?.headline,
+  ].map(normalizeRevisionCopyText).filter(Boolean);
+  return !previousHeadlines.includes(nextHeadline);
+}
+
+function revisionCandidateVisibleLength(candidate: AiDealCopyVariant): number {
+  return [
+    candidate.headline,
+    candidate.short_description,
+    candidate.push_body || candidate.push_notification,
+    candidate.social_caption,
+  ].filter(Boolean).join(" ").length;
+}
+
+function revisionPreviousVisibleLength(previousAd: SingleAd): number {
+  return [
+    previousAd.headline,
+    previousAd.short_description || previousAd.subheadline,
+    previousAd.push_notification,
+    previousAd.social_caption,
+  ].filter(Boolean).join(" ").length;
+}
+
+function scoreRevisionFeedbackFit(params: {
+  candidate: AiDealCopyVariant;
+  previousAd: SingleAd;
+  intent: RevisionFeedbackIntent;
+}): { hardFailReasons: string[]; softScore: number } {
+  const { candidate, previousAd, intent } = params;
+  if (!intent.active) return { hardFailReasons: [], softScore: 0 };
+
+  const hardFailReasons: string[] = [];
+  let softScore = 0;
+  const text = normalizeRevisionCopyText([
+    candidate.headline,
+    candidate.short_description,
+    candidate.push_body || candidate.push_notification,
+    candidate.social_caption,
+  ].filter(Boolean).join(" "));
+
+  for (const banned of intent.bannedTerms) {
+    if (banned && text.includes(banned)) hardFailReasons.push("uses_banned_feedback_term");
+  }
+
+  const headlineChanged = revisionHeadlineChanged(candidate, previousAd);
+  if (intent.requiresHeadlineChange && !headlineChanged) {
+    hardFailReasons.push("headline_unchanged_for_headline_feedback");
+  }
+  if (headlineChanged) softScore += 2;
+
+  if (intent.wantsShorter) {
+    const previousLength = revisionPreviousVisibleLength(previousAd);
+    const nextLength = revisionCandidateVisibleLength(candidate);
+    softScore += nextLength <= Math.max(80, previousLength * 0.88) ? 5 : -3;
+  }
+
+  if (intent.wantsDirect) {
+    if (candidate.headline.length <= 58 && candidate.short_description.length <= 145) softScore += 3;
+    if (/[;:]/.test(candidate.headline)) softScore -= 1;
+  }
+
+  if (intent.wantsLocal) {
+    if (candidate.strategy_id === "local_discovery" || candidate.strategy_id === "merchant_specific") softScore += 3;
+    if (/\b(?:local|nearby|neighborhood|regulars|community|around here|on your way)\b/.test(text)) softScore += 1;
+  }
+
+  if (intent.wantsWarmer) {
+    if (/\b(?:you|your|treat|favorite|bring|share|break|stop by|on us)\b/.test(text)) softScore += 2;
+  }
+
+  if (intent.wantsPremium) {
+    if (candidate.strategy_id === "product_desire" || /\b(?:crafted|polished|elevated|signature)\b/.test(text)) softScore += 2;
+    if (/\b(?:cheap|bargain|steal)\b/.test(text)) softScore -= 3;
+  }
+
+  return { hardFailReasons, softScore };
+}
+
+function filterRevisionCandidatesByFeedback(params: {
+  candidates: AiDealCopyVariant[];
+  previousAd: SingleAd;
+  revisionFeedback?: string;
+}): AiDealCopyVariant[] {
+  const intent = parseRevisionFeedbackIntent(params.revisionFeedback);
+  if (!intent.active) return params.candidates;
+
+  const scored = params.candidates.map((candidate) => ({
+    candidate,
+    ...scoreRevisionFeedbackFit({ candidate, previousAd: params.previousAd, intent }),
+  }));
+  const hardPassed = scored.filter((entry) => entry.hardFailReasons.length === 0);
+  if (hardPassed.length === 0) return [];
+
+  const positiveMatches = hardPassed.filter((entry) => entry.softScore > 0);
+  const pool = positiveMatches.length > 0 ? positiveMatches : hardPassed;
+  return pool
+    .sort((left, right) => right.softScore - left.softScore)
+    .map((entry) => entry.candidate);
+}
+
+function normalizePosterHeadlineText(value: string | null | undefined): string {
+  return typeof value === "string"
+    ? value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9%+\s-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+    : "";
+}
+
+function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {
+  const headline = normalizePosterHeadlineText(candidate.headline);
+  const reasons: string[] = [];
+  if (!headline) return reasons;
+  if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
+
+  const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
+  if (canonicalOffer && headline === canonicalOffer) {
+    reasons.push("POSTER_HEADLINE_REPEATS_LOCKED_OFFER");
+  }
+  return [...new Set(reasons)];
+}
+
 async function prepareCopyCandidates(params: {
   variants: AiDealCopyVariant[];
   creativeBrief: unknown;
@@ -974,6 +1425,7 @@ async function prepareCopyCandidates(params: {
   merchantProfile: MerchantCreativeProfile;
   offerContract: DealOfferContract;
   costContext: AiCostContext;
+  creativeFormat: "standard_card" | "poster_v1";
 }): Promise<{
   variants: AiDealCopyVariant[];
   telemetry: CopyQualityTelemetry;
@@ -1019,10 +1471,16 @@ async function prepareCopyCandidates(params: {
       },
       requiredSpecificTerms: params.offerContract.aiRules.mustUseExactItemNames,
     });
-    if (gate.ok) return true;
+    const posterReasons = params.creativeFormat === "poster_v1"
+      ? posterHeadlineGateReasons(variant, params.offerContract)
+      : [];
+    if (gate.ok && posterReasons.length === 0) return true;
     telemetry.style_gate_rejected.push({
       candidate_id: candidateId(variant, index),
-      reasons: [...new Set(gate.failures.flatMap((failure) => failure.reasons))],
+      reasons: [...new Set([
+        ...gate.failures.flatMap((failure) => failure.reasons),
+        ...posterReasons,
+      ])],
     });
     return false;
   });
@@ -1071,7 +1529,7 @@ async function prepareCopyCandidates(params: {
 
   const judgeCandidates = ranked
     .filter((variant) => validateAiCopyAgainstOffer(variant, params.offerContract).valid)
-    .slice(0, 3);
+    .slice(0, 5);
   if (judgeCandidates.length < 2) {
     telemetry.judge.skipped_reason = "fewer_than_two_valid_candidates";
     return { variants: ranked, telemetry, judgeAttempts: [] };
@@ -1092,7 +1550,7 @@ async function prepareCopyCandidates(params: {
       systemPrompt: system,
       userPrompt: userText,
       jsonSchema,
-      maxOutputTokens: 560,
+      maxOutputTokens: 780,
       timeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
       generationRunId: params.costContext.requestGroupId,
       promptVersion: CANDIDATE_JUDGE_PROMPT_VERSION,
@@ -1256,15 +1714,11 @@ function withImageSelection(
 
 async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<AdQuota> {
   const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
-  const { count } = await admin
-    .from("ai_generation_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .in("request_type", ["ad_variants", "ad_refine"])
-    .eq("openai_called", true)
-    .eq("success", true)
-    .gte("created_at", utcMonthStartIso());
-  const used = count ?? 0;
+  const { used } = await countAiQuotaUsage(admin, {
+    businessId,
+    scope: "ad_generation",
+    monthStartIso: utcMonthStartIso(),
+  });
   return {
     used,
     limit: monthlyLimit,
@@ -1282,32 +1736,45 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function geminiVisionQaFallbackEnabled(): boolean {
-  if (!envFlag("AI_VISION_FALLBACK_ENABLED", false)) return false;
-  const provider = (Deno.env.get("AI_VISION_FALLBACK_PROVIDER") ?? "gemini").trim().toLowerCase();
-  return provider === "gemini";
+function visionQaPrimaryProvider(): "gemini" | "openai" {
+  const configured = (Deno.env.get("AI_VISION_PRIMARY_PROVIDER") ?? "gemini").trim().toLowerCase();
+  return configured === "openai" ? "openai" : "gemini";
+}
+
+function visionQaFallbackEnabled(): boolean {
+  return envFlag("AI_VISION_FALLBACK_ENABLED", true);
 }
 
 function makeImageQaConfig() {
-  let fallbackEnabled = geminiVisionQaFallbackEnabled();
   let geminiTextModel = "gemini";
-  if (fallbackEnabled) {
-    try {
-      geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
-    } catch {
-      fallbackEnabled = false;
-      console.log(JSON.stringify({
-        tag: "ai_ads_v2",
-        event: "gemini_image_qa_config_error",
-        errorCode: "AI_TEXT_CONFIG_INVALID",
-      }));
-    }
+  let geminiConfigured = true;
+  try {
+    geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
+  } catch {
+    geminiConfigured = false;
+    console.log(JSON.stringify({
+      tag: "ai_ads_v2",
+      event: "gemini_image_qa_config_error",
+      errorCode: "AI_TEXT_CONFIG_INVALID",
+    }));
   }
+  // Vision QA defaults to Gemini (cheap, multimodal) with OpenAI as a guarded
+  // fallback. This keeps the offer image inspection off the expensive OpenAI
+  // reasoning model on the hot path. If the Gemini judge model is misconfigured,
+  // QA falls back to OpenAI so the guardrail never silently disappears.
+  const requestedPrimary = visionQaPrimaryProvider();
+  const primaryProvider: "gemini" | "openai" =
+    requestedPrimary === "gemini" && !geminiConfigured ? "openai" : requestedPrimary;
+  const fallbackProvider: "gemini" | "openai" = primaryProvider === "gemini" ? "openai" : "gemini";
+  const fallbackEnabled =
+    fallbackProvider === "gemini"
+      ? geminiConfigured && visionQaFallbackEnabled()
+      : visionQaFallbackEnabled();
   return {
     routerEnabled: true,
-    primaryProvider: "openai" as const,
+    primaryProvider,
     fallbackEnabled,
-    fallbackProvider: "gemini" as const,
+    fallbackProvider,
     circuitBreakerEnabled: false,
     openAiModel: CHAT_MODEL,
     geminiTextModel,
@@ -1482,7 +1949,7 @@ async function inspectGeneratedImageForOffer(params: {
         timeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
         generationRunId: params.costContext.requestGroupId,
         promptVersion: "AI_IMAGE_QA_V1",
-        reasoningLevel: "medium",
+        reasoningLevel: "low",
       },
       {
         openAiApiKey: params.openAiKey,
@@ -1525,6 +1992,65 @@ async function sourceAwareQaForImageBytes(params: {
     sourceType: params.sourceType,
     merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
   });
+}
+
+function imageQaBlocksAutomaticSelection(qa: ImageQaTelemetry): boolean {
+  return qa.decision === "block" || qa.hardFailReasons.length > 0;
+}
+
+async function fetchUploadedDealPhotoBytes(params: {
+  userClient: SupabaseClient;
+  photoPath: string;
+  eventName: string;
+}): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  const { data: signed, error: signedErr } = await params.userClient.storage
+    .from("deal-photos")
+    .createSignedUrl(params.photoPath, 60 * 60);
+  if (signedErr || !signed?.signedUrl) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: params.eventName,
+        err: signedErr?.message?.slice(0, 200),
+      }),
+    );
+    return null;
+  }
+
+  try {
+    const fetched = await fetch(signed.signedUrl);
+    if (!fetched.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: `${params.eventName}_fetch_failed`, status: fetched.status }));
+      return null;
+    }
+    return {
+      mimeType: fetched.headers.get("content-type") || "image/png",
+      bytes: new Uint8Array(await fetched.arrayBuffer()),
+    };
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: `${params.eventName}_fetch_error`, errorCode: "FETCH_ERROR" }));
+    return null;
+  }
+}
+
+async function qaMerchantOriginalPhoto(params: {
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+  merchantOverrideAcknowledged: boolean;
+}): Promise<ImageQaTelemetry> {
+  const sourceAware = await sourceAwareQaForImageBytes({
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    imageBytes: params.imageBytes,
+    requiredVisualItems: params.requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: "merchant_original",
+    merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+  });
+  return imageQaTelemetryFromSourceAware(sourceAware, 1);
 }
 
 async function fetchApprovedStockImageBytes(params: {
@@ -1638,6 +2164,7 @@ async function produceImageOpenAiOnly(params: {
   itemHint: string;
   businessName: string;
   offerContract: DealOfferContract;
+  creativeImageBrief?: string | null;
   imageEditMode: MerchantImageEditMode;
   customImageEditInstruction?: string;
   merchantOverrideAcknowledged: boolean;
@@ -1658,6 +2185,7 @@ async function produceImageOpenAiOnly(params: {
     itemHint,
     businessName,
     offerContract,
+    creativeImageBrief,
     merchantOverrideAcknowledged,
     costContext,
   } = params;
@@ -1665,99 +2193,104 @@ async function produceImageOpenAiOnly(params: {
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
   const requiredVisualItems = buildRequiredVisualItems(offerContract);
-  const originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
+  let originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
+  const originalPhotoResult = (): OpenAiProducedImage => ({
+    posterStoragePath: photoPath,
+    source: "uploaded_original",
+    treatment: null,
+    prompt: null,
+    qa: originalQa,
+  });
 
   // Path A — owner uploaded a photo
   if (photoPath) {
+    const uploadedPhoto = await fetchUploadedDealPhotoBytes({
+      userClient,
+      photoPath,
+      eventName: "photo_signed_url_failed",
+    });
+    if (uploadedPhoto) {
+      originalQa = await qaMerchantOriginalPhoto({
+        openAiKey,
+        geminiApiKey,
+        imageBytes: uploadedPhoto.bytes,
+        requiredVisualItems,
+        costContext,
+        merchantOverrideAcknowledged,
+      });
+    }
+
     if (!photoTreatment) {
       // No enhancement: copy the uploaded photo to a stable poster path
       // (the original is already in deal-photos; we just point the ad at it)
-      return {
-        posterStoragePath: photoPath,
-        source: "uploaded_original",
-        treatment: null,
-        prompt: null,
-        qa: originalQa,
-      };
-    }
-
-    const { data: signed, error: signedErr } = await userClient.storage
-      .from("deal-photos")
-      .createSignedUrl(photoPath, 60 * 60);
-    if (signedErr || !signed?.signedUrl) {
+      if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
-          event: "photo_signed_url_failed",
-          err: signedErr?.message?.slice(0, 200),
+          event: "merchant_original_image_qa_blocked",
+          hardFailReasons: originalQa.hardFailReasons.slice(0, 8),
+          missingItems: originalQa.missingItems.slice(0, 8),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
+    } else if (!uploadedPhoto) {
+      return originalPhotoResult();
+    } else {
+      const imageBytes = uploadedPhoto.bytes;
+      const imageMime = uploadedPhoto.mimeType;
 
-    let imageBytes: Uint8Array;
-    let imageMime = "image/png";
-    try {
-      const fetched = await fetch(signed.signedUrl);
-      if (!fetched.ok) {
-        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
+      // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
+      const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
+        openAiKey,
+        imageBytes,
+        imageMime,
+        treatment: photoTreatment,
+        customEditInstruction: [
+          params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+          imageRevisionInstruction({
+            revisionPreset: params.revisionPreset,
+            revisionFeedback: params.revisionFeedback,
+          }),
+        ].filter(Boolean).join(" "),
+      });
+      await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
+      const enhanced = enhancedResult.bytes;
+
+      if (!enhanced) {
+        // Enhancement failed — fall back to the original photo only if QA did not hard-block it.
+        if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+      } else {
+        const editQa = await sourceAwareQaForImageBytes({
+          openAiKey,
+          geminiApiKey,
+          imageBytes: enhanced,
+          requiredVisualItems,
+          costContext,
+          sourceType: "merchant_ai_edit",
+        });
+        if (shouldFailClosedForImageQa(editQa)) {
+          if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+        } else {
+          const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
+
+          const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
+          const { error: upErr } = await admin.storage
+            .from("deal-photos")
+            .upload(enhancedPath, enhanced, { contentType: "image/png", upsert: false });
+          if (upErr) {
+            console.log(
+              JSON.stringify({
+                tag: "ai_ads_v2",
+                event: "enhanced_upload_err",
+                err: upErr.message?.slice(0, 200),
+              }),
+            );
+            if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+          } else {
+            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
+          }
+        }
       }
-      imageMime = fetched.headers.get("content-type") || "image/png";
-      imageBytes = new Uint8Array(await fetched.arrayBuffer());
-    } catch {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
-
-    // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
-    const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
-      openAiKey,
-      imageBytes,
-      imageMime,
-      treatment: photoTreatment,
-      customEditInstruction: [
-        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
-        imageRevisionInstruction({
-          revisionPreset: params.revisionPreset,
-          revisionFeedback: params.revisionFeedback,
-        }),
-      ].filter(Boolean).join(" "),
-    });
-    await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
-    const enhanced = enhancedResult.bytes;
-
-    if (!enhanced) {
-      // Enhancement failed — fall back to the original photo so the user still gets an ad
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-
-    const editQa = await sourceAwareQaForImageBytes({
-      openAiKey,
-      geminiApiKey,
-      imageBytes: enhanced,
-      requiredVisualItems,
-      costContext,
-      sourceType: "merchant_ai_edit",
-    });
-    if (shouldFailClosedForImageQa(editQa)) {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
-
-    const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
-    const { error: upErr } = await admin.storage
-      .from("deal-photos")
-      .upload(enhancedPath, enhanced, { contentType: "image/png", upsert: false });
-    if (upErr) {
-      console.log(
-        JSON.stringify({
-          tag: "ai_ads_v2",
-          event: "enhanced_upload_err",
-          err: upErr.message?.slice(0, 200),
-        }),
-      );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
@@ -1769,6 +2302,7 @@ async function produceImageOpenAiOnly(params: {
     itemDescription: research.is_familiar ? research.description : "",
     businessName,
     requiredVisualItems,
+    creativeDirection: creativeImageBrief,
     visualRevisionInstruction: imageRevisionInstruction({
       revisionPreset: params.revisionPreset,
       revisionFeedback: params.revisionFeedback,
@@ -1846,9 +2380,16 @@ async function produceImageOpenAiOnly(params: {
         requiredVisualItems,
         missingItems: firstQa.missing_items,
       });
-      const retryGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt);
-      await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
-      const retryPng = retryGeneration.bytes;
+      // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
+      // miss keeps the first image / existing fallback instead of a second image.
+      const retryGeneration =
+        MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
+          ? await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt)
+          : null;
+      if (retryGeneration) {
+        await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
+      }
+      const retryPng = retryGeneration?.bytes ?? null;
       if (retryPng) {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
@@ -2008,6 +2549,7 @@ async function produceImage(params: {
   businessName: string;
   businessCategory?: string;
   offerContract: DealOfferContract;
+  creativeImageBrief?: string | null;
   imageSourceMode: MerchantImageSourceMode;
   imageEditMode: MerchantImageEditMode;
   customImageEditInstruction?: string;
@@ -2019,22 +2561,64 @@ async function produceImage(params: {
   imageAspectRatio: AiImageAspectRatio;
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
-  const originalUploadedPhoto = (): ProducedImage => withImageSelection(
-    {
-      posterStoragePath: params.photoPath,
-      source: "uploaded_original",
-      treatment: null,
-      prompt: null,
-      qa: originalPhotoQaTelemetry(params.merchantOverrideAcknowledged),
-      provider: "none",
-      model: null,
-      estimatedCostUsd: 0,
-    },
-    {
-      sourcePhotoPath: params.photoPath,
-      editMode: "none",
-    },
-  );
+  const originalUploadedPhoto = async (): Promise<ProducedImage> => {
+    let qa = originalPhotoQaTelemetry(params.merchantOverrideAcknowledged);
+    if (params.photoPath) {
+      const uploadedPhoto = await fetchUploadedDealPhotoBytes({
+        userClient: params.userClient,
+        photoPath: params.photoPath,
+        eventName: "merchant_original_photo_signed_url_failed",
+      });
+      if (uploadedPhoto) {
+        qa = await qaMerchantOriginalPhoto({
+          openAiKey: params.openAiKey,
+          geminiApiKey: params.geminiApiKey,
+          imageBytes: uploadedPhoto.bytes,
+          requiredVisualItems,
+          costContext: params.costContext,
+          merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+        });
+      }
+    }
+    return withImageSelection(
+      {
+        posterStoragePath: params.photoPath,
+        source: "uploaded_original",
+        treatment: null,
+        prompt: null,
+        qa,
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: "none",
+      },
+    );
+  };
+  const generateWithoutSourcePhoto = async (): Promise<ProducedImage> =>
+    produceImage({
+      ...params,
+      photoPath: null,
+      photoTreatment: null,
+      imageSourceMode: "ai_generated",
+      imageEditMode: "none",
+      customImageEditInstruction: undefined,
+    });
+  const originalUploadedPhotoOrFallback = async (): Promise<ProducedImage> => {
+    const original = await originalUploadedPhoto();
+    if (!imageQaBlocksAutomaticSelection(original.qa)) return original;
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "merchant_original_image_qa_blocked",
+        hardFailReasons: original.qa.hardFailReasons.slice(0, 8),
+        missingItems: original.qa.missingItems.slice(0, 8),
+      }),
+    );
+    return generateWithoutSourcePhoto();
+  };
   const openAiFallback = async (): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
     const withMetadata = withOpenAiImageMetadata(result);
@@ -2149,6 +2733,7 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
+    creativeDirection: params.creativeImageBrief,
     customEditInstruction: revisionImageInstruction,
     stylePreset,
     aspectRatio: params.imageAspectRatio,
@@ -2157,10 +2742,10 @@ async function produceImage(params: {
 
   if (params.photoPath) {
     if (!params.photoTreatment) {
-      return originalUploadedPhoto();
+      return originalUploadedPhotoOrFallback();
     }
     if (!params.imageProviderConfig.ownerPhotoReferenceEnabled) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const { data: signed, error: signedErr } = await params.userClient.storage
@@ -2174,7 +2759,7 @@ async function produceImage(params: {
           err: signedErr?.message?.slice(0, 200),
         }),
       );
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     let imageBytes: Uint8Array | null = null;
@@ -2189,7 +2774,7 @@ async function produceImage(params: {
       imageBytes = null;
     }
     if (!imageBytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const photoPrompt = buildGeminiAdImagePrompt({
@@ -2202,6 +2787,7 @@ async function produceImage(params: {
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      creativeDirection: params.creativeImageBrief,
       customEditInstruction: [
         params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
         revisionImageInstruction,
@@ -2222,7 +2808,7 @@ async function produceImage(params: {
     await logGeminiImageAttempts(params.costContext, "image_edit", gemini.attempts);
 
     if (!gemini.bytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const editQa = await sourceAwareQaForImageBytes({
@@ -2234,7 +2820,7 @@ async function produceImage(params: {
       sourceType: "merchant_ai_edit",
     });
     if (shouldFailClosedForImageQa(editQa)) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
     const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2248,7 +2834,7 @@ async function produceImage(params: {
       rand,
     });
     if (!enhancedPath) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
     return withImageSelection(
       {
@@ -2348,17 +2934,24 @@ async function produceImage(params: {
         requiredVisualItems,
         missingItems: firstQa.missing_items,
       });
-      const retryGeneration = await generateGeminiAdImageWithTelemetry({
-        apiKey: params.geminiApiKey,
-        model: params.imageProviderConfig.geminiModel,
-        prompt: retryPrompt,
-        aspectRatio: params.imageAspectRatio,
-        imageSize: "1K",
-        estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
-        retryOnFailure: false,
-      });
-      await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
-      if (retryGeneration.bytes) {
+      // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
+      // miss keeps the first image / existing fallback instead of a second image.
+      const retryGeneration =
+        MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
+          ? await generateGeminiAdImageWithTelemetry({
+              apiKey: params.geminiApiKey,
+              model: params.imageProviderConfig.geminiModel,
+              prompt: retryPrompt,
+              aspectRatio: params.imageAspectRatio,
+              imageSize: "1K",
+              estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+              retryOnFailure: false,
+            })
+          : null;
+      if (retryGeneration) {
+        await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
+      }
+      if (retryGeneration?.bytes) {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey: params.openAiKey,
@@ -2628,7 +3221,7 @@ function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null
 
 function buildGenerationTelemetry(params: {
   offerContract: DealOfferContract;
-  copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
+  copy: Pick<SingleAd, "headline" | "short_description" | "image_brief" | "poster_kicker" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
     fallback_reason?: string;
     generator_version?: string;
     copy_latency_ms?: number;
@@ -2641,6 +3234,7 @@ function buildGenerationTelemetry(params: {
     judge_attempts?: ProviderAttempt[];
     judge_provider?: string;
     judge_model?: string;
+    copy_alternatives?: AdCopyAlternative[];
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
@@ -2667,6 +3261,7 @@ function buildGenerationTelemetry(params: {
     generated: {
       headline: copy.headline,
       offer: copy.short_description,
+      image_brief: copy.image_brief ?? null,
       image_prompt: imageResult.prompt,
     },
     image_generation: {
@@ -2701,11 +3296,13 @@ function buildGenerationTelemetry(params: {
       generator_version: copy.generator_version ?? null,
       latency_ms: copy.copy_latency_ms ?? null,
       fallback_reason: copy.fallback_reason ?? null,
+      poster_kicker: copy.poster_kicker ?? null,
       validation_failure_count: validationRuleIds.length,
       provider: copy.provider ?? null,
       model: copy.model ?? null,
       provider_fallback_used: copy.provider_fallback_used ?? false,
       provider_fallback_reason: copy.provider_fallback_reason ?? null,
+      alternative_count: copy.copy_alternatives?.length ?? 0,
       quality: copy.copy_quality ?? [],
       judge: {
         provider: copy.judge_provider ?? null,
@@ -2919,8 +3516,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ownership check — must run before any expensive work
-    const { data: business, error: bizErr } = await userClient
+    // Ownership check — must run before any expensive work. Read the business
+    // row with the admin client, then compare it against the authenticated user;
+    // user-scoped selects cannot reliably read owner_id after column grants/RLS.
+    const { data: business, error: bizErr } = await admin
       .from("businesses")
       .select("id, owner_id, name")
       .eq("id", businessId)
@@ -3112,7 +3711,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
       fallback_reason?: string;
       generator_version?: string;
       copy_latency_ms?: number;
@@ -3125,6 +3724,7 @@ Deno.serve(async (req) => {
       judge_attempts?: ProviderAttempt[];
       judge_provider?: string;
       judge_model?: string;
+      copy_alternatives?: AdCopyAlternative[];
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
@@ -3135,11 +3735,14 @@ Deno.serve(async (req) => {
         push_notification: previousAd.push_notification || previousAd.headline,
         terms_summary: offerContract.canonicalShortTerms,
         social_caption: previousAd.social_caption,
+        image_brief: previousAd.image_brief,
+        poster_kicker: previousAd.poster?.copy?.subline,
         locked_offer_line: offerContract.canonicalOfferLine,
         locked_terms_line: offerContract.canonicalShortTerms,
         copy_source: previousAd.copy_source,
         variant_count: previousAd.variant_count,
         selected_variant_index: previousAd.selected_variant_index,
+        copy_alternatives: previousAd.copy_alternatives,
         validation_reason_codes: previousAd.validation_reason_codes,
         cta: previousAd.cta,
       };
@@ -3160,6 +3763,7 @@ Deno.serve(async (req) => {
           revisionPreset: revisionPreset || undefined,
           revisionFeedback: revisionFeedback || undefined,
           previousAd: previousAd ?? undefined,
+          creativeFormat: creativeRequest.requestedFormat,
           costContext,
         });
       } catch {
@@ -3232,6 +3836,7 @@ Deno.serve(async (req) => {
         businessName,
         businessCategory: businessContext.category,
         offerContract,
+        creativeImageBrief: copy.image_brief,
         revisionPreset: revisionPreset || undefined,
         revisionFeedback: revisionFeedback || undefined,
         imageProviderConfig,
@@ -3262,7 +3867,7 @@ Deno.serve(async (req) => {
           sourceAssetPath: imageResult.posterStoragePath,
           renderedAssetPath: null,
           headline: copy.headline,
-          subline: copy.short_description || copy.subheadline,
+          subline: copy.poster_kicker,
           businessCategory: businessContext.category,
           compositionPlan: imageResult.prompt,
         })
@@ -3333,11 +3938,14 @@ Deno.serve(async (req) => {
       push_notification: copy.push_notification,
       terms_summary: copy.terms_summary,
       social_caption: copy.social_caption,
+      image_brief: copy.image_brief,
+      poster_kicker: copy.poster_kicker,
       locked_offer_line: copy.locked_offer_line,
       locked_terms_line: copy.locked_terms_line,
       copy_source: copy.copy_source,
       variant_count: copy.variant_count,
       selected_variant_index: copy.selected_variant_index,
+      copy_alternatives: copy.copy_alternatives,
       validation_reason_codes: copy.validation_reason_codes,
       cta: copy.cta,
       item_research: research,
@@ -3442,6 +4050,42 @@ Deno.serve(async (req) => {
   }
 });
 
+function coerceCopyAlternatives(raw: unknown): AdCopyAlternative[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: AdCopyAlternative[] = [];
+  for (const value of raw) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const option = value as Record<string, unknown>;
+    const headline = clip(typeof option.headline === "string" ? option.headline : "", DEAL_COPY_LIMITS.headline);
+    const shortDescription = clip(
+      typeof option.short_description === "string" ? option.short_description : "",
+      DEAL_COPY_LIMITS.description,
+    );
+    if (!headline || !shortDescription) continue;
+    out.push({
+      ...(typeof option.candidate_id === "string" ? { candidate_id: clip(option.candidate_id, 64) } : {}),
+      ...(typeof option.strategy_id === "string" ? { strategy_id: clip(option.strategy_id, 64) } : {}),
+      ...(typeof option.strategy_reason === "string" ? { strategy_reason: clip(option.strategy_reason, 180) } : {}),
+      variant_index: typeof option.variant_index === "number" && Number.isFinite(option.variant_index)
+        ? Math.max(0, Math.floor(option.variant_index))
+        : out.length,
+      headline,
+      short_description: shortDescription,
+      push_notification: clip(
+        typeof option.push_notification === "string" ? option.push_notification : headline,
+        DEAL_COPY_LIMITS.pushBody,
+      ),
+      ...(typeof option.social_caption === "string"
+        ? { social_caption: clip(option.social_caption, DEAL_COPY_LIMITS.socialCaption) }
+        : {}),
+      ...(typeof option.cta === "string" ? { cta: clip(option.cta, 26) } : {}),
+      ...(typeof option.selected === "boolean" ? { selected: option.selected } : {}),
+    });
+    if (out.length >= 5) break;
+  }
+  return out.length > 1 ? out : undefined;
+}
+
 function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
   const research = (raw.item_research ?? {}) as Partial<ItemResearch>;
   const photoSourceRaw = typeof raw.photo_source === "string" ? raw.photo_source : "generated";
@@ -3499,6 +4143,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       : null,
     editMode: imageEditModeFromPhotoTreatment(photoTreatment),
   });
+  const parsedPoster = recordValue(raw.poster) as PosterDraftV1 | null;
 
   return {
     headline: clip(typeof raw.headline === "string" ? raw.headline : "", 70),
@@ -3513,6 +4158,11 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       240,
     ),
     social_caption: clip(typeof raw.social_caption === "string" ? raw.social_caption : "", 220) || undefined,
+    image_brief: clip(typeof raw.image_brief === "string" ? raw.image_brief : "", 260) || undefined,
+    poster_kicker: clip(
+      typeof raw.poster_kicker === "string" ? raw.poster_kicker : parsedPoster?.copy?.subline ?? "",
+      32,
+    ) || undefined,
     locked_offer_line: clip(
       typeof raw.locked_offer_line === "string" ? raw.locked_offer_line : "",
       240,
@@ -3529,6 +4179,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       typeof raw.selected_variant_index === "number" && Number.isFinite(raw.selected_variant_index)
         ? Math.max(0, Math.floor(raw.selected_variant_index))
         : null,
+    copy_alternatives: coerceCopyAlternatives(raw.copy_alternatives),
     validation_reason_codes: Array.isArray(raw.validation_reason_codes)
       ? raw.validation_reason_codes.filter((code): code is string => typeof code === "string").slice(0, 12)
       : undefined,
@@ -3542,6 +4193,6 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     photo_treatment: photoTreatment,
     poster_storage_path: posterStoragePath,
     image_selection: imageSelection,
-    poster: recordValue(raw.poster) as PosterDraftV1 | null,
+    poster: parsedPoster,
   };
 }

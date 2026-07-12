@@ -24,24 +24,35 @@ function present(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeComparison(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function localizedTitleField(deal: LocalizedDealFields, lang: DealLocale): string | null {
+  if (lang === "es") return present(deal.title_es);
+  if (lang === "ko") return present(deal.title_ko);
+  return present(deal.title_en) ?? present(deal.title);
+}
+
+function localizedDescriptionField(deal: LocalizedDealFields, lang: DealLocale): string | null {
+  if (lang === "es") return present(deal.description_es);
+  if (lang === "ko") return present(deal.description_ko);
+  return present(deal.description_en) ?? present(deal.description);
+}
+
 export function localizedDealTitle(deal: LocalizedDealFields, language: string): string {
   const lang = baseLanguage(language);
-  const localized =
-    lang === "en"
-      ? present(deal.title_en) ?? present(deal.title) ?? ""
-      : lang === "es"
-        ? present(deal.title_es) ?? present(deal.title) ?? ""
-        : present(deal.title_ko) ?? present(deal.title) ?? "";
+  const localized = localizedTitleField(deal, lang);
+  if (lang !== "en" && localized) return localized;
   return getDealDisplayTitle(deal, localized);
 }
 
 export function localizedDealDescription(deal: LocalizedDealFields, language: string): string {
   const lang = baseLanguage(language);
-  const description =
-    lang === "en"
-      ? present(deal.description_en) ?? present(deal.description) ?? ""
-      : lang === "es"
-        ? present(deal.description_es) ?? present(deal.description) ?? ""
-        : present(deal.description_ko) ?? present(deal.description) ?? "";
-  return getDealDisplayDescription(deal, description, localizedDealTitle(deal, language));
+  const description = localizedDescriptionField(deal, lang);
+  const title = localizedDealTitle(deal, language);
+  if (lang !== "en" && description) {
+    return normalizeComparison(description) === normalizeComparison(title) ? "" : description;
+  }
+  return getDealDisplayDescription(deal, description, title);
 }

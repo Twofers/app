@@ -43,8 +43,12 @@ describe("ai-extract-menu source guards", () => {
     expect(routerBlock).toMatch(/operation:\s*"merchant_context"/);
     expect(routerBlock).toMatch(/imageInputs:\s*\[\{ bytes: imageBytes, mimeType: imageMime \}\]/);
     expect(routerBlock).toMatch(/promptVersion:\s*MENU_EXTRACTION_PROMPT_VERSION/);
-    expect(routerBlock).toMatch(/config:\s*resolveAiTextProviderConfig\(\)/);
+    expect(routerBlock).toMatch(/config:\s*menuExtractionConfig\(\)/);
     expect(routerBlock).toMatch(/logMenuProviderAttempts/);
+    // Menu OCR is pinned to Gemini-first (cheap vision) regardless of the copy provider.
+    expect(source).toMatch(/function menuExtractionConfig/);
+    expect(source).toMatch(/AI_MENU_EXTRACTION_PROVIDER/);
+    expect(source).toMatch(/\?\s*"openai"\s*\n?\s*:\s*"gemini"/);
     expect(routerBlock).toMatch(/menuSuccessPayload\(generation\.value, "provider_router"\)/);
     expect(routerBlock).not.toMatch(/api\.openai\.com\/v1\/responses/);
   });

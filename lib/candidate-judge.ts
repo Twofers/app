@@ -146,6 +146,46 @@ function containsItem(text: string, item: string): boolean {
   return text.toLowerCase().includes(clean);
 }
 
+function normalizeHeadlinePhrase(value: string | null | undefined): string {
+  return cleanText(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9%+\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripWeakHeadlineFillers(value: string | null | undefined): string {
+  let stripped = normalizeHeadlinePhrase(value);
+  for (let index = 0; index < 3; index += 1) {
+    stripped = stripped.replace(/^(?:try\s+our|try\s+the|our|the|a|an|any|one|1)\s+/, "").trim();
+  }
+  return stripped.replace(/\s+(?:deal|offer|special|promo)$/g, "").trim();
+}
+
+function isItemOnlyHeadline(headline: string, itemName: string): boolean {
+  const cleanHeadline = stripWeakHeadlineFillers(headline);
+  const cleanItem = stripWeakHeadlineFillers(itemName);
+  if (!cleanHeadline || !cleanItem) return false;
+  if (cleanHeadline === cleanItem) return true;
+
+  const headlineWords = cleanHeadline.split(/\s+/).filter((word) => word.length > 1);
+  const itemWords = new Set(cleanItem.split(/\s+/).filter((word) => word.length > 1));
+  return headlineWords.length >= 2 && headlineWords.every((word) => itemWords.has(word));
+}
+
+function weakHeadlinePenalty(candidate: CandidateForJudging, contract: DealOfferContract): number {
+  const rawHeadline = cleanText(candidate.headline);
+  const startsLikeFiller = /^try\s+(?:our|the)\b/i.test(rawHeadline);
+  const requiredItems = contract.aiRules.mustUseExactItemNames.filter((item) => cleanText(item).length > 0);
+  const itemOnly = requiredItems.some((item) => isItemOnlyHeadline(rawHeadline, item));
+  if (startsLikeFiller && itemOnly) return 8;
+  if (startsLikeFiller) return 5;
+  if (itemOnly) return 6;
+  return 0;
+}
+
 function candidateId(candidate: CandidateForJudging, index: number): string {
   return candidate.candidate_id || `candidate_${index + 1}`;
 }
@@ -194,7 +234,7 @@ export function scoreCandidateDeterministically(
   const categoryFit = candidate.strategy_id === "merchant_specific" && profile?.merchantSpecificContextLimited ? 8 : 15;
   const productDesire = /\b(?:with|plus|pair|break|lunch|coffee|service|session|visit|pick up)\b/i.test(text) ? 10 : 6;
   const headlineLength = cleanText(candidate.headline).length;
-  const headlineStrength = headlineLength >= 14 && headlineLength <= 70 ? 10 : 6;
+  const headlineStrength = (headlineLength >= 14 && headlineLength <= 70 ? 10 : 6) - weakHeadlinePenalty(candidate, contract);
   const fieldCoherence = cleanText(candidate.short_description) && cleanText(candidate.push_notification) ? 5 : 2;
   const mobileReadability = text.length <= 380 ? 5 : 2;
   const total = boundedScore(

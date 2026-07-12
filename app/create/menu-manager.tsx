@@ -6,7 +6,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
@@ -15,6 +15,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
+import { formatMenuPriceLabel } from "@/lib/display-format";
 import { getMenuManagerViewState } from "@/lib/menu-manager-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -33,7 +34,7 @@ type Row = {
 
 export default function MenuManagerScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
+  const params = useLocalSearchParams<{ add?: string }>();
   const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
@@ -71,12 +72,16 @@ export default function MenuManagerScreen() {
   const menuState = getMenuManagerViewState(rows, showArchived);
   const visible = menuState.visibleRows;
 
-  const startAdding = () => {
+  const startAdding = useCallback(() => {
     setEditingId(null);
     setDraft({ name: "", category: "", price_text: "", description: "" });
     setAdding(true);
     setShowArchived(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (params.add === "1") startAdding();
+  }, [params.add, startAdding]);
 
   const startEdit = (r: Row) => {
     setAdding(false);
@@ -266,10 +271,6 @@ export default function MenuManagerScreen() {
               {t("menuManager.emptyBody")}
             </Text>
             <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
-            <SecondaryButton
-              title={t("menuManager.scanMenu")}
-              onPress={() => router.push("/create/menu-scan" as Href)}
-            />
           </View>
         ) : null}
 
@@ -363,7 +364,7 @@ export default function MenuManagerScreen() {
                 <>
                   <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{r.name}</Text>
                   {r.category ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.category}</Text> : null}
-                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.price_text}</Text> : null}
+                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{formatMenuPriceLabel(r.price_text)}</Text> : null}
                   {r.description ? <Text style={{ opacity: 0.8, color: theme.text }}>{r.description}</Text> : null}
                   <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
                     <Pressable onPress={() => startEdit(r)}>

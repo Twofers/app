@@ -24,20 +24,32 @@
 //
 // Run:  node scripts/probe-rls-smoke.mjs
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function loadEnv() {
-  const text = readFileSync(path.join(REPO_ROOT, ".env"), "utf8");
-  const env = {};
+function loadEnvFile(file, env) {
+  if (!existsSync(file)) return;
+  const text = readFileSync(file, "utf8");
   for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (m) env[m[1]] = m[2].replace(/^['"]|['"]$/g, "").trim();
   }
+}
+
+function loadEnv() {
+  const env = {};
+  loadEnvFile(path.join(REPO_ROOT, ".env"), env);
+  loadEnvFile(path.join(REPO_ROOT, ".env.development.local"), env);
   return env;
+}
+
+function redactEmail(email) {
+  const [name, domain] = String(email).split("@");
+  if (!name || !domain) return "[redacted]";
+  return `${name.slice(0, 2)}***@${domain}`;
 }
 
 const env = loadEnv();
@@ -84,7 +96,7 @@ async function rest(token, pathAndQuery, init = {}) {
 }
 
 const { token, userId } = await signIn();
-console.log(`Signed in as ${EMAIL} (${userId})`);
+console.log(`Signed in as ${redactEmail(EMAIL)}`);
 
 const checks = [
   ["deals SELECT", () => rest(token, "deals?select=id&limit=1")],

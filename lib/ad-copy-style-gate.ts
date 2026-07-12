@@ -27,6 +27,9 @@ export type AdCopyStyleGateReason =
   | "AI_TONE_PHRASE"
   | "VAGUE_LOCAL_CLICHE"
   | "HYPE_WITHOUT_SPECIFICITY"
+  | "BARE_SPECIFIC_TERM"
+  | "WEAK_TRY_OUR_PHRASE"
+  | "AWKWARD_ARTICLE_QUANTIFIER"
   | "TOO_MANY_EXCLAMATIONS"
   | "EMOJI_IN_AI_COPY";
 
@@ -76,7 +79,13 @@ function cleanText(value: string | null | undefined): string {
 }
 
 function normalizeTerm(value: string): string {
-  return value.trim().toLowerCase();
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function hasSpecificTerm(text: string, requiredSpecificTerms: string[] | undefined): boolean {
@@ -87,6 +96,23 @@ function hasSpecificTerm(text: string, requiredSpecificTerms: string[] | undefin
 
 function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function isBareSpecificTerm(text: string, requiredSpecificTerms: string[] | undefined): boolean {
+  const normalizedText = normalizeTerm(text).replace(/^(?:a|an|any|the)\s+/, "");
+  if (!normalizedText) return false;
+  const terms = (requiredSpecificTerms ?? [])
+    .map((term) => normalizeTerm(term).replace(/^(?:a|an|any|the)\s+/, ""))
+    .filter((term) => term.length >= 3);
+  return terms.some((term) => normalizedText === term);
+}
+
+function isWeakTryOurPhrase(text: string): boolean {
+  return /^try\s+(?:our|the)\b/i.test(text.trim());
+}
+
+function hasAwkwardArticleQuantifier(text: string): boolean {
+  return /\b(?:a|an|the|our|your)\s+any\b/i.test(text);
 }
 
 function shouldBypassStyleGate(provenance: AdSpecV3TextProvenance): boolean {
@@ -100,6 +126,9 @@ function reasonsForField(text: string, requiredSpecificTerms: string[] | undefin
   if (hasAnyPattern(text, [...AD_COPY_GENERIC_PHRASE_PATTERNS])) reasons.push("GENERIC_MARKETING_PHRASE");
   if (hasAnyPattern(text, [...AD_COPY_AI_TONE_PATTERNS])) reasons.push("AI_TONE_PHRASE");
   if (hasAnyPattern(text, [...AD_COPY_LOCAL_CLICHE_PATTERNS])) reasons.push("VAGUE_LOCAL_CLICHE");
+  if (isBareSpecificTerm(text, requiredSpecificTerms)) reasons.push("BARE_SPECIFIC_TERM");
+  if (isWeakTryOurPhrase(text)) reasons.push("WEAK_TRY_OUR_PHRASE");
+  if (hasAwkwardArticleQuantifier(text)) reasons.push("AWKWARD_ARTICLE_QUANTIFIER");
   if (AD_COPY_HYPE_WORD_PATTERN.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
     reasons.push("HYPE_WITHOUT_SPECIFICITY");
   }
