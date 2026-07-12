@@ -54,7 +54,9 @@ describe("admin dashboard foundation", () => {
     const summarySource = read("supabase/functions/admin-dashboard-summary/index.ts");
     const usageSource = read("supabase/functions/admin-ai-usage/index.ts");
     const resetMigration = read("supabase/migrations/20260730128000_admin_ai_quota_resets.sql");
-    const adminPage = read("website/admin/index.html");
+    // The dashboard IA lives in the token-gated fragment (audit F-015), not
+    // the signed-out /admin shell.
+    const adminPage = read("website/admin/app.html");
     const adminScript = read("website/admin/admin.js");
     const config = read("supabase/config.toml");
 
@@ -87,6 +89,49 @@ describe("admin dashboard foundation", () => {
     expect(config).toMatch(
       /\[functions\.admin-ai-usage\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/admin-ai-usage\/index\.ts"/,
     );
+  });
+
+  it("keeps the signed-out /admin shell minimal (audit F-015)", () => {
+    const shell = read("website/admin/index.html");
+    // Stays non-indexable and carries the injection root for the dashboard.
+    expect(shell).toMatch(/noindex,nofollow/);
+    expect(shell).toMatch(/data-admin-app-root/);
+    // No internal IA, queue names, or admin endpoint config may ship signed out.
+    for (const leaked of [
+      /Prospects/,
+      /Trial Requests/,
+      /Sales AI/,
+      /AI Spend/,
+      /audit-log/,
+      /billing\/events/,
+      /ai-prompts/,
+      /ai-operating-report/,
+      /data-admin-summary-endpoint/,
+      /data-admin-auth-endpoint/,
+      /data-admin-ai-usage-endpoint/,
+    ]) {
+      expect(shell, `signed-out shell must not contain ${leaked}`).not.toMatch(leaked);
+    }
+
+    // The dashboard fragment carries the IA + endpoint config instead, and is
+    // fetched only when a stored admin token exists.
+    const fragment = read("website/admin/app.html");
+    expect(fragment).toMatch(/data-admin-app[\s\S]*data-admin-auth-endpoint[\s\S]*data-admin-summary-endpoint[\s\S]*data-admin-ai-usage-endpoint/);
+    expect(fragment).toMatch(/Admin Command Center/);
+    expect(fragment).not.toMatch(/<script/i);
+
+    const script = read("website/admin/admin.js");
+    const tokenGate = script.indexOf("hasStoredToken()");
+    const fragmentFetch = script.indexOf('fetch("/admin/app.html"');
+    expect(tokenGate).toBeGreaterThan(-1);
+    expect(fragmentFetch).toBeGreaterThan(-1);
+    expect(script).toMatch(/if \(!hasStoredToken\(\)\) return/);
+
+    // Robots/CSP headers for /admin(.*) must persist so the fragment inherits
+    // noindex and inline scripts stay blocked.
+    const vercel = read("website/vercel.json");
+    expect(vercel).toMatch(/X-Robots-Tag/);
+    expect(vercel).toMatch(/script-src 'self'/);
   });
 
   it("enforces admin_users.require_mfa (aal2) at every admin endpoint, not just login", () => {
