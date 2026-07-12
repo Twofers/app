@@ -33,6 +33,8 @@
     "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
     "screenshots:pages": "node scripts/screenshot-pages.mjs",
     "smoke:admin-ai-staging": "node scripts/smoke-admin-ai-staging.mjs",
+    "release:state": "node scripts/generate-release-state.mjs",
+    "gate:release-state": "node scripts/generate-release-state.mjs --check",
     "test:db": "node scripts/db-tests/run.mjs"
   },
   "dependencies": {
@@ -92,6 +94,17 @@
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1"
+  },
+  "overrides": {
+    "react-native": "$react-native",
+    "postcss": ">=8.5.10 <9"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["react-native-launch-arguments"]
+      }
+    }
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",

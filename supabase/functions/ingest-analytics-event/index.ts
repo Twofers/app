@@ -145,7 +145,10 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      console.error(insErr);
+      // Log code + message only — the full Postgres error object can echo
+      // attempted column values into platform logs, outside the
+      // sanitizeContext redaction boundary (audit F-016).
+      console.error("[ingest-analytics-event] insert failed:", insErr.code ?? "", insErr.message ?? "");
       return new Response(JSON.stringify({ error: "Could not record event" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -157,7 +160,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error(err);
+    // Message only, never the raw object (may carry headers/payload fragments).
+    console.error("[ingest-analytics-event] error:", err instanceof Error ? err.message : String(err));
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
