@@ -811,6 +811,7 @@
   },
   "walletPass": {
     "addToGoogleWallet": "Añadir a Google Wallet",
+    "addToAppleWallet": "Añadir a Apple Wallet",
     "preparing": "Abriendo Google Wallet...",
     "errAdd": "No se pudo añadir tu Tarjeta Twofer. Inténtalo de nuevo."
   },

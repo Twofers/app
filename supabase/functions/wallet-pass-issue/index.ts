@@ -16,6 +16,7 @@ import {
   isNativeWalletPassServerEnabled,
   issueGoogleWalletPass,
 } from "../_shared/wallet-pass-sync.ts";
+import { issueAppleWalletPass } from "../_shared/apple-wallet-issue.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -64,10 +65,24 @@ serve(async (req) => {
     }
 
     if (body.platform === "apple") {
-      return json(
-        { error: "Apple Wallet support is coming soon.", error_code: "not_implemented" },
-        501,
-      );
+      const result = await issueAppleWalletPass(supabaseAdmin, user.id, body.locale);
+      if (!result.ok) {
+        const status = result.errorCode === "feature_disabled" ? 403 : result.errorCode === "not_configured" ? 503 : 502;
+        return json(
+          { error: "Wallet passes are not available right now.", error_code: result.errorCode },
+          status,
+        );
+      }
+      // Return the signed .pkpass bytes; iOS opens the Add-to-Wallet sheet on this MIME type.
+      // Copy into a fresh ArrayBuffer-backed array so it satisfies BodyInit typing.
+      return new Response(new Uint8Array(result.pkpass), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/vnd.apple.pkpass",
+          "Content-Disposition": 'attachment; filename="twofer-card.pkpass"',
+        },
+      });
     }
     if (body.platform !== "google") {
       return json({ error: "Missing or invalid platform" }, 400);

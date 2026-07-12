@@ -17,3 +17,48 @@ export async function issueWalletPass(platform: "google" | "apple", locale: stri
   }
   return data as { save_url: string };
 }
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read wallet pass data."));
+    reader.onloadend = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Apple Wallet: the .pkpass is BINARY, and supabase.functions.invoke decodes
+ * unknown content-types as text (which corrupts it), so fetch the endpoint
+ * directly and read it as a Blob. Returns the base64 pass bytes for writing to
+ * a file + handing to PassKit via the iOS share sheet.
+ */
+export async function fetchAppleWalletPassBase64(locale: string): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Please sign in to add your card.");
+  const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const res = await fetch(`${base}/functions/v1/wallet-pass-issue`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, apikey: anon, "Content-Type": "application/json" },
+    body: JSON.stringify({ platform: "apple", locale }),
+  });
+  if (!res.ok) {
+    let msg = "Couldn't create your Apple Wallet card. Try again.";
+    try {
+      const body = await res.json();
+      if (body?.error) msg = String(body.error);
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(msg);
+  }
+  return blobToBase64(await res.blob());
+}

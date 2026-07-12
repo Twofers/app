@@ -415,6 +415,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/wallet-pass-issue/index.ts"
 
+[functions.wallet-pass-webservice]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/wallet-pass-webservice/index.ts"
+
 [functions.activate-redemption-mode]
 enabled = true
 verify_jwt = false

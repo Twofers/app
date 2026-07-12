@@ -19,6 +19,8 @@ import {
   type WalletPassClaimRow,
   type WalletPassLocale,
 } from "./wallet-pass-content.ts";
+import { getAppleWalletEnv } from "./apple-pass-env.ts";
+import { createApnsClient, sendApnsUpdatePush } from "./apple-apns.ts";
 
 /** Server kill switch: flip the NATIVE_WALLET_PASS_ENABLED secret, no rebuild needed. */
 export function isNativeWalletPassServerEnabled(): boolean {
@@ -304,7 +306,7 @@ export async function syncWalletPassForUser(
     if (!userId || !isNativeWalletPassServerEnabled()) return;
     const { data: passRow, error } = await supabaseAdmin
       .from("wallet_passes")
-      .select("google_object_id, pass_locale")
+      .select("google_object_id, apple_serial_number, pass_locale")
       .eq("user_id", userId)
       .maybeSingle();
     if (error) {
@@ -313,23 +315,63 @@ export async function syncWalletPassForUser(
       // claim push in claim-deal.
       return;
     }
-    if (!passRow?.google_object_id) return;
-    const env = getGoogleWalletEnv();
-    if (!env) return;
-
+    if (!passRow) return;
     const locale = resolveWalletPassLocale(passRow.pass_locale);
-    const rows = await loadWalletPassClaimRows(supabaseAdmin, userId);
-    const content = buildWalletPassContent(deriveWalletPassState(rows, Date.now(), locale), locale);
-    const object = buildGoogleWalletGenericObject(content, {
-      issuerId: env.issuerId,
-      objectId: passRow.google_object_id,
-      logoUrl: env.logoUrl,
-    });
-    const accessToken = await getGoogleAccessToken(env.serviceAccount);
-    if (!accessToken) return;
-    await upsertGoogleWalletObject(accessToken, object);
-    // Apple branch (APNs push to wallet_pass_registrations) lands with the
-    // Phase 3 pkpass work; Google covers Android-first per the plan.
+
+    // --- Google: PATCH the object in place ---
+    if (passRow.google_object_id) {
+      const env = getGoogleWalletEnv();
+      if (env) {
+        const rows = await loadWalletPassClaimRows(supabaseAdmin, userId);
+        const content = buildWalletPassContent(deriveWalletPassState(rows, Date.now(), locale), locale);
+        const object = buildGoogleWalletGenericObject(content, {
+          issuerId: env.issuerId,
+          objectId: passRow.google_object_id,
+          logoUrl: env.logoUrl,
+        });
+        const accessToken = await getGoogleAccessToken(env.serviceAccount);
+        if (accessToken) await upsertGoogleWalletObject(accessToken, object);
+      }
+    }
+
+    // --- Apple: bump the pass version, then push every registered device ---
+    if (passRow.apple_serial_number) {
+      const appleEnv = getAppleWalletEnv();
+      if (appleEnv) {
+        await supabaseAdmin
+          .from("wallet_passes")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("user_id", userId);
+        const { data: regs } = await supabaseAdmin
+          .from("wallet_pass_registrations")
+          .select("id, apns_push_token")
+          .eq("user_id", userId);
+        const rows = (regs ?? []) as { id: string; apns_push_token: string }[];
+        if (rows.length > 0) {
+          const client = createApnsClient(appleEnv.certPem, appleEnv.keyPem);
+          try {
+            for (const r of rows) {
+              const res = await sendApnsUpdatePush({
+                certPem: appleEnv.certPem,
+                keyPem: appleEnv.keyPem,
+                passTypeId: appleEnv.passTypeId,
+                deviceToken: r.apns_push_token,
+                httpClient: client,
+              });
+              if (res.shouldUnregister) {
+                await supabaseAdmin.from("wallet_pass_registrations").delete().eq("id", r.id);
+              }
+            }
+          } finally {
+            try {
+              (client as { close?: () => void }).close?.();
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error("[wallet-pass] sync failed (non-fatal):", err instanceof Error ? err.message : "unknown");
   }

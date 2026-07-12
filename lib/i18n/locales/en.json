@@ -811,6 +811,7 @@
   },
   "walletPass": {
     "addToGoogleWallet": "Add to Google Wallet",
+    "addToAppleWallet": "Add to Apple Wallet",
     "preparing": "Opening Google Wallet...",
     "errAdd": "Couldn't add your Twofer Card. Try again."
   },

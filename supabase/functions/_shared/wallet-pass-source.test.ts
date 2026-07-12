@@ -123,6 +123,96 @@ describe("native wallet pass — issue endpoint", () => {
   });
 });
 
+describe("native wallet pass — Apple pkpass (part 1)", () => {
+  it("apple-pkpass signs with node-forge (SHA-256 detached) + zips with fflate", () => {
+    const source = read("supabase/functions/_shared/apple-pkpass.ts");
+    expect(source).toMatch(/import forge from "https:\/\/esm\.sh\/node-forge@/);
+    expect(source).toMatch(/import \{ zipSync \} from "https:\/\/esm\.sh\/fflate@/);
+    expect(source).toMatch(/createSignedData\(\)/);
+    expect(source).toMatch(/digestAlgorithm: forge\.pki\.oids\.sha256/);
+    expect(source).toMatch(/p7\.sign\(\{ detached: true \}\)/);
+    // manifest is SHA-1 per PassKit spec; signature is over manifest.json
+    expect(source).toMatch(/sha1/);
+    expect(source).toMatch(/files\["signature"\] = signManifest/);
+  });
+
+  it("apple signing secrets are read in the shared env module", () => {
+    const source = read("supabase/functions/_shared/apple-pass-env.ts");
+    expect(source).toMatch(/APPLE_PASS_CERT_PEM_B64/);
+    expect(source).toMatch(/APPLE_PASS_KEY_PEM_B64/);
+    expect(source).toMatch(/APPLE_WWDR_CERT_PEM_B64/);
+  });
+
+  it("apple-wallet-issue is kill-switch gated and mints a stable serial", () => {
+    const source = read("supabase/functions/_shared/apple-wallet-issue.ts");
+    expect(source).toMatch(/isNativeWalletPassServerEnabled\(\)/);
+    // reuse existing serial, else mint one
+    expect(source).toMatch(/apple_serial_number.*\?\?.*crypto\.randomUUID\(\)/s);
+  });
+
+  it("wallet-pass-issue returns a real .pkpass for the apple platform (no more 501)", () => {
+    const source = read("supabase/functions/wallet-pass-issue/index.ts");
+    expect(source).toMatch(/issueAppleWalletPass\(/);
+    expect(source).toMatch(/application\/vnd\.apple\.pkpass/);
+    expect(source).not.toMatch(/Apple Wallet support is coming soon/);
+  });
+
+  it("never logs the Apple private key or cert secrets", () => {
+    for (const p of ["supabase/functions/_shared/apple-wallet-issue.ts", "supabase/functions/_shared/apple-pkpass.ts"]) {
+      const source = read(p);
+      expect(source, p).not.toMatch(/console\.[a-z]+\([^;]*keyPem/);
+      expect(source, p).not.toMatch(/console\.[a-z]+\([^;]*PEM_B64/);
+    }
+  });
+});
+
+describe("native wallet pass — Apple auto-update (part 2)", () => {
+  it("web service implements the PassKit endpoints with ApplePass auth", () => {
+    const source = read("supabase/functions/wallet-pass-webservice/index.ts");
+    expect(source).toMatch(/registrations/);
+    expect(source).toMatch(/passesUpdatedSince/);
+    expect(source).toMatch(/wallet_pass_registrations/);
+    expect(source).toMatch(/v1\\\/log/); // the /v1/log route (escaped in a regex literal)
+    expect(source).toMatch(/parseApplePassAuthHeader/);
+    expect(source).toMatch(/timingSafeEqualStrings/);
+    expect(source).toMatch(/application\/vnd\.apple\.pkpass/);
+  });
+
+  it("web service is registered with verify_jwt=false (Apple calls it directly)", () => {
+    const cfg = read("supabase/config.toml");
+    expect(cfg).toMatch(/\[functions\.wallet-pass-webservice\]/);
+    expect(cfg).toMatch(/\[functions\.wallet-pass-webservice\][\s\S]*?verify_jwt = false/);
+  });
+
+  it("get-pass builds without bumping updated_at (no version feedback loop)", () => {
+    const source = read("supabase/functions/_shared/apple-wallet-issue.ts");
+    expect(source).toMatch(/export async function buildAppleWalletPassBytes/);
+    // the DB-writing issue path is separate from the pure builder
+    expect(source).toMatch(/buildAppleWalletPassBytes\(supabaseAdmin, userId, serialNumber/);
+  });
+
+  it("APNs push uses the pass-cert mTLS and drops dead device tokens", () => {
+    const apns = read("supabase/functions/_shared/apple-apns.ts");
+    expect(apns).toMatch(/Deno\.createHttpClient\(\{ cert/);
+    expect(apns).toMatch(/apns-topic/);
+    expect(apns).toMatch(/BadDeviceToken|Unregistered/);
+    const sync = read("supabase/functions/_shared/wallet-pass-sync.ts");
+    expect(sync).toMatch(/sendApnsUpdatePush/);
+    expect(sync).toMatch(/shouldUnregister/);
+    // Apple sync bumps the version so the device re-fetch sees new content
+    expect(sync).toMatch(/apple_serial_number/);
+  });
+
+  it("issued Apple passes carry the webServiceURL + stable HMAC token", () => {
+    const issue = read("supabase/functions/_shared/apple-wallet-issue.ts");
+    expect(issue).toMatch(/deriveAppleAuthToken/);
+    expect(issue).toMatch(/getWalletWebServiceUrl/);
+    const passJson = read("supabase/functions/_shared/apple-pass-json.ts");
+    expect(passJson).toMatch(/webServiceURL/);
+    expect(passJson).toMatch(/authenticationToken/);
+  });
+});
+
 describe("native wallet pass — client flag + surfaces", () => {
   it("runtime-env exposes the client flag and the snapshot line", () => {
     const source = read("lib/runtime-env.ts");
@@ -137,10 +227,21 @@ describe("native wallet pass — client flag + surfaces", () => {
     for (const match of matches) expect(match).toContain('"false"');
   });
 
-  it("the button renders nothing unless the flag is on and the platform is Android", () => {
+  it("the button is flag-gated and branches iOS (Apple) vs Android (Google)", () => {
     const source = read("components/add-to-wallet-button.tsx");
-    expect(source).toMatch(/isNativeWalletPassEnabled\(\) && Platform\.OS === "android"/);
-    expect(source).toMatch(/if \(!visible \|\| added !== false\) return null/);
+    expect(source).toMatch(/isNativeWalletPassEnabled\(\) && \(isApple \|\| isGoogle\)/);
+    expect(source).toMatch(/if \(!visible\) return null/);
+    // Apple path: fetch pkpass -> write file -> share sheet with the pkpass UTI
+    expect(source).toMatch(/fetchAppleWalletPassBase64/);
+    expect(source).toMatch(/com\.apple\.pkpass/);
+    expect(source).toMatch(/Sharing\.shareAsync/);
+  });
+
+  it("all three locales carry the Apple button label", () => {
+    for (const locale of ["en", "es", "ko"]) {
+      const json = JSON.parse(read(`lib/i18n/locales/${locale}.json`)) as { walletPass?: Record<string, string> };
+      expect(typeof json.walletPass?.addToAppleWallet, `${locale}.walletPass.addToAppleWallet`).toBe("string");
+    }
   });
 
   it("all three locales carry the walletPass strings", () => {
