@@ -24,3 +24,10 @@ f474780e3da8ce0619bad933e200776342d1bc7d:lib/recent-publish.ts:generic-api-key:1
 35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:440
 35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:494
 35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:544
+
+# Added 2026-07-12 — reviewed false positives (generic-api-key heuristic), no real secrets:
+# - lib/save-business-prompt.ts: AsyncStorage key-name constant
+#   "twoforone_save_biz_prompt_v1_" (same class as the recent-publish.ts entry above).
+# - app/(tabs)/index.tsx: a word inside an English code comment (already in main's history).
+8734349ca262b1d6d8021545e51312a3d94627b5:lib/save-business-prompt.ts:generic-api-key:10
+4eee4f0b75915d1c79c3eb5da22506c22fac65e7:app/(tabs)/index.tsx:generic-api-key:497
