@@ -220,11 +220,13 @@ describe("native wallet pass — client flag + surfaces", () => {
     expect(source).toMatch(/EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS/);
   });
 
-  it("eas.json documents the flag as OFF in every profile that lists it", () => {
+  // Native wallet pass is enabled for the launch build (owner decision 2026-07-11).
+  // Guard flipped to enforce ON so a shipping profile cannot silently regress to off.
+  it("eas.json documents the flag as ON in every profile that lists it", () => {
     const eas = read("eas.json");
     const matches = eas.match(/"EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "(true|false)"/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(3);
-    for (const match of matches) expect(match).toContain('"false"');
+    for (const match of matches) expect(match).toContain('"true"');
   });
 
   it("the button is flag-gated and branches iOS (Apple) vs Android (Google)", () => {
