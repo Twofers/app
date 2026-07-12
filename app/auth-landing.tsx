@@ -38,8 +38,7 @@ import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-f
 import i18n, { APP_LOCALES, appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
-import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
-import { BUSINESS_INVITE_PENDING_META_KEY, isValidBusinessInviteCode } from "@/lib/business-invite";
+import { getEmailAuthRedirectUrl, PASSWORD_MIN_LENGTH } from "@/lib/auth-password-recovery";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -233,13 +232,11 @@ export default function AuthLandingScreen() {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pwVisible, setPwVisible] = useState(false);
-  const [focusedField, setFocusedField] = useState<null | "email" | "password" | "invite">(null);
+  const [focusedField, setFocusedField] = useState<null | "email" | "password">(null);
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -264,7 +261,6 @@ export default function AuthLandingScreen() {
     setAuthError(null);
     setEmailError(null);
     setPwError(null);
-    setInviteError(null);
   }
 
   function switchScreenMode(next: AuthScreenMode) {
@@ -287,6 +283,12 @@ export default function AuthLandingScreen() {
     }
     if (pw.length === 0) {
       setPwError(t("authLanding.passwordRequired", { defaultValue: "Please enter your password" }));
+      ok = false;
+    } else if (screenMode === "signup" && pw.length < PASSWORD_MIN_LENGTH) {
+      // Same rule (and localized copy) as the reset screen, so the client and
+      // server password policies cannot drift apart. Login keeps the
+      // non-empty-only check so legacy shorter passwords can still sign in.
+      setPwError(t("passwordRecovery.errPasswordMin", { min: PASSWORD_MIN_LENGTH }));
       ok = false;
     } else {
       setPwError(null);
@@ -356,14 +358,6 @@ export default function AuthLandingScreen() {
       return;
     }
     if (!validateFields()) return;
-    if (signupRole === "business" && !isValidBusinessInviteCode(inviteCode)) {
-      setInviteError(
-        t("authLanding.errInviteCode", {
-          defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
-        }),
-      );
-      return;
-    }
 
     setBusyAction("signup");
     clearFeedback();
@@ -371,11 +365,10 @@ export default function AuthLandingScreen() {
     logAuthPath("signup");
     try {
       // The role rides in auth metadata so it survives the email-verification
-      // round-trip; the first login persists it to profiles.role.
+      // round-trip; the first login persists it to profiles.role. Business
+      // signups are open applications (audit F-003): new businesses start
+      // pending_verification and inert until admin review approves them.
       const signUpData: Record<string, string> = { [SIGNUP_ROLE_META_KEY]: signupRole };
-      if (signupRole === "business") {
-        signUpData[BUSINESS_INVITE_PENDING_META_KEY] = inviteCode.trim().toLowerCase();
-      }
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
@@ -804,47 +797,6 @@ export default function AuthLandingScreen() {
                     </View>
                   );
                 })()
-              ) : null}
-
-              {isSignup && signupRole === "business" ? (
-                <View style={{ marginTop: Spacing.md }}>
-                  <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
-                    {t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
-                  </Text>
-                  <TextInput
-                    value={inviteCode}
-                    onChangeText={(v) => {
-                      setInviteCode(v);
-                      if (inviteError) setInviteError(null);
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                    onFocus={() => setFocusedField("invite")}
-                    onBlur={() => setFocusedField((f) => (f === "invite" ? null : f))}
-                    accessibilityLabel={t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
-                    placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code Twofer gave you" })}
-                    placeholderTextColor={theme.mutedText}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: inviteError ? theme.danger : focusedField === "invite" ? theme.primary : inputBorder,
-                      borderRadius: Radii.md,
-                      padding: authInputPadding,
-                      fontSize: 16,
-                      backgroundColor: inputBg,
-                      color: theme.text,
-                    }}
-                  />
-                  {inviteError ? (
-                    <Text style={{ fontSize: 12, color: theme.danger, marginTop: Spacing.xs }}>{inviteError}</Text>
-                  ) : (
-                    <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: Spacing.xs }}>
-                      {t("authLanding.inviteCodeHint", {
-                        defaultValue: "Required to create a business account.",
-                      })}
-                    </Text>
-                  )}
-                </View>
               ) : null}
 
               {!isSignup ? (

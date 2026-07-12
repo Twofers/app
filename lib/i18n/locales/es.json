@@ -304,6 +304,7 @@
     "aiMissingHint": "Añade una nota breve sobre la oferta.",
     "aiRegenerationLimit": "Límite de regeneraciones. Edita abajo o empieza una oferta nueva.",
     "dbRlsViolation": "No tienes permiso para esta acción.",
+    "businessLimitReached": "Ya tienes un negocio registrado. Contacta a support@twoferapp.com si necesitas cambiarlo.",
     "dbDuplicate": "Esto ya existe. Actualiza e inténtalo de nuevo.",
     "dbForeignKey": "Esa referencia no es válida. Actualiza e inténtalo de nuevo.",
     "dbCheckViolation": "Algunos datos no pasaron la validación. Revísalos.",
@@ -1012,11 +1013,7 @@
     "backToSignIn": "Volver a iniciar sesión",
     "hintEnterEmail": "Ingresa tu correo para continuar.",
     "hintEnterPassword": "Ingresa tu contraseña para continuar.",
-    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar.",
-    "inviteCodeLabel": "Código de invitación para negocios",
-    "inviteCodePlaceholder": "Ingresa el código que Twofer te envió",
-    "inviteCodeHint": "Se requiere para crear una cuenta de negocio. Las cuentas existentes pueden dejarlo en blanco.",
-    "errInviteCode": "Ese código de invitación no es válido. Contacta a Twofer para obtener uno."
+    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar."
   },
   "supportContact": {
     "sectionTitle": "Ayuda y contacto",
@@ -1547,6 +1544,7 @@
     "resumeConfirmBody": "La oferta será visible para los clientes de nuevo.",
     "errPauseDeal": "No se pudo pausar la oferta.",
     "errResumeDeal": "No se pudo reanudar la oferta.",
+    "errResumeNotEligible": "Tu negocio no puede publicar ahora. Revisa tu facturación y verificación en Cuenta.",
     "statusPaused": "Pausada",
     "errLoadDashboard": "No se pudo cargar el panel.",
     "errEndDeal": "No se pudo finalizar la oferta.",
@@ -1687,11 +1685,6 @@
       "custom_prompt": "Personalizado…"
     },
     "errEnterName": "Ingresa primero el nombre del negocio.",
-    "errInviteCode": "Ese código de invitación no es válido. Contacta a Twofer para obtener uno.",
-    "errCheckingInvite": "Un momento, estamos verificando tu invitación.",
-    "inviteCodeLabel": "Código de invitación para negocios",
-    "inviteCodePlaceholder": "Ingresa el código que Twofer te envió",
-    "inviteCodeHint": "Las cuentas de negocio necesitan un código de invitación. Ingresa el código que compartimos contigo.",
     "lookupButton": "Buscar mi negocio",
     "searching": "Buscando...",
     "selectResult": "Elige el resultado de Google Places que coincida:",

@@ -62,6 +62,10 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "Invalid QR code format": "businessScan.msgInvalidFormat",
   "Deal redeemed successfully!": "businessScan.msgRedeemSuccess",
 
+  // businesses_require_invite trigger v3 (migration 20260814130000): one
+  // self-created business per owner during the pilot.
+  "business limit reached": "apiErrors.businessLimitReached",
+
   "Missing business_id, photo_path, or hint_text.": "apiErrors.aiAdsMissingFields",
   "You do not own this business.": "apiErrors.notBusinessOwner",
   "Could not access the photo. Upload again.": "apiErrors.photoAccessFailed",

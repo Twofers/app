@@ -304,6 +304,7 @@
     "aiMissingHint": "짧은 딜 메모를 입력하세요.",
     "aiRegenerationLimit": "재생성 한도에 도달했습니다. 아래를 수정하거나 새 오퍼를 시작하세요.",
     "dbRlsViolation": "이 작업을 할 권한이 없습니다.",
+    "businessLimitReached": "이미 등록된 비즈니스가 있습니다. 변경이 필요하면 support@twoferapp.com으로 문의하세요.",
     "dbDuplicate": "이미 있습니다. 새로고침 후 다시 시도하세요.",
     "dbForeignKey": "참조가 올바르지 않습니다. 새로고침 후 다시 시도하세요.",
     "dbCheckViolation": "일부 값이 검증을 통과하지 못했습니다.",
@@ -1012,11 +1013,7 @@
     "backToSignIn": "로그인으로 돌아가기",
     "hintEnterEmail": "계속하려면 이메일을 입력하세요.",
     "hintEnterPassword": "계속하려면 비밀번호를 입력하세요.",
-    "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요.",
-    "inviteCodeLabel": "비즈니스 초대 코드",
-    "inviteCodePlaceholder": "Twofer에서 받은 코드를 입력하세요",
-    "inviteCodeHint": "비즈니스 계정을 만들려면 필요합니다. 기존 계정은 비워 두어도 됩니다.",
-    "errInviteCode": "유효하지 않은 초대 코드입니다. Twofer에 문의해 코드를 받으세요."
+    "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요."
   },
   "supportContact": {
     "sectionTitle": "도움 및 문의",
@@ -1547,6 +1544,7 @@
     "resumeConfirmBody": "딜이 다시 고객에게 표시됩니다.",
     "errPauseDeal": "딜을 일시중지하지 못했습니다.",
     "errResumeDeal": "딜을 재개하지 못했습니다.",
+    "errResumeNotEligible": "지금은 비즈니스가 게시할 수 없습니다. 계정에서 결제 및 인증 상태를 확인하세요.",
     "statusPaused": "일시중지",
     "errLoadDashboard": "대시보드를 불러오지 못했습니다.",
     "errEndDeal": "딜을 종료하지 못했습니다.",
@@ -1687,11 +1685,6 @@
       "custom_prompt": "직접 입력…"
     },
     "errEnterName": "먼저 비즈니스 이름을 입력하세요.",
-    "errInviteCode": "유효하지 않은 초대 코드입니다. Twofer에 문의해 코드를 받으세요.",
-    "errCheckingInvite": "잠시만요, 초대 코드를 확인하고 있어요.",
-    "inviteCodeLabel": "비즈니스 초대 코드",
-    "inviteCodePlaceholder": "Twofer에서 받은 코드를 입력하세요",
-    "inviteCodeHint": "파일럿 기간 동안 비즈니스 계정은 초대제로만 운영됩니다. 받으신 코드를 입력해 계속 진행하세요.",
     "lookupButton": "내 비즈니스 찾기",
     "searching": "검색 중...",
     "selectResult": "일치하는 Google Places 결과를 선택하세요:",
