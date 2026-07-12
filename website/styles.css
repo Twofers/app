@@ -1185,6 +1185,19 @@ details p {
     gap: 8px;
     margin-top: 20px;
   }
+
+  /* Mobile onboarding (audit F-008): the application form comes right after
+     the hero instead of below the stacked value cards, so a phone visitor
+     reaches it without scrolling past four full-width cards. Desktop order
+     is unchanged. */
+  .trial-main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .trial-main > .trial-shell {
+    order: -1;
+  }
 }
 
 .form-grid {

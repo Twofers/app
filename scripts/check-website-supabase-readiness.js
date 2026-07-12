@@ -178,7 +178,10 @@ if (failures.length === 0) {
     assertIncludes(rel, html, "data-site-menu-toggle", "public website pages must expose the mobile navigation menu");
   }
   assertIncludes("website/business/start-trial/index.html", startTrialPage, PROD_FUNCTION_URL, "business form must post to the production function URL");
-  assertIncludes("website/business/start-trial/index.html", startTrialPage, "Request DFW Business Access", "business form must use trial onboarding copy");
+  // Contract is the localized jump key, not an English literal that drifts
+  // with copy edits (audit F-008: the old "Request DFW Business Access"
+  // assertion outlived the approved copy).
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'data-i18n="trial.jump"', "business form must use trial onboarding copy");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'class="button trial-jump"', "business onboarding mobile hero must provide a direct form jump");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="company_website"', "business form must keep honeypot field");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="terms_accepted"', "business form must require terms acknowledgement");
@@ -420,10 +423,13 @@ if (failures.length === 0) {
   }
 
   const trialRequestsPage = read("website/admin/trial-requests/index.html");
-  const adminDashboardPage = read("website/admin/index.html");
+  // Audit F-015: the dashboard markup lives in the token-gated fragment
+  // website/admin/app.html; the signed-out /admin shell is deliberately
+  // minimal and carries no tables.
+  const adminDashboardPage = read("website/admin/app.html");
   const adminDashboardJs = read("website/admin/admin.js");
   const adminLoginPage = read("website/admin/login/index.html");
-  assertIncludes("website/admin/index.html", adminDashboardPage, "data-mobile-cards", "admin dashboard tables must render as labeled cards on phones");
+  assertIncludes("website/admin/app.html", adminDashboardPage, "data-mobile-cards", "admin dashboard tables must render as labeled cards on phones");
   assertIncludes("website/admin/admin.js", adminDashboardJs, "dataset.label", "admin dashboard dynamic rows must provide mobile table labels");
   assertIncludes("website/admin/login/index.html", adminLoginPage, "data:image/gif;base64", "admin MFA QR image must use a non-broken placeholder before setup");
   assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must point at the admin application endpoint");

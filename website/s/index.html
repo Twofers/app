@@ -22,7 +22,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
-  <body>
+  <body data-share-lookup-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/deal-share-lookup">
     <header class="site-header">
       <nav class="nav" aria-label="Main navigation">
         <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
@@ -52,15 +52,118 @@
     <main class="content-page">
       <p class="eyebrow" data-i18n="share.eyebrow">Shared offer</p>
       <h1 data-i18n="share.heading">Open this offer in Twofer.</h1>
+      <!-- No-JS fallback + always-true privacy note. JS below adds a state
+           section; it never replaces this copy (audit F-009). -->
       <p class="lede" data-i18n="share.lede">
         Shared offer links open in the Twofer app when it is installed. No private claim code or redemption
         token is shown on this web preview page.
       </p>
+
+      <section data-share-result aria-live="polite">
+        <p data-share-state="checking" hidden data-i18n="share.stateChecking">Checking this shared offer…</p>
+        <div data-share-state="valid" hidden>
+          <h2 data-share-deal-title></h2>
+          <p data-share-business></p>
+          <p class="lede"><span data-i18n="share.endsLabel">Ends</span> <span data-share-ends></span></p>
+        </div>
+        <div data-share-state="expired" hidden>
+          <h2 data-i18n="share.stateExpired">This offer has ended.</h2>
+          <p class="lede" data-i18n="share.stateExpiredBody">The shared offer is no longer live. Open Twofer to see what's live nearby.</p>
+        </div>
+        <div data-share-state="unavailable" hidden>
+          <h2 data-i18n="share.stateUnavailable">This link isn't available.</h2>
+          <p class="lede" data-i18n="share.stateUnavailableBody">The link may be mistyped or the offer may have been removed.</p>
+        </div>
+        <div data-share-state="error" hidden>
+          <h2 data-i18n="share.stateError">Could not check this link.</h2>
+          <p class="lede" data-i18n="share.stateErrorBody">Refresh the page to try again.</p>
+        </div>
+      </section>
+
       <div class="cta-row">
-        <a class="button" href="/" data-i18n="common.backHome">Back to Twofer</a>
+        <a class="button" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="ios" hidden>
+          Get Twofer for iPhone
+        </a>
+        <a class="button" href="mailto:support@twoferapp.com?subject=Twofer%20launch" data-store-cta="android" hidden>
+          Get Twofer for Android
+        </a>
+        <a class="button button-secondary" href="/" data-i18n="common.backHome">Back to Twofer</a>
         <a class="button button-secondary" href="/support" data-i18n="common.getSupport">Get support</a>
       </div>
     </main>
     <script src="/localization.js?v=20260702-site-i18n"></script>
+    <script src="/store-links.js?v=20260707-store3"></script>
+    <script>
+      // State-aware share preview (audit F-009). Mirrors the app's parser
+      // (lib/deal-share-link.ts): /s/<7-char code>, alphabet without 0/O/I/L/1.
+      (function () {
+        var CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{7}$/;
+        var endpoint = document.body.getAttribute("data-share-lookup-endpoint");
+        var result = document.querySelector("[data-share-result]");
+        if (!endpoint || !result) return;
+
+        function show(state) {
+          var panels = result.querySelectorAll("[data-share-state]");
+          for (var i = 0; i < panels.length; i += 1) {
+            panels[i].hidden = panels[i].getAttribute("data-share-state") !== state;
+          }
+        }
+
+        var match = window.location.pathname.match(/^\/s\/([^\/]+)\/?$/);
+        if (!match) return; // bare /s — keep the static copy only.
+        var code;
+        try {
+          code = decodeURIComponent(match[1]).trim().toUpperCase();
+        } catch (_e) {
+          code = "";
+        }
+        if (!CODE_RE.test(code)) {
+          show("unavailable");
+          return;
+        }
+
+        show("checking");
+        fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: code }),
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
+          })
+          .then(function (payload) {
+            var share = payload && payload.share ? payload.share : null;
+            var status = share && typeof share.share_status === "string" ? share.share_status : "not_found";
+            if (status === "valid") {
+              var title = result.querySelector("[data-share-deal-title]");
+              var business = result.querySelector("[data-share-business]");
+              var ends = result.querySelector("[data-share-ends]");
+              if (title) title.textContent = share.deal_title || "";
+              if (business) {
+                business.textContent = [share.business_name, share.business_address]
+                  .filter(Boolean)
+                  .join(" · ");
+              }
+              if (ends) {
+                var when = share.deal_end_time ? new Date(share.deal_end_time) : null;
+                ends.textContent = when && !isNaN(when.getTime())
+                  ? when.toLocaleString(document.documentElement.lang || undefined, {
+                      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                    })
+                  : "";
+              }
+              show("valid");
+            } else if (status === "expired") {
+              show("expired");
+            } else {
+              show("unavailable");
+            }
+          })
+          .catch(function () {
+            show("error");
+          });
+      })();
+    </script>
   </body>
 </html>
