@@ -25,6 +25,7 @@ const MIME = new Map([
 
 const ROUTES = [
   "/",
+  "/404.html",
   "/business/",
   "/business/start-trial/",
   "/business/thanks/",
@@ -95,8 +96,9 @@ function createServer() {
     try {
       const filePath = routeToFile(safePathname(req.url));
       if (!withinSite(filePath) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Not found");
+        const notFoundPath = path.join(SITE_ROOT, "404.html");
+        res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+        fs.createReadStream(notFoundPath).pipe(res);
         return;
       }
       const ext = path.extname(filePath).toLowerCase();
@@ -617,7 +619,7 @@ async function checkAdminDashboard(page) {
     .catch(() => issues.push("/admin/: summary did not load signed-in state"));
   // AI Spend & Quotas now starts collapsed by default (north-star redesign) --
   // open it before interacting with the form inside.
-  const aiSpendPanel = page.locator("details.admin-manage-panel").first();
+  const aiSpendPanel = page.locator("details:has([data-ai-quota-form])").first();
   if ((await aiSpendPanel.count()) && !(await aiSpendPanel.evaluate((el) => el.open))) {
     await aiSpendPanel.locator("summary").click();
   }

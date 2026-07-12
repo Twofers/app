@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="notFound.title">Page Not Found | Twofer</title>
+    <meta name="robots" content="noindex,follow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260712-site-a11y" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+          <span>Twofer</span>
+        </a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="/support/" data-i18n="nav.support">Support</a>
+          <a href="/business/start-trial/" data-i18n="nav.businessTrial">Request Business Access</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button class="nav-menu-button" type="button" aria-controls="site-nav-links" aria-expanded="false" data-site-menu-toggle data-i18n="nav.menu">Menu</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="content-page" id="main-content">
+      <section class="admin-panel">
+        <p class="eyebrow" data-i18n="notFound.kicker">404 error</p>
+        <h1 data-i18n="notFound.heading">This page is not here</h1>
+        <p class="lede" data-i18n="notFound.body">The link may be outdated, or the page may have moved. You can return home or contact support if you need help.</p>
+        <div class="cta-row">
+          <a class="button" href="/" data-i18n="notFound.home">Return home</a>
+          <a class="button button-secondary" href="/support/" data-i18n="notFound.support">Contact support</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/localization.js?v=20260712-site-a11y"></script>
+  </body>
+</html>

@@ -112,7 +112,7 @@
 
       <div class="trial-shell">
         <form class="trial-form" id="business-application" novalidate>
-          <h2 class="trial-form-title" data-i18n="trial.formTitle">Request your business account</h2>
+          <h2 class="trial-form-title" id="business-application-heading" tabindex="-1" data-i18n="trial.formTitle">Request your business account</h2>
           <p class="form-hint" data-i18n="trial.formHint">Takes about 2 minutes. Fields marked * are required.</p>
           <div class="form-grid">
             <label>
@@ -248,6 +248,11 @@
       const form = document.querySelector("#business-application");
       const statusEl = document.querySelector("#form-status");
       const submitButton = form.querySelector("[data-submit-button]");
+      const applicationHeading = document.querySelector("#business-application-heading");
+
+      document.querySelector(".trial-jump")?.addEventListener("click", () => {
+        window.setTimeout(() => applicationHeading?.focus(), 0);
+      });
 
       function msg(key) {
         return window.TwoferI18n?.t(key) || "";

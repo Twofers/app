@@ -19,6 +19,14 @@
     statusEl.className = `status${tone === "danger" ? " error" : ""}`;
   }
 
+  function setFormEnabled(enabled) {
+    if (!form) return;
+    form.setAttribute("aria-busy", String(!enabled));
+    form.querySelectorAll("input, button").forEach((control) => {
+      control.disabled = !enabled;
+    });
+  }
+
   async function readJson(response) {
     try {
       return await response.json();
@@ -36,6 +44,7 @@
   }
 
   async function loadPreview() {
+    setFormEnabled(false);
     const token = tokenFromPath();
     if (!token) {
       setStatus("This claim link is missing a token.", "danger");
@@ -49,11 +58,13 @@
     const payload = await readJson(response);
     if (!response.ok || !payload.ok) throw new Error(payload.error || "This claim link is not available.");
     renderPreview(payload.preview);
+    setFormEnabled(true);
     setStatus("");
   }
 
   async function submitClaim(event) {
     event.preventDefault();
+    if (form?.getAttribute("aria-busy") === "true") return;
     const token = tokenFromPath();
     const data = new FormData(form);
     if (data.get("authority_confirmed") !== "on") {
@@ -80,6 +91,7 @@
   }
 
   if (form) {
+    setFormEnabled(false);
     form.addEventListener("submit", (event) => {
       submitClaim(event).catch((error) => setStatus(error instanceof Error ? error.message : "Could not start this claim.", "danger"));
     });

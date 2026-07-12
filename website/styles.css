@@ -10,7 +10,8 @@
   --dark-3: #1d4138;
   --cream: #fbf7f1;
   --accent: #f08a54;
-  --accent-dark: #dd7440;
+  --accent-dark: #b85020;
+  --accent-strong: #963e18;
   --danger: #b91c1c;
   --shadow: 0 18px 48px rgb(15 23 20 / 12%);
 }
@@ -25,6 +26,31 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  transform: translateY(-160%);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--dark);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.admin-dashboard-detail {
+  margin-bottom: 24px;
+}
+
+.admin-dashboard-detail[open] > summary {
+  margin-bottom: 18px;
 }
 
 body {
@@ -164,22 +190,22 @@ button {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-dark);
   border-radius: 8px;
   padding: 12px 18px;
-  background: var(--accent);
+  background: var(--accent-dark);
   color: #fff;
   font: inherit;
   font-size: 14px;
   font-weight: 850;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgb(240 138 84 / 20%);
+  box-shadow: 0 10px 22px rgb(184 80 32 / 20%);
 }
 
 .button:hover,
 button:hover {
-  background: var(--accent-dark);
+  background: var(--accent-strong);
   text-decoration: none;
 }
 
@@ -2021,6 +2047,10 @@ pre.admin-note {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   .admin-card,
   .admin-next-action,
   .admin-table tbody tr,
@@ -2205,6 +2235,7 @@ pre.admin-note {
 
   .admin-shell .nav-links {
     display: flex;
+    flex-wrap: nowrap;
     gap: 6px;
     overflow-x: auto;
     scrollbar-width: none;

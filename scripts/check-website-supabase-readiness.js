@@ -9,12 +9,15 @@ const ANDROID_PACKAGE = "com.unvmex2.twoforone";
 
 const requiredFiles = [
   "website/index.html",
+  "website/404.html",
   "website/localization.js",
+  "website/store-links.js",
   "website/vercel.json",
   "website/.well-known/apple-app-site-association",
   "website/.well-known/assetlinks.json",
   "website/business/index.html",
   "website/business/start-trial/index.html",
+  "website/business/claim/claim.js",
   "website/business/waitlist/index.html",
   "website/business/billing/start/index.html",
   "website/business/billing/success/index.html",
@@ -36,6 +39,7 @@ const requiredFiles = [
   "website/admin/audit-log/index.html",
   "website/admin/settings/index.html",
   "website/admin/admin.js",
+  "website/admin/admin-guard.js",
   "website/admin/admin-login.js",
   "website/admin/trial-requests.js",
   "supabase/migrations/20260730123000_business_applications.sql",
@@ -135,6 +139,10 @@ if (failures.length === 0) {
   const homePage = read("website/index.html");
   const startTrialPage = read("website/business/start-trial/index.html");
   const localizationScript = read("website/localization.js");
+  const storeLinksScript = read("website/store-links.js");
+  const claimScript = read("website/business/claim/claim.js");
+  const adminLoginHtml = read("website/admin/login/index.html");
+  const adminGuardScript = read("website/admin/admin-guard.js");
   const styles = read("website/styles.css");
   for (const rel of walkFiles("website").filter((file) => file.endsWith(".html"))) {
     assertNotIncludes(rel, read(rel), "20260701-logo", "website pages must not point at stale stylesheet cache keys");
@@ -143,6 +151,9 @@ if (failures.length === 0) {
   assertIncludes("website/styles.css", styles, ".nav-menu-button", "shared stylesheet must support the mobile navigation menu");
   assertIncludes("website/styles.css", styles, ".admin-shell .nav-links", "shared stylesheet must keep admin navigation available on mobile");
   assertIncludes("website/styles.css", styles, "data-mobile-cards", "shared stylesheet must support mobile admin table cards");
+  assertIncludes("website/styles.css", styles, ".skip-link", "shared stylesheet must expose a keyboard skip link");
+  assertIncludes("website/styles.css", styles, "--accent-dark: #b85020", "interactive orange must meet normal-text contrast");
+  assertMatch("website/styles.css", styles, /prefers-reduced-motion[\s\S]*scroll-behavior:\s*auto/, "reduced-motion mode must disable smooth scrolling");
   assertIncludes("website/index.html", homePage, "/localization.js", "home page must load the website localization script");
   assertIncludes("website/index.html", homePage, "data-language-option=\"es\"", "home page must expose Spanish language switching");
   assertIncludes("website/index.html", homePage, "data-language-option=\"ko\"", "home page must expose Korean language switching");
@@ -151,6 +162,8 @@ if (failures.length === 0) {
   assertIncludes("website/localization.js", localizationScript, "trial.heading", "localization script must cover business onboarding page copy");
   for (const key of [
     "nav.menu",
+    "a11y.skipToContent",
+    "notFound.heading",
     "trial.jump",
     "support.heading",
     "delete.heading",
@@ -169,6 +182,15 @@ if (failures.length === 0) {
     "billing.addPayment.heading",
   ]) {
     assertIncludes("website/localization.js", localizationScript, key, `localization script must cover ${key}`);
+  }
+  assertIncludes("website/404.html", read("website/404.html"), 'name="robots" content="noindex,follow"', "custom 404 must not be indexed");
+  assertIncludes("website/store-links.js", storeLinksScript, "ios: null", "iOS store CTA must stay hidden until a real listing exists");
+  assertIncludes("website/store-links.js", storeLinksScript, "android: null", "Android store CTA must stay hidden until a real listing exists");
+  assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
+  assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
+  assertIncludes("website/admin/admin-guard.js", adminGuardScript, "window.location.replace", "signed-out admin subroutes must return to login");
+  for (const rel of walkFiles("website/admin").filter((file) => file.endsWith("/index.html") && !["website/admin/index.html", "website/admin/login/index.html"].includes(file))) {
+    assertIncludes(rel, read(rel), "/admin/admin-guard.js", "admin subroutes must load the signed-out session guard");
   }
   for (const rel of walkFiles("website").filter((file) => file.endsWith(".html") && !file.startsWith("website/admin/"))) {
     const html = read(rel);

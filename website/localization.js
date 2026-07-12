@@ -8,7 +8,7 @@
       "site.lang.es": "ES",
       "site.lang.ko": "KO",
       "nav.menu": "Menu",
-      "nav.getApp": "Get the App",
+      "nav.getApp": "Join the launch list",
       "nav.customers": "For Customers",
       "nav.businesses": "For Businesses",
       "nav.how": "How It Works",
@@ -17,6 +17,18 @@
       "nav.businessAccess": "Business Access",
       "nav.businessTerms": "Business Terms",
       "nav.businessTrial": "Request Business Access",
+      "a11y.skipToContent": "Skip to main content",
+      "a11y.mainNavigation": "Main navigation",
+      "a11y.languageOptions": "Language options",
+      "a11y.whyTwofer": "Why Twofer",
+      "a11y.whatHappensNext": "What happens next",
+      "a11y.backToTop": "Back to top",
+      "notFound.title": "Page Not Found | Twofer",
+      "notFound.kicker": "404 error",
+      "notFound.heading": "This page is not here",
+      "notFound.body": "The link may be outdated, or the page may have moved. You can return home or contact support if you need help.",
+      "notFound.home": "Return home",
+      "notFound.support": "Contact support",
       "home.title": "Twofer - Live Local Specials",
       "home.meta": "Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code. Launching in DFW.",
       "home.status": "Launching in Dallas-Fort Worth",
@@ -165,7 +177,7 @@
       "site.lang.es": "ES",
       "site.lang.ko": "KO",
       "nav.menu": "Menu",
-      "nav.getApp": "Obtener la app",
+      "nav.getApp": "Únete a la lista de lanzamiento",
       "nav.customers": "Clientes",
       "nav.businesses": "Negocios",
       "nav.how": "Como funciona",
@@ -174,6 +186,18 @@
       "nav.businessAccess": "Acceso de negocio",
       "nav.businessTerms": "Terminos para negocios",
       "nav.businessTrial": "Solicitar acceso",
+      "a11y.skipToContent": "Saltar al contenido principal",
+      "a11y.mainNavigation": "Navegación principal",
+      "a11y.languageOptions": "Opciones de idioma",
+      "a11y.whyTwofer": "Por qué Twofer",
+      "a11y.whatHappensNext": "Qué sucede después",
+      "a11y.backToTop": "Volver arriba",
+      "notFound.title": "Página no encontrada | Twofer",
+      "notFound.kicker": "Error 404",
+      "notFound.heading": "Esta página no está aquí",
+      "notFound.body": "El enlace puede estar desactualizado o la página pudo haberse movido. Vuelve al inicio o contacta a soporte si necesitas ayuda.",
+      "notFound.home": "Volver al inicio",
+      "notFound.support": "Contactar a soporte",
       "home.title": "Twofer - Ofertas locales en vivo",
       "home.meta": "Twofer ayuda a negocios locales a crear ofertas locales por tiempo limitado, publicarlas cerca y redimirlas en tienda con codigo QR. Muy pronto en DFW.",
       "home.status": "Muy pronto en Dallas-Fort Worth",
@@ -322,7 +346,7 @@
       "site.lang.es": "ES",
       "site.lang.ko": "KO",
       "nav.menu": "메뉴",
-      "nav.getApp": "앱 받기",
+      "nav.getApp": "출시 알림 신청",
       "nav.customers": "고객용",
       "nav.businesses": "비즈니스용",
       "nav.how": "이용 방법",
@@ -331,6 +355,18 @@
       "nav.businessAccess": "비즈니스 액세스",
       "nav.businessTerms": "비즈니스 약관",
       "nav.businessTrial": "비즈니스 액세스 요청",
+      "a11y.skipToContent": "본문으로 건너뛰기",
+      "a11y.mainNavigation": "주요 탐색",
+      "a11y.languageOptions": "언어 옵션",
+      "a11y.whyTwofer": "Twofer를 선택하는 이유",
+      "a11y.whatHappensNext": "다음 단계",
+      "a11y.backToTop": "맨 위로",
+      "notFound.title": "페이지를 찾을 수 없음 | Twofer",
+      "notFound.kicker": "404 오류",
+      "notFound.heading": "이 페이지를 찾을 수 없습니다",
+      "notFound.body": "링크가 오래되었거나 페이지가 이동했을 수 있습니다. 홈으로 돌아가거나 도움이 필요하면 지원팀에 문의하세요.",
+      "notFound.home": "홈으로 돌아가기",
+      "notFound.support": "지원팀에 문의",
       "home.title": "Twofer - 실시간 지역 특가",
       "home.meta": "Twofer는 지역 비즈니스가 시간 한정 로컬 오퍼를 만들고, 주변에 게시하고, 매장에서 QR 코드로 리딤하도록 돕습니다. DFW 출시 예정.",
       "home.status": "Dallas-Fort Worth 출시 예정",
@@ -998,7 +1034,33 @@
     window.dispatchEvent(new CustomEvent("twofer:localechange", { detail: { locale: nextLocale } }));
   }
 
+  function prepareAccessibility() {
+    const main = document.querySelector("main");
+    if (main && !main.id) main.id = "main-content";
+
+    if (main && !document.querySelector(".skip-link")) {
+      const skipLink = document.createElement("a");
+      skipLink.className = "skip-link";
+      skipLink.href = `#${main.id}`;
+      skipLink.setAttribute("data-i18n", "a11y.skipToContent");
+      skipLink.textContent = textFor("a11y.skipToContent", "en");
+      document.body.prepend(skipLink);
+    }
+
+    const ariaLabels = [
+      ["nav.nav", "a11y.mainNavigation"],
+      [".language-set", "a11y.languageOptions"],
+      ['[aria-label="Why Twofer"]', "a11y.whyTwofer"],
+      ['[aria-label="What happens next"]', "a11y.whatHappensNext"],
+      ['[aria-label="Back to top"]', "a11y.backToTop"],
+    ];
+    ariaLabels.forEach(([selector, key]) => {
+      document.querySelectorAll(selector).forEach((node) => node.setAttribute("data-i18n-aria-label", key));
+    });
+  }
+
   function boot() {
+    prepareAccessibility();
     document.querySelectorAll("[data-language-option]").forEach((node) => {
       node.addEventListener("click", () => applyLocale(node.getAttribute("data-language-option") || "en"));
     });
