@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
+import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -62,7 +63,7 @@ serve(async (req) => {
 
     const { data: claim, error: claimError } = await supabase
       .from("deal_claims")
-      .select("id, user_id, deal_id, claim_status, redeemed_at, expires_at")
+      .select("id, user_id, deal_id, claim_status, redeemed_at, expires_at, grace_period_minutes")
       .eq("id", claimId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -88,9 +89,17 @@ serve(async (req) => {
       });
     }
 
+    // Audit F-004: a claim only expires at the shared redeem deadline
+    // (expires_at + grace) — the same rule every redemption path uses. During
+    // the grace window the claim is still redeemable, so a release request
+    // releases it (owner's explicit choice) instead of mislabeling it expired.
     const now = new Date();
     const expiresAt = Date.parse(String(claim.expires_at ?? ""));
-    if (Number.isFinite(expiresAt) && expiresAt <= now.getTime()) {
+    const graceMinutes = (claim as { grace_period_minutes?: number | null }).grace_period_minutes;
+    if (
+      Number.isFinite(expiresAt) &&
+      isPastRedeemDeadline(now.getTime(), String(claim.expires_at), graceMinutes as number)
+    ) {
       await supabaseAdmin
         .from("deal_claims")
         .update({ claim_status: "expired", redeem_started_at: null })
