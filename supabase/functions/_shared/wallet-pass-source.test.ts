@@ -233,10 +233,16 @@ describe("native wallet pass — client flag + surfaces", () => {
     const source = read("components/add-to-wallet-button.tsx");
     expect(source).toMatch(/isNativeWalletPassEnabled\(\) && \(isApple \|\| isGoogle\)/);
     expect(source).toMatch(/if \(!visible\) return null/);
-    // Apple path: fetch pkpass -> write file -> share sheet with the pkpass UTI
+    // Apple path: fetch pkpass -> native system button -> PassKit add controller.
     expect(source).toMatch(/fetchAppleWalletPassBase64/);
-    expect(source).toMatch(/com\.apple\.pkpass/);
-    expect(source).toMatch(/Sharing\.shareAsync/);
+    expect(source).toMatch(/AppleWalletPassButton/);
+    expect(source).toMatch(/presentAppleWalletPass/);
+    expect(source).not.toMatch(/Sharing\.shareAsync/);
+
+    const nativeModule = read("modules/twofer-passkit/ios/TwoferPassKitModule.swift");
+    const nativeButton = read("modules/twofer-passkit/ios/TwoferPassKitButtonView.swift");
+    expect(nativeModule).toMatch(/PKAddPassesViewController\(pass: pass\)/);
+    expect(nativeButton).toMatch(/PKAddPassButton\(addPassButtonStyle: \.black\)/);
   });
 
   it("all three locales carry the Apple button label", () => {
