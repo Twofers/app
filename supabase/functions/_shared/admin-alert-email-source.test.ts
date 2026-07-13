@@ -14,6 +14,9 @@ describe("new-application admin alert email", () => {
     // Destination inbox is configurable but defaults to support@ (no new secret required).
     expect(source).toMatch(/Deno\.env\.get\("ADMIN_ALERT_EMAIL"\)/);
     expect(source).toMatch(/support@twoferapp\.com/);
+    expect(source).toMatch(/Approve 30-day full trial/);
+    expect(source).toMatch(/Opening it does not approve the business/);
+    expect(source).toMatch(/\/admin\/trial-requests\/\?status=open/);
     // Best-effort contract: returns a warning string instead of throwing.
     expect(source).toMatch(/Promise<string \| null>/);
     // Never log the API key, and never echo the provider response body.
@@ -24,10 +27,12 @@ describe("new-application admin alert email", () => {
   it("fires from the public application intake after the insert succeeds", () => {
     const source = read("supabase/functions/submit-business-application/index.ts");
     expect(source).toMatch(
-      /import \{ sendNewApplicationAdminAlert \} from "\.\.\/_shared\/admin-alert-email\.ts"/,
+      /import \{ adminAlertInbox, sendNewApplicationAdminAlert \} from "\.\.\/_shared\/admin-alert-email\.ts"/,
     );
     // Must be awaited only after the insert's error guard, before the response.
     expect(source).toMatch(/if \(error\) throw error;[\s\S]*await sendNewApplicationAdminAlert\(/);
     expect(source).toMatch(/applicationId: application\.id as string/);
+    expect(source).toMatch(/mintFullTrialQuickApproval/);
+    expect(source).toMatch(/sendNewApplicationAdminAlert\([\s\S]*quickApprovalUrl\)/);
   });
 });

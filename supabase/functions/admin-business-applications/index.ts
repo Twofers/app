@@ -13,6 +13,7 @@ import {
   ensureStripeCustomerForBusiness,
 } from "../_shared/stripe-business-billing.ts";
 import { sendApprovalEmail } from "../_shared/approval-email.ts";
+import { quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 
 type AdminRole =
   | "owner"
@@ -41,6 +42,7 @@ type Payload = {
   business_id?: unknown;
   decision?: unknown;
   reason?: unknown;
+  token?: unknown;
 };
 
 type DecisionKey = "approve_limited" | "approve_full" | "review_required" | "waitlist" | "reject";
@@ -69,12 +71,20 @@ type BusinessDecisionSyncResult = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPEN_STATUSES = ["pending_review", "pending_verification", "review_required"];
-const KNOWN_ACTIONS = new Set(["list", "decide", "create", "verify_business"]);
+const KNOWN_ACTIONS = new Set(["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"]);
+const QUICK_APPROVAL_ACTIONS = new Set(["quick_preview", "quick_confirm"]);
+const QUICK_APPROVAL_TOKEN_RE = /^[A-Za-z0-9_-]{40,200}$/;
+const QUICK_APPROVAL_PROCESSING_TIMEOUT_MS = 2 * 60 * 1000;
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req),
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+    },
   });
 }
 
@@ -573,6 +583,220 @@ async function applyDecision(
   });
 }
 
+type QuickApprovalContext = {
+  rawTokenHash: string;
+  application: Record<string, unknown>;
+  adminUser: { id: string; email: string | null; role: AdminRole };
+  supabaseAdmin: any;
+};
+
+function quickApprovalUnavailable(req: Request) {
+  return json(req, {
+    ok: false,
+    error: "This quick-approval link is invalid, expired, already used, or no longer eligible.",
+  }, 410);
+}
+
+function quickApprovalApplicationIsEligible(application: Record<string, unknown>): boolean {
+  const riskScore = Number(application.risk_score);
+  return application.status === "pending_review" &&
+    application.access_tier === "pending_verification" &&
+    application.verification_status === "verified_low_risk" &&
+    application.terms_accepted === true &&
+    application.privacy_acknowledged === true &&
+    Number.isFinite(riskScore) &&
+    riskScore >= 70;
+}
+
+async function loadQuickApprovalContext(
+  req: Request,
+  payload: Payload,
+): Promise<QuickApprovalContext | Response> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json(req, { error: "Quick approval is not configured." }, 500);
+  }
+
+  const rawToken = cleanString(payload.token, 240);
+  if (!QUICK_APPROVAL_TOKEN_RE.test(rawToken)) return quickApprovalUnavailable(req);
+  const tokenHash = await quickApprovalTokenHash(rawToken);
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  const { data: applicationData, error: applicationError } = await supabaseAdmin
+    .from("business_applications")
+    .select("*")
+    .eq("quick_approval_token_hash", tokenHash)
+    .maybeSingle();
+  if (applicationError) throw applicationError;
+  const application = applicationData as Record<string, unknown> | null;
+  if (!application || !quickApprovalApplicationIsEligible(application)) {
+    return quickApprovalUnavailable(req);
+  }
+
+  const expiresAtMs = Date.parse(String(application.quick_approval_token_expires_at ?? ""));
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() || application.quick_approval_token_used_at) {
+    return quickApprovalUnavailable(req);
+  }
+
+  const processingAtMs = Date.parse(String(application.quick_approval_processing_started_at ?? ""));
+  const processingIsCurrent = application.quick_approval_processing_request_id &&
+    Number.isFinite(processingAtMs) &&
+    Date.now() - processingAtMs < QUICK_APPROVAL_PROCESSING_TIMEOUT_MS;
+  if (processingIsCurrent) {
+    return json(req, { ok: false, error: "This approval is already being processed. Please wait a moment." }, 409);
+  }
+
+  const issuedTo = typeof application.quick_approval_token_issued_to === "string"
+    ? application.quick_approval_token_issued_to
+    : "";
+  if (!UUID_RE.test(issuedTo)) return quickApprovalUnavailable(req);
+  const { data: adminData, error: adminError } = await supabaseAdmin
+    .from("admin_users")
+    .select("id,email,role,is_active")
+    .eq("id", issuedTo)
+    .maybeSingle();
+  if (adminError) throw adminError;
+  if (!adminData?.is_active || !hasReadableAdminRole(adminData.role) || !canDecideApplications(adminData.role)) {
+    return quickApprovalUnavailable(req);
+  }
+
+  return {
+    rawTokenHash: tokenHash,
+    application,
+    adminUser: {
+      id: adminData.id,
+      email: typeof adminData.email === "string" ? adminData.email : null,
+      role: adminData.role,
+    },
+    supabaseAdmin,
+  };
+}
+
+async function previewQuickApproval(req: Request, payload: Payload) {
+  const context = await loadQuickApprovalContext(req, payload);
+  if (context instanceof Response) return context;
+  const application = context.application;
+  return json(req, {
+    ok: true,
+    application: {
+      business_name: application.business_name,
+      contact_name: application.contact_name,
+      email: application.email,
+      address: application.address,
+      business_type: application.business_type,
+      risk_score: application.risk_score,
+    },
+    approval: {
+      trial_days: 30,
+      offer_limit: 3,
+      claim_limit: 50,
+      expires_at: application.quick_approval_token_expires_at,
+    },
+  });
+}
+
+async function confirmQuickApproval(req: Request, payload: Payload, requestId: string) {
+  const context = await loadQuickApprovalContext(req, payload);
+  if (context instanceof Response) return context;
+  const applicationId = String(context.application.id);
+  const processingStartedAt = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - QUICK_APPROVAL_PROCESSING_TIMEOUT_MS).toISOString();
+
+  // Release only an abandoned processing claim. A fresh concurrent claim stays
+  // intact and causes the guarded update below to return no row.
+  await context.supabaseAdmin
+    .from("business_applications")
+    .update({
+      quick_approval_processing_started_at: null,
+      quick_approval_processing_request_id: null,
+    })
+    .eq("id", applicationId)
+    .eq("quick_approval_token_hash", context.rawTokenHash)
+    .is("quick_approval_token_used_at", null)
+    .lt("quick_approval_processing_started_at", staleBefore);
+
+  const { data: claimedData, error: claimError } = await context.supabaseAdmin
+    .from("business_applications")
+    .update({
+      quick_approval_processing_started_at: processingStartedAt,
+      quick_approval_processing_request_id: requestId,
+    })
+    .eq("id", applicationId)
+    .eq("quick_approval_token_hash", context.rawTokenHash)
+    .eq("status", "pending_review")
+    .eq("access_tier", "pending_verification")
+    .eq("verification_status", "verified_low_risk")
+    .gte("risk_score", 70)
+    .gt("quick_approval_token_expires_at", processingStartedAt)
+    .is("quick_approval_token_used_at", null)
+    .is("quick_approval_processing_request_id", null)
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimedData) {
+    return json(req, { ok: false, error: "This approval is already being processed or is no longer available." }, 409);
+  }
+
+  let completed = false;
+  try {
+    const adminContext: AdminContext = {
+      user: { id: context.adminUser.id, email: context.adminUser.email },
+      adminUser: { email: context.adminUser.email, role: context.adminUser.role },
+      supabaseAdmin: context.supabaseAdmin,
+      requestId,
+    };
+    const decisionResponse = await applyDecision(
+      req,
+      adminContext,
+      claimedData as Record<string, unknown>,
+      "approve_full",
+      "Approved for a full 30-day trial from single-use email confirmation.",
+    );
+    const decisionPayload = await decisionResponse.json().catch(() => ({}));
+    if (!decisionResponse.ok || !decisionPayload.ok) {
+      throw new Error("quick_approval_decision_failed");
+    }
+
+    const usedAt = new Date().toISOString();
+    const { data: completedData, error: completeError } = await context.supabaseAdmin
+      .from("business_applications")
+      .update({
+        quick_approval_token_used_at: usedAt,
+        quick_approval_token_used_by: context.adminUser.id,
+        quick_approval_processing_started_at: null,
+        quick_approval_processing_request_id: null,
+      })
+      .eq("id", applicationId)
+      .eq("quick_approval_processing_request_id", requestId)
+      .select("id")
+      .maybeSingle();
+    if (completeError) throw completeError;
+    if (!completedData) throw new Error("quick_approval_completion_failed");
+    completed = true;
+
+    return json(req, {
+      ok: true,
+      request_id: requestId,
+      business_name: claimedData.business_name,
+      approval_email_warning: decisionPayload.approval_email_warning ?? null,
+    });
+  } finally {
+    if (!completed) {
+      // Let the same link retry after a transient failure. If applyDecision
+      // already changed the status, its eligibility guard still prevents a
+      // second grant or duplicate email.
+      await context.supabaseAdmin
+        .from("business_applications")
+        .update({
+          quick_approval_processing_started_at: null,
+          quick_approval_processing_request_id: null,
+        })
+        .eq("id", applicationId)
+        .eq("quick_approval_processing_request_id", requestId);
+    }
+  }
+}
+
 async function decideApplication(req: Request, ctx: AdminContext, payload: Payload) {
   if (!canDecideApplications(ctx.adminUser.role)) {
     return json(req, { error: "This admin role cannot change trial requests." }, 403);
@@ -738,13 +962,18 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await readPayload(req);
-    const adminContext = await requireAdmin(req, requestId);
-    if (adminContext instanceof Response) return adminContext;
-
     action = cleanString(payload.action || "list", 40);
     if (!KNOWN_ACTIONS.has(action)) {
       return json(req, { ok: false, error: "Unknown action.", request_id: requestId }, 400);
     }
+    if (QUICK_APPROVAL_ACTIONS.has(action)) {
+      return action === "quick_confirm"
+        ? confirmQuickApproval(req, payload, requestId)
+        : previewQuickApproval(req, payload);
+    }
+
+    const adminContext = await requireAdmin(req, requestId);
+    if (adminContext instanceof Response) return adminContext;
     if (action === "decide") {
       return decideApplication(req, adminContext, payload);
     }
@@ -759,6 +988,10 @@ Deno.serve(async (req) => {
     console.error("[admin-business-applications] error:", err);
     const error = action === "decide"
       ? "Failed to save trial decision."
+      : action === "quick_confirm"
+      ? "The quick approval could not be completed. Use the admin dashboard if this continues."
+      : action === "quick_preview"
+      ? "The quick-approval link could not be checked."
       : action === "create"
       ? "Failed to create business trial."
       : action === "verify_business"

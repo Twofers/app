@@ -37,6 +37,15 @@ describe("business application intake", () => {
     expect(source).not.toMatch(/OPENAI_API_KEY/);
   });
 
+  it("keeps even low-risk public applications pending until an explicit approval", () => {
+    const source = read("supabase/functions/submit-business-application/index.ts");
+    const lowRiskBranch = source.slice(source.indexOf("if (score >= 70)"), source.indexOf("if (score >= 40)"));
+    expect(lowRiskBranch).toMatch(/status:\s*"pending_review"/);
+    expect(lowRiskBranch).toMatch(/access_tier:\s*"pending_verification"/);
+    expect(lowRiskBranch).toMatch(/verification_status:\s*"verified_low_risk"/);
+    expect(lowRiskBranch).not.toMatch(/status:\s*"trial_limited"|access_tier:\s*"trial_limited"/);
+  });
+
   it("rate-limits the public endpoint per email and per IP before inserting", () => {
     const source = read("supabase/functions/submit-business-application/index.ts");
     // Per-email and per-IP throttles must both exist with finite ceilings.
@@ -130,7 +139,7 @@ describe("business application intake", () => {
 
   it("rejects an unrecognized action with a clear 400 instead of silently falling through to listApplications", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business"\]\)/);
+    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"\]\)/);
     expect(source).toMatch(/if \(!KNOWN_ACTIONS\.has\(action\)\) \{\s*\n\s*return json\(req, \{ ok: false, error: "Unknown action\.", request_id: requestId \}, 400\);/);
   });
 

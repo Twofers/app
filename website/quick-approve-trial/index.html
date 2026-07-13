@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="quickApproval.title">Confirm Trial Approval | Twofer</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260712-site-hardening" />
+  </head>
+  <body
+    class="quick-approval-page"
+    data-quick-approval-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-applications"
+  >
+    <header class="site-header quick-approval-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+          <a href="/support" data-i18n="nav.support">Support</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button
+            class="nav-menu-button"
+            type="button"
+            aria-controls="site-nav-links"
+            aria-expanded="false"
+            data-site-menu-toggle
+            data-i18n="nav.menu"
+          >
+            Menu
+          </button>
+        </div>
+      </nav>
+    </header>
+    <main class="quick-approval-main">
+      <section class="quick-approval-card" aria-labelledby="quick-approval-title">
+        <p class="admin-kicker" data-i18n="quickApproval.kicker">Email quick approval</p>
+        <h1 id="quick-approval-title" data-i18n="quickApproval.heading">Confirm 30-day full trial</h1>
+        <p class="quick-approval-intro" data-i18n="quickApproval.intro">Review the submitted business before activating its trial. Opening this page has not approved anything.</p>
+
+        <p class="status" data-quick-approval-status role="status" aria-live="polite" data-i18n="quickApproval.checking">Checking this approval link&hellip;</p>
+
+        <dl class="quick-approval-details" data-quick-approval-details hidden>
+          <div><dt data-i18n="quickApproval.business">Business</dt><dd data-business-name></dd></div>
+          <div><dt data-i18n="quickApproval.contact">Contact</dt><dd data-contact-name></dd></div>
+          <div><dt data-i18n="quickApproval.email">Email</dt><dd data-owner-email></dd></div>
+          <div><dt data-i18n="quickApproval.address">Address</dt><dd data-business-address></dd></div>
+          <div><dt data-i18n="quickApproval.type">Type</dt><dd data-business-type></dd></div>
+          <div><dt data-i18n="quickApproval.riskScore">Risk score</dt><dd data-risk-score></dd></div>
+        </dl>
+
+        <div class="quick-approval-limits" data-quick-approval-limits hidden>
+          <strong data-i18n="quickApproval.fullTrial">Full trial</strong>
+          <span data-i18n="quickApproval.limits">30 days &middot; 3 live offers &middot; up to 50 claims</span>
+        </div>
+
+        <div class="quick-approval-actions" data-quick-approval-actions hidden>
+          <button type="button" class="button" data-confirm-quick-approval data-i18n="quickApproval.confirm">Confirm 30-day approval</button>
+          <a class="button button-secondary" href="/admin/trial-requests/?status=open" data-i18n="quickApproval.reviewAdmin">Review in admin instead</a>
+        </div>
+
+        <div class="quick-approval-result" data-quick-approval-result hidden>
+          <h2 data-i18n="quickApproval.approvedHeading">30-day trial approved</h2>
+          <p data-i18n="quickApproval.approvedBody">The owner's full trial is live. They can open Twofer and sign in with the same email used on the request. Their welcome email is also being sent.</p>
+        </div>
+      </section>
+    </main>
+    <script src="/localization.js?v=20260712-site-hardening"></script>
+    <script src="/quick-approve-trial/quick-approve.js?v=20260713-quick-approval"></script>
+  </body>
+</html>

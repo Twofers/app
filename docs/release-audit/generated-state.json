@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 138,
-    "latest": "20260814130000_business_open_application_gate.sql"
+    "count": 139,
+    "latest": "20260815120000_admin_email_quick_approval.sql"
   },
   "edgeFunctions": {
     "count": 73,

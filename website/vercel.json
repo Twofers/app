@@ -39,6 +39,27 @@
       ]
     },
     {
+      "source": "/quick-approve-trial(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://kvodhiqhdqnptqovovia.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -106,6 +127,14 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/quick-approve-trial",
+      "destination": "/quick-approve-trial/index.html"
+    },
+    {
+      "source": "/quick-approve-trial/",
+      "destination": "/quick-approve-trial/index.html"
+    },
     {
       "source": "/s/:path*",
       "destination": "/s/index.html"

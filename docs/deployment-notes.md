@@ -47,6 +47,7 @@ High-signal dependencies:
 - **Website prospect command center:** `20260802120000_business_prospect_command_center.sql`. This adds unclaimed prospect, source, enrichment, demand, score, sales, claim-link, and conversion-history tables plus safe public projection/demand RPCs. Applying it is production-changing and requires explicit approval.
 - **Website admin AI operating layer:** `20260802130000_admin_ai_operating_layer.sql`. This extends `ai_generation_logs` for admin/prospect AI output metadata and related prospect IDs, and updates prospect score tiers. Applying it is production-changing and requires explicit approval.
 - **Admin AI prompt registry:** `20260802140000_admin_ai_prompt_registry.sql`. This adds the RLS-closed `admin_ai_prompts` table and seeded active prompt versions used server-side by admin AI functions. Applying it is production-changing and requires explicit approval.
+- **Admin email quick approval:** `20260815120000_admin_email_quick_approval.sql`. This adds hashed, single-use, expiring quick-approval state to the RLS-closed business application table. The raw bearer token is never stored. Applying it is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -70,10 +71,10 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `delete-user-account` | Auth user deletion for consumers and business owners |
 | `ingest-analytics-event` | Append-only client analytics |
 | `deal-link` | Deep-link redirect for deal sharing |
-| `submit-business-application` | Public website business access-request intake |
+| `submit-business-application` | Public website business access-request intake and eligible low-risk admin quick-link issuance |
 | `admin-dashboard-summary` | Internal admin dashboard summary, active-admin checked |
 | `admin-ai-usage` | Internal admin AI spend/usage lookup and audited monthly quota reset |
-| `admin-business-applications` | Internal admin business trial request listing and audited approval/waitlist/reject decisions |
+| `admin-business-applications` | Internal admin trial-request decisions plus single-use, explicit-confirmation full 30-day trial quick approval |
 | `public-local-businesses` | Public-safe projection for active businesses and reviewed prospects |
 | `request-business-on-twofer` | Authenticated customer demand capture for prospect/business requests |
 | `admin-prospect-import` | Admin-only prospect import with source provenance and duplicate checks |

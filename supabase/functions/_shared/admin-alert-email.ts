@@ -32,7 +32,7 @@ function siteBaseUrl(): string {
   return (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
 }
 
-function alertInbox(): string {
+export function adminAlertInbox(): string {
   const configured = (Deno.env.get("ADMIN_ALERT_EMAIL") ?? "").trim().toLowerCase();
   return EMAIL_RE.test(configured) ? configured : DEFAULT_ALERT_INBOX;
 }
@@ -51,9 +51,12 @@ function orDash(value: string | null): string {
   return trimmed || "—";
 }
 
-function buildEmail(alert: NewApplicationAlert): { subject: string; html: string; text: string } {
+function buildEmail(
+  alert: NewApplicationAlert,
+  quickApprovalUrl: string | null,
+): { subject: string; html: string; text: string } {
   const businessName = alert.businessName.trim() || "New business";
-  const adminUrl = `${siteBaseUrl()}/admin`;
+  const adminUrl = `${siteBaseUrl()}/admin/trial-requests/?status=open`;
   const subject = `New business application (${alert.status}) — ${businessName}`;
 
   const rows: Array<[string, string]> = [
@@ -70,11 +73,19 @@ function buildEmail(alert: NewApplicationAlert): { subject: string; html: string
     ["Source", alert.source],
   ];
 
+  const quickApprovalText = quickApprovalUrl
+    ? [
+        `Approve the 30-day full trial (link expires in 30 minutes):`,
+        quickApprovalUrl,
+        ``,
+      ]
+    : [];
   const text = [
     `A new business application was submitted.`,
     ``,
     ...rows.map(([label, value]) => `${label}: ${value}`),
     ``,
+    ...quickApprovalText,
     `Review it in the admin dashboard:`,
     adminUrl,
   ].join("\n");
@@ -86,14 +97,21 @@ function buildEmail(alert: NewApplicationAlert): { subject: string; html: string
     )
     .join("");
 
+  const quickApprovalButton = quickApprovalUrl
+    ? `<p style="margin:0 0 12px;">
+        <a href="${escapeHtml(quickApprovalUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:13px 20px;border-radius:8px;">Approve 30-day full trial</a>
+      </p>
+      <p style="font-size:13px;line-height:1.45;margin:0 0 20px;color:#5f625b;">The link expires in 30 minutes. Opening it does not approve the business; you must review and tap Confirm approval.</p>`
+    : "";
   const html = `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#f6f7f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1d1a;">
     <div style="max-width:520px;margin:0 auto;padding:24px;">
       <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">A new business application was submitted.</p>
       <table style="border-collapse:collapse;margin:0 0 20px;">${htmlRows}</table>
+      ${quickApprovalButton}
       <p style="margin:0 0 20px;">
-        <a href="${escapeHtml(adminUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:12px 20px;border-radius:8px;">Open admin dashboard</a>
+        <a href="${escapeHtml(adminUrl)}" style="display:inline-block;color:#7c310a;text-decoration:underline;font-size:14px;font-weight:600;padding:8px 0;">Review in admin instead</a>
       </p>
     </div>
   </body>
@@ -107,7 +125,10 @@ function buildEmail(alert: NewApplicationAlert): { subject: string; html: string
  * when skipped (no API key); returns a short warning string on any recoverable
  * failure. Never throws.
  */
-export async function sendNewApplicationAdminAlert(alert: NewApplicationAlert): Promise<string | null> {
+export async function sendNewApplicationAdminAlert(
+  alert: NewApplicationAlert,
+  quickApprovalUrl: string | null = null,
+): Promise<string | null> {
   const WARN = "Application saved, but the admin alert email could not be sent.";
 
   try {
@@ -117,7 +138,7 @@ export async function sendNewApplicationAdminAlert(alert: NewApplicationAlert): 
       return WARN;
     }
 
-    const email = buildEmail(alert);
+    const email = buildEmail(alert, quickApprovalUrl);
     const response = await fetch(RESEND_ENDPOINT, {
       method: "POST",
       headers: {
@@ -126,7 +147,7 @@ export async function sendNewApplicationAdminAlert(alert: NewApplicationAlert): 
       },
       body: JSON.stringify({
         from: FROM_ADDRESS,
-        to: [alertInbox()],
+        to: [adminAlertInbox()],
         subject: email.subject,
         html: email.html,
         text: email.text,

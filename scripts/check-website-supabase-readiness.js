@@ -27,6 +27,8 @@ const requiredFiles = [
   "website/business/billing/status/index.html",
   "website/business/review-pending/index.html",
   "website/business/thanks/index.html",
+  "website/quick-approve-trial/index.html",
+  "website/quick-approve-trial/quick-approve.js",
   "website/business-terms/index.html",
   "website/admin/index.html",
   "website/admin/login/index.html",
@@ -49,11 +51,14 @@ const requiredFiles = [
   "supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql",
   "supabase/migrations/20260730128000_admin_ai_quota_resets.sql",
   "supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql",
+  "supabase/migrations/20260815120000_admin_email_quick_approval.sql",
   "supabase/functions/submit-business-application/index.ts",
   "supabase/functions/admin-dashboard-summary/index.ts",
   "supabase/functions/admin-auth-session/index.ts",
   "supabase/functions/admin-ai-usage/index.ts",
   "supabase/functions/admin-business-applications/index.ts",
+  "supabase/functions/_shared/admin-alert-email.ts",
+  "supabase/functions/_shared/admin-quick-approval.ts",
   "supabase/functions/_shared/admin-mfa.ts",
   "supabase/functions/get-business-onboarding-context/index.ts",
   "supabase/functions/update-business-profile-section/index.ts",
@@ -180,6 +185,7 @@ if (failures.length === 0) {
     "thanks.heading",
     "waitlist.heading",
     "review.heading",
+    "quickApproval.heading",
     "share.heading",
     "billing.start.heading",
     "billing.status.heading",
@@ -449,6 +455,10 @@ if (failures.length === 0) {
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_limited", "admin business applications must audit limited approvals");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_full", "admin business applications must audit full approvals");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "ensureStripeCustomerForBusiness", "admin business applications must seed billing access when approving linked owners");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quick_preview", "admin business applications must expose token-gated quick preview");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quick_confirm", "admin business applications must expose token-gated quick confirmation");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quickApprovalApplicationIsEligible", "quick approvals must recheck low-risk eligibility server-side");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, '"approve_full"', "quick confirmation must reuse the full 30-day trial decision path");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminApplicationsFn)) {
     failures.push("supabase/functions/admin-business-applications/index.ts: admin trial decisions must not depend on payment or AI secrets");
   }
@@ -473,6 +483,14 @@ if (failures.length === 0) {
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"decide\"", "trial requests script must submit admin decisions");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must expose limited approval");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must expose full approval");
+
+  const quickApprovalPage = read("website/quick-approve-trial/index.html");
+  const quickApprovalJs = read("website/quick-approve-trial/quick-approve.js");
+  assertIncludes("website/quick-approve-trial/index.html", quickApprovalPage, "data-quick-approval-endpoint", "quick approval page must point at the server-authorized decision endpoint");
+  assertIncludes("website/quick-approve-trial/index.html", quickApprovalPage, "data-confirm-quick-approval", "quick approval page must require an explicit confirmation control");
+  assertIncludes("website/quick-approve-trial/quick-approve.js", quickApprovalJs, "window.history.replaceState", "quick approval page must remove the bearer fragment before requests");
+  assertIncludes("website/quick-approve-trial/quick-approve.js", quickApprovalJs, 'post("quick_preview")', "quick approval page must preview before confirmation");
+  assertIncludes("website/quick-approve-trial/quick-approve.js", quickApprovalJs, 'post("quick_confirm")', "quick approval page must submit the explicit confirmation");
 
   const contextFn = read("supabase/functions/get-business-onboarding-context/index.ts");
   assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "materializeBusinessForUser", "context function must materialize website requests on app login");

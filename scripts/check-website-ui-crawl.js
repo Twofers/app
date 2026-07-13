@@ -32,6 +32,7 @@ const ROUTES = [
   "/business/claim/mock-claim-token",
   "/business/waitlist/",
   "/business/review-pending/",
+  "/quick-approve-trial/#token=mock_quick_approval_token_12345678901234567890",
   "/business-terms/",
   "/business/billing/start/",
   "/business/billing/status/",
@@ -398,6 +399,23 @@ function mockPayload(pathname, requestBody) {
   }
 
   if (pathname.endsWith("/admin-business-applications")) {
+    if (requestBody?.action === "quick_preview") {
+      return {
+        ok: true,
+        application: {
+          business_name: "Sample Bakery",
+          contact_name: "Pat Owner",
+          email: "pat@example.com",
+          address: "123 Main St, Dallas, TX",
+          business_type: "bakery",
+          risk_score: 75,
+        },
+        approval: { trial_days: 30, offer_limit: 3, claim_limit: 50 },
+      };
+    }
+    if (requestBody?.action === "quick_confirm") {
+      return { ok: true, business_name: "Sample Bakery", approval_email_warning: null };
+    }
     return {
       ok: true,
       business_linked: false,
@@ -680,6 +698,24 @@ async function checkTrialRequests(page) {
   return issues;
 }
 
+async function checkQuickApproval(page) {
+  const issues = [];
+  await page
+    .waitForFunction(() => document.querySelector("[data-business-name]")?.textContent?.includes("Sample Bakery"), null, {
+      timeout: 5000,
+    })
+    .catch(() => issues.push("/quick-approve-trial/: preview did not load"));
+  const confirmButton = page.locator("[data-confirm-quick-approval]");
+  if (!(await confirmButton.count())) return [...issues, "/quick-approve-trial/: confirmation button is missing"];
+  await confirmButton.click();
+  await page
+    .waitForFunction(() => document.querySelector("[data-quick-approval-result]")?.hidden === false, null, {
+      timeout: 5000,
+    })
+    .catch(() => issues.push("/quick-approve-trial/: explicit confirmation did not reach the approved state"));
+  return issues;
+}
+
 async function crawlRoute(browser, baseUrl, route, viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   await prepareStorage(context, route);
@@ -731,6 +767,7 @@ async function crawlRoute(browser, baseUrl, route, viewport) {
   }
   if (route === "/admin/" && viewport.name === "mobile") issues.push(...(await checkAdminDashboard(page)));
   if (route === "/admin/trial-requests/" && viewport.name === "mobile") issues.push(...(await checkTrialRequests(page)));
+  if (route.startsWith("/quick-approve-trial/") && viewport.name === "mobile") issues.push(...(await checkQuickApproval(page)));
 
   if (SCREENSHOT_DIR && SCREENSHOT_ROUTES.has(route)) {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });

@@ -10,7 +10,8 @@ import {
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
 import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts";
-import { sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
+import { adminAlertInbox, sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
+import { mintFullTrialQuickApproval } from "../_shared/admin-quick-approval.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 30;
 const RATE_LIMIT_MAX_PER_EMAIL = 3;
@@ -68,8 +69,8 @@ type Payload = {
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
 type IntakeDecision = {
-  status: "trial_limited" | "review_required" | "pending_verification" | "waitlisted" | "rejected";
-  access_tier: "trial_limited" | "review_required" | "pending_verification" | "waitlisted" | "rejected";
+  status: "pending_review" | "review_required" | "pending_verification" | "waitlisted" | "rejected";
+  access_tier: "review_required" | "pending_verification" | "waitlisted" | "rejected";
   verification_status: "verified_low_risk" | "needs_review" | "in_progress" | "waitlisted" | "rejected";
   risk_score: number;
   risk_reasons: string[];
@@ -209,14 +210,17 @@ function scoreApplication(args: {
 
   if (score >= 70) {
     return {
-      status: "trial_limited",
-      access_tier: "trial_limited",
+      // Low risk is eligible for Dan's short-lived email approval, but the
+      // public form itself never grants access. The existing audited decision
+      // path changes this to the full 30-day trial only after explicit confirmation.
+      status: "pending_review",
+      access_tier: "pending_verification",
       verification_status: "verified_low_risk",
       risk_score: score,
       risk_reasons: riskReasons,
-      trial_days: 14,
-      trial_offer_limit: 1,
-      trial_claim_limit: 25,
+      trial_days: null,
+      trial_offer_limit: null,
+      trial_claim_limit: null,
     };
   }
 
@@ -353,10 +357,23 @@ serve(async (req) => {
 
     if (error) throw error;
 
+    const quickApprovalUrl = await mintFullTrialQuickApproval(supabase, {
+      applicationId: application.id as string,
+      applicationStatus: decision.status,
+      accessTier: decision.access_tier,
+      verificationStatus: decision.verification_status,
+      riskScore: decision.risk_score,
+      adminEmail: adminAlertInbox(),
+      ownerEmail: email,
+      address,
+      phone: normalized.phone,
+    });
+
     // Best-effort admin alert (never throws, never blocks the insert): notify the
     // team a new application landed so a trial can be turned on. Fires for every
     // inserted application regardless of decision; the honeypot early-return and
-    // rate-limited requests never reach this point.
+    // rate-limited requests never reach this point. Only low-risk pending requests
+    // receive a short-lived quick-approval action.
     await sendNewApplicationAdminAlert({
       applicationId: application.id as string,
       businessName,
@@ -370,7 +387,7 @@ serve(async (req) => {
       verificationStatus: decision.verification_status,
       riskScore: decision.risk_score,
       source: "website_start_trial",
-    });
+    }, quickApprovalUrl);
 
     const requestId = await createOnboardingRequest(supabase, normalized, payload as Record<string, unknown>, {
       applicationId: application.id,

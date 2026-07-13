@@ -1226,6 +1226,147 @@ details p {
   }
 }
 
+/* Single-use email trial approval. Kept outside /admin so the emailed bearer
+   link can open without an admin browser session; the Edge Function remains
+   the authorization boundary. */
+.quick-approval-page {
+  min-height: 100vh;
+  background: #f2f4f0;
+}
+
+.quick-approval-header .nav {
+  min-height: 68px;
+}
+
+.quick-approval-main {
+  width: min(100% - 32px, 620px);
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+
+.quick-approval-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  padding: 28px;
+}
+
+.quick-approval-card h1 {
+  margin: 4px 0 12px;
+  font-size: clamp(32px, 7vw, 48px);
+}
+
+.quick-approval-intro {
+  margin: 0 0 20px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.quick-approval-details {
+  display: grid;
+  gap: 0;
+  margin: 22px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.quick-approval-details[hidden],
+.quick-approval-limits[hidden],
+.quick-approval-actions[hidden],
+.quick-approval-result[hidden] {
+  display: none;
+}
+
+.quick-approval-details > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.quick-approval-details > div:last-child {
+  border-bottom: 0;
+}
+
+.quick-approval-details dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-approval-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+
+.quick-approval-limits {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: #fff6ef;
+  padding: 14px 16px;
+}
+
+.quick-approval-limits span {
+  color: var(--muted);
+}
+
+.quick-approval-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.quick-approval-actions .button {
+  width: 100%;
+  text-align: center;
+}
+
+.quick-approval-result {
+  margin-top: 22px;
+  border: 1px solid #b7e2ca;
+  border-radius: 12px;
+  background: #e9f6ef;
+  padding: 18px;
+}
+
+.quick-approval-result h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+}
+
+.quick-approval-result p {
+  margin: 0;
+  color: #235441;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .quick-approval-main {
+    width: min(100% - 20px, 620px);
+    padding: 24px 0 48px;
+  }
+
+  .quick-approval-card {
+    border-radius: 14px;
+    padding: 20px 16px;
+  }
+
+  .quick-approval-details > div {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 12px;
+  }
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
