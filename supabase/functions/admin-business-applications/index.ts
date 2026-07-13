@@ -13,7 +13,7 @@ import {
   ensureStripeCustomerForBusiness,
 } from "../_shared/stripe-business-billing.ts";
 import { sendApprovalEmail } from "../_shared/approval-email.ts";
-import { quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
+import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 
 type AdminRole =
   | "owner"
@@ -672,10 +672,24 @@ async function loadQuickApprovalContext(
   };
 }
 
-async function previewQuickApproval(req: Request, payload: Payload) {
+async function previewQuickApproval(req: Request, payload: Payload, requestId: string) {
   const context = await loadQuickApprovalContext(req, payload);
   if (context instanceof Response) return context;
   const application = context.application;
+
+  // Audit the token-gated PII disclosure. Unlike every other read here, preview is
+  // reachable without an admin session, so record who/when it was viewed — attributed
+  // to the issued-to admin the token is bound to.
+  await context.supabaseAdmin.from("admin_audit_log").insert({
+    admin_user_id: context.adminUser.id,
+    admin_email: context.adminUser.email,
+    action: "admin_business_application_quick_previewed",
+    target_type: "business_application",
+    target_id: String(application.id),
+    reason: "quick_approval_email_preview",
+    request_id: requestId,
+  });
+
   return json(req, {
     ok: true,
     application: {
@@ -739,6 +753,20 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
 
   let completed = false;
   try {
+    // Re-run the duplicate screen on the freshly claimed row: a duplicate business
+    // or a sibling application could have appeared between token mint and now. If
+    // so, the finally block releases the claim and we fall back to manual review.
+    if (
+      await hasPossibleDuplicate(context.supabaseAdmin, {
+        applicationId,
+        ownerEmail: String(claimedData.email ?? ""),
+        address: typeof claimedData.address === "string" ? claimedData.address : null,
+        phone: typeof claimedData.phone === "string" ? claimedData.phone : null,
+      })
+    ) {
+      return quickApprovalUnavailable(req);
+    }
+
     const adminContext: AdminContext = {
       user: { id: context.adminUser.id, email: context.adminUser.email },
       adminUser: { email: context.adminUser.email, role: context.adminUser.role },
@@ -756,9 +784,15 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
     if (!decisionResponse.ok || !decisionPayload.ok) {
       throw new Error("quick_approval_decision_failed");
     }
+    // The grant succeeded and is audited by applyDecision. From here the token MUST
+    // NOT be treated as retryable, so mark completed BEFORE the single-use bookkeeping
+    // below. That write is best-effort: if it errors, the approval still stands (status
+    // is now trial_active, so the eligibility guard blocks any re-grant) and we must
+    // not fail the request or falsely release the link for a dead retry.
+    completed = true;
 
     const usedAt = new Date().toISOString();
-    const { data: completedData, error: completeError } = await context.supabaseAdmin
+    const { error: completeError } = await context.supabaseAdmin
       .from("business_applications")
       .update({
         quick_approval_token_used_at: usedAt,
@@ -767,12 +801,13 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
         quick_approval_processing_request_id: null,
       })
       .eq("id", applicationId)
-      .eq("quick_approval_processing_request_id", requestId)
-      .select("id")
-      .maybeSingle();
-    if (completeError) throw completeError;
-    if (!completedData) throw new Error("quick_approval_completion_failed");
-    completed = true;
+      .eq("quick_approval_processing_request_id", requestId);
+    if (completeError) {
+      console.error(
+        "[admin-business-applications] quick approval granted but single-use bookkeeping failed:",
+        completeError,
+      );
+    }
 
     return json(req, {
       ok: true,
@@ -782,9 +817,9 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
     });
   } finally {
     if (!completed) {
-      // Let the same link retry after a transient failure. If applyDecision
-      // already changed the status, its eligibility guard still prevents a
-      // second grant or duplicate email.
+      // Release the processing claim so a genuine transient failure (or the
+      // duplicate-guard decline above) frees the link. A completed grant never
+      // reaches here, and the eligibility guard blocks any second grant anyway.
       await context.supabaseAdmin
         .from("business_applications")
         .update({
@@ -969,7 +1004,7 @@ Deno.serve(async (req) => {
     if (QUICK_APPROVAL_ACTIONS.has(action)) {
       return action === "quick_confirm"
         ? confirmQuickApproval(req, payload, requestId)
-        : previewQuickApproval(req, payload);
+        : previewQuickApproval(req, payload, requestId);
     }
 
     const adminContext = await requireAdmin(req, requestId);

@@ -116,6 +116,11 @@ describe("business application intake", () => {
     expect(source).toMatch(/admin_business_application_billing_sync_failed/);
     expect(source).toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).toMatch(/billing_sync_warning/);
+    // Token-gated quick_preview PII disclosure is audited (reachable without an
+    // admin session), and quick_confirm re-runs the duplicate screen on the
+    // freshly claimed row before granting.
+    expect(source).toMatch(/admin_business_application_quick_previewed/);
+    expect(source).toMatch(/hasPossibleDuplicate/);
     expect(source).not.toMatch(/auth\.admin\.listUsers/);
     expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
   });

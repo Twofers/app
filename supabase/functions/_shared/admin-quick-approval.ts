@@ -39,7 +39,16 @@ function eligibleForQuickApproval(input: QuickApprovalMintInput): boolean {
     input.riskScore >= 70;
 }
 
-async function hasPossibleDuplicate(supabaseAdmin: any, input: QuickApprovalMintInput): Promise<boolean> {
+export type DuplicateCheckInput = {
+  applicationId: string;
+  ownerEmail: string;
+  address: string | null;
+  phone: string | null;
+};
+
+// Exported so the confirm path can re-run the same screen on the freshly claimed
+// row (a duplicate can appear between token mint and confirmation).
+export async function hasPossibleDuplicate(supabaseAdmin: any, input: DuplicateCheckInput): Promise<boolean> {
   const openOrGrantedStatuses = [
     "pending_review",
     "pending_verification",

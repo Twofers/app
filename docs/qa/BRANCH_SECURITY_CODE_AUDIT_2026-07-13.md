@@ -37,7 +37,14 @@ Priority #1 (public intake) plus adjacent hardening applied and validated. **Not
 - ✅ **M2** — reordered counted insert ahead of outbound email (race window narrowed); atomic-counter version delivered as [`proposed-m2-atomic-rate-limit.sql`](proposed-m2-atomic-rate-limit.sql) (needs migration approval to apply — hard-gated).
 - ✅ **Hardening (report follow-up "b")** — extracted the IP logic to a shared, unit-tested [`_shared/client-ip.ts`](../../supabase/functions/_shared/client-ip.ts) and wired all three functions (`submit-business-application`, `submit-launch-signup`, `admin-auth-session`) to it, killing 3 copies of the leftmost-XFF anti-pattern; removed a 4th **dead** copy exported from `_shared/admin-prospects.ts`. New behavioral test `client-ip.test.ts` proves a spoofed leftmost hop cannot win.
 - ✅ **L7** — persist real consent booleans.
-- **Validation:** `npm run typecheck:functions` (exit 0) · full edge-function suite **688/688** · `check-website-supabase-readiness.js` passed.
+
+**Round 2 — quick-approval + intake hardening (committed separately):**
+- ✅ **L2** — `quick_preview` now writes an `admin_business_application_quick_previewed` audit row (attributed to the issued-to admin), closing the unaudited-PII-read gap.
+- ✅ **L4** — `quick_confirm` re-runs `hasPossibleDuplicate` on the freshly claimed row (exported from `admin-quick-approval.ts`); a duplicate that raced in after mint now releases the claim and falls back to manual review.
+- ✅ **L5** — the single-use `token_used_at` write is now best-effort and runs after `completed=true`; a bookkeeping error no longer fails the request or leaves the (already-granted, already-audited) link falsely retryable.
+- ✅ **I-HONEYPOT** — the tripped honeypot now returns the exact success shape (`{ok:true, onboarding_saved:true}`), so a bot can't detect it by response diffing.
+- ✅ **I-EMAILURL** — the approve-button href is emitted only for an `https://` URL, so `escapeHtml` is never the sole guard on that attribute.
+- **Validation (both rounds):** `npm run typecheck:functions` (exit 0) · full edge-function suite **688/688** · `check-website-supabase-readiness.js` passed.
 
 **Deliberately NOT auto-fixed (need your input):**
 - **L6** (rename `verified_low_risk` / rebalance scoring) — a product & data-model decision with cross-surface ripple (DB, admin UI, quick-approval eligibility). Needs your call.

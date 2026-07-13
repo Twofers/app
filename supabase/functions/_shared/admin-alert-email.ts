@@ -58,6 +58,11 @@ function buildEmail(
   const businessName = alert.businessName.trim() || "New business";
   const adminUrl = `${siteBaseUrl()}/admin/trial-requests/?status=open`;
   const subject = `New business application (${alert.status}) — ${businessName}`;
+  // Defense in depth: only ever emit an https link for the one-click approve
+  // button, so escapeHtml is never the sole guard on the href attribute.
+  const safeQuickApprovalUrl = quickApprovalUrl && /^https:\/\//i.test(quickApprovalUrl)
+    ? quickApprovalUrl
+    : null;
 
   const rows: Array<[string, string]> = [
     ["Business", businessName],
@@ -73,10 +78,10 @@ function buildEmail(
     ["Source", alert.source],
   ];
 
-  const quickApprovalText = quickApprovalUrl
+  const quickApprovalText = safeQuickApprovalUrl
     ? [
         `Approve the 30-day full trial (link expires in 30 minutes):`,
-        quickApprovalUrl,
+        safeQuickApprovalUrl,
         ``,
       ]
     : [];
@@ -97,9 +102,9 @@ function buildEmail(
     )
     .join("");
 
-  const quickApprovalButton = quickApprovalUrl
+  const quickApprovalButton = safeQuickApprovalUrl
     ? `<p style="margin:0 0 12px;">
-        <a href="${escapeHtml(quickApprovalUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:13px 20px;border-radius:8px;">Approve 30-day full trial</a>
+        <a href="${escapeHtml(safeQuickApprovalUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:13px 20px;border-radius:8px;">Approve 30-day full trial</a>
       </p>
       <p style="font-size:13px;line-height:1.45;margin:0 0 20px;color:#5f625b;">The link expires in 30 minutes. Opening it does not approve the business; you must review and tap Confirm approval.</p>`
     : "";

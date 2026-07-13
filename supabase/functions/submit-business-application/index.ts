@@ -293,7 +293,9 @@ serve(async (req) => {
   }
 
   if (cleanString(payload.company_website, 120)) {
-    return json(req, { ok: true });
+    // Mirror the genuine success shape exactly so a bot cannot detect the honeypot
+    // by comparing responses.
+    return json(req, { ok: true, onboarding_saved: true });
   }
 
   const businessName = cleanString(payload.business_name, 120);
