@@ -248,9 +248,3 @@ export function randomUrlToken(bytes = 32): string {
   for (const byte of buffer) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
-
-export function firstForwardedIp(header: string | null): string | null {
-  if (!header) return null;
-  const first = header.split(",")[0]?.trim();
-  return first || null;
-}

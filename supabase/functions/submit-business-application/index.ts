@@ -12,16 +12,16 @@ import {
 import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts";
 import { adminAlertInbox, sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
 import { mintFullTrialQuickApproval } from "../_shared/admin-quick-approval.ts";
+import { clientIpFromRequest } from "../_shared/client-ip.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 30;
 const RATE_LIMIT_MAX_PER_EMAIL = 3;
 const RATE_LIMIT_MAX_PER_IP = 8;
-
-function firstForwardedIp(header: string | null): string | null {
-  if (!header) return null;
-  const first = header.split(",")[0]?.trim();
-  return first || null;
-}
+// Client-independent flood ceiling. Even if an attacker rotates emails/IPs to
+// evade the per-actor caps above, no more than this many new applications per
+// window trigger the costly outbound admin alert + quick-approval token mint.
+// Set well above expected pilot volume so it never throttles genuine signups.
+const RATE_LIMIT_MAX_ALERTS_PER_WINDOW = 40;
 
 async function isRateLimited(
   supabase: DbClient,
@@ -48,6 +48,24 @@ async function isRateLimited(
   }
 
   return false;
+}
+
+// Client-independent flood backstop. Counts applications inserted in the recent
+// window across ALL emails/IPs; when the ceiling is exceeded the caller skips the
+// outbound admin alert + quick-approval token mint. Fails OPEN (returns false on
+// a counting error) so a transient DB issue never silently drops a real signup's
+// alert.
+async function alertFloodExceeded(supabase: DbClient): Promise<boolean> {
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("business_applications")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", windowStart);
+  if (error) {
+    console.error("[submit-business-application] alert flood check failed:", error);
+    return false;
+  }
+  return (count ?? 0) > RATE_LIMIT_MAX_ALERTS_PER_WINDOW;
 }
 
 type Payload = {
@@ -296,7 +314,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const requestIp = firstForwardedIp(req.headers.get("x-forwarded-for"));
+    const requestIp = clientIpFromRequest(req);
     if (await isRateLimited(supabase, { email, ip: requestIp })) {
       return json(req, { error: "Too many requests. Please try again later." }, 429);
     }
@@ -342,8 +360,11 @@ serve(async (req) => {
       slow_hours: slowHours,
       offer_interests: offerInterests,
       launch_area: launchArea,
-      terms_accepted: true,
-      privacy_acknowledged: true,
+      // Persist the actual validated consent (guaranteed true by the required-fields
+      // guard above) rather than a hardcoded literal, so the legal-consent record
+      // always reflects what was submitted even if that guard is ever changed.
+      terms_accepted: termsAccepted,
+      privacy_acknowledged: privacyAcknowledged,
       source: "website_start_trial",
       status: decision.status,
       access_tier: decision.access_tier,
@@ -357,38 +378,14 @@ serve(async (req) => {
 
     if (error) throw error;
 
-    const quickApprovalUrl = await mintFullTrialQuickApproval(supabase, {
-      applicationId: application.id as string,
-      applicationStatus: decision.status,
-      accessTier: decision.access_tier,
-      verificationStatus: decision.verification_status,
-      riskScore: decision.risk_score,
-      adminEmail: adminAlertInbox(),
-      ownerEmail: email,
-      address,
-      phone: normalized.phone,
-    });
-
-    // Best-effort admin alert (never throws, never blocks the insert): notify the
-    // team a new application landed so a trial can be turned on. Fires for every
-    // inserted application regardless of decision; the honeypot early-return and
-    // rate-limited requests never reach this point. Only low-risk pending requests
-    // receive a short-lived quick-approval action.
-    await sendNewApplicationAdminAlert({
-      applicationId: application.id as string,
-      businessName,
-      contactName,
-      email,
-      phone: normalized.phone,
-      address,
-      businessType,
-      status: decision.status,
-      accessTier: decision.access_tier,
-      verificationStatus: decision.verification_status,
-      riskScore: decision.risk_score,
-      source: "website_start_trial",
-    }, quickApprovalUrl);
-
+    // Record the throttle-counted onboarding request BEFORE the costly outbound
+    // side effects below. This keeps network I/O (the admin email) out of the
+    // rate-limit check→count window and lets the flood ceiling reflect this
+    // attempt. This is a public, unauthenticated endpoint: we never materialize a
+    // business or create a Stripe customer for an existing account here, since the
+    // submitter's control of `email` is unverified. Once the real owner signs in to
+    // the app, get-business-onboarding-context re-reads this onboarding request by
+    // their verified session email and materializes the business then.
     const requestId = await createOnboardingRequest(supabase, normalized, payload as Record<string, unknown>, {
       applicationId: application.id,
       status: decision.status,
@@ -397,14 +394,51 @@ serve(async (req) => {
       ipAddress: requestIp,
       userAgent: req.headers.get("user-agent"),
     });
-
-    // This is a public, unauthenticated endpoint: we never materialize a
-    // business or create a Stripe customer for an existing account here,
-    // since the submitter's control of `email` is unverified. Once the real
-    // owner signs in to the app, get-business-onboarding-context re-reads
-    // this onboarding request by their verified session email and
-    // materializes the business then.
     await supabase.from("business_applications").update({ onboarding_request_id: requestId }).eq("id", application.id);
+
+    // Client-independent flood backstop: only mint a quick-approval token and send
+    // the admin alert when the endpoint is not being flooded. Even if the
+    // per-email/per-IP caps are evaded by rotating identifiers, this bounds Resend
+    // cost, inbox flooding, and one-click approve links to a fixed rate per window.
+    // A genuine signup during a flood is still saved and visible in the admin
+    // dashboard; only its proactive alert is deferred. Only low-risk pending
+    // requests receive a short-lived quick-approval action (mint returns null
+    // otherwise); the honeypot early-return and rate-limited requests never reach
+    // this point.
+    if (await alertFloodExceeded(supabase)) {
+      console.error(
+        "[submit-business-application] alert flood ceiling exceeded; suppressing admin alert + quick approval for this window.",
+      );
+    } else {
+      const quickApprovalUrl = await mintFullTrialQuickApproval(supabase, {
+        applicationId: application.id as string,
+        applicationStatus: decision.status,
+        accessTier: decision.access_tier,
+        verificationStatus: decision.verification_status,
+        riskScore: decision.risk_score,
+        adminEmail: adminAlertInbox(),
+        ownerEmail: email,
+        address,
+        phone: normalized.phone,
+      });
+
+      // Best-effort admin alert (never throws, never blocks the insert): notify the
+      // team a new application landed so a trial can be turned on.
+      await sendNewApplicationAdminAlert({
+        applicationId: application.id as string,
+        businessName,
+        contactName,
+        email,
+        phone: normalized.phone,
+        address,
+        businessType,
+        status: decision.status,
+        accessTier: decision.access_tier,
+        verificationStatus: decision.verification_status,
+        riskScore: decision.risk_score,
+        source: "website_start_trial",
+      }, quickApprovalUrl);
+    }
     await enqueueStripeCustomerSync(supabase, {
       onboardingRequestId: requestId,
       businessApplicationId: application.id,

@@ -58,11 +58,20 @@ describe("business application intake", () => {
     expect(source).toMatch(/\.eq\("owner_email", params\.email\)/);
     expect(source).toMatch(/\.eq\("ip_address", params\.ip\)/);
     expect(source).toMatch(/\.gte\("created_at", windowStart\)/);
-    // Exceeding either ceiling returns HTTP 429, and the client IP is read
-    // from the x-forwarded-for header rather than trusted from the body.
+    // Exceeding either ceiling returns HTTP 429. The client IP is derived from
+    // trusted edge/CDN headers and validated as a real IP — never trusting the
+    // attacker-controllable leftmost x-forwarded-for hop on this public endpoint.
     expect(source).toMatch(/Too many requests/);
     expect(source).toMatch(/\},\s*429\)/);
-    expect(source).toMatch(/firstForwardedIp\(req\.headers\.get\("x-forwarded-for"\)\)/);
+    // IP derivation lives in the shared trusted-IP helper (validated, prefers
+    // unspoofable edge headers, never the leftmost XFF hop) — see client-ip.test.ts.
+    expect(source).toMatch(/from "\.\.\/_shared\/client-ip\.ts"/);
+    expect(source).toMatch(/clientIpFromRequest\(req\)/);
+    expect(source).not.toMatch(/firstForwardedIp/);
+    // A client-independent flood ceiling backstops evasion of the per-actor caps
+    // (email/IP rotation) by bounding the costly admin alert + quick-approval mint.
+    expect(source).toMatch(/const RATE_LIMIT_MAX_ALERTS_PER_WINDOW\s*=\s*\d+/);
+    expect(source).toMatch(/alertFloodExceeded/);
     // A honeypot field short-circuits obvious bots before any DB work.
     expect(source).toMatch(/cleanString\(payload\.company_website/);
 
@@ -73,6 +82,14 @@ describe("business application intake", () => {
     expect(rateCheckAt).toBeGreaterThan(-1);
     expect(insertAt).toBeGreaterThan(-1);
     expect(rateCheckAt).toBeLessThan(insertAt);
+
+    // The throttle-counted onboarding request must be recorded BEFORE the costly
+    // outbound admin alert, so network I/O stays out of the rate-limit window.
+    const onboardingAt = source.indexOf("createOnboardingRequest(supabase");
+    const alertAt = source.indexOf("sendNewApplicationAdminAlert(");
+    expect(onboardingAt).toBeGreaterThan(-1);
+    expect(alertAt).toBeGreaterThan(-1);
+    expect(onboardingAt).toBeLessThan(alertAt);
   });
 
   it("registers the public function and website CORS origin", () => {
