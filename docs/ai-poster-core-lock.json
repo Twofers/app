@@ -86,17 +86,17 @@
     },
     {
       "path": "lib/deal-offer-contract.ts",
-      "sha256": "b1c655da9e66a0a4d6f93a29ba4d07930912f42fcc8d819f70a0f1cf9841bac7",
+      "sha256": "1c9eebdb05922cdffd35825684d190a85881affb1e6beab2d0e62726a6fe508e",
       "approvedBy": "Dan",
-      "latestApprovalRef": "2026-07-14 Dan chat approval: strip stray wrapping/unmatched quote characters from offer item names before contract canonicalization, validation, and deterministic fallback copy so inferred items like \"THE SERGEANT'S STRIPES (...) do not cause COPY_FAILED. No prompt, provider, schema, poster layout, migration, or production deploy performed.",
+      "latestApprovalRef": "2026-07-18 Dan chat approval ('complete the proposed fix'): end the item-name validation catch-22 that returned COPY_FAILED 502 for item names embedding parenthetical descriptions with banned words (prod repro: 'the recon roast ( Roaster fresh coffee with a shot of espresso)') — (1) banned hype-word checks (UNSUPPORTED_PROMO_CLAIM) now run on copy text with the contract's exact item names masked out, so words inside a merchant item name can never invalidate copy while hype words elsewhere still fail; (2) containsItem also accepts the core item name with parenthetical segments stripped, so copy naming the core item passes the item checks without carrying the whole description; (3) buildDeterministicDealChannelCopy builds channel copy from paren-stripped core names so the deterministic fallback fits field limits and always validates instead of throwing DETERMINISTIC_FALLBACK_INVALID. The locked canonicalOfferLine and offer facts are unchanged. Prior ref: 2026-07-14 Dan chat approval: strip stray wrapping/unmatched quote characters from offer item names before contract canonicalization, validation, and deterministic fallback copy so inferred items like \"THE SERGEANT'S STRIPES (...) do not cause COPY_FAILED. No prompt, provider, schema, poster layout, migration, or production deploy performed.",
       "approvalRef": "2026-07-03 initial AI poster core lock; 2026-07-13 Dan chat approval: keep the punctuation-only location-name cleanup in canonical offer terms",
       "rationale": "Keeps deal facts authoritative for AI generation and poster offer lines. 2026-07-13: canonical free-item and percent-off terms strip trailing punctuation from the location name before adding the sentence period, preventing duplicated punctuation such as 'Co..' without changing offer facts, prompt behavior, poster layout, or deployment requirements."
     },
     {
       "path": "lib/deal-offer-contract.test.ts",
-      "sha256": "93214c70093581d3b29f5670ddbe913866a70e1174facb69e1e2d6bdf748b4ac",
+      "sha256": "76d51fdf132a0892bf67d24ff6678d2631b2fd3070ec9fa2795d575f179715ba",
       "approvedBy": "Dan",
-      "latestApprovalRef": "2026-07-14 Dan chat approval: add regression coverage for the S10 unmatched-quote coffee-item offer with free cookie and blank optional item values.",
+      "latestApprovalRef": "2026-07-18 Dan chat approval ('complete the proposed fix'): regression tests for the parenthetical/banned-word item-name catch-22 — core-name copy validates, full-name copy with 'fresh' inside the item name validates, standalone hype words still fail, and the deterministic fallback for the recon-roast contract shape validates instead of throwing. Prior ref: 2026-07-14 Dan chat approval: add regression coverage for the S10 unmatched-quote coffee-item offer with free cookie and blank optional item values.",
       "approvalRef": "2026-07-03 initial AI poster core lock",
       "rationale": "Regression coverage for authoritative offer facts used by AI and poster copy."
     },
