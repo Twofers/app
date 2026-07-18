@@ -64,6 +64,58 @@ describe("importBusinessWebsite", () => {
     expect(result.site_title).toBe("Example Cafe");
   });
 
+  it("splits legacy 'Name ( long description )' items and carries description", async () => {
+    mocks.invoke.mockResolvedValue({
+      data: {
+        ...happyPayload,
+        menu: {
+          items: [
+            // Old function deploys pack the blurb into the name.
+            {
+              name: "the recon roast ( Roaster fresh coffee with a shot of espresso)",
+              category: "",
+              price_text: "",
+              size_options: [],
+              readable: true,
+            },
+            // New deploys return a separate description field.
+            {
+              name: "the sargents stripes",
+              description: "select orgin estate grown coffee",
+              category: "",
+              price_text: "",
+              size_options: [],
+              readable: true,
+            },
+          ],
+          low_legibility: false,
+          menu_notes: "",
+        },
+      },
+      error: null,
+    });
+
+    const result = await importBusinessWebsite({ website_url: "https://example.com" });
+    expect(result.menu?.items).toEqual([
+      {
+        name: "the recon roast",
+        description: "Roaster fresh coffee with a shot of espresso",
+        category: undefined,
+        price_text: undefined,
+        size_options: [],
+        readable: true,
+      },
+      {
+        name: "the sargents stripes",
+        description: "select orgin estate grown coffee",
+        category: undefined,
+        price_text: undefined,
+        size_options: [],
+        readable: true,
+      },
+    ]);
+  });
+
   it("passes business_id through only when provided", async () => {
     mocks.invoke.mockResolvedValue({ data: happyPayload, error: null });
 

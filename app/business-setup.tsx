@@ -39,6 +39,7 @@ import {
   type SiteImportMenuItem,
   type SiteImportResult,
 } from "@/lib/business-site-import";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 
@@ -433,16 +434,20 @@ export default function BusinessSetupScreen() {
         .from("business_menu_items")
         .select("name")
         .eq("business_id", businessId);
+      // Legacy library rows may still carry "Name ( long description )" — dedupe
+      // on the split short name so a re-import doesn't duplicate those items.
+      const nameKey = (value: string) => splitMenuItemDescription(value).name.toLowerCase();
       const existingNames = new Set(
         (existing ?? [])
-          .map((r) => (typeof (r as { name?: unknown }).name === "string" ? (r as { name: string }).name.trim().toLowerCase() : ""))
+          .map((r) => (typeof (r as { name?: unknown }).name === "string" ? nameKey((r as { name: string }).name) : ""))
           .filter(Boolean),
       );
-      const toInsert = importItems.filter((r) => !existingNames.has(r.name.trim().toLowerCase()));
+      const toInsert = importItems.filter((r) => !existingNames.has(nameKey(r.name)));
       if (toInsert.length === 0) return true;
       const payload = toInsert.map((r, i) => ({
         business_id: businessId,
         name: r.name,
+        description: r.description?.trim() || null,
         category: r.category?.trim() || null,
         price_text: r.price_text?.trim() || null,
         size_options: r.size_options.length > 0 ? r.size_options : null,
@@ -1040,6 +1045,11 @@ export default function BusinessSetupScreen() {
                           <Text style={{ fontSize: 14, color: theme.text }} numberOfLines={1}>
                             {item.name}
                           </Text>
+                          {item.description ? (
+                            <Text style={{ fontSize: 12, opacity: 0.6, color: theme.text }} numberOfLines={1}>
+                              {item.description}
+                            </Text>
+                          ) : null}
                           {item.price_text ? (
                             <Text style={{ fontSize: 12, opacity: 0.6, color: theme.text }}>
                               {item.price_text}

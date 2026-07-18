@@ -25,6 +25,7 @@ import {
   shouldShowAppendMenuPhotoActions,
   type MenuScanState,
 } from "@/lib/menu-scan-state";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +36,7 @@ import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 type EditableRow = {
   key: string;
   name: string;
+  description: string;
   category: string;
   price_text: string;
   size_options: string[];
@@ -52,9 +54,13 @@ function newKey() {
  */
 const MAX_MENU_SCAN_BASE64_LENGTH = 1_100_000;
 
-/** Normalize for dedupe against saved library lines */
+/**
+ * Normalize for dedupe against saved library lines. Names go through the
+ * parenthetical splitter so a clean rescan still matches legacy rows saved as
+ * "Name ( long description )".
+ */
 function libraryDedupeKey(name: string, priceText: string): string {
-  return `${name.trim().toLowerCase()}|${priceText.trim().toLowerCase()}`;
+  return `${splitMenuItemDescription(name).name.toLowerCase()}|${priceText.trim().toLowerCase()}`;
 }
 
 function parseSizesInput(text: string): string[] {
@@ -197,9 +203,16 @@ export default function MenuScanScreen() {
           if (out.low_legibility) anyLow = true;
           if (out.extraction_source === "synthetic_fallback") anySyntheticFallback = true;
           for (const it of out.items) {
+            // The function may return a separate description; older deploys pack
+            // it into the name as "Name ( long description )" — split locally so
+            // the saved item name stays short either way.
+            const split = splitMenuItemDescription(it.name);
+            const fnDescriptionRaw = (it as { description?: unknown }).description;
+            const fnDescription = typeof fnDescriptionRaw === "string" ? fnDescriptionRaw.trim() : "";
             merged.push({
               key: newKey(),
-              name: it.name,
+              name: split.name,
+              description: fnDescription || split.description || "",
               category: it.category ?? "",
               price_text: it.price_text ?? "",
               size_options: Array.isArray(it.size_options) ? it.size_options : [],
@@ -264,7 +277,7 @@ export default function MenuScanScreen() {
 
   const addRow = useCallback(() => {
     setScanState("success");
-    setRows((r) => [...r, { key: newKey(), name: "", category: "", price_text: "", size_options: [] }]);
+    setRows((r) => [...r, { key: newKey(), name: "", description: "", category: "", price_text: "", size_options: [] }]);
   }, []);
 
   const removeRow = useCallback((key: string) => {
@@ -311,6 +324,7 @@ export default function MenuScanScreen() {
       const payload = toInsert.map((r, i) => ({
         business_id: businessId,
         name: r.name,
+        description: r.description.trim() || null,
         category: r.category.trim() || null,
         price_text: r.price_text.trim() || null,
         size_options: r.size_options.length > 0 ? r.size_options : null,
@@ -464,6 +478,11 @@ export default function MenuScanScreen() {
                     backgroundColor: theme.surface,
                   }}
                 />
+                {item.description ? (
+                  <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text }} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 <TextInput
                   value={item.category}
                   onChangeText={(text) =>

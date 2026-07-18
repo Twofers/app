@@ -1,5 +1,9 @@
 import { supabase } from "./supabase";
 import { devWarn } from "./dev-log";
+import {
+  MAX_MENU_ITEM_DESCRIPTION_CHARS,
+  splitMenuItemDescription,
+} from "./menu-item-text";
 import { EDGE_FN_TIMEOUT_DEFAULT_MS } from "../constants/timing";
 
 /**
@@ -20,6 +24,7 @@ export type SiteImportLogoCandidate = {
 
 export type SiteImportMenuItem = {
   name: string;
+  description?: string;
   category?: string;
   price_text?: string;
   size_options: string[];
@@ -88,12 +93,20 @@ function parseMenuItems(value: unknown): SiteImportMenuItem[] {
   const out: SiteImportMenuItem[] = [];
   for (const raw of value) {
     const row = asRecord(raw);
-    const name = cleanString(row?.name).trim();
-    if (!row || !name) continue;
+    const rawName = cleanString(row?.name).trim();
+    if (!row || !rawName) continue;
+    // Older function deploys return names like "Item ( long description )" with
+    // no description field — split locally so item names stay short everywhere.
+    const split = splitMenuItemDescription(rawName);
+    const description = (cleanString(row.description).trim() || split.description || "").slice(
+      0,
+      MAX_MENU_ITEM_DESCRIPTION_CHARS,
+    );
     const category = cleanString(row.category).trim();
     const priceText = cleanString(row.price_text).trim();
     out.push({
-      name,
+      name: split.name,
+      description: description || undefined,
       category: category || undefined,
       price_text: priceText || undefined,
       size_options: Array.isArray(row.size_options)

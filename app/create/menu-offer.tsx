@@ -31,12 +31,14 @@ import {
   saveLastMenuOfferPairingType,
 } from "@/lib/menu-offer-persist";
 import {
+  buildOfferAdHintText,
   buildOfferHintText,
   buildStructuredOffer,
   resolveMenuOfferLocationFlow,
   structuredOfferToEligibilityFormState,
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
 import { formatMenuPriceLabel } from "@/lib/display-format";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -50,6 +52,7 @@ type DbMenuItem = {
   name: string;
   category: string | null;
   price_text: string | null;
+  description?: string | null;
   size_options?: string[] | null;
   archived_at?: string | null;
 };
@@ -158,7 +161,7 @@ export default function MenuOfferScreen() {
     void (async () => {
       const { data, error } = await supabase
         .from("business_menu_items")
-        .select("id,name,category,price_text,size_options,archived_at")
+        .select("id,name,category,price_text,description,size_options,archived_at")
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -174,7 +177,21 @@ export default function MenuOfferScreen() {
         return;
       }
       const rows = (data ?? []) as DbMenuItem[];
-      setItems(rows.filter((r) => !r.archived_at));
+      // Legacy rows may still be stored as "Name ( long description )" — split
+      // here so offer item names (and the deal title built from them) stay
+      // short, with the blurb carried as the description instead.
+      setItems(
+        rows
+          .filter((r) => !r.archived_at)
+          .map((r) => {
+            const split = splitMenuItemDescription(r.name);
+            return {
+              ...r,
+              name: split.name,
+              description: r.description?.trim() || split.description,
+            };
+          }),
+      );
     })();
     return () => {
       cancelled = true;
@@ -222,7 +239,10 @@ export default function MenuOfferScreen() {
       setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
-    const hint = buildOfferHintText(structuredOffer);
+    // Enriched hint carries each item's menu description as flavor for the AI
+    // copywriter; the authoritative offer facts still come from the eligibility
+    // prefill below, so item names stay clean.
+    const hint = buildOfferAdHintText(structuredOffer);
     const prefillDealEligibility = JSON.stringify(structuredOfferToEligibilityFormState(structuredOffer));
     const locPrimary = dealLocationIds[0] ?? "";
     const extras = dealLocationIds.slice(1).join(",");
@@ -327,8 +347,10 @@ export default function MenuOfferScreen() {
     }
     setBanner(null);
     const offer = buildStructuredOffer({
-      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize },
-      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize } : null,
+      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize, description: mainItem.description },
+      paired: pairedItem
+        ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize, description: pairedItem.description }
+        : null,
       pairing_type: pairingType,
       discount_percent: pairingType === "percent_off" ? discountPercent : undefined,
       fixed_price_amount:
@@ -560,6 +582,11 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
+                {item.description ? (
+                  <Text style={[mutedTextStyle, { marginTop: 4, fontSize: 13 }]} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 {item.price_text ? (
                   <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}
@@ -618,6 +645,11 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
+                {item.description ? (
+                  <Text style={[mutedTextStyle, { marginTop: 4, fontSize: 13 }]} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 {item.price_text ? (
                   <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}

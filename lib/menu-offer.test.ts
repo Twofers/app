@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOfferAdHintText,
   buildOfferHintText,
   buildStructuredOffer,
   resolveMenuOfferLocationFlow,
@@ -146,6 +147,65 @@ describe("buildOfferHintText", () => {
       requiredItemDescription: "Coffee",
       freeItemDescription: "Croissant",
     });
+  });
+});
+
+describe("buildStructuredOffer descriptions", () => {
+  it("carries item descriptions through onto the offer item refs", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Recon Roast", description: " Roaster fresh coffee with a shot of espresso " },
+      paired: { name: "Sargents Stripes", description: "select orgin estate grown coffee" },
+      pairing_type: "free_with_purchase",
+    });
+    expect(o.main_item.description).toBe("Roaster fresh coffee with a shot of espresso");
+    expect(o.paired_item?.description).toBe("select orgin estate grown coffee");
+    // Names stay clean — descriptions never leak into them.
+    expect(o.main_item.name).toBe("Recon Roast");
+    expect(o.paired_item?.name).toBe("Sargents Stripes");
+  });
+
+  it("leaves description null when none is provided", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Latte" },
+      paired: null,
+      pairing_type: "percent_off",
+      discount_percent: 50,
+    });
+    expect(o.main_item.description).toBeNull();
+  });
+});
+
+describe("buildOfferAdHintText", () => {
+  it("appends item descriptions as flavor after the offer summary", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Recon Roast", description: "Roaster fresh coffee with a shot of espresso" },
+      paired: { name: "Sargents Stripes", description: "select orgin estate grown coffee" },
+      pairing_type: "free_with_purchase",
+    });
+    const hint = buildOfferAdHintText(o);
+    expect(hint.startsWith(o.human_summary)).toBe(true);
+    expect(hint).toContain("Recon Roast: Roaster fresh coffee with a shot of espresso");
+    expect(hint).toContain("Sargents Stripes: select orgin estate grown coffee");
+  });
+
+  it("returns the plain summary when no item has a description", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Latte" },
+      paired: { name: "Croissant" },
+      pairing_type: "free_with_purchase",
+    });
+    expect(buildOfferAdHintText(o)).toBe(buildOfferHintText(o));
+  });
+
+  it("does not repeat a shared item's description twice (bogo same item)", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Latte", description: "double shot oat milk latte" },
+      paired: { name: "Latte", description: "double shot oat milk latte" },
+      pairing_type: "bogo_pair",
+    });
+    const hint = buildOfferAdHintText(o);
+    const occurrences = hint.split("double shot oat milk latte").length - 1;
+    expect(occurrences).toBe(1);
   });
 });
 
