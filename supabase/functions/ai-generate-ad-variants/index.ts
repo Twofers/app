@@ -107,6 +107,7 @@ import {
   unavailableSourceAwareImageQaResult,
   type AdImageQaDecision,
   type AdImageQaSourceType,
+  type AdImageRenderFormat,
   type QuickDealImageQaResult,
   type SourceAwareImageQaResult,
 } from "../../../lib/quick-deal-image-qa.ts";
@@ -2009,6 +2010,7 @@ async function inspectGeneratedImageForOffer(params: {
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
   sourceType?: AdImageQaSourceType;
+  renderFormat?: AdImageRenderFormat;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   try {
@@ -2019,6 +2021,7 @@ async function inspectGeneratedImageForOffer(params: {
         userPrompt: buildAdImageQaPrompt({
           sourceType: params.sourceType ?? "ai_generated",
           requiredVisualItems,
+          renderFormat: params.renderFormat,
         }),
         jsonSchema: QUICK_DEAL_IMAGE_QA_SCHEMA,
         imageInputs: [{ bytes: params.imageBytes, mimeType: "image/png" }],
@@ -2053,6 +2056,7 @@ async function sourceAwareQaForImageBytes(params: {
   costContext: AiCostContext;
   sourceType: AdImageQaSourceType;
   merchantOverrideAcknowledged?: boolean;
+  renderFormat?: AdImageRenderFormat;
 }): Promise<SourceAwareImageQaResult> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   const raw = await inspectGeneratedImageForOffer({
@@ -2062,6 +2066,7 @@ async function sourceAwareQaForImageBytes(params: {
     requiredVisualItems,
     costContext: params.costContext,
     sourceType: params.sourceType,
+    renderFormat: params.renderFormat,
   });
   return normalizeSourceAwareImageQaResult({
     raw,
@@ -2380,6 +2385,7 @@ async function produceImageOpenAiOnly(params: {
           requiredVisualItems,
           costContext,
           sourceType: "merchant_ai_edit",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         if (shouldFailClosedForImageQa(editQa)) {
           if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
@@ -2458,6 +2464,7 @@ async function produceImageOpenAiOnly(params: {
       requiredVisualItems,
       costContext,
       sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -2515,17 +2522,14 @@ async function produceImageOpenAiOnly(params: {
           requiredVisualItems,
           costContext,
           sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          Object.assign(
-            qa,
-            imageQaTelemetryFromSourceAware(
-              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
-              2,
-              true,
-            ),
-          );
+          // Retry inspection unavailable: keep the first image's known failing
+          // verdict rather than erasing it, so a QA-failed image cannot ship
+          // uninspected under the fail-open rule.
+          console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           Object.assign(
             qa,
@@ -2557,7 +2561,10 @@ async function produceImageOpenAiOnly(params: {
       );
     }
   }
-  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
+  // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
+  // discard a generated image; an unavailable inspector ships it with the
+  // VISION_QA_UNAVAILABLE warning instead of cascading to paid fallbacks.
+  if (qa.hardFailReasons.length > 0 || qa.missingItems.length > 0) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
@@ -2944,6 +2951,7 @@ async function produceImage(params: {
       requiredVisualItems,
       costContext: params.costContext,
       sourceType: "merchant_ai_edit",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     if (shouldFailClosedForImageQa(editQa)) {
       return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
@@ -3025,6 +3033,7 @@ async function produceImage(params: {
       requiredVisualItems,
       costContext: params.costContext,
       sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -3089,17 +3098,14 @@ async function produceImage(params: {
           requiredVisualItems,
           costContext: params.costContext,
           sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          Object.assign(
-            qa,
-            imageQaTelemetryFromSourceAware(
-              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
-              2,
-              true,
-            ),
-          );
+          // Retry inspection unavailable: keep the first image's known failing
+          // verdict rather than erasing it, so a QA-failed image cannot ship
+          // uninspected under the fail-open rule.
+          console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           Object.assign(
             qa,
@@ -3134,7 +3140,10 @@ async function produceImage(params: {
       );
     }
   }
-  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
+  // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
+  // discard a generated image; an unavailable inspector ships it with the
+  // VISION_QA_UNAVAILABLE warning instead of cascading to paid fallbacks.
+  if (qa.hardFailReasons.length > 0 || qa.missingItems.length > 0) {
     imageBytes = null;
     imageMimeType = null;
   }

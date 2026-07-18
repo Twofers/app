@@ -468,36 +468,57 @@ async function attemptGeminiImageGeneration(params: {
         ? { inlineData: { mimeType: part.mime_type, data: part.data } }
         : { text: part.text }
     );
-    const res = await fetch(
-      useInteractionsApi
-        ? "https://generativelanguage.googleapis.com/v1beta/interactions"
-        : `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(params.model)}:generateContent`,
-      {
+    const endpointUrl = useInteractionsApi
+      ? "https://generativelanguage.googleapis.com/v1beta/interactions"
+      : `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(params.model)}:generateContent`;
+    const interactionsBody = (includeResponseFormat: boolean) =>
+      JSON.stringify({
+        model: params.model,
+        input: buildGeminiInputParts({ prompt: params.prompt, referenceImages: params.referenceImages }),
+        ...(includeResponseFormat
+          ? {
+            response_format: {
+              type: "image",
+              aspect_ratio: params.aspectRatio,
+              image_size: params.imageSize,
+            },
+          }
+          : {}),
+      });
+    const legacyBody = JSON.stringify({
+      contents: [{ parts: legacyParts }],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: {
+          aspectRatio: params.aspectRatio,
+          imageSize: params.imageSize,
+        },
+      },
+    });
+    const geminiFetch = (body: string) =>
+      fetch(endpointUrl, {
         method: "POST",
         headers: {
           "x-goog-api-key": apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(
-          useInteractionsApi
-            ? {
-              model: params.model,
-              input: buildGeminiInputParts({ prompt: params.prompt, referenceImages: params.referenceImages }),
-            }
-            : {
-              contents: [{ parts: legacyParts }],
-              generationConfig: {
-                responseModalities: ["TEXT", "IMAGE"],
-                imageConfig: {
-                  aspectRatio: params.aspectRatio,
-                  imageSize: params.imageSize,
-                },
-              },
-            },
-        ),
+        body,
         signal: AbortSignal.timeout(GEMINI_CALL_TIMEOUT_MS),
-      },
-    );
+      });
+    let res = await geminiFetch(useInteractionsApi ? interactionsBody(true) : legacyBody);
+    if (useInteractionsApi && res.status === 400) {
+      // An earlier structured-output shape drew HTTP 400 from this endpoint
+      // (2026-07-14 incident), so a rejected response_format must never kill
+      // generation: retry once without it and accept the default aspect ratio.
+      console.warn(
+        JSON.stringify({
+          tag: "gemini_image_config",
+          event: "response_format_rejected",
+          model: params.model,
+        }),
+      );
+      res = await geminiFetch(interactionsBody(false));
+    }
 
     if (!res.ok) {
       const errorCode = normalizeGeminiErrorCode(res.status);

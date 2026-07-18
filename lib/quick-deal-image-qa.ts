@@ -27,6 +27,9 @@ export type AdImageQaSourceType =
 
 export type AdImageQaDecision = "pass" | "warn" | "block" | "unavailable" | "not_checked";
 
+/** How the inspected image will actually be rendered in the app. */
+export type AdImageRenderFormat = "square_1_1" | "poster_4_5";
+
 export type SourceAwareImageQaResult = {
   checked: boolean;
   available: boolean;
@@ -101,21 +104,29 @@ function cleanItem(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
-export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string[]): string {
+export function buildQuickDealImageQaPrompt(
+  requiredVisualItems: readonly string[],
+  renderFormat: AdImageRenderFormat = "square_1_1",
+): string {
   const items = requiredVisualItems.map(cleanItem).filter(Boolean);
+  const poster = renderFormat === "poster_4_5";
   return [
     "Inspect this deal image.",
     "Check only whether the required offer items are visibly present and prominent enough to understand the deal.",
     `Required items: ${items.join(", ")}.`,
     "Also check for forbidden elements: any readable text, letters, numbers, discount copy, business/app names, menu boards, signs, prices, coupons, QR codes, logos, brand marks, watermark-like marks, mascots, cartoon characters, animals, app mascots, or unrelated prop characters.",
-    "Also check mobile crop and overlay safety: the final card is a square 1:1 image, native offer text may overlay near the top or bottom, and required items should remain recognizable in the center-safe area.",
+    poster
+      ? "Also check mobile crop and overlay safety: the final card is a vertical 4:5 poster image, native offer text may overlay near the top or bottom, and required items should remain recognizable in the center-safe area."
+      : "Also check mobile crop and overlay safety: the final card is a square 1:1 image, native offer text may overlay near the top or bottom, and required items should remain recognizable in the center-safe area.",
     "Mark an item present only if a normal shopper could recognize it in the image.",
     "Mark an item prominent only if it is a main subject, not tiny background detail.",
     "Set has_readable_text true if any word, letter, number, or offer copy is visible, even if misspelled or stylized.",
     "Set has_forbidden_logo_or_brand true if any logo, app name, business name, brand mark, or watermark-like mark is visible.",
     "Set has_qr_code true if any QR/barcode-like mark is visible.",
     "Set has_unrelated_mascot_or_animal true if any mascot, cartoon character, animal, app mascot, or unrelated character prop is visible unless it is the actual product being sold.",
-    "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, likely covered by top/bottom text overlays, hard to recognize after square cover crop, or placed on a background too busy for native text.",
+    poster
+      ? "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, likely covered by top/bottom text overlays, hard to recognize in the vertical 4:5 poster frame, or placed on a background too busy for native text."
+      : "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, likely covered by top/bottom text overlays, hard to recognize after square cover crop, or placed on a background too busy for native text.",
     "Put every forbidden element in forbidden_elements.",
     "Put concise crop or overlay problems in crop_or_overlay_issues.",
     "If required items are missing, any forbidden element is present, or crop/overlay risk is present, all_required_items_present must be false.",
@@ -126,18 +137,21 @@ export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string
 export function buildAdImageQaPrompt(params: {
   sourceType: AdImageQaSourceType;
   requiredVisualItems: readonly string[];
+  renderFormat?: AdImageRenderFormat;
 }): string {
+  const renderFormat = params.renderFormat ?? "square_1_1";
+  const cardNoun = renderFormat === "poster_4_5" ? "a vertical 4:5 poster card" : "a square mobile card";
   const sourceGuidance =
     params.sourceType === "merchant_original"
       ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, crop/overlay limits, and non-prominent required items as warnings unless a forbidden hard blocker appears."
       : params.sourceType === "merchant_ai_edit"
-      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable in a square mobile card with native text overlays, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
+      ? `This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable in ${cardNoun} with native text overlays, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props.`
       : params.sourceType === "approved_stock"
-      ? "This is approved stock media. It must still match the offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics."
+      ? `This is approved stock media. It must still match the offer items, work in ${cardNoun} with native text overlays, and must not contain forbidden ad graphics.`
       : params.sourceType === "deterministic_fallback"
       ? "This is a deterministic native-rendered fallback. No vision inspection is required."
-      : "This is a fully AI-generated image. It must show the required offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics.";
-  return [sourceGuidance, buildQuickDealImageQaPrompt(params.requiredVisualItems)].join(" ");
+      : `This is a fully AI-generated image. It must show the required offer items, work in ${cardNoun} with native text overlays, and must not contain forbidden ad graphics.`;
+  return [sourceGuidance, buildQuickDealImageQaPrompt(params.requiredVisualItems, renderFormat)].join(" ");
 }
 
 export function buildQuickDealImageRegenerationPrompt(params: {
@@ -219,17 +233,19 @@ function unavailableDecision(
   sourceType: AdImageQaSourceType,
   merchantOverrideAcknowledged = false,
 ): SourceAwareImageQaResult {
-  const merchantOriginal = sourceType === "merchant_original";
+  // Fail-open (Dan, 2026-07-17): an inspector outage is not evidence the image
+  // is bad. When vision QA cannot run, keep the image and record the outage as
+  // a warning instead of discarding paid generations across every provider.
   return {
     checked: false,
     available: false,
     sourceType,
-    decision: merchantOriginal ? "unavailable" : "block",
-    hardFailReasons: merchantOriginal ? [] : ["VISION_QA_UNAVAILABLE"],
-    warningCodes: merchantOriginal ? ["VISION_QA_UNAVAILABLE"] : [],
+    decision: "unavailable",
+    hardFailReasons: [],
+    warningCodes: ["VISION_QA_UNAVAILABLE"],
     missingItems: [],
     forbiddenElements: [],
-    merchantOverrideAllowed: merchantOriginal,
+    merchantOverrideAllowed: sourceType === "merchant_original",
     merchantOverrideAcknowledged,
     notes: "Image QA unavailable.",
   };
@@ -261,8 +277,13 @@ export function normalizeSourceAwareImageQaResult(params: {
   }
 
   const qa = params.raw;
+  // Only truly absent items block a generated image (Dan, 2026-07-17);
+  // present-but-not-prominent items are a warning, not a discard.
   const missingItems = qa.items
-    .filter((item) => !item.present || !item.prominent)
+    .filter((item) => !item.present)
+    .map((item) => item.item);
+  const notProminentItems = qa.items
+    .filter((item) => item.present && !item.prominent)
     .map((item) => item.item);
   const forbiddenElements = qa.forbidden_elements;
   const cropOrOverlayIssues = qa.has_crop_or_overlay_risk
@@ -290,10 +311,10 @@ export function normalizeSourceAwareImageQaResult(params: {
   const warningCodes =
     params.sourceType === "merchant_original"
       ? [
-        ...missingItems.map((item) => reasonCode("ITEM_NOT_PROMINENT", item)),
+        ...[...missingItems, ...notProminentItems].map((item) => reasonCode("ITEM_NOT_PROMINENT", item)),
         ...cropOrOverlayIssues.map((item) => reasonCode("CROP_OR_OVERLAY_WARNING", item)),
       ]
-      : [];
+      : notProminentItems.map((item) => reasonCode("ITEM_NOT_PROMINENT", item));
   const decision: AdImageQaDecision =
     hardFailReasons.length > 0
       ? "block"

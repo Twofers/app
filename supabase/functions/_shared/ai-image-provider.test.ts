@@ -171,6 +171,7 @@ describe("generateGeminiAdImageWithTelemetry", () => {
       apiKey: "test-gemini-key",
       model: "gemini-3.1-flash-image",
       prompt: "Create a product photo.",
+      aspectRatio: "4:5",
       estimatedCostUsd: 0.067,
     });
 
@@ -185,8 +186,42 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     const body = JSON.parse(String(request.body));
     expect(body.model).toBe("gemini-3.1-flash-image");
     expect(body.input).toEqual([{ type: "text", text: "Create a product photo." }]);
-    expect(body.response_format).toBeUndefined();
+    expect(body.response_format).toEqual({ type: "image", aspect_ratio: "4:5", image_size: "1K" });
     expect(body.generationConfig).toBeUndefined();
+  });
+
+  it("retries the Interactions request without response_format when it is rejected with HTTP 400", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const pngBytes = new TextEncoder().encode("png");
+    const pngBase64 = btoa(String.fromCharCode(...pngBytes));
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("", { status: 400 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ output_image: { mime_type: "image/png", data: pngBase64 } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      aspectRatio: "4:5",
+      retryOnFailure: false,
+    });
+
+    expect(result.bytes).toEqual(pngBytes);
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0]?.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    const secondBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(firstBody.response_format).toEqual({ type: "image", aspect_ratio: "4:5", image_size: "1K" });
+    expect(secondBody.response_format).toBeUndefined();
+    expect(secondBody.input).toEqual(firstBody.input);
+    expect(warn).toHaveBeenCalled();
   });
 
   it("keeps the legacy GenerateContent request for non-Gemini-3 image models", async () => {
