@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -18,6 +18,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
+import { LaunchArguments } from "react-native-launch-arguments";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Trans, useTranslation } from "react-i18next";
@@ -203,12 +204,22 @@ function firstQueryString(v: string | string[] | undefined): string | undefined 
 
 type AuthScreenMode = "login" | "signup";
 
+type QaLoginLaunchArgs = {
+  qaLogin?: string | number | boolean;
+  qaLoginEmail?: string;
+  qaLoginPassword?: string;
+};
+
 export default function AuthLandingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const params = useLocalSearchParams<{ next?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    next?: string | string[];
+    qaLogin?: string | string[];
+    qaLoginEmail?: string | string[];
+  }>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   // Account-type cards stay side-by-side by default. On narrow phones we tighten
@@ -241,6 +252,7 @@ export default function AuthLandingScreen() {
   const [resendBusy, setResendBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const qaLoginStarted = useRef(false);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -256,6 +268,61 @@ export default function AuthLandingScreen() {
   }, [resendCooldown]);
 
   const busy = busyAction !== null;
+
+  useEffect(() => {
+    if (!__DEV__ || qaLoginStarted.current) return;
+    let args: QaLoginLaunchArgs | null = null;
+    try {
+      args = LaunchArguments.value<QaLoginLaunchArgs>();
+    } catch {
+      args = null;
+    }
+    const paramQaLogin = firstQueryString(params.qaLogin);
+    const paramQaEmail = firstQueryString(params.qaLoginEmail);
+    const rawEnabled = paramQaLogin ?? args?.qaLogin;
+    const enabled = rawEnabled === "1" || rawEnabled === 1 || rawEnabled === true;
+    const qaEmail = (paramQaEmail ?? args?.qaLoginEmail ?? "").trim();
+    // The password is accepted ONLY from native launch arguments (adb/instrumentation),
+    // never from a deep-link URL query param — a URL-borne password would leak into
+    // Android logcat / intent history / screen recordings. (__DEV__-only regardless.)
+    const qaPassword = args?.qaLoginPassword ?? "";
+    if (!enabled || !qaEmail || !qaPassword) return;
+
+    qaLoginStarted.current = true;
+    setEmail(qaEmail);
+    setPw(qaPassword);
+    setBusyAction("login");
+    clearFeedback();
+
+    void (async () => {
+      try {
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({
+          email: qaEmail,
+          password: qaPassword,
+        });
+        if (error) {
+          setAuthError(friendlyAuthError(error, t));
+          return;
+        }
+        const user = signInData.session?.user;
+        if (!user) {
+          setAuthError(t("authLanding.errGeneric"));
+          return;
+        }
+        const role = await resolveRoleForUser(user);
+        await adoptRole(role, user.id);
+        const href = await resolvePostAuthReplaceHref({
+          role,
+          nextParam: firstQueryString(params.next),
+        });
+        router.replace(href);
+      } catch (e: unknown) {
+        setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+      } finally {
+        setBusyAction(null);
+      }
+    })();
+  }, [adoptRole, params.next, params.qaLogin, params.qaLoginEmail, router, t]);
 
   function clearFeedback() {
     setAuthError(null);

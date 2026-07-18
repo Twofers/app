@@ -250,7 +250,7 @@ export default function OnboardingScreen() {
       <>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: footerMetrics.scrollPadding, gap: Spacing.lg }}
+        contentContainerStyle={{ paddingBottom: footerMetrics.bottom + Spacing.xl, gap: Spacing.lg }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
@@ -402,33 +402,18 @@ export default function OnboardingScreen() {
             })}
           </View>
         </View>
-      </ScrollView>
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: footerMetrics.bottom,
-          minHeight: footerMetrics.minHeight,
-          justifyContent: "center",
-          backgroundColor: C.background,
-          paddingHorizontal: horizontal,
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.sm,
-        }}
-      >
         <PrimaryButton
           title={busy ? t("consumerProfile.saving") : t("onboarding.getStarted")}
           onPress={() => void handleGetStarted()}
           disabled={setupActionDisabled}
         />
-      </View>
+      </ScrollView>
       </>
       ) : (
       <>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: footerMetrics.scrollPadding, gap: Spacing.md }}
+        contentContainerStyle={{ paddingBottom: footerMetrics.bottom + Spacing.xl, gap: Spacing.md }}
         showsVerticalScrollIndicator={false}
       >
         {onboardingHeader}
@@ -467,22 +452,6 @@ export default function OnboardingScreen() {
             );
           })
         )}
-      </ScrollView>
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: footerMetrics.bottom,
-          minHeight: footerMetrics.minHeight + 48,
-          justifyContent: "center",
-          backgroundColor: C.background,
-          paddingHorizontal: horizontal,
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.sm,
-          gap: Spacing.xs,
-        }}
-      >
         <PrimaryButton
           title={busy ? t("consumerProfile.saving") : t("onboarding.shopsDone")}
           onPress={() => void handleFinish()}
@@ -495,7 +464,7 @@ export default function OnboardingScreen() {
         >
           <Text style={{ color: C.mutedText, fontWeight: "600" }}>{t("onboarding.shopsSkip")}</Text>
         </Pressable>
-      </View>
+      </ScrollView>
       </>
       )}
     </View>
