@@ -619,7 +619,8 @@ export default function HomeScreen() {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
     setSortMode(prefs.dealSortMode);
-    setFavoritesOnly(prefs.notificationPrefs.mode === "favorites_only");
+    // Notification delivery scope must not change what the customer can browse.
+    // The Deals-page heart control owns this screen-local filter.
     setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
     const coords = await resolveConsumerCoordinates(prefs);
     if (coords) {
