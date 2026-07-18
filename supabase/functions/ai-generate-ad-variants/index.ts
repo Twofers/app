@@ -607,6 +607,7 @@ async function generateCopy(params: {
   let providerFallbackUsed = false;
   let providerFallbackReason: string | undefined;
   let latestPreparedVariants: AiDealCopyVariant[] = [];
+  let qualityRepairFeedback: string | undefined;
   const merchantProfile = buildMerchantCreativeProfile({
     businessId: offerContract.businessId,
     businessName,
@@ -621,6 +622,11 @@ async function generateCopy(params: {
   let selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
+      // Attempt 2 corrective feedback from the contract layer only covers offer
+      // validation; append the concrete style-gate/diversity rejection reasons
+      // from attempt 1 so the repair does not trip the same wire again.
+      const combinedValidationFeedback =
+        [validationFeedback, qualityRepairFeedback].filter(Boolean).join("\n\n") || undefined;
       const { system, userText, jsonSchema } = buildAdCopyPrompt({
         itemHint,
         research,
@@ -634,7 +640,7 @@ async function generateCopy(params: {
         revisionFeedback,
         previousAd,
         offerContract,
-        validationFeedback,
+        validationFeedback: combinedValidationFeedback,
         merchantCreativeProfile: merchantProfile,
         creativeFormat,
       });
@@ -697,6 +703,7 @@ async function generateCopy(params: {
           creativeFormat,
         });
         copyQuality.push(prepared.telemetry);
+        qualityRepairFeedback = qualityGateRepairFeedback(prepared.telemetry) ?? qualityRepairFeedback;
         judgeAttempts.push(...prepared.judgeAttempts);
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
@@ -1469,6 +1476,33 @@ function normalizePosterHeadlineText(value: string | null | undefined): string {
 
 function posterVisibleLength(value: string | null | undefined): number {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().length : 0;
+}
+
+const QUALITY_GATE_REPAIR_GUIDANCE: Record<string, string> = {
+  WEAK_TRY_OUR_PHRASE: 'Never begin any field with "Try our" or "Try the". Lead with the item, the reward, or the customer moment.',
+  POSTER_HEADLINE_TRY_OUR: 'Never begin the poster headline with "Try our".',
+  POSTER_HEADLINE_REPEATS_LOCKED_OFFER:
+    "Do not repeat the locked offer line word-for-word as the headline. The app renders the locked offer line separately; write a fresh angle.",
+  MISSING_REQUIRED_STRATEGY: "Return exactly one candidate for each of the five strategy IDs.",
+  DUPLICATE_STRATEGY: "Return exactly one candidate for each of the five strategy IDs.",
+  UNKNOWN_STRATEGY: "Use only the five listed strategy IDs.",
+  IDENTICAL_HEADLINE: "Every headline must be clearly different from the others.",
+  DUPLICATE_HEADLINE_OPENING: "Every headline must open with different words.",
+  OBVIOUS_PARAPHRASE: "Each candidate must be a different idea, not a paraphrase of another candidate.",
+};
+
+function qualityGateRepairFeedback(telemetry: CopyQualityTelemetry): string | undefined {
+  const codes = [
+    ...new Set([
+      ...telemetry.style_gate_rejected.flatMap((rejection) => rejection.reasons),
+      ...telemetry.diversity.hard_failures.map((failure) => failure.code),
+    ]),
+  ];
+  if (codes.length === 0) return undefined;
+  return [
+    "Some previous candidates were rejected by automated quality checks. Every new candidate must avoid these issues:",
+    ...codes.map((code) => `- ${code}: ${QUALITY_GATE_REPAIR_GUIDANCE[code] ?? "Avoid this rejection reason."}`),
+  ].join("\n");
 }
 
 function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {

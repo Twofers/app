@@ -129,10 +129,16 @@ export function checkAdCandidateDiversity(
     if (opening.split(" ").length >= 4) openings.set(opening, [...(openings.get(opening) ?? []), id]);
   });
 
+  // A strategy can only be genuinely "missing" when the model had the chance to
+  // cover all of them. When fewer candidates arrive (an upstream gate already
+  // filtered some out), absent strategies are expected — rejecting the whole
+  // surviving set for them would discard good candidates.
+  const missingStrategySeverity: AdCandidateDiversityIssue["severity"] =
+    candidates.length >= AD_COPY_STRATEGY_IDS.length ? "hard" : "warning";
   for (const required of AD_COPY_STRATEGY_IDS) {
     if (!strategies.has(required)) {
       addIssue(issues, {
-        severity: "hard",
+        severity: missingStrategySeverity,
         code: "MISSING_REQUIRED_STRATEGY",
         candidateIds: [],
         message: `Missing required strategy: ${required}`,

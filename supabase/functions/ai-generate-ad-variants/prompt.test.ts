@@ -66,6 +66,13 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("amazing deal");
   });
 
+  it("bans weak Try-our openings and poster headlines that repeat the locked offer line", () => {
+    expect(basePrompt.system).toContain(
+      'Never begin a headline, description, push text, or caption with "Try our" or "Try the"',
+    );
+    expect(basePrompt.system).toContain("Poster headlines must not repeat the locked offer line word-for-word");
+  });
+
   it("includes the category playbook, merchant profile, creative brief, and five lane instructions", () => {
     expect(basePrompt.system).toContain("Write one positive creative brief and exactly five");
     expect(basePrompt.system).toContain("CATEGORY PLAYBOOK");

@@ -27,7 +27,7 @@ describe("ad candidate diversity", () => {
     expect(result.hardFailures).toEqual([]);
   });
 
-  it("hard-fails duplicate or missing strategy lanes", () => {
+  it("hard-fails duplicate strategy lanes", () => {
     const result = checkAdCandidateDiversity([
       candidate("value_clarity", "Coffee gets the bagel"),
       candidate("value_clarity", "Coffee earns breakfast"),
@@ -35,7 +35,32 @@ describe("ad candidate diversity", () => {
 
     expect(result.ok).toBe(false);
     expect(result.hardFailures.map((issue) => issue.code)).toContain("DUPLICATE_STRATEGY");
-    expect(result.hardFailures.map((issue) => issue.code)).toContain("MISSING_REQUIRED_STRATEGY");
+  });
+
+  it("hard-fails a missing strategy only when the full candidate set was provided", () => {
+    const fullSetWithDuplicate = checkAdCandidateDiversity([
+      candidate("value_clarity", "Coffee gets the bagel"),
+      candidate("value_clarity", "Coffee earns breakfast"),
+      candidate("product_desire", "Coffee plus a bakery-case bagel"),
+      candidate("local_discovery", "Try Cedar Street with breakfast"),
+      candidate("merchant_specific", "Your coffee run gets breakfast"),
+    ]);
+
+    expect(fullSetWithDuplicate.ok).toBe(false);
+    expect(fullSetWithDuplicate.hardFailures.map((issue) => issue.code)).toContain("MISSING_REQUIRED_STRATEGY");
+  });
+
+  it("downgrades missing strategies to warnings when candidates were already filtered upstream", () => {
+    const survivors = checkAdCandidateDiversity([
+      candidate("value_clarity", "Coffee gets the bagel"),
+      candidate("social_or_occasion", "Bring breakfast to the break"),
+      candidate("product_desire", "Coffee plus a bakery-case bagel"),
+      candidate("local_discovery", "Try Cedar Street with breakfast"),
+    ]);
+
+    expect(survivors.ok).toBe(true);
+    expect(survivors.hardFailures).toEqual([]);
+    expect(survivors.warnings.map((issue) => issue.code)).toContain("MISSING_REQUIRED_STRATEGY");
   });
 
   it("hard-fails duplicate first four meaningful headline words", () => {
