@@ -41,7 +41,7 @@ export type GenerateAdImageInput = {
 export type GeminiImageAttempt = {
   provider: "gemini";
   model: string;
-  endpoint: "models.generateContent";
+  endpoint: "interactions.create" | "models.generateContent";
   success: boolean;
   errorCode: string | null;
   errorMessage: string | null;
@@ -69,7 +69,8 @@ type EnvReader = {
 };
 
 const GEMINI_IMAGE_MODEL_FALLBACK = "gemini-3.1-flash-image";
-const GEMINI_IMAGE_ENDPOINT = "models.generateContent" as const;
+const GEMINI_INTERACTIONS_ENDPOINT = "interactions.create" as const;
+const GEMINI_GENERATE_CONTENT_ENDPOINT = "models.generateContent" as const;
 const GEMINI_CALL_TIMEOUT_MS = 60_000;
 
 export const GEMINI_IMAGE_MODEL_ALLOWLIST = new Set([
@@ -327,6 +328,94 @@ function findInlineImagePart(json: unknown): { data: string; mimeType: string | 
   return null;
 }
 
+function findInteractionImagePart(json: unknown): { data: string; mimeType: string | null } | null {
+  const record = json as Record<string, unknown> | null;
+  const outputImage = (record?.output_image ?? record?.outputImage) as Record<string, unknown> | undefined;
+  if (outputImage && typeof outputImage.data === "string" && outputImage.data) {
+    const mimeType =
+      typeof outputImage.mime_type === "string"
+        ? outputImage.mime_type
+        : typeof outputImage.mimeType === "string"
+        ? outputImage.mimeType
+        : null;
+    return { data: outputImage.data, mimeType };
+  }
+
+  const steps = record?.steps;
+  if (!Array.isArray(steps)) return null;
+  for (const step of steps) {
+    const stepRecord = step as Record<string, unknown>;
+    const blocks = stepRecord.type === "model_output" && Array.isArray(stepRecord.content)
+      ? stepRecord.content
+      : stepRecord.type === "thought" && Array.isArray(stepRecord.summary)
+      ? stepRecord.summary
+      : [];
+    for (const block of blocks) {
+      const blockRecord = block as Record<string, unknown>;
+      if (blockRecord.type !== "image" || typeof blockRecord.data !== "string" || !blockRecord.data) continue;
+      const mimeType =
+        typeof blockRecord.mime_type === "string"
+          ? blockRecord.mime_type
+          : typeof blockRecord.mimeType === "string"
+          ? blockRecord.mimeType
+          : null;
+      return { data: blockRecord.data, mimeType };
+    }
+  }
+  return null;
+}
+
+function shouldUseInteractionsApi(model: string): boolean {
+  return /^gemini-3(?:\.|-)/.test(model);
+}
+
+function buildGeminiInputParts(params: {
+  prompt: string;
+  referenceImages?: AiImageReference[];
+}): Record<string, unknown>[] {
+  const input: Record<string, unknown>[] = [];
+  for (const image of params.referenceImages ?? []) {
+    const mimeType = cleanText(image.mimeType, 80) || "image/png";
+    if (!image.base64) continue;
+    input.push({ type: "image", mime_type: mimeType, data: image.base64 });
+  }
+  input.push({ type: "text", text: params.prompt });
+  return input;
+}
+
+async function decodeGeminiImagePart(params: {
+  imagePart: { data: string; mimeType: string | null };
+  attemptBase: GeminiImageAttempt;
+  startedAt: number;
+}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt }> {
+  const imageMimeType = params.imagePart.mimeType ?? "image/png";
+  let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
+  try {
+    normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(params.imagePart.data), imageMimeType);
+  } catch {
+    return {
+      bytes: null,
+      mimeType: null,
+      attempt: {
+        ...params.attemptBase,
+        latencyMs: Date.now() - params.startedAt,
+        errorCode: "PNG_CONVERSION_FAILED",
+        errorMessage: "Gemini image output could not be converted to PNG.",
+      },
+    };
+  }
+  return {
+    bytes: normalizedImage.bytes,
+    mimeType: normalizedImage.mimeType,
+    attempt: {
+      ...params.attemptBase,
+      success: true,
+      latencyMs: Date.now() - params.startedAt,
+      mimeType: normalizedImage.mimeType,
+    },
+  };
+}
+
 async function attemptGeminiImageGeneration(params: {
   apiKey: string | null | undefined;
   model: string;
@@ -339,10 +428,11 @@ async function attemptGeminiImageGeneration(params: {
   retry: boolean;
 }): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt }> {
   const startedAt = Date.now();
+  const useInteractionsApi = shouldUseInteractionsApi(params.model);
   const attemptBase: GeminiImageAttempt = {
     provider: "gemini",
     model: params.model,
-    endpoint: GEMINI_IMAGE_ENDPOINT,
+    endpoint: useInteractionsApi ? GEMINI_INTERACTIONS_ENDPOINT : GEMINI_GENERATE_CONTENT_ENDPOINT,
     success: false,
     errorCode: null,
     errorMessage: null,
@@ -370,32 +460,41 @@ async function attemptGeminiImageGeneration(params: {
   }
 
   try {
-    const parts: Record<string, unknown>[] = [];
-    for (const image of params.referenceImages ?? []) {
-      const mimeType = cleanText(image.mimeType, 80) || "image/png";
-      if (!image.base64) continue;
-      parts.push({ inlineData: { mimeType, data: image.base64 } });
-    }
-    parts.push({ text: params.prompt });
-
+    const legacyParts = buildGeminiInputParts({
+      prompt: params.prompt,
+      referenceImages: params.referenceImages,
+    }).map((part) =>
+      part.type === "image"
+        ? { inlineData: { mimeType: part.mime_type, data: part.data } }
+        : { text: part.text }
+    );
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(params.model)}:generateContent`,
+      useInteractionsApi
+        ? "https://generativelanguage.googleapis.com/v1beta/interactions"
+        : `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(params.model)}:generateContent`,
       {
         method: "POST",
         headers: {
           "x-goog-api-key": apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
-            imageConfig: {
-              aspectRatio: params.aspectRatio,
-              imageSize: params.imageSize,
+        body: JSON.stringify(
+          useInteractionsApi
+            ? {
+              model: params.model,
+              input: buildGeminiInputParts({ prompt: params.prompt, referenceImages: params.referenceImages }),
+            }
+            : {
+              contents: [{ parts: legacyParts }],
+              generationConfig: {
+                responseModalities: ["TEXT", "IMAGE"],
+                imageConfig: {
+                  aspectRatio: params.aspectRatio,
+                  imageSize: params.imageSize,
+                },
+              },
             },
-          },
-        }),
+        ),
         signal: AbortSignal.timeout(GEMINI_CALL_TIMEOUT_MS),
       },
     );
@@ -415,7 +514,7 @@ async function attemptGeminiImageGeneration(params: {
     }
 
     const json = await res.json();
-    const imagePart = findInlineImagePart(json);
+    const imagePart = useInteractionsApi ? findInteractionImagePart(json) : findInlineImagePart(json);
     if (!imagePart) {
       return {
         bytes: null,
@@ -429,32 +528,7 @@ async function attemptGeminiImageGeneration(params: {
       };
     }
 
-    const imageMimeType = imagePart.mimeType ?? "image/png";
-    let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
-    try {
-      normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(imagePart.data), imageMimeType);
-    } catch {
-      return {
-        bytes: null,
-        mimeType: null,
-        attempt: {
-          ...attemptBase,
-          latencyMs: Date.now() - startedAt,
-          errorCode: "PNG_CONVERSION_FAILED",
-          errorMessage: "Gemini image output could not be converted to PNG.",
-        },
-      };
-    }
-    return {
-      bytes: normalizedImage.bytes,
-      mimeType: normalizedImage.mimeType,
-      attempt: {
-        ...attemptBase,
-        success: true,
-        latencyMs: Date.now() - startedAt,
-        mimeType: normalizedImage.mimeType,
-      },
-    };
+    return decodeGeminiImagePart({ imagePart, attemptBase, startedAt });
   } catch {
     return {
       bytes: null,

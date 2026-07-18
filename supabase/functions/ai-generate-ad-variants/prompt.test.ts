@@ -125,8 +125,12 @@ describe("buildAdCopyPrompt", () => {
     expect(prompt.userText).toContain("bottom offer lines and schedule line");
     expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
     expect(prompt.userText).toContain("revise headlineAlternative and posterKicker first");
+    expect(prompt.userText).toContain("they mean posterKicker on posters and the description on cards");
+    expect(prompt.userText).toContain("you must return a different, complete posterKicker");
     expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
     expect(prompt.system).toContain("posterKicker is the small top kicker");
+    expect(prompt.system).toContain("headline must be at most 28 characters and posterKicker at most 32 characters");
+    expect(prompt.system).toContain("ideally under 24 characters and never more than 32");
     expect(prompt.system).toContain("Derive it from the specific product, customer moment, merchant context, or deal angle");
     expect(prompt.system).toContain("Do not use generic defaults such as Try our");
     expect(prompt.system).not.toContain("Coffee + Cookie Break");

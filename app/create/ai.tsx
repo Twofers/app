@@ -52,6 +52,7 @@ import {
   translateDeal,
   translateDealCopy,
   getErrorCode,
+  getFunctionErrorBody,
   getErrorWaitSeconds,
   fetchAdGenerationQuota,
 } from "../../lib/functions";
@@ -106,7 +107,12 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract, type OfferDefinitionV1 } from "../../lib/offer-definition";
-import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
+import {
+  buildPosterSpecFromOfferDefinition,
+  checkMerchantPosterHeadline,
+  checkMerchantPosterSubline,
+} from "@/lib/poster/posterCopy";
+import { POSTER_TEXT_LIMITS } from "@/lib/poster/posterPolicy";
 import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
 import type {
   AdCreativeFormat,
@@ -1059,6 +1065,11 @@ export default function AiDealScreen() {
   const eligibilityTouchedRef = useRef<Set<keyof DealEligibilityFormState>>(new Set());
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
+  // The text actually rendered on the poster (large headline + small top
+  // subheadline/kicker). Seeded from the generated poster copy and editable
+  // until publish; title/promoLine stay the card-format copy.
+  const [posterHeadlineText, setPosterHeadlineText] = useState("");
+  const [posterSublineText, setPosterSublineText] = useState("");
   const [ctaText, setCtaText] = useState("");
   const [description, setDescription] = useState("");
   const [maxClaims, setMaxClaims] = useState("10");
@@ -1541,10 +1552,7 @@ export default function AiDealScreen() {
   }
 
   function hasFallbackTemplateSource() {
-    // Poster-style deals can always fall back: the deterministic poster/composed
-    // card renders the offer natively with no image (Phase 5), so "fallback
-    // available" no longer requires a saved image in that format.
-    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl || showPosterFormat);
+    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl);
   }
 
   function clearGenerationErrorState() {
@@ -1644,6 +1652,10 @@ export default function AiDealScreen() {
       setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(restoredPath));
     }
     lastSentPhotoTreatmentRef.current = restored.photo_treatment ?? null;
+    if (restored.poster?.copy) {
+      setPosterHeadlineText(restored.poster.copy.headline ?? "");
+      setPosterSublineText(restored.poster.copy.subline ?? "");
+    }
     setAdAccepted(false);
     setManualDraftUnlocked(true);
     setPublishStatus("idle");
@@ -1671,6 +1683,8 @@ export default function AiDealScreen() {
         price,
         title,
         promoLine,
+        posterHeadlineText,
+        posterSublineText,
         ctaText,
         description,
         dealEligibility: JSON.stringify(eligibilityForm),
@@ -1696,6 +1710,8 @@ export default function AiDealScreen() {
       price,
       title,
       promoLine,
+      posterHeadlineText,
+      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -1743,6 +1759,8 @@ export default function AiDealScreen() {
   }, [
     title,
     promoLine,
+    posterHeadlineText,
+    posterSublineText,
     ctaText,
     description,
     price,
@@ -1862,6 +1880,8 @@ export default function AiDealScreen() {
     setPrice(draft.price);
     setTitle(draft.title);
     setPromoLine(draft.promoLine);
+    setPosterHeadlineText(draft.posterHeadlineText);
+    setPosterSublineText(draft.posterSublineText);
     setCtaText(draft.ctaText);
     setDescription(draft.description);
     setEligibilityForm(draft.eligibilityForm);
@@ -1953,6 +1973,8 @@ export default function AiDealScreen() {
       price,
       title,
       promoLine,
+      posterHeadlineText,
+      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -2002,6 +2024,8 @@ export default function AiDealScreen() {
     price,
     title,
     promoLine,
+    posterHeadlineText,
+    posterSublineText,
     ctaText,
     description,
     eligibilityForm,
@@ -2100,6 +2124,8 @@ export default function AiDealScreen() {
         setTitle(loadedTitle);
         setDescription(loadedDescription);
         setPromoLine("");
+        setPosterHeadlineText("");
+        setPosterSublineText("");
         setCtaText("");
         setPrice(loadedPrice);
         setPhotoUri(null);
@@ -2139,6 +2165,8 @@ export default function AiDealScreen() {
             price: loadedPrice,
             title: loadedTitle,
             promoLine: "",
+            posterHeadlineText: "",
+            posterSublineText: "",
             ctaText: "",
             description: loadedDescription,
             dealEligibility: JSON.stringify(loadedEligibilityForm),
@@ -2186,6 +2214,8 @@ export default function AiDealScreen() {
         setTitle(getDealDisplayTitle({ title: row.title }, row.title));
         setDescription(row.description ?? "");
         setPromoLine("");
+        setPosterHeadlineText("");
+        setPosterSublineText("");
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
         setEligibilityForm(createDefaultDealEligibilityFormState());
@@ -2395,6 +2425,8 @@ export default function AiDealScreen() {
   function resetGenerationState() {
     setGeneratedAd(null);
     setImageVersions([]);
+    setPosterHeadlineText("");
+    setPosterSublineText("");
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
@@ -2648,6 +2680,8 @@ export default function AiDealScreen() {
     const draft = adToDealDraft(ad, hintText);
     setTitle(draft.title);
     setPromoLine(draft.promo_line);
+    setPosterHeadlineText(ad.poster?.copy?.headline ?? "");
+    setPosterSublineText(ad.poster?.copy?.subline ?? "");
     setCtaText(draft.cta_text);
     setDescription(draft.offer_details);
     aiDraftBaselineRef.current = {
@@ -2655,6 +2689,43 @@ export default function AiDealScreen() {
       promo_line: draft.promo_line,
       cta_text: draft.cta_text,
       description: draft.offer_details,
+    };
+  }
+
+  function imageFailureTelemetry(err: unknown) {
+    const body = getFunctionErrorBody(err);
+    const imageFailure = body?.image_failure;
+    if (!imageFailure || typeof imageFailure !== "object" || Array.isArray(imageFailure)) return {};
+    const failure = imageFailure as Record<string, unknown>;
+    const attempts = Array.isArray(failure.attempts) ? failure.attempts : [];
+    const attemptCodes = attempts
+      .slice(-6)
+      .map((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+        const attempt = value as Record<string, unknown>;
+        const provider = typeof attempt.provider === "string" ? attempt.provider : "unknown";
+        const endpoint = typeof attempt.endpoint === "string" ? attempt.endpoint : "unknown";
+        const errorCode =
+          typeof attempt.error_code === "string" && attempt.error_code.length > 0
+            ? attempt.error_code
+            : attempt.success === true
+            ? "success"
+            : "unknown";
+        return `${provider}:${endpoint}:${errorCode}`;
+      })
+      .filter(Boolean)
+      .join("|")
+      .slice(0, 220);
+    const qa = failure.qa && typeof failure.qa === "object" && !Array.isArray(failure.qa)
+      ? (failure.qa as Record<string, unknown>)
+      : {};
+    return {
+      image_failure_source: typeof failure.source === "string" ? failure.source : null,
+      image_failure_provider: typeof failure.provider === "string" ? failure.provider : null,
+      image_failure_model: typeof failure.model === "string" ? failure.model : null,
+      image_failure_attempts: attemptCodes || null,
+      image_failure_qa_decision: typeof qa.decision === "string" ? qa.decision : null,
+      image_failure_qa_unavailable: typeof qa.unavailable === "boolean" ? qa.unavailable : null,
     };
   }
 
@@ -2911,9 +2982,6 @@ export default function AiDealScreen() {
         const friendly = t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
         });
-        // Not hardcoded to "no fallback" anymore: with a photo saved — or in
-        // poster format, where the deterministic poster needs no image (Phase 5)
-        // — the recovery card must offer the "Use fallback template" action.
         setGenerationFailureState(
           friendly,
           hasFallbackTemplateSource() ? "ai_failed_fallback_available" : "ai_failed_no_fallback",
@@ -2937,6 +3005,10 @@ export default function AiDealScreen() {
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
         regeneration_attempt: 0,
+        image_provider: normalizedAd.image_selection?.provider ?? null,
+        image_model: normalizedAd.image_selection?.model ?? null,
+        image_source_mode: normalizedAd.image_selection?.sourceMode ?? null,
+        image_photo_source: normalizedAd.photo_source ?? null,
       });
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;
@@ -2962,10 +3034,13 @@ export default function AiDealScreen() {
         }),
       );
       setBanner({ message: friendly, tone: "error" });
+      const imageFailure = imageFailureTelemetry(err);
       trackEvent(AiAdsEvents.GENERATION_FAILED, {
         screen: "create_ai",
         regeneration_attempt: 0,
+        error_code: code ?? null,
         message_snippet: raw.slice(0, 80),
+        ...imageFailure,
       });
     } finally {
       // Only flip the spinner off if our request is still the active one. If the user
@@ -3186,12 +3261,7 @@ export default function AiDealScreen() {
 
   function acceptAd() {
     if (!generatedAd) return;
-    // Poster-style ads may be accepted with no image (Phase 5): the deterministic
-    // poster/composed card renders the offer natively, the composite QA treats
-    // deterministic_fallback as having a visual, and publish stores a null poster.
-    // Standard-card ads still require one. acceptAd is also the exact-preview
-    // approval path, so blocking here would dead-end the no-image poster flow.
-    if (!imageVersionStoragePath(generatedAd) && !showPosterFormat) {
+    if (!imageVersionStoragePath(generatedAd)) {
       setBanner({
         message: t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
@@ -3303,11 +3373,7 @@ export default function AiDealScreen() {
     const generatedPosterPath = imageVersionStoragePath(generatedAd);
     const fallbackPosterPath = generatedPosterPath ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
-    // Poster-style deals render the offer natively in the consumer feed
-    // (ComposedAdCard, deterministic_fallback) — no baked-in image — so a poster
-    // deal may ship with no photo when image generation is down. Standard cards
-    // still need one.
-    if (!hasImageSource && !showPosterFormat) {
+    if (!hasImageSource) {
       setBanner({
         message: t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
@@ -3697,6 +3763,49 @@ export default function AiDealScreen() {
           }
         : null;
       const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
+      if (shouldPublishPosterSpec) {
+        // Merchant-typed poster text must publish exactly as previewed: block on
+        // fit/policy problems instead of letting the sanitizer silently rewrite it.
+        const posterHeadlineCheck = checkMerchantPosterHeadline(posterHeadlineText);
+        const posterSublineCheck = checkMerchantPosterSubline(posterSublineText);
+        if (!posterHeadlineCheck.ok || !posterSublineCheck.ok) {
+          const overLimit =
+            posterHeadlineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT") ||
+            posterSublineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT");
+          showPublishError(
+            overLimit
+              ? t("createAi.errPosterTextTooLong", {
+                  defaultValue:
+                    "The poster headline or subheadline is too long to fit the poster. Shorten it, then publish again.",
+                  headlineMax: POSTER_TEXT_LIMITS.headline,
+                  sublineMax: POSTER_TEXT_LIMITS.subline,
+                })
+              : t("createAi.errPosterTextNotAllowed", {
+                  defaultValue:
+                    "The poster headline or subheadline uses wording that can't go on the poster (like claim/scan instructions or restating the offer mechanics). Reword it, then publish again.",
+                }),
+            "warning",
+          );
+          return;
+        }
+        const posterFactsCheck = checkMerchantDealTitleAgainstOffer(
+          {
+            title: posterHeadlineText.trim() || null,
+            supportingLine: posterSublineText.trim() || null,
+          },
+          offerContract,
+        );
+        if (!posterFactsCheck.ok) {
+          showPublishError(
+            t("createAi.errHeadlineContradictsOffer", {
+              defaultValue:
+                "Your headline or subheadline doesn't match this deal's locked offer facts. Update the wording so it fits the offer, then publish again.",
+            }),
+            "warning",
+          );
+          return;
+        }
+      }
       const posterForPublishSpec =
         shouldPublishPosterSpec && offerDefinition
           ? buildPosterSpecFromOfferDefinition({
@@ -3705,7 +3814,8 @@ export default function AiDealScreen() {
               templateId: selectedPosterTemplateId,
               sourceAssetPath: finalStoragePath,
               renderedAssetPath: null,
-              headline: title,
+              headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
+              subline: posterSublineText.trim() || null,
               businessCategory: businessContextForAi.category,
               compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
             })
@@ -3872,12 +3982,7 @@ export default function AiDealScreen() {
             screenshotQa: composedScreenshotQaSnapshotForPublish,
           }
         : null;
-      // Poster-style deals render the offer natively for consumers (ComposedAdCard
-      // deterministic_fallback), and the deal row stores a null poster fine, so a
-      // poster deal may publish with no image. Standard cards still require one.
-      // Fail-safe: if the server rejects the imageless poster spec, the poster-spec
-      // fallback below retries as a Standard card.
-      if (!posterForPublish && !showPosterFormat) {
+      if (!posterForPublish) {
         showPublishError(t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
         }));
@@ -4078,6 +4183,8 @@ export default function AiDealScreen() {
             price,
             title,
             promoLine,
+            posterHeadlineText,
+            posterSublineText,
             ctaText,
             description,
             dealEligibility: JSON.stringify(eligibilityForm),
@@ -4207,7 +4314,10 @@ export default function AiDealScreen() {
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
-  const fallbackPosterPreviewSpec =
+  // Built with the same inputs the publish path uses so the poster preview
+  // always shows exactly what will publish — including live headline/subheadline
+  // edits. The stale generated spec is only a fallback when no offer exists.
+  const livePosterPreviewSpec =
     showPosterFormat && offerDefinition
       ? buildPosterSpecFromOfferDefinition({
           definition: offerDefinition,
@@ -4215,12 +4325,15 @@ export default function AiDealScreen() {
           templateId: selectedPosterTemplateId,
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath ?? null,
           renderedAssetPath: null,
-          headline: title.trim() || generatedAd?.headline || null,
+          headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
+          subline: posterSublineText.trim() || null,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
         })
       : null;
-  const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;
+  const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;
+  const posterHeadlineEditCheck = checkMerchantPosterHeadline(posterHeadlineText);
+  const posterSublineEditCheck = checkMerchantPosterSubline(posterSublineText);
   const showPosterPreview = Boolean(effectivePosterSpec);
   const posterPreviewImageUri = adImageUri ?? selectedPhotoUri;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
@@ -5771,6 +5884,28 @@ export default function AiDealScreen() {
                   </View>
                 )}
 
+                {showPosterFormat ? (
+                  <>
+                    <Text style={{ marginTop: 16, color: theme.text }}>
+                      {t("createAi.editPosterHeadline")} ({posterHeadlineText.trim().length}/{POSTER_TEXT_LIMITS.headline})
+                    </Text>
+                    <TextInput value={posterHeadlineText} maxLength={POSTER_TEXT_LIMITS.headline} onChangeText={(value) => { setPosterHeadlineText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.posterHeadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                    {!posterHeadlineEditCheck.ok ? (
+                      <Text style={{ marginTop: 4, fontSize: 13, color: theme.danger }}>
+                        {t("createAi.posterHeadlineNotAllowed")}
+                      </Text>
+                    ) : null}
+                    <Text style={{ marginTop: 12, color: theme.text }}>
+                      {t("createAi.editPosterSubheadline")} ({posterSublineText.trim().length}/{POSTER_TEXT_LIMITS.subline})
+                    </Text>
+                    <TextInput value={posterSublineText} maxLength={POSTER_TEXT_LIMITS.subline} onChangeText={(value) => { setPosterSublineText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.posterSubheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                    {!posterSublineEditCheck.ok ? (
+                      <Text style={{ marginTop: 4, fontSize: 13, color: theme.danger }}>
+                        {t("createAi.posterSubheadlineNotAllowed")}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editSubheadline")}</Text>

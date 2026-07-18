@@ -146,7 +146,50 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("sends the expected REST request and parses inline PNG output", async () => {
+  it("uses the Interactions API for Gemini 3 image models and parses PNG output", async () => {
+    const pngBytes = new TextEncoder().encode("png");
+    const pngBase64 = btoa(String.fromCharCode(...pngBytes));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output_image: {
+            mime_type: "image/png",
+            data: pngBase64,
+          },
+          steps: [
+            {
+              type: "model_output",
+              content: [{ type: "image", mime_type: "image/png", data: pngBase64 }],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      estimatedCostUsd: 0.067,
+    });
+
+    expect(result.bytes).toEqual(pngBytes);
+    expect(result.mimeType).toBe("image/png");
+    expect(result.estimatedCostUsd).toBe(0.067);
+    expect(result.attempts[0]?.endpoint).toBe("interactions.create");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe("https://generativelanguage.googleapis.com/v1beta/interactions");
+    const request = init as RequestInit;
+    expect((request.headers as Record<string, string>)["x-goog-api-key"]).toBe("test-gemini-key");
+    const body = JSON.parse(String(request.body));
+    expect(body.model).toBe("gemini-3.1-flash-image");
+    expect(body.input).toEqual([{ type: "text", text: "Create a product photo." }]);
+    expect(body.response_format).toBeUndefined();
+    expect(body.generationConfig).toBeUndefined();
+  });
+
+  it("keeps the legacy GenerateContent request for non-Gemini-3 image models", async () => {
     const pngBytes = new TextEncoder().encode("png");
     const pngBase64 = btoa(String.fromCharCode(...pngBytes));
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -166,22 +209,19 @@ describe("generateGeminiAdImageWithTelemetry", () => {
 
     const result = await generateGeminiAdImageWithTelemetry({
       apiKey: "test-gemini-key",
-      model: "gemini-3.1-flash-image",
+      model: "gemini-2.5-flash-image",
       prompt: "Create a product photo.",
-      estimatedCostUsd: 0.067,
+      estimatedCostUsd: 0.05,
+      retryOnFailure: false,
     });
 
     expect(result.bytes).toEqual(pngBytes);
-    expect(result.mimeType).toBe("image/png");
-    expect(result.estimatedCostUsd).toBe(0.067);
+    expect(result.attempts[0]?.endpoint).toBe("models.generateContent");
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/v1beta/models/gemini-3.1-flash-image:generateContent");
-    const request = init as RequestInit;
-    expect((request.headers as Record<string, string>)["x-goog-api-key"]).toBe("test-gemini-key");
-    const body = JSON.parse(String(request.body));
+    expect(String(url)).toContain("/v1/models/gemini-2.5-flash-image:generateContent");
+    const body = JSON.parse(String((init as RequestInit).body));
     expect(body.generationConfig.responseModalities).toEqual(["TEXT", "IMAGE"]);
     expect(body.generationConfig.imageConfig).toEqual({ aspectRatio: "1:1", imageSize: "1K" });
-    expect(body.generationConfig.responseFormat).toBeUndefined();
   });
 });
 

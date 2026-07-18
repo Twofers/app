@@ -42,6 +42,42 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("disabled={savingTemplate || !canPublish}");
   });
 
+  it("keeps poster headline and subheadline live-editable through preview and publish", () => {
+    // Preview and publish build the poster from the SAME live fields; the stale
+    // generated spec is only a fallback when no offer definition exists.
+    expect(createAiSource).toContain("const [posterHeadlineText, setPosterHeadlineText] = useState(\"\");");
+    expect(createAiSource).toContain("const [posterSublineText, setPosterSublineText] = useState(\"\");");
+    expect(createAiSource).toContain(
+      "const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;",
+    );
+    const previewHeadline = "headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,";
+    const publishSubline = "subline: posterSublineText.trim() || null,";
+    expect(createAiSource.split(previewHeadline).length - 1).toBe(2);
+    expect(createAiSource.split(publishSubline).length - 1).toBe(2);
+    // Seeded from every generated/revised ad and restored image version.
+    expect(createAiSource).toContain("setPosterHeadlineText(ad.poster?.copy?.headline ?? \"\");");
+    expect(createAiSource).toContain("setPosterSublineText(ad.poster?.copy?.subline ?? \"\");");
+    // Visible fit limits on the inputs plus a publish-time block, never a silent rewrite.
+    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.headline}");
+    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
+    expect(createAiSource).toContain("checkMerchantPosterHeadline(posterHeadlineText)");
+    expect(createAiSource).toContain("checkMerchantPosterSubline(posterSublineText)");
+    expect(createAiSource).toContain("createAi.errPosterTextTooLong");
+    expect(createAiSource).toContain("createAi.errPosterTextNotAllowed");
+
+    for (const locale of ["en", "es", "ko"] as const) {
+      const createAi = readLocale(locale).createAi;
+      expect(createAi.editPosterHeadline, `${locale} editPosterHeadline`).toBeTruthy();
+      expect(createAi.editPosterSubheadline, `${locale} editPosterSubheadline`).toBeTruthy();
+      expect(createAi.posterHeadlinePlaceholder, `${locale} posterHeadlinePlaceholder`).toBeTruthy();
+      expect(createAi.posterSubheadlinePlaceholder, `${locale} posterSubheadlinePlaceholder`).toBeTruthy();
+      expect(createAi.posterHeadlineNotAllowed, `${locale} posterHeadlineNotAllowed`).toBeTruthy();
+      expect(createAi.posterSubheadlineNotAllowed, `${locale} posterSubheadlineNotAllowed`).toBeTruthy();
+      expect(createAi.errPosterTextTooLong, `${locale} errPosterTextTooLong`).toBeTruthy();
+      expect(createAi.errPosterTextNotAllowed, `${locale} errPosterTextNotAllowed`).toBeTruthy();
+    }
+  });
+
   it("keeps past-template loading errors scoped to the templates area", () => {
     expect(createHubSource).toContain("templatesLoadError");
     expect(createHubSource).toContain("setTemplatesLoadError(t(\"createHub.templatesLoadError\"))");
@@ -257,6 +293,20 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("Twofer fallback");
   });
 
+  it("blocks poster-format generation from continuing without an image asset", () => {
+    const noImageGateCount =
+      createAiSource.split("if (!imageVersionStoragePath(normalizedAd))").length - 1;
+
+    expect(noImageGateCount).toBeGreaterThanOrEqual(2);
+    expect(createAiSource).toContain("if (!imageVersionStoragePath(generatedAd))");
+    expect(createAiSource).toContain("if (!hasImageSource)");
+    expect(createAiSource).toContain("if (!posterForPublish)");
+    expect(createAiSource).not.toContain("if (!imageVersionStoragePath(normalizedAd) && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!imageVersionStoragePath(generatedAd) && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!hasImageSource && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!posterForPublish && !showPosterFormat)");
+  });
+
   it("keeps no-photo manual drafts out of the deterministic fallback visual", () => {
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
@@ -342,7 +392,7 @@ describe("AI create UX source guards", () => {
 
     expect(generatedPreviewSource).toContain("createAi.dealPreview");
     expect(createAiSource).toContain("const showPosterFormat = creativeFormat === \"poster_v1\" || previewFormat === \"poster_v1\";");
-    expect(createAiSource).toContain("const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;");
+    expect(createAiSource).toContain("const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;");
     expect(createAiSource).toContain("const renderPosterPreview = () =>");
     expect(createAiSource).toContain("<AdPosterCanvas");
     expect(createAiSource).toContain("spec={effectivePosterSpec}");

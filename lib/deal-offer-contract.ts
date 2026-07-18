@@ -233,6 +233,13 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+function cleanOfferItemText(value: unknown): string {
+  return cleanText(value)
+    .replace(/^[\s"'`\u2018\u2019\u201C\u201D]+/, "")
+    .replace(/[\s"'`\u2018\u2019\u201C\u201D]+$/, "")
+    .trim();
+}
+
 function normalizeItemKey(value: string): string {
   return value
     .toLowerCase()
@@ -257,7 +264,7 @@ export function canonicalizeOfferItem(
   original: string,
   menuCatalogNames: readonly string[] = [],
 ): CanonicalizedItem {
-  const clean = cleanText(original);
+  const clean = cleanOfferItemText(original);
   if (!clean) {
     return { original: "", canonical: "", confidence: "low", source: "unchanged" };
   }
@@ -297,7 +304,7 @@ export function canonicalizeOfferItem(
 }
 
 function stripRewardPrefix(value: string): string {
-  return cleanText(value).replace(/^(?:a\s+|an\s+|the\s+)?(?:free|complimentary)\s+/i, "").trim();
+  return cleanOfferItemText(value).replace(/^(?:a\s+|an\s+|the\s+)?(?:free|complimentary)\s+/i, "").trim();
 }
 
 function numeric(value: unknown): number | null {
@@ -603,8 +610,9 @@ function canonicalFreeItemTerms(
     : "Limited quantity available.";
   const requiredPhrase = formatCountedItem(requiredQuantity, requiredItem);
   const freePhrase = formatCountedItem(freeQuantity, freeItem);
+  const location = stripEndingPunctuation(locationName);
   return sentence(
-    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${locationName}. ${quantity}`,
+    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${location}. ${quantity}`,
   );
 }
 
@@ -617,7 +625,8 @@ function canonicalPercentTerms(
   const quantity = Number.isFinite(quantityLimit ?? NaN) && (quantityLimit ?? 0) > 0
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
-  return sentence(`Get ${discountPercent}% off one ${itemName}. Redeem only at ${locationName}. ${quantity}`);
+  const location = stripEndingPunctuation(locationName);
+  return sentence(`Get ${discountPercent}% off one ${itemName}. Redeem only at ${location}. ${quantity}`);
 }
 
 export function buildDealOfferContract(

@@ -126,6 +126,27 @@ describe("buildDealOfferContract", () => {
     );
   });
 
+  it("strips stray inferred quotes before validating and building fallback copy", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "\"THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+      freeItemQuantity: 1,
+      freeItemDescription: "Cookie",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.requiredPurchase?.itemName).toBe("THE SERGEANT'S STRIPES (Select origins estate grown coffee)");
+    expect(contract.canonicalOfferLine).toBe(
+      "Buy THE SERGEANT'S STRIPES (Select origins estate grown coffee) and get a free cookie",
+    );
+
+    const fallback = deterministicFallbackCopy(contract);
+    expect(fallback.headline).not.toContain("\"");
+    expect(validateAiCopyAgainstOffer(fallback, contract).valid).toBe(true);
+  });
+
   it("builds the required golden canonical headlines", () => {
     expect(buildCanonicalHeadlineFromFacts({
       merchantName: "Cafe",

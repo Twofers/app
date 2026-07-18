@@ -134,6 +134,7 @@ import {
   buildPosterSpecFromOfferDefinition,
   choosePosterTemplateForOffer,
 } from "../../../lib/poster/posterCopy.ts";
+import { POSTER_TEXT_LIMITS } from "../../../lib/poster/posterPolicy.ts";
 import type { PosterDraftV1, PosterStyleChoice } from "../../../lib/poster/posterTypes.ts";
 import type {
   AdLocalizationBundle,
@@ -804,6 +805,30 @@ async function generateCopy(params: {
       };
     }
   }
+  if (isRevision && previousAd) {
+    const revisionIntent = parseRevisionFeedbackIntent(revisionFeedback);
+    if (revisionIntent.requiresKickerChange && !revisionKickerChanged(selected, previousAd)) {
+      const revisedKicker = deterministicRevisedKicker(offerContract, previousAd);
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "revision_deterministic_kicker_fallback",
+          businessId: offerContract.businessId,
+          kickerCleared: !revisedKicker,
+        }),
+      );
+      selected = {
+        ...selected,
+        poster_kicker: revisedKicker,
+        validation_reason_codes: [
+          ...new Set([
+            ...selected.validation_reason_codes,
+            "REVISION_DETERMINISTIC_KICKER",
+          ]),
+        ],
+      };
+    }
+  }
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
   const copyAlternatives = buildCopyAlternatives({
@@ -821,7 +846,7 @@ async function generateCopy(params: {
     terms_summary: clip(selected.terms_summary, DEAL_COPY_LIMITS.terms),
     social_caption: selected.social_caption ? clip(selected.social_caption, DEAL_COPY_LIMITS.socialCaption) : undefined,
     image_brief: selected.image_brief ? clip(selected.image_brief, 260) : undefined,
-    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, 32) : undefined,
+    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, POSTER_TEXT_LIMITS.subline) : undefined,
     locked_offer_line: selected.locked_offer_line,
     locked_terms_line: selected.locked_terms_line,
     copy_source: selected.copy_source,
@@ -1171,27 +1196,35 @@ function normalizeRevisionCopyText(value: string | null | undefined): string {
     : "";
 }
 
+function previousRevisionKicker(previousAd: SingleAd): string {
+  return normalizeRevisionCopyText(previousAd.poster?.copy?.subline ?? previousAd.poster_kicker);
+}
+
 function hasVisibleRevisionCopyChange(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
   const nextHeadline = normalizeRevisionCopyText(candidate.headline);
   const nextDescription = normalizeRevisionCopyText(candidate.short_description);
   const nextPush = normalizeRevisionCopyText(candidate.push_body || candidate.push_notification);
+  const nextKicker = normalizeRevisionCopyText(candidate.poster_kicker);
   const previousHeadlines = [
     previousAd.headline,
     previousAd.poster?.copy?.headline,
   ].map(normalizeRevisionCopyText).filter(Boolean);
   const previousDescription = normalizeRevisionCopyText(previousAd.short_description || previousAd.subheadline);
   const previousPush = normalizeRevisionCopyText(previousAd.push_notification);
+  const previousKicker = previousRevisionKicker(previousAd);
 
   return (
     (nextHeadline.length > 0 && !previousHeadlines.includes(nextHeadline)) ||
     (nextDescription.length > 0 && nextDescription !== previousDescription) ||
-    (nextPush.length > 0 && nextPush !== previousPush)
+    (nextPush.length > 0 && nextPush !== previousPush) ||
+    (nextKicker.length > 0 && nextKicker !== previousKicker)
   );
 }
 
 type RevisionFeedbackIntent = {
   active: boolean;
   requiresHeadlineChange: boolean;
+  requiresKickerChange: boolean;
   wantsShorter: boolean;
   wantsDirect: boolean;
   wantsLocal: boolean;
@@ -1237,6 +1270,7 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
     return {
       active: false,
       requiresHeadlineChange: false,
+      requiresKickerChange: false,
       wantsShorter: false,
       wantsDirect: false,
       wantsLocal: false,
@@ -1249,6 +1283,8 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
     active: true,
     requiresHeadlineChange:
       /\b(?:ad copy|caption|headline|heading|hero|main copy|main line|main message|opening|poster copy|poster headline|poster text|tagline|title|top|top copy|top text|wording)\b/.test(normalized),
+    requiresKickerChange:
+      /\b(?:kicker|eyebrow|sub[\s-]?headings?|sub[\s-]?headlines?|sub[\s-]?lines?|sub[\s-]?titles?|supporting (?:copy|line|text)|second line|small(?:er)? (?:line|text))\b/.test(normalized),
     wantsShorter: /\b(?:shorter|too long|less text|fewer words|trim|tighten|concise)\b/.test(normalized),
     wantsDirect: /\b(?:actual ad|awkward|boring|clear|confusing|direct|doesn t make sense|doesn t read right|full offer|generic|make sense|natural|plain|read right|reads weird|real ad|simple|sounds off|whole deal|whole offer)\b/.test(normalized),
     wantsLocal: /\b(?:local|nearby|neighborhood|neighbourhood|regulars|community|around here)\b/.test(normalized),
@@ -1265,6 +1301,7 @@ function revisionFeedbackMentionsImageOnly(feedback: string | undefined): boolea
   if (!mentionsImage) return false;
   const intent = parseRevisionFeedbackIntent(feedback);
   return !intent.requiresHeadlineChange &&
+    !intent.requiresKickerChange &&
     !intent.wantsShorter &&
     !intent.wantsDirect &&
     !intent.wantsLocal &&
@@ -1282,6 +1319,27 @@ function shouldUseDeterministicRevisionCopyFallback(params: {
   if (intent.requiresHeadlineChange && !revisionHeadlineChanged(params.selected, params.previousAd)) return true;
   if (hasVisibleRevisionCopyChange(params.selected, params.previousAd)) return false;
   return true;
+}
+
+function revisionKickerChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
+  return normalizeRevisionCopyText(candidate.poster_kicker) !== previousRevisionKicker(previousAd);
+}
+
+/**
+ * Backstop when the merchant asked for a different subheadline/kicker but no
+ * candidate changed it: use the offer's own item name as a fact-safe kicker, or
+ * drop the kicker entirely rather than return the complained-about line again.
+ */
+function deterministicRevisedKicker(contract: DealOfferContract, previousAd: SingleAd): string | undefined {
+  const itemName = (
+    contract.requiredPurchase?.itemName ??
+    contract.singleItemDiscount?.itemName ??
+    contract.freeReward?.itemName ??
+    ""
+  ).replace(/\s+/g, " ").trim();
+  const fits = itemName.length > 0 && itemName.length <= POSTER_TEXT_LIMITS.subline;
+  if (fits && normalizeRevisionCopyText(itemName) !== previousRevisionKicker(previousAd)) return itemName;
+  return undefined;
 }
 
 function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
@@ -1338,6 +1396,12 @@ function scoreRevisionFeedbackFit(params: {
     hardFailReasons.push("headline_unchanged_for_headline_feedback");
   }
   if (headlineChanged) softScore += 2;
+
+  const kickerChanged = revisionKickerChanged(candidate, previousAd);
+  if (intent.requiresKickerChange && !kickerChanged) {
+    hardFailReasons.push("kicker_unchanged_for_subheadline_feedback");
+  }
+  if (intent.requiresKickerChange && kickerChanged) softScore += 2;
 
   if (intent.wantsShorter) {
     const previousLength = revisionPreviousVisibleLength(previousAd);
@@ -1401,10 +1465,23 @@ function normalizePosterHeadlineText(value: string | null | undefined): string {
     : "";
 }
 
+function posterVisibleLength(value: string | null | undefined): number {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().length : 0;
+}
+
 function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {
   const headline = normalizePosterHeadlineText(candidate.headline);
   const reasons: string[] = [];
-  if (!headline) return reasons;
+  // Oversized poster text would be silently word-dropped or sliced by the
+  // sanitize clamps downstream; reject the candidate here instead so a repair
+  // attempt or the deterministic fallback produces copy that actually fits.
+  if (posterVisibleLength(candidate.headline) > POSTER_TEXT_LIMITS.headline) {
+    reasons.push("POSTER_HEADLINE_OVER_LIMIT");
+  }
+  if (posterVisibleLength(candidate.poster_kicker) > POSTER_TEXT_LIMITS.subline) {
+    reasons.push("POSTER_KICKER_OVER_LIMIT");
+  }
+  if (!headline) return [...new Set(reasons)];
   if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
 
   const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
@@ -2140,6 +2217,7 @@ type OpenAiProducedImage = {
   treatment: PhotoTreatment | null;
   prompt: string | null;
   qa: ImageQaTelemetry;
+  attempts?: ImageProviderAttemptSummary[];
 };
 
 type ProducedImageBase = OpenAiProducedImage & {
@@ -2151,6 +2229,41 @@ type ProducedImageBase = OpenAiProducedImage & {
 type ProducedImage = ProducedImageBase & {
   selection: AdImageSelection;
 };
+
+type ImageProviderAttemptSummary = {
+  provider: "gemini" | "openai";
+  endpoint: string;
+  model: string | null;
+  success: boolean;
+  errorCode: string | null;
+  retry: boolean;
+};
+
+function summarizeOpenAiImageAttempts(attempts: readonly OpenAiImageAttempt[]): ImageProviderAttemptSummary[] {
+  return attempts.map((attempt) => ({
+    provider: "openai",
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    errorCode: attempt.errorCode,
+    retry: false,
+  }));
+}
+
+function summarizeGeminiImageAttempts(attempts: readonly GeminiImageAttempt[]): ImageProviderAttemptSummary[] {
+  return attempts.map((attempt) => ({
+    provider: "gemini",
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    errorCode: attempt.errorCode,
+    retry: attempt.retry,
+  }));
+}
+
+function mergeImageAttempts(...attemptGroups: Array<readonly ImageProviderAttemptSummary[] | undefined>): ImageProviderAttemptSummary[] {
+  return attemptGroups.flatMap((attempts) => attempts ?? []);
+}
 
 async function produceImageOpenAiOnly(params: {
   openAiKey: string;
@@ -2253,11 +2366,12 @@ async function produceImageOpenAiOnly(params: {
         ].filter(Boolean).join(" "),
       });
       await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
+      const enhancedAttempts = summarizeOpenAiImageAttempts(enhancedResult.attempts);
       const enhanced = enhancedResult.bytes;
 
       if (!enhanced) {
         // Enhancement failed — fall back to the original photo only if QA did not hard-block it.
-        if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+        if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
       } else {
         const editQa = await sourceAwareQaForImageBytes({
           openAiKey,
@@ -2268,7 +2382,7 @@ async function produceImageOpenAiOnly(params: {
           sourceType: "merchant_ai_edit",
         });
         if (shouldFailClosedForImageQa(editQa)) {
-          if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+          if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
         } else {
           const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2284,9 +2398,9 @@ async function produceImageOpenAiOnly(params: {
                 err: upErr.message?.slice(0, 200),
               }),
             );
-            if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+            if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
           } else {
-            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
+            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry, attempts: enhancedAttempts };
           }
         }
       }
@@ -2311,6 +2425,7 @@ async function produceImageOpenAiOnly(params: {
   });
   let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
+  let providerAttempts = summarizeOpenAiImageAttempts(imageGeneration.attempts);
   let png = imageGeneration.bytes;
   const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
     normalizeSourceAwareImageQaResult({
@@ -2332,7 +2447,7 @@ async function produceImageOpenAiOnly(params: {
     }),
   );
   if (!png) {
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
 
   if (requiredVisualItems.length > 0) {
@@ -2388,6 +2503,7 @@ async function produceImageOpenAiOnly(params: {
           : null;
       if (retryGeneration) {
         await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
+        providerAttempts = mergeImageAttempts(providerAttempts, summarizeOpenAiImageAttempts(retryGeneration.attempts));
       }
       const retryPng = retryGeneration?.bytes ?? null;
       if (retryPng) {
@@ -2442,7 +2558,7 @@ async function produceImageOpenAiOnly(params: {
     }
   }
   if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
   const { error: upErr } = await admin.storage
@@ -2456,9 +2572,9 @@ async function produceImageOpenAiOnly(params: {
         err: upErr.message?.slice(0, 200),
       }),
     );
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
-  return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa };
+  return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
 }
 
 function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase {
@@ -2482,6 +2598,7 @@ async function produceFallbackImage(params: {
   costContext: AiCostContext;
   sourcePhotoPath?: string | null;
   editMode?: MerchantImageEditMode;
+  attempts?: readonly ImageProviderAttemptSummary[];
 }): Promise<ProducedImage> {
   if (params.imageProviderConfig.stockFallbackEnabled) {
     const stockPaths = await findStockImageFallbacks({
@@ -2509,6 +2626,7 @@ async function produceFallbackImage(params: {
           provider: "stock",
           model: null,
           estimatedCostUsd: 0,
+          attempts: [...(params.attempts ?? [])],
         },
         {
           sourcePhotoPath: params.sourcePhotoPath ?? null,
@@ -2528,6 +2646,7 @@ async function produceFallbackImage(params: {
       provider: "none",
       model: null,
       estimatedCostUsd: 0,
+      attempts: [...(params.attempts ?? [])],
     },
     {
       sourcePhotoPath: params.sourcePhotoPath ?? null,
@@ -2619,9 +2738,14 @@ async function produceImage(params: {
     );
     return generateWithoutSourcePhoto();
   };
-  const openAiFallback = async (): Promise<ProducedImage> => {
+  const openAiFallback = async (
+    priorAttempts: readonly ImageProviderAttemptSummary[] = [],
+  ): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
-    const withMetadata = withOpenAiImageMetadata(result);
+    const withMetadata = {
+      ...withOpenAiImageMetadata(result),
+      attempts: mergeImageAttempts(priorAttempts, result.attempts),
+    };
     if (withMetadata.posterStoragePath || withMetadata.source === "uploaded_original") {
       return withImageSelection(withMetadata, {
         sourcePhotoPath: params.photoPath,
@@ -2638,6 +2762,7 @@ async function produceImage(params: {
       costContext: params.costContext,
       sourcePhotoPath: params.photoPath,
       editMode: params.imageEditMode,
+      attempts: withMetadata.attempts,
     });
   };
 
@@ -2806,9 +2931,10 @@ async function produceImage(params: {
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
     });
     await logGeminiImageAttempts(params.costContext, "image_edit", gemini.attempts);
+    const geminiAttempts = summarizeGeminiImageAttempts(gemini.attempts);
 
     if (!gemini.bytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
 
     const editQa = await sourceAwareQaForImageBytes({
@@ -2820,7 +2946,7 @@ async function produceImage(params: {
       sourceType: "merchant_ai_edit",
     });
     if (shouldFailClosedForImageQa(editQa)) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
     const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2834,7 +2960,7 @@ async function produceImage(params: {
       rand,
     });
     if (!enhancedPath) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
     return withImageSelection(
       {
@@ -2846,6 +2972,7 @@ async function produceImage(params: {
         provider: "gemini",
         model: gemini.model,
         estimatedCostUsd: gemini.estimatedCostUsd,
+        attempts: geminiAttempts,
       },
       {
         sourcePhotoPath: params.photoPath,
@@ -2863,6 +2990,7 @@ async function produceImage(params: {
     estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
   });
   await logGeminiImageAttempts(params.costContext, "image_generation", gemini.attempts);
+  let providerAttempts = summarizeGeminiImageAttempts(gemini.attempts);
   let imageBytes = gemini.bytes;
   let imageMimeType = gemini.mimeType;
   let imagePrompt = gemini.prompt;
@@ -2950,6 +3078,7 @@ async function produceImage(params: {
           : null;
       if (retryGeneration) {
         await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
+        providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(retryGeneration.attempts));
       }
       if (retryGeneration?.bytes) {
         qa.regenerated = true;
@@ -3031,6 +3160,7 @@ async function produceImage(params: {
           provider: "gemini",
           model: gemini.model,
           estimatedCostUsd,
+          attempts: providerAttempts,
         },
         {
           sourcePhotoPath: null,
@@ -3041,7 +3171,7 @@ async function produceImage(params: {
   }
 
   if (useOpenAiFallback) {
-    const result = await openAiFallback();
+    const result = await openAiFallback(providerAttempts);
     if (result.posterStoragePath || result.source === "stock" || result.source === "copy_only") {
       return result;
     }
@@ -3057,6 +3187,7 @@ async function produceImage(params: {
     costContext: params.costContext,
     sourcePhotoPath: params.photoPath,
     editMode: params.imageEditMode,
+    attempts: providerAttempts,
   });
 }
 
@@ -3138,6 +3269,40 @@ function providerAttemptTelemetry(attempt: ProviderAttempt) {
     reasoning_tokens: attempt.reasoningTokens ?? null,
     output_tokens: attempt.outputTokens ?? null,
     estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+  };
+}
+
+function imageProviderAttemptTelemetry(attempt: ImageProviderAttemptSummary) {
+  return {
+    provider: attempt.provider,
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    error_code: attempt.errorCode,
+    retry: attempt.retry,
+  };
+}
+
+function imageFailureDebug(imageResult: ProducedImage) {
+  const attempts = (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry);
+  return {
+    source: imageResult.source,
+    provider: imageResult.provider,
+    model: imageResult.model,
+    produced_image: imageResult.posterStoragePath !== null,
+    attempts: attempts.slice(-8),
+    qa: {
+      unavailable: imageResult.qa.unavailable,
+      decision: imageResult.qa.decision,
+      hard_fail_reasons: imageResult.qa.hardFailReasons.slice(0, 8),
+      missing_items: imageResult.qa.missingItems.slice(0, 8),
+      attempts: imageResult.qa.attempts,
+      regenerated: imageResult.qa.regenerated,
+    },
+    selection: {
+      source_mode: imageResult.selection.sourceMode,
+      selected_storage_path_present: Boolean(imageResult.selection.selectedStoragePath),
+    },
   };
 }
 
@@ -3272,6 +3437,7 @@ function buildGenerationTelemetry(params: {
       estimated_cost_usd: imageResult.estimatedCostUsd,
       produced_image: imageResult.posterStoragePath !== null,
       requested_aspect_ratio: params.posterDraft?.aspect_ratio ?? "1:1",
+      provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
     },
     poster: params.posterDraft
       ? {
@@ -3972,10 +4138,10 @@ Deno.serve(async (req) => {
     };
 
     /**
-     * Copy-only is an intentional fallback when every image source fails. Unexpected null-image
-     * states still fail closed so they do not burn quota.
+     * AI ads require a usable image asset. Copy-only remains useful telemetry for
+     * the exhausted fallback path, but it is not a successful generated ad.
      */
-    const imageProductionFailed = imageResult.posterStoragePath === null && imageResult.source !== "copy_only";
+    const imageProductionFailed = imageResult.posterStoragePath === null;
     const productionSuccess = !imageProductionFailed;
 
     await admin.from("ai_generation_logs").insert({
@@ -4020,10 +4186,12 @@ Deno.serve(async (req) => {
 
     if (imageProductionFailed) {
       await releaseReservedChargeableRevision("image_failed");
+      const imageFailure = imageFailureDebug(imageResult);
       return new Response(
         JSON.stringify({
           error: "AI image generation failed. Try again.",
           error_code: "IMAGE_REQUIRED",
+          image_failure: imageFailure,
           quota,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -4036,7 +4204,12 @@ Deno.serve(async (req) => {
       chargeableRevisionCredit = null;
     }
 
-    return new Response(JSON.stringify({ ad, ads: [ad], quota }), {
+    return new Response(JSON.stringify({
+      ad,
+      ads: [ad],
+      quota,
+      image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

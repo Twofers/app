@@ -6,11 +6,20 @@ import {
   buildPosterCopyFromOfferDefinition,
   buildPosterOfferLinesFromOfferDefinition,
   buildPosterSpecFromOfferDefinition,
+  checkMerchantPosterHeadline,
+  checkMerchantPosterSubline,
   normalizePosterSpecForPublish,
   sanitizePosterBusinessName,
 } from "../posterCopy";
 import { validatePosterSpecV1 } from "../posterAdSpec";
-import { assertPosterCopyPolicy, clampPosterText, sanitizePosterText } from "../posterPolicy";
+import {
+  assertPosterCopyPolicy,
+  checkPosterTextFit,
+  clampPosterText,
+  POSTER_TEXT_LIMITS,
+  sanitizePosterCopy,
+  sanitizePosterText,
+} from "../posterPolicy";
 import type { PosterCopyV1 } from "../posterTypes";
 
 function definitionFor(input: DealEligibilityInput) {
@@ -289,5 +298,70 @@ describe("poster policy", () => {
       offer_line_1: "\uCEE4\uD53C \uBB34\uB8CC",
       offer_line_2: "\uBCA0\uC774\uAE00 X 1 \uAD6C\uB9E4 \uC2DC",
     });
+  });
+});
+
+describe("poster text fit", () => {
+  it("shares one set of fit limits across layers", () => {
+    expect(POSTER_TEXT_LIMITS).toEqual({ businessName: 34, headline: 28, subline: 32 });
+  });
+
+  it("flags over-limit text instead of silently shortening it", () => {
+    const fit = checkPosterTextFit("FRESH PASTRIES BAKED EVERY SINGLE MORNING", POSTER_TEXT_LIMITS.subline);
+    expect(fit.ok).toBe(false);
+    expect(fit.reasonCodes).toContain("POSTER_TEXT_OVER_LIMIT");
+    expect(fit.length).toBeGreaterThan(fit.maxChars);
+  });
+
+  it("accepts fitting, policy-clean text unchanged", () => {
+    expect(checkPosterTextFit("BAKED FRESH DAILY", POSTER_TEXT_LIMITS.subline)).toMatchObject({
+      ok: true,
+      reasonCodes: [],
+    });
+  });
+
+  it("flags forbidden terms without rewriting them", () => {
+    const fit = checkPosterTextFit("Scan to claim yours", POSTER_TEXT_LIMITS.subline);
+    expect(fit.ok).toBe(false);
+    expect(fit.reasonCodes).toEqual(expect.arrayContaining(["CTA_SCAN", "CTA_CLAIM"]));
+  });
+
+  it("records a warning whenever sanitizing changed the requested copy", () => {
+    const clipped = sanitizePosterCopy(
+      safeCopy({
+        headline: "A very long headline that cannot possibly fit the poster",
+        subline: "FRESH PASTRIES BAKED EVERY SINGLE MORNING",
+      }),
+      "Merit Coffee",
+    );
+    expect(clipped.copy.headline.length).toBeLessThanOrEqual(POSTER_TEXT_LIMITS.headline);
+    expect(clipped.policy.warnings).toEqual(
+      expect.arrayContaining(["HEADLINE_TEXT_ADJUSTED", "SUBLINE_TEXT_ADJUSTED"]),
+    );
+
+    const untouched = sanitizePosterCopy(safeCopy({ subline: "BAKED FRESH DAILY" }), "Merit Coffee");
+    expect(untouched.policy.warnings).toEqual([]);
+  });
+
+  it("blocks merchant poster headlines that would be silently replaced", () => {
+    expect(checkMerchantPosterHeadline("Buy one get one free latte").reasonCodes).toContain(
+      "POSTER_HEADLINE_MECHANICAL",
+    );
+    expect(checkMerchantPosterHeadline("Try our seasonal latte").reasonCodes).toContain(
+      "POSTER_HEADLINE_WEAK_OPENER",
+    );
+    expect(
+      checkMerchantPosterHeadline("A very long headline that cannot possibly fit").reasonCodes,
+    ).toContain("POSTER_TEXT_OVER_LIMIT");
+    expect(checkMerchantPosterHeadline("Afternoon pick me up")).toMatchObject({ ok: true });
+    expect(checkMerchantPosterHeadline("")).toMatchObject({ ok: true });
+  });
+
+  it("checks merchant poster sublines for fit and policy only", () => {
+    expect(checkMerchantPosterSubline("Baked fresh daily")).toMatchObject({ ok: true });
+    expect(checkMerchantPosterSubline("Hurry, only 3 left today").ok).toBe(false);
+    expect(
+      checkMerchantPosterSubline("A supporting line that is far too long for the poster").reasonCodes,
+    ).toContain("POSTER_TEXT_OVER_LIMIT");
   });
 });

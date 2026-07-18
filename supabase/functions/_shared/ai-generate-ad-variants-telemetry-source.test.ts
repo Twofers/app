@@ -84,4 +84,10 @@ describe("ai-generate-ad-variants telemetry source guard", () => {
     expect(source).toMatch(/poster:\s*posterDraft/);
     expect(source).toMatch(/requested_aspect_ratio/);
   });
+
+  it("treats copy-only image fallback as an image production failure", () => {
+    expect(source).toContain("const imageProductionFailed = imageResult.posterStoragePath === null;");
+    expect(source).not.toContain('imageResult.source !== "copy_only"');
+    expect(source).toContain('error_code: "IMAGE_REQUIRED"');
+  });
 });

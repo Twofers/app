@@ -26,6 +26,8 @@ export type AiDealRecoveryDraft = {
   price: string;
   title: string;
   promoLine: string;
+  posterHeadlineText: string;
+  posterSublineText: string;
   ctaText: string;
   description: string;
   eligibilityForm: DealEligibilityFormState;
@@ -46,13 +48,24 @@ export type AiDealRecoveryDraft = {
 
 type DraftCandidate = Omit<
   AiDealRecoveryDraft,
-  "version" | "businessId" | "updatedAt" | "startTime" | "endTime" | "creativeFormat" | "previewFormat"
+  | "version"
+  | "businessId"
+  | "updatedAt"
+  | "startTime"
+  | "endTime"
+  | "creativeFormat"
+  | "previewFormat"
+  | "posterHeadlineText"
+  | "posterSublineText"
 > & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
   endTime: Date | string | number;
   creativeFormat?: AiDealDraftCreativeFormat | null;
   previewFormat?: AiDealDraftCreativeFormat | null;
+  // Optional so drafts saved before poster text editing existed still parse.
+  posterHeadlineText?: string | null;
+  posterSublineText?: string | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -123,6 +136,8 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
       draft.price.trim() ||
       draft.title.trim() ||
       draft.promoLine.trim() ||
+      draft.posterHeadlineText.trim() ||
+      draft.posterSublineText.trim() ||
       draft.ctaText.trim() ||
       draft.description.trim() ||
       draft.generatedAd ||
@@ -160,6 +175,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     price: cleanString(input.price),
     title: cleanDisplayTitle(input.title),
     promoLine: cleanString(input.promoLine),
+    posterHeadlineText: cleanString(input.posterHeadlineText),
+    posterSublineText: cleanString(input.posterSublineText),
     ctaText: cleanString(input.ctaText),
     description: cleanString(input.description),
     eligibilityForm: input.eligibilityForm ?? createDefaultDealEligibilityFormState(),
@@ -201,6 +218,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       price: parsed.price ?? "",
       title: parsed.title ?? "",
       promoLine: parsed.promoLine ?? "",
+      posterHeadlineText: parsed.posterHeadlineText ?? "",
+      posterSublineText: parsed.posterSublineText ?? "",
       ctaText: parsed.ctaText ?? "",
       description: parsed.description ?? "",
       eligibilityForm: parsed.eligibilityForm as DealEligibilityFormState,

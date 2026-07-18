@@ -7,10 +7,13 @@ import { SUPPORTED_LOCALES, type SupportedLocale } from "../supported-locales.ts
 import type { OfferDefinitionV1 } from "../offer-definition.ts";
 import {
   assertPosterCopyPolicy,
+  checkPosterTextFit,
+  POSTER_TEXT_LIMITS,
   sanitizePosterCopy,
   sanitizePosterText,
   scanPosterTextPolicy,
 } from "./posterPolicy.ts";
+import type { PosterTextFitCheck } from "./posterTypes.ts";
 import type {
   PosterCopyV1,
   PosterDraftV1,
@@ -138,9 +141,33 @@ export function sanitizePosterBusinessName(
     "Local Favorite";
   return sanitizePosterText(input ?? "", {
     fallback,
-    maxChars: 34,
+    maxChars: POSTER_TEXT_LIMITS.businessName,
     uppercase: false,
   });
+}
+
+/**
+ * Merchant-typed poster headline check. The AI path falls back deterministically
+ * on a bad headline (posterHeadline below); merchant edits must instead be
+ * blocked with these reason codes so the published poster never silently
+ * diverges from what the owner typed.
+ */
+export function checkMerchantPosterHeadline(value: string | null | undefined): PosterTextFitCheck {
+  const requested = cleanText(value);
+  const fit = checkPosterTextFit(requested, POSTER_TEXT_LIMITS.headline);
+  if (!requested) return fit;
+  const reasonCodes = [...fit.reasonCodes];
+  if (isWeakPosterHeroHeadline(requested)) reasonCodes.push("POSTER_HEADLINE_WEAK_OPENER");
+  if (isMechanicalOfferHeadline(requested)) reasonCodes.push("POSTER_HEADLINE_MECHANICAL");
+  return {
+    ...fit,
+    ok: reasonCodes.length === 0,
+    reasonCodes: [...new Set(reasonCodes)],
+  };
+}
+
+export function checkMerchantPosterSubline(value: string | null | undefined): PosterTextFitCheck {
+  return checkPosterTextFit(cleanText(value), POSTER_TEXT_LIMITS.subline);
 }
 
 export function choosePosterTemplateForOffer(
@@ -307,7 +334,7 @@ export function buildPosterCopyFromOfferDefinition(params: {
     business_name: businessName,
     headline: sanitizePosterText(headline, {
       fallback: posterHeadlineFallback(params.definition),
-      maxChars: 32,
+      maxChars: POSTER_TEXT_LIMITS.headline,
     }),
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
@@ -315,7 +342,7 @@ export function buildPosterCopyFromOfferDefinition(params: {
       ? {
           subline: sanitizePosterText(params.subline ?? "", {
             fallback: "",
-            maxChars: 32,
+            maxChars: POSTER_TEXT_LIMITS.subline,
           }),
         }
       : {}),
@@ -336,7 +363,7 @@ function copyForLocale(
         ? base.headline
         : sanitizePosterText(lines.offer_line_2, {
             fallback: base.headline,
-            maxChars: 32,
+            maxChars: POSTER_TEXT_LIMITS.headline,
           }),
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,

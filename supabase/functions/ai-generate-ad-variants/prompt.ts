@@ -195,7 +195,7 @@ export const AI_COPY_PROMPT_V5 = [
   "",
   "FIELD RULES:",
   "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.",
-  "- posterKicker: short poster top kicker, target 1-3 words, max 24 characters. It may be empty. Derive it from the specific product, customer moment, merchant context, or deal angle, and it must fit the actual item being offered. Use the CATEGORY PLAYBOOK natural customer moments as kicker inspiration; never use a moment that belongs to a different business category. Do not use generic defaults such as Try our, Our deal, Special offer, or Menu pick unless the available facts make that phrase uniquely natural. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
+  "- posterKicker: short poster top kicker, target 1-3 words, ideally under 24 characters and never more than 32. It may be empty. Derive it from the specific product, customer moment, merchant context, or deal angle, and it must fit the actual item being offered. Use the CATEGORY PLAYBOOK natural customer moments as kicker inspiration; never use a moment that belongs to a different business category. Do not use generic defaults such as Try our, Our deal, Special offer, or Menu pick unless the available facts make that phrase uniquely natural. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
   "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
@@ -204,6 +204,7 @@ export const AI_COPY_PROMPT_V5 = [
   "- imageBrief: short visual idea using only verified offer and merchant facts; no text in image.",
   "- merchantSpecificContextLimited: true only for the merchant_specific lane when verified merchant context is sparse.",
   "- For poster ads, headlineAlternative is the large poster headline and posterKicker is the small top kicker. Make them work together as a real poster concept.",
+  "- For poster ads the layout is fixed: headline must be at most 28 characters and posterKicker at most 32 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.",
   "- Poster offer lines and schedule metadata are app-rendered from locked offer facts. Do not put dates, exact times, claim counts, status, or CTA labels in AI-generated poster fields.",
   "- Do not put Twofer, Claim, Redeem, Scan, Tap, Get in app, availability counts, time left, coupon codes, QR instructions, or urgency/scarcity in any poster-oriented wording or image idea.",
   "",
@@ -472,6 +473,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
     revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
     revisionBlock.push("If the merchant mentions title, headline, top text, or wording, revise headlineAlternative and posterKicker first; the poster offer lines remain locked to offer facts.");
+    revisionBlock.push("If the merchant mentions the subheadline, sub-headline, kicker, subline, subtitle, eyebrow, supporting line, or the small text near the headline, they mean posterKicker on posters and the description on cards: you must return a different, complete posterKicker (or an empty one if nothing fits) and revise the description to match.");
     revisionBlock.push("If the adjustment is about tone, rewrite the framing and word choice while preserving the exact locked offer facts.");
   }
 

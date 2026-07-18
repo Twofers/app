@@ -30,6 +30,28 @@ describe("deal form dirty snapshots", () => {
     expect(isDealFormDirty(initial, current)).toBe(false);
   });
 
+  it("counts poster-only text edits as unsaved changes", () => {
+    const initial = buildDealFormDirtySnapshot({
+      validityMode: "one-time",
+      title: "Taco Tuesday",
+      posterHeadlineText: "TACO TUESDAY TREAT",
+      posterSublineText: "FRESH OFF THE GRILL",
+      startTime: "2026-07-01T18:00:00.000Z",
+      endTime: "2026-07-01T20:00:00.000Z",
+    });
+    const posterEdited = buildDealFormDirtySnapshot({
+      validityMode: "one-time",
+      title: "Taco Tuesday",
+      posterHeadlineText: "TACO TUESDAY TREAT",
+      posterSublineText: "HOT AND READY",
+      startTime: "2026-07-01T18:00:00.000Z",
+      endTime: "2026-07-01T20:00:00.000Z",
+    });
+
+    expect(isDealFormDirty(initial, posterEdited)).toBe(true);
+    expect(isDealFormDirty(initial, initial)).toBe(false);
+  });
+
   it("ignores hidden one-time schedule defaults but catches real edits", () => {
     const initial = buildDealFormDirtySnapshot({
       validityMode: "one-time",

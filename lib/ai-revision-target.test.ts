@@ -12,6 +12,16 @@ describe("copyOnlyRevisionTargetForFeedback", () => {
     expect(copyOnlyRevisionTargetForFeedback("both", "Make it more inviting and less generic.")).toBe("copy");
   });
 
+  it("routes subheadline, kicker, and supporting-line comments from both to copy", () => {
+    expect(copyOnlyRevisionTargetForFeedback("both", "The subheadline got cut off and doesn't make sense")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "Fix the sub headline")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "The sub-headline is confusing")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "Change the kicker")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "The subline is incomplete")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "Rewrite the supporting line")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "The subtitle is cut off")).toBe("copy");
+  });
+
   it("keeps both when feedback mentions image work too", () => {
     expect(copyOnlyRevisionTargetForFeedback("both", "Make the photo brighter and fix the headline")).toBe("both");
     expect(copyOnlyRevisionTargetForFeedback("both", "Try a different image angle")).toBe("both");

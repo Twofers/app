@@ -102,6 +102,85 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.previewFormat).toBe("poster_v1");
   });
 
+  it("round-trips edited poster text and treats it as recoverable on its own", () => {
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      photoPath: null,
+      posterUrl: null,
+      photoTreatment: "studiopolish",
+      customImageEditInstruction: "",
+      usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: false,
+      hintText: "",
+      price: "",
+      title: "",
+      promoLine: "",
+      posterHeadlineText: "AFTERNOON PICK ME UP",
+      posterSublineText: "BAKED FRESH DAILY",
+      ctaText: "",
+      description: "",
+      eligibilityForm,
+      maxClaims: "50",
+      cutoffMins: "15",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      daysOfWeek: [1, 2, 3, 4, 5],
+      windowStartMinutes: 540,
+      windowEndMinutes: 1020,
+      timezone: "America/Chicago",
+      publishLocationIds: [],
+      generatedAd: null,
+      adAccepted: false,
+      manualDraftUnlocked: false,
+    });
+
+    expect(draft).not.toBeNull();
+    const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
+    expect(parsed?.posterHeadlineText).toBe("AFTERNOON PICK ME UP");
+    expect(parsed?.posterSublineText).toBe("BAKED FRESH DAILY");
+  });
+
+  it("defaults missing poster text fields on older stored drafts", () => {
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      photoPath: "biz-1/reference.jpg",
+      posterUrl: null,
+      photoTreatment: "studiopolish",
+      customImageEditInstruction: "",
+      usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: false,
+      hintText: "BOGO latte",
+      price: "",
+      title: "",
+      promoLine: "",
+      ctaText: "",
+      description: "",
+      eligibilityForm,
+      maxClaims: "50",
+      cutoffMins: "15",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      daysOfWeek: [1, 2, 3, 4, 5],
+      windowStartMinutes: 540,
+      windowEndMinutes: 1020,
+      timezone: "America/Chicago",
+      publishLocationIds: [],
+      generatedAd: null,
+      adAccepted: false,
+      manualDraftUnlocked: false,
+    });
+    expect(draft).not.toBeNull();
+    const legacy = { ...draft } as Record<string, unknown>;
+    delete legacy.posterHeadlineText;
+    delete legacy.posterSublineText;
+
+    const parsed = parseAiDealRecoveryDraft(JSON.stringify(legacy), "biz-1");
+    expect(parsed?.posterHeadlineText).toBe("");
+    expect(parsed?.posterSublineText).toBe("");
+  });
+
   it("preserves an explicit standard-card draft choice", () => {
     const draft = buildAiDealRecoveryDraft({
       businessId: "biz-1",
