@@ -18,16 +18,19 @@ type MerchantAccessBlockedCardProps = {
    * path; every other blocked status keeps the "contact support" message.
    */
   status?: string | null;
+  reason?: string | null;
 };
 
-export function MerchantAccessBlockedCard({ status }: MerchantAccessBlockedCardProps) {
+export function MerchantAccessBlockedCard({ status, reason }: MerchantAccessBlockedCardProps) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
   const email = session?.user?.email ?? null;
-  const needsTrial = isNeverActivatedBillingStatus(status);
+  const needsTrial =
+    reason === "approved_not_activated" &&
+    isNeverActivatedBillingStatus(status);
 
   if (needsTrial) {
     return (
@@ -39,6 +42,17 @@ export function MerchantAccessBlockedCard({ status }: MerchantAccessBlockedCardP
           <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
             {t("merchantAccess.verifyBody")}
           </Text>
+          <View style={{ gap: 4 }}>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: theme.text }}>
+              {t("merchantAccess.setupProgressProfile")}
+            </Text>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: theme.text }}>
+              {t("merchantAccess.setupProgressMenu")}
+            </Text>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedText }}>
+              {t("merchantAccess.setupProgressLocked")}
+            </Text>
+          </View>
           {email ? (
             <View>
               <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>

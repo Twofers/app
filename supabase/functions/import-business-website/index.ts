@@ -31,6 +31,7 @@ import {
   type LogoCandidateSource,
   type MenuExtractionResult,
 } from "../_shared/site-import.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type JsonHeaders = Record<string, string>;
 
@@ -313,19 +314,30 @@ serve(async (req) => {
     const websiteUrlRaw = typeof body.website_url === "string" ? body.website_url.trim() : "";
     const businessId = typeof body.business_id === "string" ? body.business_id.trim() : "";
 
-    // Optional business ownership check (business row may not exist yet at onboarding).
+    // Corrected onboarding requires the confirmed owner to claim an approved
+    // business before any external website fetch or AI menu extraction.
     let bizCategory = "";
-    if (businessId) {
-      const { data: biz, error: bizErr } = await admin
-        .from("businesses")
-        .select("id,owner_id,category")
-        .eq("id", businessId)
-        .maybeSingle();
-      if (bizErr || !biz || (biz as { owner_id?: string }).owner_id !== user.id) {
-        return errorResponse(corsHeaders, 403, "FORBIDDEN", "Business not found or access denied.");
-      }
-      bizCategory = ((biz as { category?: string }).category ?? "").trim();
+    if (!businessId) {
+      return errorResponse(corsHeaders, 403, "BUSINESS_SETUP_CAPABILITY_REQUIRED", "Approved business setup is required.");
     }
+    const { data: biz, error: bizErr } = await admin
+      .from("businesses")
+      .select("id,owner_id,category")
+      .eq("id", businessId)
+      .maybeSingle();
+    if (bizErr || !biz || (biz as { owner_id?: string }).owner_id !== user.id) {
+      return errorResponse(corsHeaders, 403, "FORBIDDEN", "Business not found or access denied.");
+    }
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_use_setup_tools) {
+      return errorResponse(
+        corsHeaders,
+        403,
+        "BUSINESS_SETUP_CAPABILITY_REQUIRED",
+        "Website import is unavailable for this account.",
+      );
+    }
+    bizCategory = ((biz as { category?: string }).category ?? "").trim();
 
     // Rate limit: count scans in the trailing 24h, then log this one (hostname only).
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -465,6 +477,19 @@ serve(async (req) => {
     const aiConfigured = Boolean((openAiKey ?? "").trim()) || Boolean((geminiApiKey ?? "").trim());
     let menu: { items: unknown[]; low_legibility: boolean; menu_notes: string } | null = null;
     const requestGroupId = crypto.randomUUID();
+    const wantsMenuAi =
+      (Boolean(menuText) && aiConfigured) ||
+      (!menuText && Boolean(menuPdfUrl) && Boolean((geminiApiKey ?? "").trim()));
+    let menuAiAllowed = false;
+    if (wantsMenuAi && capabilities.can_extract_initial_menu) {
+      const { data: allowanceConsumed, error: allowanceError } = await admin.rpc(
+        "consume_setup_menu_extraction_allowance",
+        { p_business_id: businessId },
+      );
+      if (allowanceError) throw allowanceError;
+      menuAiAllowed = allowanceConsumed === true;
+    }
+    if (wantsMenuAi && !menuAiAllowed) warnings.push("MENU_EXTRACTION_LIMIT_REACHED");
 
     const logAttempts = async (attempts: readonly ProviderAttempt[]) => {
       for (const attempt of attempts) {
@@ -485,7 +510,7 @@ serve(async (req) => {
       }
     };
 
-    if (menuText && aiConfigured) {
+    if (menuText && aiConfigured && menuAiAllowed) {
       try {
         const generation = await generateStructuredText<typeof menuSchema, MenuExtractionResult>(
           {
@@ -519,7 +544,7 @@ serve(async (req) => {
           errorCode === "AI_PROVIDER_CIRCUIT_OPEN" ? "MENU_BUSY" : "MENU_EXTRACTION_FAILED",
         );
       }
-    } else if (!menuText && menuPdfUrl && (geminiApiKey ?? "").trim()) {
+    } else if (!menuText && menuPdfUrl && (geminiApiKey ?? "").trim() && menuAiAllowed) {
       // Menu is a PDF and no readable page text — Gemini can read PDFs directly.
       const pdf = await safeFetch({
         url: menuPdfUrl,
@@ -565,7 +590,11 @@ serve(async (req) => {
 
     if (!menu) {
       if (menuPdfUrl && !warnings.includes("MENU_PDF_ONLY")) warnings.push("MENU_PDF_ONLY");
-      else if (!warnings.includes("MENU_EXTRACTION_FAILED") && !warnings.includes("MENU_BUSY")) {
+      else if (
+        !warnings.includes("MENU_EXTRACTION_FAILED") &&
+        !warnings.includes("MENU_EXTRACTION_LIMIT_REACHED") &&
+        !warnings.includes("MENU_BUSY")
+      ) {
         warnings.push("MENU_NOT_FOUND");
       }
     } else if (Array.isArray(menu.items) && menu.items.length === 0) {

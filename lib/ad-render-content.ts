@@ -51,7 +51,12 @@ export function buildApprovedAdCopy(params: {
 }
 
 export function imageSourceTypeFromGeneratedAd(ad: GeneratedAd | null | undefined): AdImageSourceType {
-  if (!ad?.poster_storage_path) return "deterministic_fallback";
+  if (!ad) return "deterministic_fallback";
+  const storagePath = ad.poster_storage_path?.trim() || ad.image_selection?.selectedStoragePath?.trim() || "";
+  if (!storagePath) return "deterministic_fallback";
+  if (ad.image_selection?.sourceMode && ad.image_selection.sourceMode !== "deterministic_fallback") {
+    return ad.image_selection.sourceMode;
+  }
   if (ad.photo_source === "uploaded_enhanced") return "merchant_ai_edit";
   if (ad.photo_source === "generated") return "ai_generated";
   if (ad.photo_source === "stock") return "approved_stock";

@@ -99,7 +99,7 @@ describe("admin dashboard foundation", () => {
     // No internal IA, queue names, or admin endpoint config may ship signed out.
     for (const leaked of [
       /Prospects/,
-      /Trial Requests/,
+      /Business Access/,
       /Sales AI/,
       /AI Spend/,
       /audit-log/,

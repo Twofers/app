@@ -37,10 +37,10 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `139`
-- Latest: `20260815120000_admin_email_quick_approval.sql`
+- Count: `145`
+- Latest: `20260817120000_approved_not_activated_activation_gate.sql`
 
-## Edge Functions (supabase/functions, 73 local)
+## Edge Functions (supabase/functions, 77 local)
 
 - accept-business-terms
 - activate-redemption-mode
@@ -50,6 +50,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - admin-ai-usage
 - admin-auth-session
 - admin-business-applications
+- admin-business-name-requests
 - admin-claim-link-assistant
 - admin-claim-link-create
 - admin-dashboard-summary
@@ -59,6 +60,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - admin-prospect-import
 - admin-prospect-sales
 - admin-prospect-score
+- admin-qr-campaigns
 - admin-reports
 - admin-sales-script
 - admin-trial-conversion-assistant
@@ -75,6 +77,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - begin-visual-redeem
 - billing-checkout-redirect
 - billing-pricing
+- business-activation-status
 - business-checkout-link
 - business-claim-link
 - cancel-visual-redeem
@@ -93,6 +96,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - owner-redemption-security
 - public-local-businesses
 - publish-offer-version
+- qr-campaign-redirect
 - redeem-token
 - release-claim
 - request-business-on-twofer

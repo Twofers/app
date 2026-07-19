@@ -305,6 +305,7 @@
     "aiRegenerationLimit": "Límite de regeneraciones. Edita abajo o empieza una oferta nueva.",
     "dbRlsViolation": "No tienes permiso para esta acción.",
     "businessLimitReached": "Ya tienes un negocio registrado. Contacta a support@twoferapp.com si necesitas cambiarlo.",
+    "businessNameLocked": "El nombre de tu negocio está verificado y no se puede cambiar aquí. Usa “Solicitar cambio de nombre del negocio” en tu perfil de negocio.",
     "dbDuplicate": "Esto ya existe. Actualiza e inténtalo de nuevo.",
     "dbForeignKey": "Esa referencia no es válida. Actualiza e inténtalo de nuevo.",
     "dbCheckViolation": "Algunos datos no pasaron la validación. Revísalos.",
@@ -525,8 +526,8 @@
     "title": "Crear",
     "loginPrompt": "Inicia sesion para crear ofertas.",
     "loading": "Cargando...",
-    "createBusinessHeader": "Crea tu negocio",
-    "createBusinessBody": "Crea un negocio para publicar ofertas y canjear codigos QR.",
+    "createBusinessHeader": "Configura tu negocio",
+    "createBusinessBody": "Usa el correo aprobado de tu negocio para reclamar la cuenta y terminar la configuracion. La publicacion se desbloquea despues de activar la prueba.",
     "placeholderBusinessName": "Nombre del negocio",
     "creating": "Creando...",
     "createBusiness": "Crear negocio",
@@ -573,7 +574,10 @@
     "newDeal": "Crear nueva oferta",
     "newDealSub": "Foto, voz o texto",
     "reuseDeal": "Repetir oferta anterior",
-    "reuseDealSub": "Relanza una plantilla u oferta anterior"
+    "reuseDealSub": "Relanza una plantilla u oferta anterior",
+    "setupApprovedTitle": "Aprobado para configurar",
+    "setupApprovedBody": "Termina tu perfil y menu ahora. Tu prueba de 30 dias, herramientas de IA, publicacion, creditos y reclamos nuevos se desbloquean despues del Checkout seguro.",
+    "setupApprovedCta": "Activar prueba de 30 dias"
   },
   "menuScan": {
     "title": "Escanear menú",
@@ -658,7 +662,10 @@
     "fixedPriceLabel": "Precio especial (USD)",
     "fixedPricePlaceholder": "ej. 3.50",
     "errPercentWeak": "Twofer necesita al menos 40% de descuento para este tipo; elige 40% o más.",
-    "errFixedPrice": "Ingresa un monto válido en dólares para el precio especial."
+    "errFixedPrice": "Ingresa un monto válido en dólares para el precio especial.",
+    "saveTextDraft": "Guardar borrador de texto",
+    "textDraftSaved": "Borrador guardado. La IA y la publicación se activarán después de iniciar la prueba.",
+    "textDraftSaveFailed": "No pudimos guardar este borrador. Inténtalo de nuevo."
   },
   "menuWorkflow": {
     "errSchema": "El almacenamiento del menú no está configurado en este servidor. Pide al administrador que ejecute la migración de base de datos más reciente.",
@@ -1665,12 +1672,27 @@
     "saving": "Guardando...",
     "errRequired": "Rellena todos los campos (usa chips cuando puedas).",
     "errNameAddress": "El nombre del negocio y la dirección son obligatorios.",
+    "approvalRequired": "La configuracion del negocio se abre despues de aprobar tu solicitud. Solicita acceso en el sitio web o inicia sesion con el mismo correo de tu solicitud aprobada.",
     "errEmail": "Introduce un email válido.",
     "errSave": "No se pudo crear el negocio. Inténtalo de nuevo.",
     "errSaveChanges": "No se pudieron guardar los cambios. Intenta de nuevo.",
     "setupComplete": "¡Configuración completa! Listo para lanzar ofertas de compra uno y llévate otro gratis.",
     "changesSaved": "Cambios guardados.",
     "city": "Ciudad",
+    "nameChange": {
+      "lockedHint": "El nombre de tu negocio está verificado y no se puede editar aquí.",
+      "request": "Solicitar cambio de nombre del negocio",
+      "newNameLabel": "Nuevo nombre del negocio",
+      "reasonLabel": "Motivo (opcional)",
+      "submit": "Enviar solicitud",
+      "cancel": "Cancelar",
+      "pending": "Cambio de nombre solicitado: “{{name}}”. Lo revisaremos pronto.",
+      "cancelRequest": "Cancelar solicitud",
+      "submitted": "Solicitud enviada. La revisaremos pronto.",
+      "duplicate": "Ya hay una solicitud de cambio de nombre en revisión.",
+      "errSubmit": "No se pudo enviar la solicitud. Inténtalo de nuevo.",
+      "errTooShort": "Escribe el nuevo nombre del negocio."
+    },
     "cat": {
       "restaurant": "Restaurante",
       "cafe": "Cafetería",
@@ -2099,10 +2121,13 @@
   "merchantAccess": {
     "inactiveTitle": "La cuenta comercial no está activa",
     "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
-    "verifyTitle": "Verifica tu negocio",
-    "verifyBody": "Tu cuenta comercial aún no está activa. Comienza tu prueba gratis y revisaremos tu solicitud en 1 o 2 días hábiles.",
-    "verifyEmailHint": "Solicítala con el mismo correo con el que iniciaste sesión:",
-    "startTrialCta": "Comenzar prueba gratis",
+    "verifyTitle": "Aprobado para configurar",
+    "verifyBody": "Termina la configuración ahora. Tu prueba de 30 días comienza solo cuando Stripe confirma el checkout seguro.",
+    "verifyEmailHint": "Correo de la cuenta aprobada:",
+    "setupProgressProfile": "✓ El perfil y la ubicación del negocio están disponibles",
+    "setupProgressMenu": "✓ El menú y los borradores de texto están disponibles",
+    "setupProgressLocked": "Bloqueado hasta activar: IA, publicación, créditos y reclamos nuevos",
+    "startTrialCta": "Continuar en el sitio seguro",
     "contactSupport": "Contactar soporte"
   },
   "businessTerms": {

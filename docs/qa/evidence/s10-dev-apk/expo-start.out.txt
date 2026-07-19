@@ -1,0 +1,1678 @@
+
+> twoforone@1.0.0 start:dev-client
+> expo start --dev-client --localhost
+
+env: load .env.development.local .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY EXPO_PUBLIC_ENABLE_SHARE_DEAL TWOFER_APP_VARIANT EXPO_PUBLIC_APP_VARIANT EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING EXPO_PUBLIC_POSTER_LOOK_V2 EXPO_PUBLIC_SHOW_DEBUG_PANEL EXPO_PUBLIC_DEBUG_BOOT_LOG EXPO_PUBLIC_PREVIEW_MATCHES_DEV TWOFER_SMOKE_EMAIL TWOFER_SMOKE_PASSWORD TWOFER_SMOKE_BUSINESS_ID TWOFER_QA_OWNER_EMAIL TWOFER_QA_OWNER_PASSWORD TWOFER_QA_SHOPPER_EMAIL TWOFER_QA_SHOPPER_PASSWORD EXPO_PUBLIC_ENABLE_SITE_IMPORT EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED EXPO_PUBLIC_QA_ALLOW_PROD_SUPABASE_DEV_PUBLISHING EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS
+Starting project at C:\Users\unvme\Downloads\twoforone
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% ( 7/12)
+λ node_modules\expo-router\node\render.js ▓░░░░░░░░░░░░░░░  6.3% ( 35/140)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (12/25)
+λ node_modules\expo-router\node\render.js ▓▓░░░░░░░░░░░░░░ 13.3% ( 92/252)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (13/29)
+λ node_modules\expo-router\node\render.js ▓▓░░░░░░░░░░░░░░ 17.1% (129/348)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (25/44)
+λ node_modules\expo-router\node\render.js ▓▓▓░░░░░░░░░░░░░ 24.2% (214/435)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% ( 27/104)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓░░░░░░░░░░░ 31.8% (269/531)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% ( 27/104)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓░░░░░░░░░░░ 31.8% (291/648)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% ( 94/238)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓░░░░░░░░░░░ 35.0% (456/771)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\US" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./US". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\MX" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./MX". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\KR" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./KR". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (119/310)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.5% ( 688/1207)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (284/592)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.5% ( 814/1302)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.0% (309/672)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 67.2% (1223/1587)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\US" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./US". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\MX" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./MX". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\KR" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./KR". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 44.5% ( 622/1159)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 67.2% (1328/1656)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 44.5% ( 816/1392)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 68.2% (1618/2245)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 54.1% (1154/1569)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 68.2% (1729/2299)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66.2% (1381/1697)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91.8% (2244/2342)
+Android node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░  9.8% ( 5/16)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 67.4% (1700/2309)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 94.3% (2346/2430)
+Android node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░ 10.6% (14/43)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91.5% (2244/2346)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.1% (2419/2480)
+Android node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░ 10.6% ( 53/217)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 94.1% (2348/2422)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.5% (2469/2532)
+Android node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 29.2% (316/639)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.6% (2385/2441)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96.2% (2521/2572)
+Android node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 29.2% (380/834)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\US" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./US". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\MX" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./MX". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\KR" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./KR". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96.8% (2420/2461)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.8% (2564/2593)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓░░░░░░░░░░ 43.2% ( 679/1033)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.0% (2436/2474)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 98.9% (2584/2598)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 47.1% ( 885/1451)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.1% (2453/2490)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.2% (2596/2606)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 59.5% (1294/1677)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.7% (2497/2526)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2606/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 67.6% (1692/2058)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2518/2530)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (1813/2228)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2518/2530)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (1877/2436)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2518/2530)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (1944/2632)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2525/2537)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (1977/2688)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2525/2537)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (1999/2699)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2525/2537)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2021/2717)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2525/2537)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2038/2721)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2529/2545)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (2607/2607)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2078/2748)
+λ Bundled 112838ms node_modules\expo-router\node\render.js (2607 modules)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2533/2545)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2105/2752)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2533/2545)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2164/2767)
+🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2533/2545)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.4% (2299/2784)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2533/2545)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.1% (2949/2987)
+Web Bundled 126946ms node_modules\expo-router\entry.js (2545 modules)
+Android Bundled 93933ms node_modules\expo-router\entry.js (3109 modules)
+Android Bundled 481ms node_modules\expo-secure-store\build\SecureStore.js (575 modules)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android node_modules\expo-notifications\build\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 84.0% (548/598)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "business",
+  "language": "en",
+  "authUserId": "5e489fa0-f6f5-4453-b2fd-11e6c2634061",
+  "authEmail": "test2@test.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 2104ms node_modules\expo-notifications\build\index.js (789 modules)
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android Bundled 1209ms lib\profiles-role.ts (690 modules)
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "business",
+  "language": "en",
+  "authUserId": "5e489fa0-f6f5-4453-b2fd-11e6c2634061",
+  "authEmail": "test2@test.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 174ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 29ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 38ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 155ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 31ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 32ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 182ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 33ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 28ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 104ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 28ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 25ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 179ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 36ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 41ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 25ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 121ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 20ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 24ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 27ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 365ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 24ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 29ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 25ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 111ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 35ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 28ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 24ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 118ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 19ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 30ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 25ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 145ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 20ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 28ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 26ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 107ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 33ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 29ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 24ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 113ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 24ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 24ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+Android Bundled 29ms lib\profiles-role.ts (1 module)
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "00000000-0000-4000-8000-000000000001",
+  "authEmail": "demo.shopper@screenshots.twoferapp.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 129ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 31ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 24ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.dev.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "2675d09e",
+  "easBuildProfile": null,
+  "appVariant": "ai-studio-dev",
+  "androidPackage": "com.unvmex2.twoforone.dev",
+  "productionSupabaseHost": "kvodhiqhdqnptqovovia.supabase.co",
+  "aiStudioDevPublishingDisabled": true,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+    "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
+    "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "(unset)",
+    "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "(unset)",
+    "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "(unset)",
+    "EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV": "true",
+    "EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING": "true",
+    "EXPO_PUBLIC_APP_VARIANT": "ai-studio-dev",
+    "androidPackage": "com.unvmex2.twoforone.dev",
+    "appVariant": "ai-studio-dev",
+    "AI_V4_COMPOSED_AD_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED": "true",
+    "AI_V4_SHARED_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
+    "AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED": "true",
+    "AI_V4_PRESENTATION_RESOLVER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED": "true",
+    "AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED": "true",
+    "AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED": "true",
+    "AI_V4_COMPOSITE_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED": "true",
+    "AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED": "true",
+    "AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED": "true",
+    "AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED": "true",
+    "AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED": "(unset)",
+    "AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED": "(unset)",
+    "AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED": "true",
+    "AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED": "true",
+    "AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED": "true",
+    "AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED": "true",
+    "AI_V5_TRANSLATION_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED": "true",
+    "AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED": "true",
+    "AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED": "true",
+    "AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED": "(unset)",
+    "AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "(unset)",
+    "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false",
+    "POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED": "(unset)",
+    "POSTER_LOOK_V2_ENABLED": "(unset)",
+    "EXPO_PUBLIC_POSTER_LOOK_V2": "false",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}

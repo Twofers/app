@@ -14,6 +14,7 @@ import {
   validateDealEligibility,
   type DealEligibilityInput,
 } from "../../../lib/deal-eligibility.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type AiResult = {
   title: string;
@@ -252,6 +253,36 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
       resolvedBusinessId = biz?.id ?? null;
+    }
+
+    if (!resolvedBusinessId) {
+      return new Response(
+        JSON.stringify({ error: "Approved business access is required.", error_code: "BUSINESS_REQUIRED" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const { data: ownedBusiness } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("id", resolvedBusinessId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+    if (!ownedBusiness) {
+      return new Response(
+        JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const capabilities = await getBusinessCapabilities(supabase as any, resolvedBusinessId);
+    if (!capabilities.can_generate_ai) {
+      return new Response(
+        JSON.stringify({
+          error: "AI generation unlocks after trial activation.",
+          error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const requestGroupId = crypto.randomUUID();

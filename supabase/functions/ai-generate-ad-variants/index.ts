@@ -55,6 +55,7 @@ import {
   getSuspendedPrimaryBusinessLocation,
   suspendedLocationResponseBody,
 } from "../_shared/billing-suspension.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
   AD_COPY_PROMPT_VERSION,
@@ -3706,6 +3707,20 @@ Deno.serve(async (req) => {
       });
     }
     const businessName = typeof business.name === "string" ? business.name : "";
+
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_generate_ai || !capabilities.can_consume_offer_credits) {
+      return new Response(
+        JSON.stringify({
+          error: "AI ad generation unlocks after trial activation.",
+          error_code: !capabilities.can_generate_ai
+            ? "BUSINESS_AI_CAPABILITY_REQUIRED"
+            : "BUSINESS_OFFER_CREDIT_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (quotaStatusOnly) {
       const quota = await fetchAdQuota(admin, businessId);

@@ -48,6 +48,8 @@ import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { RedemptionModeSettings } from "@/components/redemption-mode-settings";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { isBusinessNameLocked } from "@/lib/business-name-change";
+import { BusinessNameChangeCard } from "@/components/business-name-change-request";
 import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
@@ -95,6 +97,7 @@ export default function AccountScreen() {
     access: merchantAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
+    businessStatus: businessProfile?.status ?? null,
     subscriptionTier,
     isLoggedIn,
   });
@@ -146,6 +149,10 @@ export default function AccountScreen() {
   const { confirm, confirmModal } = useBrandedConfirm();
   const supportEmail = getSupportEmail();
   const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
+  // Server-side identity lock (migration 20260816120000): once the business
+  // is publicly visible its name can only change through an admin-reviewed
+  // request; the field renders read-only with the request card underneath.
+  const bizNameLocked = isBusinessNameLocked(businessProfile?.status);
   const visibleBusinessContactName = businessProfile?.contact_name?.trim() || null;
   const visibleBusinessEmail = businessProfile?.business_email?.trim() || null;
 
@@ -999,7 +1006,10 @@ export default function AccountScreen() {
           ) : null}
 
           {tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
-            <MerchantAccessBlockedCard status={merchantAccess.status} />
+            <MerchantAccessBlockedCard
+              status={merchantAccess.status}
+              reason={merchantAccess.reason}
+            />
           ) : null}
 
           {mobileBillingEnabled && tabMode === "business" && businessId ? (
@@ -1302,24 +1312,39 @@ export default function AccountScreen() {
                   onChangeText={setProfileBusinessName}
                   placeholder={t("account.phBusinessName")}
                   autoCapitalize="words"
-                  editable={!savingProfile}
+                  editable={!savingProfile && !bizNameLocked}
                   style={{
                     borderWidth: 1,
                     borderColor: profileNameMissing ? theme.danger : theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                    backgroundColor: savingProfile || bizNameLocked ? theme.surfaceMuted : undefined,
                   }}
                 />
+                {bizNameLocked ? (
+                  <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.6, color: theme.text }}>
+                    {t("businessSetup.nameChange.lockedHint")}
+                  </Text>
+                ) : null}
                 {profileNameMissing ? <ProfileFieldError message={t("account.errBizNameRequired")} theme={theme} /> : null}
               </View>
 
-              <SecondaryButton
-                title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
-                onPress={() => void lookupBusinessProfileByName()}
-                disabled={lookupSearching || lookupDetailsPlaceId !== null || !profileBusinessName.trim()}
-              />
+              {bizNameLocked && businessId && userId ? (
+                <BusinessNameChangeCard
+                  businessId={businessId}
+                  userId={userId}
+                  currentName={profileBusinessName.trim() || null}
+                />
+              ) : null}
+
+              {!bizNameLocked && (
+                <SecondaryButton
+                  title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+                  onPress={() => void lookupBusinessProfileByName()}
+                  disabled={lookupSearching || lookupDetailsPlaceId !== null || !profileBusinessName.trim()}
+                />
+              )}
 
               {lookupResults && lookupResults.length > 0 && (
                 <View style={{ gap: Spacing.sm }}>

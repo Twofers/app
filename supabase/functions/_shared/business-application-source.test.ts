@@ -111,10 +111,11 @@ describe("business application intake", () => {
     expect(source).toMatch(/from\("admin_users"\)/);
     expect(source).toMatch(/from\("business_applications"\)/);
     expect(source).toMatch(/createOnboardingRequest/);
-    expect(source).toMatch(/admin_business_application_approved_limited/);
-    expect(source).toMatch(/admin_business_application_approved_full/);
-    expect(source).toMatch(/admin_business_application_billing_sync_failed/);
-    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/admin_business_application_approved_for_setup/);
+    expect(source).toMatch(/admin_business_application_approved_for_setup_full/);
+    expect(source).toMatch(/approved_not_activated/);
+    expect(source).not.toMatch(/admin_business_application_billing_sync_failed/);
+    expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).toMatch(/billing_sync_warning/);
     // Token-gated quick_preview PII disclosure is audited (reachable without an
     // admin session), and quick_confirm re-runs the duplicate screen on the
@@ -132,8 +133,8 @@ describe("business application intake", () => {
     expect(page).toMatch(/\/admin\/trial-requests\.js/);
     expect(script).toMatch(/action: "list"/);
     expect(script).toMatch(/action: "decide"/);
-    expect(script).toMatch(/approve_limited/);
-    expect(script).toMatch(/approve_full/);
+    expect(script).toMatch(/approve_setup/);
+    expect(script).toMatch(/suspend/);
     expect(script).toMatch(/AbortController/);
     expect(script).toMatch(/networkFailureMessage/);
     expect(script).toMatch(/billing_sync_warning/);

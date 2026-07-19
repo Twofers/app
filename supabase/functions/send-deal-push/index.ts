@@ -22,6 +22,7 @@ import {
   resolveDealReleaseNotificationState,
   type DealReleaseNotificationState,
 } from "../../../lib/deal-release-notification.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const BASE_DEAL_SELECT = "id,title,business_id,location_id,start_time,end_time,is_active,max_claims,businesses(name,owner_id)";
 const STRUCTURED_DEAL_SELECT = [
@@ -398,6 +399,15 @@ async function dispatchDueDealPushes(admin: any, dryRun: boolean): Promise<Recor
       continue;
     }
 
+    const capabilities = await getBusinessCapabilities(admin as any, deal.business_id);
+    if (!capabilities.can_publish_offer) {
+      skipped++;
+      await markDealPushEvent(admin, event.id, "skipped_not_live", 0, 0, {
+        reason: `business_capability:${capabilities.reason_code}`,
+      });
+      continue;
+    }
+
     const business = normalizeBusiness(deal);
     const result = await sendDealPushToAudience(admin, deal, business?.owner_id ?? null);
     sent += result.sent;
@@ -490,6 +500,18 @@ serve(async (req) => {
 
     if (!biz || biz.owner_id !== user.id) {
       return jsonResponse({ error: "Not your deal" }, 403);
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, deal.business_id);
+    if (!capabilities.can_publish_offer) {
+      return jsonResponse(
+        {
+          error: "Business access does not currently allow deal notifications.",
+          error_code: "BUSINESS_NOTIFICATION_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        },
+        403,
+      );
     }
 
     const suspendedLocation =

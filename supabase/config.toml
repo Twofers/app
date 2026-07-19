@@ -539,6 +539,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/deal-link/index.ts"
 
+# Public QR scan-and-redirect endpoint. It validates active slugs and writes
+# only server-derived telemetry; browsers never receive direct table access.
+[functions.qr-campaign-redirect]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/qr-campaign-redirect/index.ts"
+
 # Public share-preview lookup for the /s/<code> web landing (audit F-009).
 [functions.deal-share-lookup]
 enabled = true
@@ -561,6 +568,11 @@ entrypoint = "./functions/submit-launch-signup/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-dashboard-summary/index.ts"
+
+[functions.admin-qr-campaigns]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-qr-campaigns/index.ts"
 
 [functions.admin-auth-session]
 enabled = true
@@ -725,6 +737,11 @@ entrypoint = "./functions/simulate-subscribe/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-create-checkout-session/index.ts"
+
+[functions.business-activation-status]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/business-activation-status/index.ts"
 
 [functions.stripe-customer-portal-session]
 enabled = true

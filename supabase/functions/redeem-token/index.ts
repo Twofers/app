@@ -8,6 +8,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
@@ -385,6 +386,22 @@ serve(async (req) => {
         JSON.stringify({
           error: "This deal belongs to another business and cannot be redeemed here.",
           error_code: "WRONG_BUSINESS_REDEMPTION",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    const redeemBusinessId = deal.business_id ?? "";
+    const capabilities = await getBusinessCapabilities(supabaseAdmin as any, redeemBusinessId);
+    if (!capabilities.can_redeem_existing_claims) {
+      await recordFailedAttempt("business_capability");
+      return new Response(
+        JSON.stringify({
+          error: "Redemption is unavailable for this business. Contact Twofer support.",
+          error_code: "BUSINESS_REDEMPTION_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
         }),
         {
           status: 403,

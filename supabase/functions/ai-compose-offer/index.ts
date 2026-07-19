@@ -10,6 +10,7 @@ import {
 } from "../_shared/ai-text-provider.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -266,6 +267,18 @@ serve(async (req) => {
     if (bizErr || !biz || biz.owner_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, business_id);
+    if (!capabilities.can_generate_ai) {
+      return new Response(
+        JSON.stringify({
+          error: "AI generation unlocks after trial activation.",
+          error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

@@ -40,6 +40,9 @@ describe("buildStructuredOffer", () => {
     expect(withPaired.human_summary).toMatch(/Buy one, get one/i);
     expect(withPaired.human_summary).toContain("Muffin");
     expect(withPaired.human_summary).toContain("Coffee");
+    expect(
+      validateMenuOfferCanonicalSummary({ human_summary: withPaired.human_summary }).ok,
+    ).toBe(true);
 
     const solo = buildStructuredOffer({
       main: { name: "Muffin" },
@@ -49,6 +52,7 @@ describe("buildStructuredOffer", () => {
     expect(solo.human_summary).toMatch(/Buy one, get one/i);
     expect(solo.human_summary).toContain("Muffin");
     expect(solo.paired_item).toBeNull();
+    expect(validateMenuOfferCanonicalSummary({ human_summary: solo.human_summary }).ok).toBe(true);
   });
 
   it("second_half_off remains historical data but is not a valid strong menu offer", () => {

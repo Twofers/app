@@ -37,6 +37,8 @@ describe("billing trial start ownership", () => {
     const source = readRepoFile("hooks/use-primary-location-billing-gate.ts");
     expect(source).toMatch(/getMerchantAccessForBillingSummary/);
     expect(source).toMatch(/useLocationBillingSummary\(bypass \? null : primaryLocationId\)/);
-    expect(source).toMatch(/loading:\s*!bypass\s*&&\s*Boolean\(businessId\)\s*&&\s*\(locationsLoading\s*\|\|\s*summaryLoading\)/);
+    expect(source).toMatch(
+      /loading:\s*!bypass\s*&&\s*Boolean\(businessId\)\s*&&\s*\(locationsLoading\s*\|\|\s*summaryLoading\s*\|\|\s*capabilitiesLoading\)/,
+    );
   });
 });

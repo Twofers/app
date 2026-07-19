@@ -27,6 +27,11 @@ describe("billing edge function safety", () => {
     // global require_card_for_trial switch is off or a valid exemption code
     // was used -- see the dedicated describe block below for the full check.
     expect(source).toMatch(/payment_method_collection: skipCardCollection \? "if_required" : "always"/);
+    expect(source).toMatch(/assertBusinessCanStartTrialCheckout/);
+    expect(source).toMatch(/accessStatus: "approved_not_activated"/);
+    expect(source).toMatch(/checkout_purpose: "trial_start"/);
+    expect(source).toMatch(/trial_period_days: STANDARD_TRIAL_DAYS/);
+    expect(source).toMatch(/app_access_after: "approved_not_activated"/);
     expect(source).not.toMatch(/user_owns_business_location/);
     expect(source).not.toMatch(/trial_acknowledged/);
     expect(source).not.toMatch(/trial_checkout_intents/);
@@ -200,8 +205,10 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/safeGetString\(metadata\.checkout_purpose\) === "trial_start"/);
     expect(source).toMatch(/existingStatus === "trial_checkout_pending"/);
     expect(source).toMatch(/stripeStatus === "trialing"/);
-    expect(source).toMatch(/shouldDeferTrialSubscriptionSync\(metadata, existingStatus, status\)/);
+    expect(source).toMatch(/shouldDeferTrialSubscriptionSync\(existingStatus, status\)/);
     expect(source).toMatch(/metadata: mergedMetadata/);
+    expect(source).toMatch(/existingStatus === "approved_not_activated"/);
+    expect(source).toMatch(/effectiveAccess/);
   });
 
   it("records refund webhook details before requiring billing account metadata", () => {
@@ -240,7 +247,7 @@ describe("billing edge function safety", () => {
   it("asserts the expected Stripe price and fails closed on an unknown status (Finding 07)", () => {
     const source = readFunction("stripe-webhook");
     expect(source).toMatch(
-      /if \(subscription && \(access\.appAccessStatus === "active" \|\| access\.appAccessStatus === "trialing"\)\) \{/,
+      /if \(subscription && \(status === "active" \|\| status === "trialing" \|\| access\.appAccessStatus === "active" \|\| access\.appAccessStatus === "trialing"\)\) \{/,
     );
     expect(source).toMatch(/assertExpectedPrice\(priceConfig, subscription\)/);
     // The permissive `cancelAtPeriodEnd ? active : pending` fallback must be
@@ -250,7 +257,7 @@ describe("billing edge function safety", () => {
 
   it("marks the location's trial as used once a trialing subscription is confirmed (Finding 05 bookkeeping)", () => {
     const source = readFunction("stripe-webhook");
-    expect(source).toMatch(/if \(access\.appAccessStatus === "trialing"\) \{/);
+    expect(source).toMatch(/if \(orderedAccess\.appAccessStatus === "trialing"\) \{/);
     expect(source).toMatch(/ensurePrimaryBusinessLocationId\(supabase, businessId\)/);
     expect(source).toMatch(/from\("business_location_identity"\)\.upsert\(/);
   });
@@ -268,7 +275,7 @@ describe("billing edge function safety", () => {
     // ...and the code is only consumed when the card would otherwise be
     // required, so a limited-use code is never burned needlessly.
     expect(source).toMatch(/if \(!skipCardCollection\) \{\s*\n\s*skipCardCollection = await consumeTrialNoCardExemptionCode\(/);
-    expect(source).toMatch(/trial_period_days: config\.noCardTrialDays/);
+    expect(source).toMatch(/trial_period_days: STANDARD_TRIAL_DAYS/);
     expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
   });
 

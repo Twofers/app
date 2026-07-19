@@ -431,10 +431,10 @@ export default function AuthLandingScreen() {
     setSignUpAwaitingVerification(false);
     logAuthPath("signup");
     try {
-      // The role rides in auth metadata so it survives the email-verification
-      // round-trip; the first login persists it to profiles.role. Business
-      // signups are open applications (audit F-003): new businesses start
-      // pending_verification and inert until admin review approves them.
+      // The role rides in auth metadata only to preserve post-verification
+      // navigation. It never grants a merchant workspace or capabilities:
+      // the confirmed email must still atomically claim one approved
+      // application on first business-context load.
       const signUpData: Record<string, string> = { [SIGNUP_ROLE_META_KEY]: signupRole };
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),

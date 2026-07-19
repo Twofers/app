@@ -487,8 +487,18 @@ export type BusinessOnboardingContext = {
   first_offer_draft?: Record<string, unknown> | null;
   access_state?: {
     can_edit_profile?: boolean;
+    can_use_setup_tools?: boolean;
+    can_use_menu_tools?: boolean;
+    can_extract_initial_menu?: boolean;
+    can_create_text_draft?: boolean;
     can_create_offer_draft?: boolean;
+    can_generate_ai?: boolean;
+    can_consume_offer_credits?: boolean;
     can_publish_offer?: boolean;
+    can_receive_new_claims?: boolean;
+    can_redeem_existing_claims?: boolean;
+    can_manage_billing?: boolean;
+    limits?: unknown;
     reason_code?: string;
     friendly_status_message?: string;
   };

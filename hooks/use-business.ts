@@ -23,6 +23,8 @@ type BusinessInfo = {
   phone: string | null;
   hours_text: string | null;
   current_profile_version: number | null;
+  /** Lifecycle status (get_my_business RPC path only) — drives the name lock UI. */
+  status: string | null;
 };
 
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled";
@@ -140,6 +142,7 @@ export function useBusiness() {
             phone: data.phone ?? null,
             hours_text: data.hours_text ?? null,
             current_profile_version: data.current_profile_version ?? null,
+            status: data.status ?? null,
           }
         : null,
     );

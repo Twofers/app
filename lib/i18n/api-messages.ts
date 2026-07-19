@@ -66,6 +66,11 @@ const API_MESSAGE_KEY: Record<string, string> = {
   // self-created business per owner during the pilot.
   "business limit reached": "apiErrors.businessLimitReached",
 
+  // Identity lock (migration 20260816120000): stable token raised by the
+  // businesses trigger and returned by update-business-profile-section when a
+  // publicly visible business tries to rename itself directly.
+  "business_name_locked": "apiErrors.businessNameLocked",
+
   "Missing business_id, photo_path, or hint_text.": "apiErrors.aiAdsMissingFields",
   "You do not own this business.": "apiErrors.notBusinessOwner",
   "Could not access the photo. Upload again.": "apiErrors.photoAccessFailed",

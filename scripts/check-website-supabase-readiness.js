@@ -35,6 +35,7 @@ const requiredFiles = [
   "website/admin/businesses/index.html",
   "website/admin/businesses/new/index.html",
   "website/admin/businesses/detail/index.html",
+  "website/admin/qr-campaigns/index.html",
   "website/admin/trial-requests/index.html",
   "website/admin/offers/index.html",
   "website/admin/billing/events/index.html",
@@ -44,6 +45,7 @@ const requiredFiles = [
   "website/admin/admin-guard.js",
   "website/admin/admin-login.js",
   "website/admin/trial-requests.js",
+  "website/admin/qr-campaigns.js",
   "supabase/migrations/20260730123000_business_applications.sql",
   "supabase/migrations/20260730124000_business_onboarding_workflow.sql",
   "supabase/migrations/20260730125000_admin_dashboard_foundation.sql",
@@ -52,11 +54,15 @@ const requiredFiles = [
   "supabase/migrations/20260730128000_admin_ai_quota_resets.sql",
   "supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql",
   "supabase/migrations/20260815120000_admin_email_quick_approval.sql",
+  "supabase/migrations/20260815130000_qr_campaign_tracking.sql",
   "supabase/functions/submit-business-application/index.ts",
   "supabase/functions/admin-dashboard-summary/index.ts",
   "supabase/functions/admin-auth-session/index.ts",
   "supabase/functions/admin-ai-usage/index.ts",
   "supabase/functions/admin-business-applications/index.ts",
+  "supabase/functions/admin-qr-campaigns/index.ts",
+  "supabase/functions/qr-campaign-redirect/index.ts",
+  "supabase/functions/_shared/qr-campaign.ts",
   "supabase/functions/_shared/admin-alert-email.ts",
   "supabase/functions/_shared/admin-quick-approval.ts",
   "supabase/functions/_shared/admin-mfa.ts",
@@ -153,10 +159,10 @@ if (failures.length === 0) {
     const html = read(rel);
     assertNotIncludes(rel, html, "20260701-logo", "website pages must not point at stale stylesheet cache keys");
     if (html.includes("/styles.css?v=")) {
-      assertIncludes(rel, html, "/styles.css?v=20260712-site-hardening", "website pages must load the current shared stylesheet version");
+      assertIncludes(rel, html, "/styles.css?v=20260717-home-refresh", "website pages must load the current shared stylesheet version");
     }
     if (html.includes("/localization.js?v=")) {
-      assertIncludes(rel, html, "/localization.js?v=20260712-site-hardening", "public pages must load the current localization version");
+      assertIncludes(rel, html, "/localization.js?v=20260717-home-refresh", "public pages must load the current localization version");
     }
   }
   assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
@@ -198,7 +204,7 @@ if (failures.length === 0) {
   }
   assertIncludes("website/404.html", read("website/404.html"), 'name="robots" content="noindex,follow"', "custom 404 must not be indexed");
   assertIncludes("website/store-links.js", storeLinksScript, "ios: null", "iOS store CTA must stay hidden until a real listing exists");
-  assertIncludes("website/store-links.js", storeLinksScript, "android: null", "Android store CTA must stay hidden until a real listing exists");
+  assertIncludes("website/store-links.js", storeLinksScript, 'android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"', "Android store CTA must use the verified Google Play listing");
   assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
   assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
   assertIncludes("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js?v=20260712-session-hardening", "admin login must load the current session script version");
@@ -263,6 +269,12 @@ if (failures.length === 0) {
   }
   if (!JSON.stringify(vercel.rewrites ?? []).includes("/admin")) {
     failures.push("website/vercel.json: must rewrite /admin on Vercel");
+  }
+  if (!JSON.stringify(vercel.rewrites ?? []).includes("/r/:slug")) {
+    failures.push("website/vercel.json: must rewrite public QR campaign slugs on Vercel");
+  }
+  if (!JSON.stringify(vercel.rewrites ?? []).includes("/admin/qr-campaigns")) {
+    failures.push("website/vercel.json: must rewrite the QR campaign admin page on Vercel");
   }
   if (!JSON.stringify(vercel.headers ?? []).includes("/.well-known/apple-app-site-association")) {
     failures.push("website/vercel.json: must set AASA headers on Vercel");
@@ -338,6 +350,18 @@ if (failures.length === 0) {
     config,
     /\[functions\.admin-business-applications\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/admin-business-applications\/index\.ts"/,
     "admin-business-applications must be registered for admin trial request decisions",
+  );
+  assertMatch(
+    "supabase/config.toml",
+    config,
+    /\[functions\.qr-campaign-redirect\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/qr-campaign-redirect\/index\.ts"/,
+    "qr-campaign-redirect must be registered as a public tracking redirect",
+  );
+  assertMatch(
+    "supabase/config.toml",
+    config,
+    /\[functions\.admin-qr-campaigns\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/admin-qr-campaigns\/index\.ts"/,
+    "admin-qr-campaigns must be registered for the protected QR dashboard",
   );
 
   const cors = read("supabase/functions/_shared/cors.ts");
@@ -452,13 +476,12 @@ if (failures.length === 0) {
   const adminApplicationsFn = read("supabase/functions/admin-business-applications/index.ts");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("admin_users")', "admin business applications must check admin_users");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("business_applications")', "admin business applications must read and update trial requests");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_limited", "admin business applications must audit limited approvals");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_full", "admin business applications must audit full approvals");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "ensureStripeCustomerForBusiness", "admin business applications must seed billing access when approving linked owners");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_for_setup", "admin business applications must audit setup approvals");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "approved_not_activated", "admin business applications must leave approved businesses setup-only until activation");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quick_preview", "admin business applications must expose token-gated quick preview");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quick_confirm", "admin business applications must expose token-gated quick confirmation");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "quickApprovalApplicationIsEligible", "quick approvals must recheck low-risk eligibility server-side");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, '"approve_full"', "quick confirmation must reuse the full 30-day trial decision path");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, '"approve_setup"', "quick confirmation must reuse the setup-only approval decision path");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminApplicationsFn)) {
     failures.push("supabase/functions/admin-business-applications/index.ts: admin trial decisions must not depend on payment or AI secrets");
   }
@@ -481,8 +504,9 @@ if (failures.length === 0) {
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "dataset.label", "trial requests dynamic rows must provide mobile table labels");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"list\"", "trial requests script must load applications from the backend");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"decide\"", "trial requests script must submit admin decisions");
-  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must expose limited approval");
-  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must expose full approval");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_setup", "trial requests script must expose setup-only approval");
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must retire limited auto-trial approval");
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must retire full auto-trial approval");
 
   const quickApprovalPage = read("website/quick-approve-trial/index.html");
   const quickApprovalJs = read("website/quick-approve-trial/quick-approve.js");
@@ -493,9 +517,10 @@ if (failures.length === 0) {
   assertIncludes("website/quick-approve-trial/quick-approve.js", quickApprovalJs, 'post("quick_confirm")', "quick approval page must submit the explicit confirmation");
 
   const contextFn = read("supabase/functions/get-business-onboarding-context/index.ts");
-  assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "materializeBusinessForUser", "context function must materialize website requests on app login");
-  assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "can_business_publish", "context function must use central publish helper");
-  assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "enqueueStripeCustomerSync", "context function must queue Stripe sync after app materialization");
+  assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "claim_approved_business_application_for_user", "context function must claim approved applications by confirmed owner email");
+  assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "get_business_capabilities", "context function must use central capability helper");
+  assertNotIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "applyBusinessBillingAccessState", "context function must not start or synchronize trials during app materialization");
+  assertNotIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "enqueueStripeCustomerSync", "context function must not create Stripe state during app materialization");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY|stripe-create-checkout|customer-portal/i.test(contextFn)) {
     failures.push("supabase/functions/get-business-onboarding-context/index.ts: app context must not return billing or AI secret surfaces");
   }

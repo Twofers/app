@@ -12,6 +12,11 @@ import {
   normalizeUrlOrHandle,
   upsertBusinessProfileForOwner,
 } from "../_shared/business-onboarding-sync.ts";
+import {
+  BUSINESS_NAME_LOCKED_ERROR,
+  isPublicBusinessStatus,
+} from "../_shared/business-identity-lock.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type Payload = {
   business_id?: unknown;
@@ -138,6 +143,14 @@ serve(async (req) => {
     if (!(await assertCanEdit(supabaseAdmin, businessId, user.id, email))) {
       return json(req, { error: "Forbidden." }, 403);
     }
+    const capabilities = await getBusinessCapabilities(supabaseAdmin as any, businessId);
+    if (!capabilities.can_edit_business_information) {
+      return json(req, {
+        error: "Business information is read-only for this account.",
+        error_code: "BUSINESS_PROFILE_EDIT_CAPABILITY_REQUIRED",
+        reason_code: capabilities.reason_code,
+      }, 403);
+    }
 
     const { data: current, error: currentError } = await supabaseAdmin
       .from("businesses")
@@ -172,6 +185,35 @@ serve(async (req) => {
 
     if (!name || !String(name).trim() || (sectionKey !== "contact" && !address && !current.address)) {
       return json(req, { error: "Business name and address are required." }, 400);
+    }
+
+    // Identity lock: once the business is publicly visible its verified name
+    // is frozen (spoof prevention — consumer surfaces live-join
+    // businesses(name), so a rename retroactively rebrands live deals and
+    // wallet claims). This function writes as service_role and bypasses the
+    // enforce_businesses_protected_columns trigger, so the same rule is
+    // enforced here. Renames go through business_name_change_requests and are
+    // applied by admin-business-name-requests after review.
+    const nameChanged = String(name).trim() !== String(current.name ?? "").trim();
+    if (nameChanged && isPublicBusinessStatus(current.status)) {
+      await supabaseAdmin.from("system_events").insert({
+        event_type: "business_name_change_blocked",
+        source: "mobile_app",
+        message: "Post-approval business rename attempt rejected by update-business-profile-section.",
+        metadata: {
+          business_id: businessId,
+          actor_user_id: user.id,
+          section_key: sectionKey,
+          current_name: current.name ?? null,
+          attempted_name: String(name),
+          business_status: current.status ?? null,
+        },
+      });
+      return json(req, {
+        error: BUSINESS_NAME_LOCKED_ERROR,
+        code: BUSINESS_NAME_LOCKED_ERROR,
+        message: "The business name is locked after approval. Submit a name change request for review.",
+      }, 409);
     }
 
     const addressChanged = Boolean(address && address !== current.address);

@@ -15,6 +15,7 @@
     "check:mobile-store-copy": "node scripts/check-mobile-store-copy.js",
     "check:website-supabase": "node scripts/check-website-supabase-readiness.js",
     "check:website-ui": "node scripts/check-website-ui-crawl.js",
+    "website:preview": "python -m http.server 4173 --directory website",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "node scripts/typecheck-functions.cjs",
     "pretest": "node scripts/check-ai-poster-core-lock.mjs",

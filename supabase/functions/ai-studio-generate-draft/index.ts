@@ -11,6 +11,7 @@ import {
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
 } from "../_shared/ai-image-provider.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 // Static anchors so Supabase's remote bundler includes the optional JPEG->PNG
 // conversion packages used by `_shared/ai-image-provider.ts`.
@@ -822,6 +823,19 @@ serve(async (req) => {
   }
   if (!business || business.owner_id !== user.id) {
     return json(req, { error: "You do not manage this business." }, 403);
+  }
+
+  const capabilities = await getBusinessCapabilities(admin as any, input.businessId);
+  if (!capabilities.can_generate_ai) {
+    return json(
+      req,
+      {
+        error: "AI generation unlocks after trial activation.",
+        error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+        reason_code: capabilities.reason_code,
+      },
+      403,
+    );
   }
 
   const requestGroupId = crypto.randomUUID();

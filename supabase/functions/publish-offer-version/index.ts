@@ -11,6 +11,7 @@ import {
   getUnverifiedLocationFromDealRows,
 } from "../_shared/business-verification.ts";
 import { validateExactLocalizationApprovalPayload } from "../_shared/localization-approval-validation.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { validatePosterSpecV1 } from "../../../lib/poster/posterAdSpec.ts";
 import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
@@ -438,6 +439,19 @@ serve(async (req) => {
       .maybeSingle();
     if (businessError || !business || business.owner_id !== user.id) {
       return jsonResponse(req, { error: "Business not found for owner" }, 403);
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_publish_offer) {
+      return jsonResponse(
+        req,
+        {
+          error: "Business access does not currently allow publishing.",
+          error_code: "BUSINESS_PUBLISH_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        },
+        403,
+      );
     }
 
     // Independent of billing/verification: publishing requires the owner to have

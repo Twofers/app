@@ -1,12 +1,14 @@
 // Parsing and interpretation for public Share Deal links
-// (https://www.twoferapp.com/s/<shareCode>). Pure logic only so it can be
-// unit tested; the Supabase RPC call lives in the deep link handler.
+// (https://www.twoferapp.com/s/<shareCode>) and their native Expo-normalized
+// equivalents (twoforone://s/<shareCode>). Pure logic only so it can be unit
+// tested; the Supabase RPC call lives in the deep link handler.
 
 // Must mirror the share-code rules in lookup_deal_share() and lib/share-deal.ts:
 // 7 chars from an alphabet that excludes 0, O, I, L, and 1.
 const SHARE_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{7}$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHARE_NATIVE_SCHEMES = new Set(["twoforone:", "twofer:"]);
 
 export type ShareLinkParse =
   | { type: "none" }
@@ -14,7 +16,8 @@ export type ShareLinkParse =
   | { type: "code"; code: string };
 
 /**
- * Detects share links by path shape: any http(s) URL whose path is /s/<segment>.
+ * Detects share links by path shape: any http(s) URL whose path is /s/<segment>,
+ * plus native deep links Expo may normalize to scheme://s/<segment>.
  * Returns "none" for URLs that are not share links, "invalid" for share links
  * whose code cannot be a real share code, and the normalized code otherwise.
  */
@@ -24,10 +27,15 @@ export function parseShareLink(url: string | null): ShareLinkParse {
   let pathname: string;
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      pathname = parsed.pathname;
+    } else if (SHARE_NATIVE_SCHEMES.has(parsed.protocol)) {
+      // Android App Links can arrive via Expo Router as twoforone://s/ABCDEFG,
+      // where "s" is the URL host rather than part of pathname.
+      pathname = parsed.hostname === "s" ? `/s${parsed.pathname}` : parsed.pathname;
+    } else {
       return { type: "none" };
     }
-    pathname = parsed.pathname;
   } catch {
     return { type: "none" };
   }

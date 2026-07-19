@@ -17,6 +17,21 @@ describe("parseShareLink", () => {
     });
   });
 
+  it("extracts native share links normalized by Expo Router", () => {
+    expect(parseShareLink("twoforone://s/ABCD234")).toEqual({
+      type: "code",
+      code: "ABCD234",
+    });
+    expect(parseShareLink("twofer://s/abcd234/")).toEqual({
+      type: "code",
+      code: "ABCD234",
+    });
+    expect(parseShareLink("twoforone:///s/ABCD234")).toEqual({
+      type: "code",
+      code: "ABCD234",
+    });
+  });
+
   it("accepts the apex-domain and query/fragment variants", () => {
     expect(parseShareLink("https://twoferapp.com/s/XYZRSTU?utm=share#x")).toEqual({
       type: "code",

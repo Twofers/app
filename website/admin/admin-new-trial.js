@@ -98,7 +98,7 @@
     }
 
     if (submitButton) submitButton.disabled = true;
-    setStatus("Creating trial...");
+    setStatus("Creating setup approval...");
     try {
       const response = await fetch(applicationsEndpoint, {
         method: "POST",
@@ -120,7 +120,7 @@
         return;
       }
       if (!response.ok || !payload.ok) {
-        const message = payload.error || "Could not create the trial.";
+        const message = payload.error || "Could not create the setup approval.";
         setStatus(payload.request_id ? `${message} Request id: ${payload.request_id}.` : message, "danger");
         return;
       }
@@ -129,7 +129,7 @@
         : "Saved. The business record links automatically when the owner signs in to the app with this email.";
       const decisionWarnings = [payload.billing_sync_warning, payload.approval_email_warning].filter(Boolean);
       const warningSuffix = decisionWarnings.length ? ` ${decisionWarnings.join(" ")}` : "";
-      setStatus(`Trial created for ${fields.business_name}. ${linked}${warningSuffix}`);
+      setStatus(`Setup approval created for ${fields.business_name}. ${linked}${warningSuffix}`);
       form.reset();
     } catch {
       setStatus("Could not reach the admin service. Check that admin-business-applications is deployed.", "danger");

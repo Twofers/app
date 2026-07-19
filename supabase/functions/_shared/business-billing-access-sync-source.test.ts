@@ -28,36 +28,51 @@ describe("business billing access state sync wiring", () => {
     expect(source).not.toMatch(/const nextAccessLevel = access\.appAccessStatus === "active"/);
   });
 
-  it("materializes the business on first login with the admin-approved trial length instead of an eternal trial", () => {
-    const source = readFunction("get-business-onboarding-context");
-    expect(source).toMatch(/trial_days/);
-    expect(source).toMatch(/trialDays: typeof decision\.trial_days === "number" \? decision\.trial_days : null/);
-    expect(source).not.toMatch(/trialDays: null,/);
+  it("mirrors subscription lifecycle changes back to the linked application", () => {
+    const source = readSharedFile("business-location-entitlement-sync.ts");
+    expect(source).toMatch(/resolveBusinessApplicationStateForAppAccessStatus/);
+    expect(source).toMatch(/\.from\("business_applications"\)/);
+    expect(source).toMatch(/status: applicationState\.status/);
+    expect(source).toMatch(/access_tier: applicationState\.accessTier/);
   });
 
-  it("reconciles billing access for owners whose business was linked before admin approval (stuck 'Business account not active')", () => {
+  it("materializes the business on first login as setup-only approved, without starting a trial", () => {
     const source = readFunction("get-business-onboarding-context");
-    expect(source).toMatch(/import \{ applyBusinessBillingAccessState \} from "\.\.\/_shared\/business-location-entitlement-sync\.ts"/);
-    // Both early-return paths (direct owner_id match and business_members
-    // link) previously returned before any billing sync; each must reconcile.
-    const reconcileCalls = source.match(/await reconcileBillingAccessForLinkedBusiness\(/g) ?? [];
-    expect(reconcileCalls.length).toBeGreaterThanOrEqual(2);
-    // Picks up an approved-but-unlinked application by owner email...
-    expect(source).toMatch(/\.in\("status", \["trial_limited", "trial_active"\]\)/);
-    // ...seeds the subscription (which mirrors into location_entitlements)
-    // with the admin-approved trial length, and backlinks the application.
-    expect(source).toMatch(/source: "app_login_reconcile"/);
-    expect(source).toMatch(/update\(\{ business_id: businessId \}\)/);
-    // Reconciliation is a healing side-effect: it must never 500 the context load.
-    expect(source).toMatch(/billing reconcile failed/);
+    expect(source).toMatch(/claim_approved_business_application_for_user/);
+    expect(source).toMatch(/can_use_setup_tools/);
+    expect(source).toMatch(/can_generate_ai/);
+    expect(source).toMatch(/can_publish_offer/);
+    expect(source).not.toMatch(/enqueueStripeCustomerSync/);
   });
 
-  it("creates prospect-approved trials with the same 30\/14-day lengths as admin-business-applications, and seeds business_subscriptions immediately when the business already exists", () => {
+  it("reconciles already-active billing access without turning approved applications into trials", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "supabase", "migrations", "20260817120000_approved_not_activated_activation_gate.sql"),
+      "utf8",
+    );
+    expect(migration).toMatch(/app_access_status IN \('pending', 'approved_not_activated'\)/);
+    expect(migration).toMatch(/WHEN 'trialing' THEN 'trial_active'/);
+    expect(migration).toMatch(/WHEN 'active' THEN 'active'/);
+    expect(migration).toMatch(/WHEN 'comped' THEN 'active'/);
+    expect(migration).toMatch(/v_location_status := CASE v_subscription\.app_access_status/);
+    expect(migration).toMatch(/WHEN 'active' THEN CASE[\s\S]*'pro_active'/);
+    expect(migration).toMatch(/WHEN 'comped' THEN NULL/);
+  });
+
+  it("creates prospect approvals as setup-only and leaves Stripe/trial activation to Checkout", () => {
     const source = readFunction("admin-trial-create-from-prospect");
-    expect(source).toMatch(/trialDays: 30/);
-    expect(source).toMatch(/trialDays: 14/);
-    expect(source).not.toMatch(/trialDays: 90/);
-    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/applicationStatus: "approved_not_activated"/);
+    expect(source).toMatch(/businessAccessLevel: "approved_not_activated"/);
+    expect(source).toMatch(/trialDays: null/);
+    expect(source).toMatch(/trial_days: null/);
+    expect(source).not.toMatch(/trialDays: 30|trialDays: 14|trialDays: 90/);
+    expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/APPROVED_ACTIVATION_GATE_DISABLED/);
+    expect(source).toMatch(/approved_email_normalized: normalized\.email\.toLowerCase\(\)/);
+    expect(source).toMatch(/linkedBusinessHasProtectedAccess/);
+    expect(source).toMatch(/LINKED_BUSINESS_ACCESS_PROTECTED/);
+    expect(source).toMatch(/Boolean\(subscription\?\.activated_at\)/);
+    expect(source).toMatch(/Boolean\(subscription\?\.stripe_subscription_id\)/);
   });
 
   it("schedules the billing access expiry sweep and reuses the existing cron secret infrastructure", () => {
@@ -72,6 +87,10 @@ describe("business billing access state sync wiring", () => {
     const fn = readFunction("expire-billing-access");
     expect(fn).toMatch(/verify_billing_reminder_secret/);
     expect(fn).toMatch(/app_access_status", \["trialing", "trial_limited"\]/);
+    expect(fn).toMatch(/eq\("app_access_status", "active"\)/);
+    expect(fn).toMatch(/eq\("cancel_at_period_end", true\)/);
+    expect(fn).toMatch(/appAccessStatus: "canceled"/);
+    expect(fn).toMatch(/paid_cancel_expirations/);
     expect(fn).toMatch(/eq\("app_access_status", "past_due_grace"\)/);
     expect(fn).toMatch(/applyBusinessBillingAccessState/);
     // "expired" is ambiguous in the shared resolver (trial-ran-out vs

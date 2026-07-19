@@ -24,6 +24,8 @@ import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 import { BusinessTermsGate } from "@/components/business-terms-gate";
 import { getBusinessOnboardingContext } from "@/lib/functions";
+import { CardShell } from "@/components/ui/card-shell";
+import { BUSINESS_START_TRIAL_URL, openWebsiteUrl } from "@/lib/legal-urls";
 
 type TemplateRow = {
   id: string;
@@ -40,7 +42,7 @@ export default function CreateDeal() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
-  const { isLoggedIn, businessId, loading, subscriptionTier } = useBusiness();
+  const { isLoggedIn, businessId, businessProfile, loading, subscriptionTier } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
   const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
@@ -62,6 +64,7 @@ export default function CreateDeal() {
     access: billingAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
+    businessStatus: businessProfile?.status ?? null,
     subscriptionTier,
     isLoggedIn,
     bypass,
@@ -310,6 +313,10 @@ export default function CreateDeal() {
   }
 
   const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
+  const canShowPrepToolsWhileBlocked =
+    blockedSubscription &&
+    (billingAccess.canUseSetupTools || billingAccess.canUseMenuTools || billingAccess.canCreateTextDraft);
+  const showActivationPrompt = blockedSubscription && billingAccess.reason === "approved_not_activated";
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -334,7 +341,7 @@ export default function CreateDeal() {
             onPress={() => router.push("/business-setup" as Href)}
           />
         </View>
-      ) : blockedSubscription ? (
+      ) : blockedSubscription && !canShowPrepToolsWhileBlocked ? (
         <View style={{ marginTop: Spacing.lg }}>
           <MerchantAccessBlockedCard status={billingAccess.status} />
         </View>
@@ -355,48 +362,67 @@ export default function CreateDeal() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {showActivationPrompt ? (
+            <CardShell>
+              <View style={{ gap: Spacing.sm }}>
+                <Text style={{ fontSize: 17, fontWeight: "900", color: theme.text }}>
+                  {t("createHub.setupApprovedTitle")}
+                </Text>
+                <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
+                  {t("createHub.setupApprovedBody")}
+                </Text>
+                <PrimaryButton
+                  title={t("createHub.setupApprovedCta")}
+                  onPress={() => void openWebsiteUrl(BUSINESS_START_TRIAL_URL)}
+                  style={{ borderRadius: Radii.md }}
+                />
+              </View>
+            </CardShell>
+          ) : null}
+
           {/* ── New Deal (unified AI builder: photo, voice, or text → review → publish) ── */}
-          {renderHubAction({
+          {billingAccess.canGenerateAi ? renderHubAction({
             title: t("createHub.newDeal"),
             subtitle: t("createHub.newDealSub"),
             iconName: "add-circle-outline",
             onPress: () => router.push("/create/ai?fromCreateHub=1" as Href),
             accent: true,
-          })}
+          }) : null}
 
-          {renderHubAction({
+          {billingAccess.canCreateTextDraft ? renderHubAction({
             title: t("createHub.menuOfferTitle"),
             subtitle: t("createHub.menuOfferSubtitle"),
             iconName: "restaurant-menu",
             onPress: () => router.push("/create/menu-offer" as Href),
-          })}
+            accent: !billingAccess.canGenerateAi,
+          }) : null}
 
           {/* ── Reuse Past Deal ── */}
-          {renderHubAction({
+          {billingAccess.canPublishOffer ? renderHubAction({
             title: t("createHub.reuseDeal"),
             subtitle: t("createHub.reuseDealSub"),
             iconName: "history",
             onPress: () => router.push("/create/reuse"),
-          })}
+          }) : null}
 
           <View style={{ gap: Spacing.sm, paddingTop: Spacing.xs }}>
-            {renderCompactAction({
+            {billingAccess.canUseMenuTools ? renderCompactAction({
               title: t("createHub.menuManagerTitle"),
               subtitle: t("createHub.menuManagerSubtitle"),
               iconName: "menu-book",
               onPress: () => router.push("/create/menu-manager" as Href),
-            })}
-            {renderCompactAction({
+            }) : null}
+            {billingAccess.canPublishOffer ? renderCompactAction({
               title: t("createHub.templatesTitle"),
               subtitle: t("reuseHub.templatesSection"),
               iconName: templatesOpen ? "folder-open" : "folder",
               onPress: toggleTemplatesFolder,
               accessibilityState: { expanded: templatesOpen },
               trailingIcon: templatesOpen ? "keyboard-arrow-up" : "keyboard-arrow-down",
-            })}
+            }) : null}
           </View>
 
-          {templatesOpen ? (
+          {templatesOpen && billingAccess.canPublishOffer ? (
             <View style={{ gap: Spacing.md, paddingTop: Spacing.xs }}>
             {templatesLoadError ? (
               <Banner

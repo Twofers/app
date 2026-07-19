@@ -9,11 +9,11 @@ import {
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
 import {
-  billingProfileFromOnboarding,
-  ensureStripeCustomerForBusiness,
-} from "../_shared/stripe-business-billing.ts";
-import { sendApprovalEmail } from "../_shared/approval-email.ts";
+  sendApprovalEmail,
+  type ApprovalEmailDecision,
+} from "../_shared/approval-email.ts";
 import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
+import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 
 type AdminRole =
   | "owner"
@@ -45,7 +45,14 @@ type Payload = {
   token?: unknown;
 };
 
-type DecisionKey = "approve_limited" | "approve_full" | "review_required" | "waitlist" | "reject";
+type DecisionKey =
+  | "approve_setup"
+  | "approve_limited"
+  | "approve_full"
+  | "review_required"
+  | "waitlist"
+  | "reject"
+  | "suspend";
 
 type VerificationDecision = "verify" | "reject" | "needs_more_info";
 
@@ -119,36 +126,36 @@ function riskLevel(score: unknown): "low" | "medium" | "high" | "blocked" | null
 }
 
 function decisionConfig(decision: DecisionKey): DecisionConfig {
-  if (decision === "approve_limited") {
+  if (decision === "approve_setup" || decision === "approve_limited") {
     return {
-      status: "trial_limited",
-      accessTier: "trial_limited",
+      status: "approved_not_activated",
+      accessTier: "approved_not_activated",
       verificationStatus: "verified_low_risk",
-      trialDays: 14,
-      trialOfferLimit: 1,
-      trialClaimLimit: 25,
-      requestStatus: "trial_limited",
-      businessStatus: "limited_trial",
-      businessAccessLevel: "limited_trial",
+      trialDays: null,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      requestStatus: "approved_not_activated",
+      businessStatus: "approved_not_activated",
+      businessAccessLevel: "approved_not_activated",
       businessVerificationStatus: "basic_verified",
-      subscriptionAccessStatus: "trial_limited",
-      auditAction: "admin_business_application_approved_limited",
+      subscriptionAccessStatus: "approved_not_activated",
+      auditAction: "admin_business_application_approved_for_setup",
     };
   }
   if (decision === "approve_full") {
     return {
-      status: "trial_active",
-      accessTier: "trialing",
+      status: "approved_not_activated",
+      accessTier: "approved_not_activated",
       verificationStatus: "verified_low_risk",
-      trialDays: 30,
-      trialOfferLimit: 3,
-      trialClaimLimit: 50,
-      requestStatus: "pending_verification",
-      businessStatus: "trialing",
-      businessAccessLevel: "full_trial",
+      trialDays: null,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      requestStatus: "approved_not_activated",
+      businessStatus: "approved_not_activated",
+      businessAccessLevel: "approved_not_activated",
       businessVerificationStatus: "manual_verified",
-      subscriptionAccessStatus: "trialing",
-      auditAction: "admin_business_application_approved_full",
+      subscriptionAccessStatus: "approved_not_activated",
+      auditAction: "admin_business_application_approved_for_setup_full",
     };
   }
   if (decision === "waitlist") {
@@ -183,6 +190,22 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       auditAction: "admin_business_application_rejected",
     };
   }
+  if (decision === "suspend") {
+    return {
+      status: "suspended",
+      accessTier: "suspended",
+      verificationStatus: "needs_review",
+      trialDays: null,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      requestStatus: "suspended",
+      businessStatus: "suspended",
+      businessAccessLevel: "none",
+      businessVerificationStatus: "needs_more_info",
+      subscriptionAccessStatus: "suspended",
+      auditAction: "admin_business_application_suspended",
+    };
+  }
   return {
     status: "review_required",
     accessTier: "review_required",
@@ -203,9 +226,77 @@ function isDecision(value: unknown): value is DecisionKey {
   return (
     value === "approve_limited" ||
     value === "approve_full" ||
+    value === "approve_setup" ||
     value === "review_required" ||
     value === "waitlist" ||
-    value === "reject"
+    value === "reject" ||
+    value === "suspend"
+  );
+}
+
+function isSetupApprovalDecision(
+  decision: DecisionKey,
+): decision is ApprovalEmailDecision {
+  return decision === "approve_setup" || decision === "approve_limited" || decision === "approve_full";
+}
+
+async function approvedActivationGateEnabled(supabaseAdmin: any): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("feature_flags")
+    .select("enabled")
+    .eq("key", "approved_activation_gate")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.enabled === true;
+}
+
+const PROTECTED_BUSINESS_ACCESS_LEVELS = new Set([
+  "limited_trial",
+  "full_trial",
+  "paid",
+  "admin_comped",
+  "partner_comped",
+  "internal_test",
+]);
+
+const PROTECTED_SUBSCRIPTION_ACCESS_STATUSES = new Set([
+  "trial_limited",
+  "trialing",
+  "active",
+  "past_due_grace",
+  "comped",
+]);
+
+async function linkedBusinessHasProtectedAccess(
+  supabaseAdmin: any,
+  businessId: string,
+): Promise<boolean> {
+  const [
+    { data: business, error: businessError },
+    { data: subscription, error: subscriptionError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("businesses")
+      .select("id,access_level")
+      .eq("id", businessId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("app_access_status,activated_at,stripe_subscription_id")
+      .eq("business_id", businessId)
+      .maybeSingle(),
+  ]);
+  if (businessError) throw businessError;
+  if (subscriptionError) throw subscriptionError;
+  if (!business) throw new Error("Linked business was not found.");
+
+  return (
+    PROTECTED_BUSINESS_ACCESS_LEVELS.has(String(business.access_level ?? "")) ||
+    PROTECTED_SUBSCRIPTION_ACCESS_STATUSES.has(
+      String(subscription?.app_access_status ?? ""),
+    ) ||
+    Boolean(subscription?.activated_at) ||
+    Boolean(subscription?.stripe_subscription_id)
   );
 }
 
@@ -360,7 +451,7 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   if (status === "open") {
     query = query.in("status", OPEN_STATUSES);
   } else if (status === "approved") {
-    query = query.in("status", ["trial_limited", "trial_active", "approved_not_billed", "active"]);
+    query = query.in("status", ["approved_not_activated", "trial_limited", "trial_active", "approved_not_billed", "active"]);
   } else if (status !== "all") {
     query = query.eq("status", status);
   }
@@ -419,11 +510,41 @@ async function syncBusinessDecision(
   application: Record<string, unknown>,
   config: DecisionConfig,
   businessId: string | null,
-  ownerUserId: string | null,
 ): Promise<BusinessDecisionSyncResult> {
   if (!businessId) return { businessUpdated: false, billingSyncWarning: null };
 
-  const approvedPatch = config.status === "trial_limited" || config.status === "trial_active"
+  let existingBusiness: Record<string, unknown> | null = null;
+  let existingSubscription: Record<string, unknown> | null = null;
+  if (config.subscriptionAccessStatus === "approved_not_activated") {
+    const [
+      { data: business, error: businessReadError },
+      { data, error: subscriptionReadError },
+    ] = await Promise.all([
+      ctx.supabaseAdmin
+        .from("businesses")
+        .select("access_level")
+        .eq("id", businessId)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("business_subscriptions")
+        .select("activated_at,app_access_status,stripe_subscription_id,trial_type,trial_start,trial_end,current_period_start,current_period_end,cancel_at_period_end")
+        .eq("business_id", businessId)
+        .maybeSingle(),
+    ]);
+    if (businessReadError) throw businessReadError;
+    if (subscriptionReadError) throw subscriptionReadError;
+    existingBusiness = business as Record<string, unknown> | null;
+    existingSubscription = data as Record<string, unknown> | null;
+  }
+  const protectedLegacyAccess =
+    PROTECTED_BUSINESS_ACCESS_LEVELS.has(String(existingBusiness?.access_level ?? "")) ||
+    Boolean(existingSubscription?.activated_at) ||
+    Boolean(existingSubscription?.stripe_subscription_id) ||
+    PROTECTED_SUBSCRIPTION_ACCESS_STATUSES.has(
+      String(existingSubscription?.app_access_status ?? ""),
+    );
+
+  const approvedPatch = config.status === "approved_not_activated" || config.status === "trial_limited" || config.status === "trial_active"
     ? {
         first_approved_at: new Date().toISOString(),
         approved_by: ctx.user.id,
@@ -433,8 +554,10 @@ async function syncBusinessDecision(
   const { error } = await ctx.supabaseAdmin
     .from("businesses")
     .update({
-      status: config.businessStatus,
-      access_level: config.businessAccessLevel,
+      ...(protectedLegacyAccess ? {} : {
+        status: config.businessStatus,
+        access_level: config.businessAccessLevel,
+      }),
       verification_status: config.businessVerificationStatus,
       risk_score: Number(application.risk_score) || null,
       risk_level: riskLevel(application.risk_score),
@@ -443,41 +566,65 @@ async function syncBusinessDecision(
     .eq("id", businessId);
   if (error) throw error;
 
-  if ((config.status === "trial_limited" || config.status === "trial_active") && ownerUserId) {
-    try {
-      await ensureStripeCustomerForBusiness({
+  if (config.subscriptionAccessStatus === "approved_not_activated") {
+    if (!protectedLegacyAccess) {
+      const { error: subscriptionUpdateError } = await ctx.supabaseAdmin
+        .from("business_subscriptions")
+        .upsert(
+          {
+            business_id: businessId,
+            billing_mode: "web_stripe",
+            billing_status: "none",
+            app_access_status: "approved_not_activated",
+            trial_type: null,
+            trial_start: null,
+            trial_end: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+            source: "admin_approval_for_setup",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "business_id" },
+        );
+      if (subscriptionUpdateError) throw subscriptionUpdateError;
+      await applyBusinessBillingAccessState({
         supabase: ctx.supabaseAdmin,
-        stripe: null,
-        input: billingProfileFromOnboarding({
-          businessId,
-          ownerUserId,
-          normalized: normalizedFromApplication(application),
-          source: "admin_review",
-          sourceRecordId: String(application.id),
-        }),
-        source: "admin_review",
-        trialDays: config.trialDays,
-        accessStatus: config.subscriptionAccessStatus,
+        businessId,
+        provider: "admin",
+        appAccessStatus: "approved_not_activated",
+        trialType: null,
+        trialStart: null,
+        trialEnd: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
       });
-    } catch (billingError) {
-      console.error("[admin-business-applications] billing sync failed:", billingError);
-      const billingWarning = "Billing sync needs follow-up, but the trial decision was saved.";
-      try {
-        await ctx.supabaseAdmin.from("admin_audit_log").insert({
-          admin_user_id: ctx.user.id,
-          admin_email: ctx.adminUser.email ?? ctx.user.email ?? null,
-          action: "admin_business_application_billing_sync_failed",
-          target_type: "business_application",
-          target_id: String(application.id),
-          business_id: businessId,
-          reason: "billing_sync_failed_after_admin_decision",
-          request_id: ctx.requestId,
-        });
-      } catch (auditError) {
-        console.error("[admin-business-applications] billing sync audit failed:", auditError);
-      }
-      return { businessUpdated: true, billingSyncWarning: billingWarning };
     }
+  } else if (config.subscriptionAccessStatus === "suspended") {
+    const now = new Date().toISOString();
+    const { error: subscriptionError } = await ctx.supabaseAdmin
+      .from("business_subscriptions")
+      .update({
+        app_access_status: "suspended",
+        access_locked_at: now,
+        access_locked_reason: "admin_suspension",
+        updated_at: now,
+      })
+      .eq("business_id", businessId);
+    if (subscriptionError) throw subscriptionError;
+    await applyBusinessBillingAccessState({
+      supabase: ctx.supabaseAdmin,
+      businessId,
+      provider: "admin",
+      appAccessStatus: "suspended",
+      trialType: null,
+      trialStart: null,
+      trialEnd: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    });
   }
 
   return { businessUpdated: true, billingSyncWarning: null };
@@ -491,15 +638,36 @@ async function applyDecision(
   rawReason: unknown,
 ) {
   const applicationId = String(application.id);
+  if (isSetupApprovalDecision(decision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+    return json(req, {
+      error: "Approved activation rollout is not enabled.",
+      error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
+    }, 503);
+  }
+  const linkedBusinessId =
+    typeof application.business_id === "string" ? application.business_id : null;
+  if (
+    isSetupApprovalDecision(decision) &&
+    linkedBusinessId &&
+    await linkedBusinessHasProtectedAccess(ctx.supabaseAdmin, linkedBusinessId)
+  ) {
+    return json(req, {
+      error: "Linked business already has protected access; use billing management instead.",
+      error_code: "LINKED_BUSINESS_ACCESS_PROTECTED",
+    }, 409);
+  }
   const config = decisionConfig(decision);
   const reason = cleanBusinessString(rawReason, 500) ?? "";
   const adminEmail = ctx.adminUser.email ?? ctx.user.email ?? null;
   const onboardingRequestId = await ensureOnboardingRequestForDecision(ctx, application, config);
-  const { businessId, ownerUserId } = await maybeMaterializeBusiness(ctx, application, config);
+  const { businessId } = await maybeMaterializeBusiness(ctx, application, config);
 
   const applicationPatch = {
     status: config.status,
     access_tier: config.accessTier,
+    ...(isSetupApprovalDecision(decision)
+      ? { approved_email_normalized: String(application.email ?? "").trim().toLowerCase() }
+      : {}),
     verification_status: config.verificationStatus,
     trial_days: config.trialDays,
     trial_offer_limit: config.trialOfferLimit,
@@ -535,12 +703,12 @@ async function applyDecision(
       .eq("id", onboardingRequestId);
   }
 
-  const businessSync = await syncBusinessDecision(ctx, application, config, businessId, ownerUserId);
+  const businessSync = await syncBusinessDecision(ctx, application, config, businessId);
 
-  // Trial-welcome email (best-effort; never blocks the decision). Only the two
-  // approval tiers notify the owner and hand over the payment link.
+  // Approval email (best-effort; never blocks the decision). Approval no longer
+  // starts access; it hands the owner to account setup and trial activation.
   let approvalEmailWarning: string | null = null;
-  if (decision === "approve_limited" || decision === "approve_full") {
+  if (isSetupApprovalDecision(decision)) {
     approvalEmailWarning = await sendApprovalEmail({
       supabaseAdmin: ctx.supabaseAdmin,
       application: updated as Record<string, unknown>,
@@ -702,8 +870,8 @@ async function previewQuickApproval(req: Request, payload: Payload, requestId: s
     },
     approval: {
       trial_days: 30,
-      offer_limit: 3,
-      claim_limit: 50,
+      offer_limit: null,
+      claim_limit: null,
       expires_at: application.quick_approval_token_expires_at,
     },
   });
@@ -777,8 +945,8 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
       req,
       adminContext,
       claimedData as Record<string, unknown>,
-      "approve_full",
-      "Approved for a full 30-day trial from single-use email confirmation.",
+      "approve_setup",
+      "Approved for setup; 30-day trial starts only after verified Stripe activation.",
     );
     const decisionPayload = await decisionResponse.json().catch(() => ({}));
     if (!decisionResponse.ok || !decisionPayload.ok) {
@@ -787,7 +955,7 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
     // The grant succeeded and is audited by applyDecision. From here the token MUST
     // NOT be treated as retryable, so mark completed BEFORE the single-use bookkeeping
     // below. That write is best-effort: if it errors, the approval still stands (status
-    // is now trial_active, so the eligibility guard blocks any re-grant) and we must
+    // is now approved_not_activated, so the eligibility guard blocks any re-grant) and we must
     // not fail the request or falsely release the link for a dead retry.
     completed = true;
 
@@ -942,6 +1110,12 @@ async function createApplication(req: Request, ctx: AdminContext, payload: Paylo
 
   if (!businessName || !contactName || !EMAIL_RE.test(email)) {
     return json(req, { error: "Business name, contact name, and a valid email are required." }, 400);
+  }
+  if (isSetupApprovalDecision(accessDecision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+    return json(req, {
+      error: "Approved activation rollout is not enabled.",
+      error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
+    }, 503);
   }
 
   const { data: application, error: insertError } = await ctx.supabaseAdmin

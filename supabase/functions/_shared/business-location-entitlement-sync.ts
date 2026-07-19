@@ -12,7 +12,7 @@ type DbClient = SupabaseClient<any, any, any, any, any>;
  * writer of `business_subscriptions.app_access_status` — admin trial
  * creation, login materialization, the Stripe webhook, and the expiry sweeps
  * — must call `applyBusinessBillingAccessState` right after that write so the
- * three models never drift apart again.
+ * business, application, and location mirrors never drift from billing again.
  */
 
 const COMPED_ACCESS_LEVELS = new Set(["admin_comped", "partner_comped", "internal_test"]);
@@ -23,6 +23,8 @@ export function resolveBusinessAccessLevelForAppAccessStatus(params: {
 }): string | null {
   if (params.currentAccessLevel && COMPED_ACCESS_LEVELS.has(params.currentAccessLevel)) return null;
   switch (params.appAccessStatus) {
+    case "approved_not_activated":
+      return "approved_not_activated";
     case "active":
     case "past_due_grace":
       return "paid";
@@ -46,6 +48,8 @@ export function resolveBusinessStatusForAppAccessStatus(params: {
 }): string | null {
   if (params.currentAccessLevel && COMPED_ACCESS_LEVELS.has(params.currentAccessLevel)) return null;
   switch (params.appAccessStatus) {
+    case "approved_not_activated":
+      return "approved_not_activated";
     case "active":
       return "active";
     case "past_due_grace":
@@ -56,6 +60,32 @@ export function resolveBusinessStatusForAppAccessStatus(params: {
       return "limited_trial";
     case "canceled":
       return "canceled";
+    default:
+      return null;
+  }
+}
+
+export function resolveBusinessApplicationStateForAppAccessStatus(appAccessStatus: string): {
+  status: string;
+  accessTier: string;
+} | null {
+  switch (appAccessStatus) {
+    case "approved_not_activated":
+      return { status: "approved_not_activated", accessTier: "approved_not_activated" };
+    case "trial_limited":
+      return { status: "trial_limited", accessTier: "trial_limited" };
+    case "trialing":
+      return { status: "trial_active", accessTier: "trialing" };
+    case "active":
+    case "past_due_grace":
+      return { status: "active", accessTier: "active" };
+    case "canceled":
+      return { status: "canceled", accessTier: "canceled" };
+    case "expired":
+      return { status: "expired", accessTier: "expired" };
+    case "blocked":
+    case "suspended":
+      return { status: "suspended", accessTier: "suspended" };
     default:
       return null;
   }
@@ -73,6 +103,8 @@ export function resolveLocationEntitlementStatus(params: {
   cancelAtPeriodEnd: boolean;
 }): string | null {
   switch (params.appAccessStatus) {
+    case "approved_not_activated":
+      return "trial_eligible";
     case "trial_limited":
       return "admin_trial_active";
     case "trialing":
@@ -188,6 +220,19 @@ export async function applyBusinessBillingAccessState(input: ApplyBusinessBillin
     if (nextAccessLevel) patch.access_level = nextAccessLevel;
     if (nextStatus) patch.status = nextStatus;
     const { error } = await supabase.from("businesses").update(patch).eq("id", businessId);
+    if (error) throw error;
+  }
+
+  const applicationState = resolveBusinessApplicationStateForAppAccessStatus(input.appAccessStatus);
+  if (applicationState && !COMPED_ACCESS_LEVELS.has(currentAccessLevel ?? "")) {
+    const { error } = await supabase
+      .from("business_applications")
+      .update({
+        status: applicationState.status,
+        access_tier: applicationState.accessTier,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("business_id", businessId);
     if (error) throw error;
   }
 

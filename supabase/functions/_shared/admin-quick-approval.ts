@@ -53,6 +53,7 @@ export async function hasPossibleDuplicate(supabaseAdmin: any, input: DuplicateC
     "pending_review",
     "pending_verification",
     "review_required",
+    "approved_not_activated",
     "trial_limited",
     "trial_active",
     "approved_not_billed",
@@ -93,7 +94,7 @@ export async function hasPossibleDuplicate(supabaseAdmin: any, input: DuplicateC
 }
 
 /**
- * Mint a short-lived approval link for the configured alert inbox only when
+ * Mint a short-lived setup-approval link for the configured alert inbox only when
  * that inbox maps to an active admin who can decide applications. Best-effort:
  * a failure returns null so the normal review email still sends.
  */

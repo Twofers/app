@@ -17,13 +17,9 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 //
 // Errors are deliberately generic; internals are never exposed.
 
-// Statuses for which an approved application may still convert to paid.
-const ELIGIBLE_STATUSES = new Set([
-  "trial_limited",
-  "trial_active",
-  "approved_not_billed",
-  "active",
-]);
+// This email token is exclusively for first activation. Existing trial, paid,
+// lapsed, or suspended accounts use billing management/support instead.
+const ELIGIBLE_STATUSES = new Set(["approved_not_activated"]);
 
 // Abuse guard: cap how many checkout sessions a single business can spin up in a
 // short window, so a leaked link can't hammer Stripe session creation.

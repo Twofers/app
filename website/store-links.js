@@ -2,7 +2,7 @@
 // store CTAs stay hidden so the site never shows fake download or notify links.
 window.TWOFER_STORE_LINKS = {
   ios: null, // e.g. "https://apps.apple.com/app/id0000000000"
-  android: null, // e.g. "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"
+  android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone",
 };
 
 (() => {

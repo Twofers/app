@@ -162,9 +162,14 @@ export function validateMenuOfferCanonicalSummary(input: {
   discount_percent?: number | null;
 }): ReturnType<typeof validateStrongDealOnly> {
   const s = (input.human_summary ?? "").trim();
+  // The menu wizard's canonical BOGO summary intentionally uses natural
+  // punctuation ("Buy one, get one"). Normalize that comma for the shared
+  // strong-language matcher, which otherwise expects whitespace between the
+  // two clauses and rejects the wizard's own valid offer.
+  const normalizedSummary = s.replace(/\bbuy\s+one\s*,\s*get\s+one\b/gi, "buy one get one");
   return validateStrongDealOnly({
-    title: s,
-    description: s,
+    title: normalizedSummary,
+    description: normalizedSummary,
     discountPercent: input.discount_percent ?? null,
   });
 }

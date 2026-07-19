@@ -27,6 +27,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useRegisterSuccessSound } from "@/hooks/use-register-success-sound";
 import { localizedDealTitle, type LocalizedDealFields } from "@/lib/deal-localization";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -86,6 +87,7 @@ export default function RedemptionModeScreen() {
   const [scanned, setScanned] = useState(false);
   const [exiting, setExiting] = useState(false);
   const busyRef = useRef(false);
+  const playRegisterSuccess = useRegisterSuccessSound();
 
   const staffReady = isRedeemerSession(session) && sessionStatus === "ready";
   const lockedExpired = Boolean(state) && !staffReady;
@@ -210,6 +212,7 @@ export default function RedemptionModeScreen() {
       setSuccess(result);
       setManualCode("");
       setScanned(false);
+      void playRegisterSuccess();
     } catch (err) {
       setBanner({
         message: err instanceof Error ? err.message : t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }),

@@ -10,6 +10,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type AppLocale = "en" | "es" | "ko";
 
@@ -247,6 +248,19 @@ serve(async (req) => {
 
     if (!biz || biz.owner_id !== user.id) {
       return jsonResponse({ error: "You do not own this business." }, 403, corsHeaders);
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_generate_ai) {
+      return jsonResponse(
+        {
+          error: "AI translation unlocks after trial activation.",
+          error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        },
+        403,
+        corsHeaders,
+      );
     }
 
     if (!title && !description) {

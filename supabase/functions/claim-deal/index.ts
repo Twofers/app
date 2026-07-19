@@ -19,6 +19,7 @@ import {
 } from "../_shared/repeat-claim-policy.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -620,6 +621,21 @@ serve(async (req) => {
     if (suspendedLocation) {
       return new Response(
         JSON.stringify(suspendedLocationResponseBody("claim new deals")),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const capabilities = await getBusinessCapabilities(supabaseAdmin as any, businessId);
+    if (!capabilities.can_receive_new_claims) {
+      return new Response(
+        JSON.stringify({
+          error: "This business is not accepting new deal claims.",
+          error_code: "BUSINESS_NEW_CLAIMS_DISABLED",
+          reason_code: capabilities.reason_code,
+        }),
         {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

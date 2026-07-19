@@ -34,7 +34,7 @@ describe("admin email quick approval", () => {
     expect(source).not.toMatch(/console\.[a-z]+\([^;]*rawToken/);
   });
 
-  it("previews without mutation and confirms through the existing audited full-trial decision", () => {
+  it("previews without mutation and confirms through the audited setup-only decision", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     expect(source).toMatch(/QUICK_APPROVAL_ACTIONS/);
     expect(source).toMatch(/quick_preview/);
@@ -43,8 +43,8 @@ describe("admin email quick approval", () => {
     expect(source).toMatch(/quickApprovalApplicationIsEligible/);
     expect(source).toMatch(/quick_approval_processing_request_id: requestId/);
     expect(source).toMatch(/is\("quick_approval_token_used_at", null\)/);
-    expect(source).toMatch(/await applyDecision\([\s\S]*"approve_full"/);
-    expect(source).toMatch(/Approved for a full 30-day trial from single-use email confirmation/);
+    expect(source).toMatch(/await applyDecision\([\s\S]*"approve_setup"/);
+    expect(source).toMatch(/Approved for setup; 30-day trial starts only after verified Stripe activation/);
     expect(source).toMatch(/quick_approval_token_used_at: usedAt/);
     expect(source).not.toMatch(/quick_confirm[\s\S]{0,500}"approve_limited"/);
   });

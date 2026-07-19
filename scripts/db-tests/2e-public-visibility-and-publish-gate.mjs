@@ -1,101 +1,209 @@
-// D2.2e — public business visibility + database-authoritative publish gate
-// (audit F-001 / F-002 / F-003).
+// D2.2e — approved merchant claim, public visibility, and publish gate.
 //
-// Requires migrations 20260814120000 (public predicate + publish gate) and
-// 20260814130000 (open-application gate) applied to the REMOTE TEST project.
-// If they are absent the suite reports SKIPs with that instruction.
-//
-// Proves:
-//   1. F-003/F-002: an authenticated business owner can self-create exactly ONE
-//      business (open application, per-owner cap), and the row lands hidden
-//      from anon + other users while staying visible to its owner.
-//   2. F-002: once service-role review flips status to 'active', the row is
-//      publicly visible (including through the SECURITY INVOKER nearby RPCs).
-//   3. F-001: the owner of an APPROVED business still cannot direct-write a
-//      LIVE deal until can_business_publish passes (terms + subscription);
-//      inactive drafts are always allowed; flipping live is denied then
-//      allowed once eligible; deactivating stays allowed after eligibility is
-//      revoked.
-//
+// Requires migration 20260817120000 on the REMOTE TEST project.
 // Run: node scripts/db-tests/2e-public-visibility-and-publish-gate.mjs
 
 import { assertTestDb } from "../assert-test-db.mjs";
-import { loadTestEnv, makeReporter, rest, signIn,
-         adminCreateUser, adminDeleteUser, uniqueEmail, isDenied, randomUUID } from "./_shared.mjs";
+import {
+  adminCreateUser,
+  adminDeleteUser,
+  isDenied,
+  loadTestEnv,
+  makeReporter,
+  randomUUID,
+  rest,
+  signIn,
+  uniqueEmail,
+} from "./_shared.mjs";
 
 const ctx = loadTestEnv();
-assertTestDb(ctx.url); // GUARD — first action, before any DB call.
+assertTestDb(ctx.url);
 
-const R = makeReporter("2e public visibility + publish gate");
+const R = makeReporter("2e approved claim + public visibility + publish gate");
 const PW = `Test!${randomUUID().slice(0, 10)}`;
 const cleanup = { rows: [], users: [] };
-
-const hoursFromNow = (h) => new Date(Date.now() + h * 3600_000).toISOString();
+const hoursFromNow = (hours) => new Date(Date.now() + hours * 3_600_000).toISOString();
+const denied = (result) =>
+  isDenied(result) ||
+  /APPROVED_APPLICATION_CLAIM_REQUIRED|BUSINESS_PUBLISH_CAPABILITY_REQUIRED|P0001/i.test(result.text);
 
 async function seed(table, body) {
-  const r = await rest(ctx, "service", table, { method: "POST", body });
-  const row = Array.isArray(r.json) ? r.json[0] : null;
+  const response = await rest(ctx, "service", table, { method: "POST", body });
+  const row = Array.isArray(response.json) ? response.json[0] : null;
   if (row?.id) cleanup.rows.unshift([table, row.id]);
-  if (!row) R.skip(`seed ${table}`, `HTTP ${r.status} ${r.text}`);
-  return row;
+  return { response, row };
 }
 
 async function main() {
-  const ownerEmail = uniqueEmail("vis-owner");
-  const ownerId = await adminCreateUser(ctx, { email: ownerEmail, password: PW, role: "business" });
-  const shopperEmail = uniqueEmail("vis-shopper");
-  const shopperId = await adminCreateUser(ctx, { email: shopperEmail, password: PW, role: "customer" });
+  const ownerEmail = uniqueEmail("activation-owner");
+  const ownerId = await adminCreateUser(ctx, {
+    email: ownerEmail,
+    password: PW,
+    role: "business",
+  });
+  const shopperEmail = uniqueEmail("activation-shopper");
+  const shopperId = await adminCreateUser(ctx, {
+    email: shopperEmail,
+    password: PW,
+    role: "customer",
+  });
   cleanup.users.push(ownerId, shopperId);
   const { token: ownerJwt } = await signIn(ctx, ownerEmail, PW);
   const { token: shopperJwt } = await signIn(ctx, shopperEmail, PW);
 
-  // --- 1. open-application self-create (F-003 gate v3) ---
-  const createRes = await rest(ctx, "anon", "businesses", {
-    token: ownerJwt, method: "POST",
-    body: { owner_id: ownerId, name: "Visibility Test Cafe" },
+  const directCreate = await rest(ctx, "anon", "businesses", {
+    token: ownerJwt,
+    method: "POST",
+    body: { owner_id: ownerId, name: "Direct Workspace Attempt" },
   });
-  if (!createRes.ok && /business invite required/i.test(createRes.text)) {
-    R.skip("ALL checks", "old invite trigger still active — apply migrations 20260814120000 + 20260814130000 to the TEST project first");
+  R.check("authenticated user cannot self-create a merchant workspace", denied(directCreate), {
+    detail: `HTTP ${directCreate.status} ${directCreate.text}`,
+    onFail: "Workspace creation bypassed the approved-email claim transaction.",
+  });
+
+  const { response: applicationResponse, row: application } = await seed("business_applications", {
+    business_name: "Activation Test Cafe",
+    contact_name: "Test Owner",
+    email: ownerEmail,
+    approved_email_normalized: ownerEmail.toLowerCase(),
+    address: "100 Test Way, Dallas, TX",
+    status: "approved_not_activated",
+    access_tier: "approved_not_activated",
+    verification_status: "verified_low_risk",
+    terms_accepted: false,
+    privacy_acknowledged: false,
+  });
+  if (!application?.id) {
+    R.skip(
+      "remaining checks",
+      `approved application seed failed; apply 20260817120000 first: HTTP ${applicationResponse.status} ${applicationResponse.text}`,
+    );
     return;
   }
-  const biz = Array.isArray(createRes.json) ? createRes.json[0] : null;
-  if (biz?.id) cleanup.rows.unshift(["businesses", biz.id]);
-  R.check("owner can self-create a business (open application)", createRes.ok && Boolean(biz?.id),
-    { detail: `HTTP ${createRes.status} ${biz?.id ? "" : createRes.text}`,
-      onFail: "Self-serve creation broke — check trigger v3 + RLS insert policy (app bug) or missing migration (test setup)." });
-  if (!biz?.id) return;
 
-  const second = await rest(ctx, "anon", "businesses", {
-    token: ownerJwt, method: "POST",
-    body: { owner_id: ownerId, name: "Second Cafe Attempt" },
+  const wrongEmailClaim = await rest(
+    ctx,
+    "service",
+    "rpc/claim_approved_business_application_for_user",
+    {
+      method: "POST",
+      body: { p_user_id: ownerId, p_email: shopperEmail },
+    },
+  );
+  R.check("wrong email cannot claim the approved application", denied(wrongEmailClaim), {
+    detail: `HTTP ${wrongEmailClaim.status} ${wrongEmailClaim.text}`,
   });
-  R.check("second self-created business is denied (per-owner cap)", isDenied(second),
-    { detail: `HTTP ${second.status} ${second.text}`,
-      onFail: "Cap missing — open applications can be mass-created (app bug)." });
-  const secondRow = Array.isArray(second.json) ? second.json[0] : null;
-  if (secondRow?.id) cleanup.rows.unshift(["businesses", secondRow.id]);
 
-  // Forced-pending start (column locks) — verify via service role.
-  const pendingRow = await rest(ctx, "service", `businesses?select=status&id=eq.${biz.id}`);
-  R.check("self-created business starts pending_verification", pendingRow.json?.[0]?.status === "pending_verification",
-    { detail: `status=${pendingRow.json?.[0]?.status}` });
+  const [claimA, claimB] = await Promise.all([
+    rest(ctx, "service", "rpc/claim_approved_business_application_for_user", {
+      method: "POST",
+      body: { p_user_id: ownerId, p_email: ownerEmail },
+    }),
+    rest(ctx, "service", "rpc/claim_approved_business_application_for_user", {
+      method: "POST",
+      body: { p_user_id: ownerId, p_email: ownerEmail.toUpperCase() },
+    }),
+  ]);
+  const rowA = Array.isArray(claimA.json) ? claimA.json[0] : null;
+  const rowB = Array.isArray(claimB.json) ? claimB.json[0] : null;
+  const businessId = rowA?.business_id ?? rowB?.business_id;
+  if (businessId) cleanup.rows.unshift(["businesses", businessId]);
+  R.check(
+    "concurrent case-insensitive claims are idempotent and return one workspace",
+    claimA.ok &&
+      claimB.ok &&
+      Boolean(rowA?.business_id) &&
+      rowA?.business_id === rowB?.business_id &&
+      rowA?.application_id === rowB?.application_id,
+    { detail: `A=${claimA.status}/${rowA?.business_id}, B=${claimB.status}/${rowB?.business_id}` },
+  );
+  if (!businessId) return;
 
-  // --- 2. F-002 visibility while pending ---
-  const anonRead = await rest(ctx, "anon", `businesses?select=id,name&id=eq.${biz.id}`);
-  R.check("anon cannot see the pending business", anonRead.ok && (anonRead.json?.length ?? 0) === 0,
-    { detail: `HTTP ${anonRead.status}, rows=${anonRead.json?.length}`,
-      onFail: "Pending business publicly visible — F-002 regression (app bug)." });
-  const shopperRead = await rest(ctx, "anon", `businesses?select=id,name&id=eq.${biz.id}`, { token: shopperJwt });
-  R.check("another user cannot see the pending business", shopperRead.ok && (shopperRead.json?.length ?? 0) === 0,
-    { detail: `HTTP ${shopperRead.status}, rows=${shopperRead.json?.length}` });
-  const ownerRead = await rest(ctx, "anon", `businesses?select=id,name&id=eq.${biz.id}`, { token: ownerJwt });
-  R.check("owner still sees their own pending business", ownerRead.ok && (ownerRead.json?.length ?? 0) === 1,
-    { detail: `HTTP ${ownerRead.status}, rows=${ownerRead.json?.length}`,
-      onFail: "Owner locked out of own pending row — the owner OR-clause is broken (app bug: breaks business setup)." });
+  const subscription = await rest(
+    ctx,
+    "service",
+    `business_subscriptions?select=id,billing_status,app_access_status,trial_start,trial_end,activated_at&business_id=eq.${businessId}`,
+  );
+  const subscriptionRow = subscription.json?.[0];
+  if (subscriptionRow?.id) cleanup.rows.unshift(["business_subscriptions", subscriptionRow.id]);
+  R.check(
+    "claim creates only an inert subscription shell with no trial dates",
+    subscriptionRow?.billing_status === "none" &&
+      subscriptionRow?.app_access_status === "approved_not_activated" &&
+      subscriptionRow?.trial_start == null &&
+      subscriptionRow?.trial_end == null &&
+      subscriptionRow?.activated_at == null,
+    { detail: JSON.stringify(subscriptionRow ?? null) },
+  );
 
-  // --- 3. F-001 publish gate while PENDING and not eligible ---
+  const locations = await rest(
+    ctx,
+    "service",
+    `business_locations?select=id&business_id=eq.${businessId}`,
+  );
+  const locationId = locations.json?.[0]?.id;
+  const credits = locationId
+    ? await rest(
+        ctx,
+        "service",
+        `deal_credit_periods?select=id&business_location_id=eq.${locationId}`,
+      )
+    : null;
+  R.check(
+    "claim grants no offer credit period",
+    Boolean(locationId) && (credits?.json?.length ?? -1) === 0,
+    { detail: `location=${locationId ?? "none"}, credit_periods=${credits?.json?.length ?? "n/a"}` },
+  );
+
+  const setupCapabilities = await rest(ctx, "anon", "rpc/get_business_capabilities", {
+    token: ownerJwt,
+    method: "POST",
+    body: { p_business_id: businessId },
+  });
+  R.check(
+    "setup capabilities allow profile/menu work but deny AI, publishing, and new claims",
+    setupCapabilities.json?.can_edit_business_information === true &&
+      setupCapabilities.json?.can_use_menu_tools === true &&
+      setupCapabilities.json?.can_generate_ai === false &&
+      setupCapabilities.json?.can_publish_offer === false &&
+      setupCapabilities.json?.can_receive_new_claims === false,
+    { detail: JSON.stringify(setupCapabilities.json ?? null) },
+  );
+
+  const anonRead = await rest(ctx, "anon", `businesses?select=id,name&id=eq.${businessId}`);
+  const shopperRead = await rest(
+    ctx,
+    "anon",
+    `businesses?select=id,name&id=eq.${businessId}`,
+    { token: shopperJwt },
+  );
+  const ownerRead = await rest(
+    ctx,
+    "anon",
+    `businesses?select=id,name&id=eq.${businessId}`,
+    { token: ownerJwt },
+  );
+  R.check(
+    "approved-not-activated business is private except to its owner",
+    (anonRead.json?.length ?? -1) === 0 &&
+      (shopperRead.json?.length ?? -1) === 0 &&
+      (ownerRead.json?.length ?? 0) === 1,
+    {
+      detail: `anon=${anonRead.json?.length}, shopper=${shopperRead.json?.length}, owner=${ownerRead.json?.length}`,
+    },
+  );
+
+  const profileEdit = await rest(ctx, "anon", `businesses?id=eq.${businessId}`, {
+    token: ownerJwt,
+    method: "PATCH",
+    body: { short_description: "Prepared before activation" },
+  });
+  R.check("setup-only owner can edit business information", profileEdit.ok, {
+    detail: `HTTP ${profileEdit.status} ${profileEdit.text}`,
+  });
+
   const liveDeal = {
-    business_id: biz.id,
+    business_id: businessId,
     title: "Buy one get one free",
     description: "BOGO",
     is_recurring: true,
@@ -103,96 +211,104 @@ async function main() {
     start_time: hoursFromNow(-1),
     end_time: hoursFromNow(24),
   };
-  const liveDenied = await rest(ctx, "anon", "deals", { token: ownerJwt, method: "POST", body: liveDeal });
-  const liveDeniedRow = Array.isArray(liveDenied.json) ? liveDenied.json[0] : null;
-  if (liveDeniedRow?.id) cleanup.rows.unshift(["deals", liveDeniedRow.id]);
-  R.check("ineligible owner cannot direct-insert a LIVE deal", isDenied(liveDenied),
-    { detail: `HTTP ${liveDenied.status} ${liveDenied.text}`,
-      onFail: "F-001 regression: direct write published a deal without can_business_publish (app bug)." });
+  const liveDenied = await rest(ctx, "anon", "deals", {
+    token: ownerJwt,
+    method: "POST",
+    body: liveDeal,
+  });
+  R.check("setup-only owner cannot direct-insert a live deal", denied(liveDenied), {
+    detail: `HTTP ${liveDenied.status} ${liveDenied.text}`,
+  });
 
-  const draftDeal = { ...liveDeal, is_active: false };
-  const draftRes = await rest(ctx, "anon", "deals", { token: ownerJwt, method: "POST", body: draftDeal });
-  const draft = Array.isArray(draftRes.json) ? draftRes.json[0] : null;
+  const draftResponse = await rest(ctx, "anon", "deals", {
+    token: ownerJwt,
+    method: "POST",
+    body: { ...liveDeal, is_active: false },
+  });
+  const draft = Array.isArray(draftResponse.json) ? draftResponse.json[0] : null;
   if (draft?.id) cleanup.rows.unshift(["deals", draft.id]);
-  R.check("ineligible owner CAN insert an inactive draft", draftRes.ok && Boolean(draft?.id),
-    { detail: `HTTP ${draftRes.status} ${draft?.id ? "" : draftRes.text}`,
-      onFail: "Drafts blocked — the gate is broader than live-state transitions (app bug: breaks owner edits)." });
-  if (!draft?.id) return;
-
-  const flipDenied = await rest(ctx, "anon", `deals?id=eq.${draft.id}`, {
-    token: ownerJwt, method: "PATCH", body: { is_active: true },
+  R.check("setup-only owner can retain an inactive deal draft", draftResponse.ok && Boolean(draft?.id), {
+    detail: `HTTP ${draftResponse.status} ${draftResponse.text}`,
   });
-  const flipStillInactive = await rest(ctx, "service", `deals?select=is_active&id=eq.${draft.id}`);
-  R.check("ineligible owner cannot flip a draft LIVE", isDenied(flipDenied) && flipStillInactive.json?.[0]?.is_active === false,
-    { detail: `HTTP ${flipDenied.status}, is_active=${flipStillInactive.json?.[0]?.is_active}` });
+  if (!draft?.id || !locationId) return;
 
-  // --- 4. F-001: paying-but-UNREVIEWED business still cannot publish ---
-  // can_business_publish alone returns true for a pending business with an
-  // active subscription + accepted terms; the deals policies must ALSO
-  // require public visibility, or an unreviewed merchant who pays can inject
-  // deals into the public feed while their business stays hidden.
   await seed("terms_acceptances", {
-    business_id: biz.id, user_id: ownerId, document_type: "business_terms",
-    document_version: "db-test-v1", source: "db_test",
+    business_id: businessId,
+    user_id: ownerId,
+    document_type: "business_terms",
+    document_version: "db-test-v1",
+    source: "db_test",
   });
-  const sub = await seed("business_subscriptions", {
-    business_id: biz.id, billing_status: "active", app_access_status: "active",
+  await rest(ctx, "service", `businesses?id=eq.${businessId}`, {
+    method: "PATCH",
+    body: { status: "active", access_level: "paid" },
   });
-  if (sub) {
-    const pendingPaidDenied = await rest(ctx, "anon", "deals", { token: ownerJwt, method: "POST", body: liveDeal });
-    const pendingPaidRow = Array.isArray(pendingPaidDenied.json) ? pendingPaidDenied.json[0] : null;
-    if (pendingPaidRow?.id) cleanup.rows.unshift(["deals", pendingPaidRow.id]);
-    R.check("pending business with active subscription still cannot publish LIVE", isDenied(pendingPaidDenied),
-      { detail: `HTTP ${pendingPaidDenied.status} ${pendingPaidDenied.text}`,
-        onFail: "Visibility gate missing — a paying unreviewed business can publish into the public feed (app bug)." });
-  }
+  await rest(ctx, "service", `business_subscriptions?business_id=eq.${businessId}`, {
+    method: "PATCH",
+    body: { billing_status: "active", app_access_status: "active" },
+  });
+  await rest(ctx, "service", `business_applications?id=eq.${application.id}`, {
+    method: "PATCH",
+    body: { status: "active", access_tier: "active" },
+  });
+  await rest(ctx, "service", `location_entitlements?business_location_id=eq.${locationId}`, {
+    method: "PATCH",
+    body: { status: "paid_active" },
+  });
 
-  // --- 5. F-002 visibility + F-001 publish after approval ---
-  await rest(ctx, "service", `businesses?id=eq.${biz.id}`, { method: "PATCH", body: { status: "active" } });
-  const anonReadActive = await rest(ctx, "anon", `businesses?select=id,name&id=eq.${biz.id}`);
-  R.check("anon sees the business once approved (status=active)", anonReadActive.ok && (anonReadActive.json?.length ?? 0) === 1,
-    { detail: `HTTP ${anonReadActive.status}, rows=${anonReadActive.json?.length}`,
-      onFail: "Approved business hidden — predicate too strict (app bug: hides valid businesses)." });
+  const activeCapabilities = await rest(ctx, "anon", "rpc/get_business_capabilities", {
+    token: ownerJwt,
+    method: "POST",
+    body: { p_business_id: businessId },
+  });
+  R.check(
+    "activated state enables AI and publishing capabilities",
+    activeCapabilities.json?.can_generate_ai === true &&
+      activeCapabilities.json?.can_publish_offer === true &&
+      activeCapabilities.json?.can_receive_new_claims === true,
+    { detail: JSON.stringify(activeCapabilities.json ?? null) },
+  );
 
-  if (sub) {
-    const flipAllowed = await rest(ctx, "anon", `deals?id=eq.${draft.id}`, {
-      token: ownerJwt, method: "PATCH", body: { is_active: true },
-    });
-    const nowLive = await rest(ctx, "service", `deals?select=is_active&id=eq.${draft.id}`);
-    R.check("eligible owner can flip the draft LIVE", !isDenied(flipAllowed) && nowLive.json?.[0]?.is_active === true,
-      { detail: `HTTP ${flipAllowed.status}, is_active=${nowLive.json?.[0]?.is_active}`,
-        onFail: "Eligible publish blocked — can_business_publish wiring too strict (app bug: blocks legitimate publish)." });
+  const flipAllowed = await rest(ctx, "anon", `deals?id=eq.${draft.id}`, {
+    token: ownerJwt,
+    method: "PATCH",
+    body: { is_active: true },
+  });
+  R.check("eligible owner can flip the inactive draft live", flipAllowed.ok, {
+    detail: `HTTP ${flipAllowed.status} ${flipAllowed.text}`,
+  });
 
-    const liveInsert = await rest(ctx, "anon", "deals", { token: ownerJwt, method: "POST", body: liveDeal });
-    const liveRow = Array.isArray(liveInsert.json) ? liveInsert.json[0] : null;
-    if (liveRow?.id) cleanup.rows.unshift(["deals", liveRow.id]);
-    R.check("eligible owner can insert a LIVE deal", liveInsert.ok && Boolean(liveRow?.id),
-      { detail: `HTTP ${liveInsert.status} ${liveRow?.id ? "" : liveInsert.text}` });
-
-    // Revoke eligibility, then confirm the owner can still turn things OFF.
-    await rest(ctx, "service", `business_subscriptions?id=eq.${sub.id}`, {
-      method: "PATCH", body: { billing_status: "canceled", app_access_status: "expired" },
-    });
-    const deactivate = await rest(ctx, "anon", `deals?id=eq.${draft.id}`, {
-      token: ownerJwt, method: "PATCH", body: { is_active: false },
-    });
-    const offNow = await rest(ctx, "service", `deals?select=is_active&id=eq.${draft.id}`);
-    R.check("ineligible owner can still DEACTIVATE their live deal", !isDenied(deactivate) && offNow.json?.[0]?.is_active === false,
-      { detail: `HTTP ${deactivate.status}, is_active=${offNow.json?.[0]?.is_active}`,
-        onFail: "Owners must always be able to turn deals off regardless of billing (app bug: owner lockout)." });
-  }
+  await rest(ctx, "service", `business_subscriptions?business_id=eq.${businessId}`, {
+    method: "PATCH",
+    body: { billing_status: "canceled", app_access_status: "expired" },
+  });
+  await rest(ctx, "service", `businesses?id=eq.${businessId}`, {
+    method: "PATCH",
+    body: { status: "trial_expired", access_level: "none" },
+  });
+  const deactivate = await rest(ctx, "anon", `deals?id=eq.${draft.id}`, {
+    token: ownerJwt,
+    method: "PATCH",
+    body: { is_active: false },
+  });
+  R.check("lapsed owner can still deactivate a previously live deal", deactivate.ok, {
+    detail: `HTTP ${deactivate.status} ${deactivate.text}`,
+  });
 }
 
 main()
-  .catch((err) => {
-    console.error("Unexpected error:", err);
-    R.check("suite ran to completion", false, { detail: String(err) });
+  .catch((error) => {
+    console.error("Unexpected error:", error);
+    R.check("suite ran to completion", false, { detail: String(error) });
   })
   .finally(async () => {
     for (const [table, id] of cleanup.rows) {
-      await rest(ctx, "service", `${table}?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" }).catch(() => {});
+      await rest(ctx, "service", `${table}?id=eq.${id}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      }).catch(() => {});
     }
-    for (const u of cleanup.users) await adminDeleteUser(ctx, u);
+    for (const userId of cleanup.users) await adminDeleteUser(ctx, userId);
     const { failed } = R.summary();
     process.exit(failed ? 1 : 0);
   });

@@ -1,4 +1,4 @@
-import { Redirect, type Href, useLocalSearchParams } from "expo-router";
+import { Redirect, type Href, useLocalSearchParams, useSegments } from "expo-router";
 import { Stack } from "expo-router";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -12,15 +12,17 @@ import { isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateLayout() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
+  const segments = useSegments();
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const { t } = useTranslation();
 
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
-  const { isLoggedIn, businessId, subscriptionTier, loading: businessLoading } = useBusiness();
-  const { blocked, loading: billingLoading } = usePrimaryLocationBillingGate({
+  const { isLoggedIn, businessId, businessProfile, subscriptionTier, loading: businessLoading } = useBusiness();
+  const { blocked, access, loading: billingLoading } = usePrimaryLocationBillingGate({
     businessId,
+    businessStatus: businessProfile?.status ?? null,
     subscriptionTier,
     isLoggedIn,
     bypass,
@@ -36,7 +38,14 @@ export default function CreateLayout() {
     );
   }
 
-  if (blocked) {
+  const leafRoute = String(segments[segments.length - 1] ?? "");
+  const routeAllowedBeforeActivation =
+    (leafRoute === "menu" && access.canUseMenuTools) ||
+    (leafRoute === "menu-scan" && access.canExtractInitialMenu) ||
+    (leafRoute === "menu-manager" && access.canUseMenuTools) ||
+    (leafRoute === "menu-offer" && (access.canUseSetupTools || access.canCreateTextDraft));
+
+  if (blocked && !routeAllowedBeforeActivation) {
     return <Redirect href={"/(tabs)/account" as Href} />;
   }
 

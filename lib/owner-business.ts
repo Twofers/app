@@ -33,6 +33,11 @@ export type OwnerBusinessRow = {
   hours_text: string | null;
   logo_url: string | null;
   current_profile_version: number | null;
+  // Present on the get_my_business() RPC path (full row); absent on the
+  // legacy direct-select fallback, whose column list predates the status
+  // column grant. Callers treat undefined as "not locked" — the server
+  // enforces the name lock regardless.
+  status?: string | null;
 };
 
 const OWNER_BUSINESS_COLUMNS =

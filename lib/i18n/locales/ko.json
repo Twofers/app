@@ -305,6 +305,7 @@
     "aiRegenerationLimit": "재생성 한도에 도달했습니다. 아래를 수정하거나 새 오퍼를 시작하세요.",
     "dbRlsViolation": "이 작업을 할 권한이 없습니다.",
     "businessLimitReached": "이미 등록된 비즈니스가 있습니다. 변경이 필요하면 support@twoferapp.com으로 문의하세요.",
+    "businessNameLocked": "비즈니스 이름이 인증되어 여기에서 변경할 수 없습니다. 비즈니스 프로필의 “비즈니스 이름 변경 요청”을 이용하세요.",
     "dbDuplicate": "이미 있습니다. 새로고침 후 다시 시도하세요.",
     "dbForeignKey": "참조가 올바르지 않습니다. 새로고침 후 다시 시도하세요.",
     "dbCheckViolation": "일부 값이 검증을 통과하지 못했습니다.",
@@ -525,8 +526,8 @@
     "title": "만들기",
     "loginPrompt": "딜을 만들려면 로그인하세요.",
     "loading": "불러오는 중...",
-    "createBusinessHeader": "비즈니스 만들기",
-    "createBusinessBody": "딜을 게시하고 QR 코드를 사용 처리하려면 비즈니스를 만드세요.",
+    "createBusinessHeader": "비즈니스 설정",
+    "createBusinessBody": "승인된 비즈니스 이메일로 계정을 연결하고 설정을 마치세요. 게시는 체험 활성화 후 열립니다.",
     "placeholderBusinessName": "비즈니스 이름",
     "creating": "만드는 중...",
     "createBusiness": "비즈니스 만들기",
@@ -573,7 +574,10 @@
     "newDeal": "새 오퍼 만들기",
     "newDealSub": "사진, 음성 또는 텍스트",
     "reuseDeal": "지난 오퍼 반복",
-    "reuseDealSub": "템플릿이나 지난 오퍼를 다시 시작"
+    "reuseDealSub": "템플릿이나 지난 오퍼를 다시 시작",
+    "setupApprovedTitle": "설정 승인 완료",
+    "setupApprovedBody": "지금 프로필과 메뉴를 완성하세요. 30일 무료 체험, AI 도구, 게시, 크레딧, 새 클레임은 보안 Checkout 활성화 후 열립니다.",
+    "setupApprovedCta": "30일 무료 체험 활성화"
   },
   "menuScan": {
     "title": "메뉴 스캔",
@@ -658,7 +662,10 @@
     "fixedPriceLabel": "특가(USD)",
     "fixedPricePlaceholder": "예: 3.50",
     "errPercentWeak": "이 유형은 최소 40% 할인이 필요합니다. 40% 이상을 선택하세요.",
-    "errFixedPrice": "특가에 유효한 달러 금액을 입력하세요."
+    "errFixedPrice": "특가에 유효한 달러 금액을 입력하세요.",
+    "saveTextDraft": "텍스트 전용 초안 저장",
+    "textDraftSaved": "초안이 저장되었습니다. AI와 게시는 체험 활성화 후 이용할 수 있습니다.",
+    "textDraftSaveFailed": "초안을 저장할 수 없습니다. 다시 시도해 주세요."
   },
   "menuWorkflow": {
     "errSchema": "이 서버에 메뉴 저장이 아직 설정되지 않았습니다. 관리자에게 최신 DB 마이그레이션 적용을 요청하세요.",
@@ -1665,12 +1672,27 @@
     "saving": "저장 중...",
     "errRequired": "모든 항목을 입력하세요(칩을 활용하세요).",
     "errNameAddress": "비즈니스 이름과 주소는 필수입니다.",
+    "approvalRequired": "비즈니스 설정은 신청이 승인된 후 열립니다. 웹사이트에서 신청하거나 승인된 요청에 사용한 같은 이메일로 로그인하세요.",
     "errEmail": "올바른 이메일을 입력하세요.",
     "errSave": "비즈니스를 만들지 못했습니다. 다시 시도하세요.",
     "errSaveChanges": "변경 사항을 저장하지 못했습니다. 다시 시도하세요.",
     "setupComplete": "설정 완료 — 1+1 딜을 시작할 준비가 되었습니다!",
     "changesSaved": "변경 사항이 저장되었습니다.",
     "city": "도시",
+    "nameChange": {
+      "lockedHint": "비즈니스 이름이 인증되어 여기에서 수정할 수 없습니다.",
+      "request": "비즈니스 이름 변경 요청",
+      "newNameLabel": "새 비즈니스 이름",
+      "reasonLabel": "사유 (선택)",
+      "submit": "요청 보내기",
+      "cancel": "취소",
+      "pending": "이름 변경 요청됨: “{{name}}”. 곧 검토하겠습니다.",
+      "cancelRequest": "요청 취소",
+      "submitted": "요청을 보냈습니다. 곧 검토하겠습니다.",
+      "duplicate": "이미 검토 대기 중인 이름 변경 요청이 있습니다.",
+      "errSubmit": "요청을 보내지 못했습니다. 다시 시도하세요.",
+      "errTooShort": "새 비즈니스 이름을 입력하세요."
+    },
     "cat": {
       "restaurant": "레스토랑",
       "cafe": "카페",
@@ -2099,10 +2121,13 @@
   "merchantAccess": {
     "inactiveTitle": "비즈니스 계정이 활성 상태가 아닙니다",
     "inactiveBody": "비즈니스 계정이 활성 상태가 아닙니다. 계정을 활성화하려면 Twofer 지원팀에 문의하세요.",
-    "verifyTitle": "비즈니스 인증하기",
-    "verifyBody": "비즈니스 계정이 아직 활성화되지 않았습니다. 무료 체험을 시작하시면 영업일 기준 1~2일 내에 검토해 드립니다.",
-    "verifyEmailHint": "로그인한 이메일과 동일한 이메일로 신청해 주세요:",
-    "startTrialCta": "무료 체험 시작",
+    "verifyTitle": "설정 승인 완료",
+    "verifyBody": "지금 설정을 완료하세요. 30일 체험은 Stripe가 보안 Checkout을 확인한 후에만 시작됩니다.",
+    "verifyEmailHint": "승인된 계정 이메일:",
+    "setupProgressProfile": "✓ 비즈니스 프로필과 위치를 사용할 수 있습니다",
+    "setupProgressMenu": "✓ 메뉴 도구와 텍스트 초안을 사용할 수 있습니다",
+    "setupProgressLocked": "활성화 전 잠김: AI, 게시, 크레딧, 새 클레임",
+    "startTrialCta": "보안 웹사이트에서 계속",
     "contactSupport": "지원팀에 문의"
   },
   "businessTerms": {

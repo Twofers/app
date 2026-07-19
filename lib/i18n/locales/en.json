@@ -305,6 +305,7 @@
     "aiRegenerationLimit": "Regeneration limit reached. Edit below or start a new offer.",
     "dbRlsViolation": "You don’t have permission for this action.",
     "businessLimitReached": "You already have a business on file. Contact support@twoferapp.com if you need to change it.",
+    "businessNameLocked": "Your business name is verified and can’t be changed here. Use “Request a business name change” in your business profile.",
     "dbDuplicate": "This already exists. Refresh and try again.",
     "dbForeignKey": "That reference isn’t valid. Refresh and try again.",
     "dbCheckViolation": "Check your inputs and try again.",
@@ -525,8 +526,8 @@
     "title": "Create",
     "loginPrompt": "Please log in to create deals.",
     "loading": "Loading...",
-    "createBusinessHeader": "Create your business",
-    "createBusinessBody": "Create a business to post deals and redeem QR codes.",
+    "createBusinessHeader": "Set up your business",
+    "createBusinessBody": "Use your approved business email to claim your account and finish setup. Publishing unlocks after trial activation.",
     "placeholderBusinessName": "Business name",
     "creating": "Creating...",
     "createBusiness": "Create business",
@@ -573,7 +574,10 @@
     "newDeal": "Create new offer",
     "newDealSub": "Photo, voice, or text",
     "reuseDeal": "Repeat a past deal",
-    "reuseDealSub": "Relaunch a template or past offer"
+    "reuseDealSub": "Relaunch a template or past offer",
+    "setupApprovedTitle": "Approved for setup",
+    "setupApprovedBody": "Finish your profile and menu now. Your 30-day trial, AI tools, publishing, credits, and new claims unlock after secure Checkout.",
+    "setupApprovedCta": "Activate 30-day trial"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -658,7 +662,10 @@
     "fixedPriceLabel": "Special price (USD)",
     "fixedPricePlaceholder": "e.g. 3.50",
     "errPercentWeak": "Twofer needs at least 40% off for this type — pick 40% or higher.",
-    "errFixedPrice": "Enter a valid dollar amount for the special price."
+    "errFixedPrice": "Enter a valid dollar amount for the special price.",
+    "saveTextDraft": "Save text-only draft",
+    "textDraftSaved": "Draft saved. AI and publishing will unlock after trial activation.",
+    "textDraftSaveFailed": "We couldn't save this draft. Please try again."
   },
   "menuWorkflow": {
     "errSchema": "Menu tools aren't ready yet. You can still create a deal manually.",
@@ -1987,6 +1994,7 @@
     "saving": "Saving...",
     "errRequired": "Fill in every required field.",
     "errNameAddress": "Business name and address are required.",
+    "approvalRequired": "Business setup opens after your application is approved. Apply on the website, or sign in with the same email used on your approved request.",
     "errEmail": "Enter a valid email.",
     "errSave": "Could not create business. Try again.",
     "errSaveChanges": "Could not save changes. Try again.",
@@ -2005,6 +2013,20 @@
     "setupComplete": "Setup complete — ready to launch buy-one-get-one deals!",
     "changesSaved": "Changes saved.",
     "city": "City",
+    "nameChange": {
+      "lockedHint": "Your business name is verified and can’t be edited here.",
+      "request": "Request a business name change",
+      "newNameLabel": "New business name",
+      "reasonLabel": "Reason (optional)",
+      "submit": "Submit request",
+      "cancel": "Cancel",
+      "pending": "Name change requested: “{{name}}”. We’ll review it soon.",
+      "cancelRequest": "Cancel request",
+      "submitted": "Request sent. We’ll review it soon.",
+      "duplicate": "A name change request is already waiting for review.",
+      "errSubmit": "Could not send the request. Try again.",
+      "errTooShort": "Enter the new business name."
+    },
     "cat": {
       "restaurant": "Restaurant",
       "cafe": "Café",
@@ -2099,10 +2121,13 @@
   "merchantAccess": {
     "inactiveTitle": "Business account not active",
     "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
-    "verifyTitle": "Verify your business",
-    "verifyBody": "Your business account isn't active yet. Start your free trial and we'll review your request within 1–2 business days.",
-    "verifyEmailHint": "Apply with the same email you signed in with:",
-    "startTrialCta": "Start free trial",
+    "verifyTitle": "Approved for setup",
+    "verifyBody": "Finish setup now. Your 30-day trial starts only after Stripe confirms secure Checkout.",
+    "verifyEmailHint": "Approved account email:",
+    "setupProgressProfile": "✓ Business profile and location are available",
+    "setupProgressMenu": "✓ Menu tools and text-only drafts are available",
+    "setupProgressLocked": "Locked until activation: AI, publishing, credits, and new claims",
+    "startTrialCta": "Continue on secure website",
     "contactSupport": "Contact support"
   },
   "businessTerms": {

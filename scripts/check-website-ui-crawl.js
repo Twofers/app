@@ -9,7 +9,7 @@ const SUPABASE_FUNCTIONS_HOST = "https://kvodhiqhdqnptqovovia.supabase.co/**";
 const SCREENSHOT_DIR = process.env.WEBSITE_UI_SCREENSHOT_DIR
   ? path.resolve(process.env.WEBSITE_UI_SCREENSHOT_DIR)
   : "";
-const SCREENSHOT_ROUTES = new Set(["/", "/business/start-trial/", "/admin/", "/admin/trial-requests/", "/admin/prospects/"]);
+const SCREENSHOT_ROUTES = new Set(["/", "/business/start-trial/", "/admin/", "/admin/trial-requests/", "/admin/prospects/", "/admin/qr-campaigns/"]);
 
 const MIME = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -54,6 +54,7 @@ const ROUTES = [
   "/admin/businesses/",
   "/admin/businesses/new/",
   "/admin/businesses/detail/",
+  "/admin/qr-campaigns/",
   "/admin/offers/",
   "/admin/billing/events/",
   "/admin/audit-log/",
@@ -211,8 +212,8 @@ function mockPayload(pathname, requestBody) {
           id: requestBody.business_id || "11111111-1111-4111-8111-111111111111",
           name: "Sample Coffee",
           owner_email: "owner@example.com",
-          status: "trialing",
-          access_level: "full_trial",
+          status: "approved_not_activated",
+          access_level: "approved_not_activated",
           verification_status: "manual_verified",
           risk_level: "low",
         },
@@ -220,16 +221,16 @@ function mockPayload(pathname, requestBody) {
           {
             contact_name: "Pat Owner",
             email: "pat@example.com",
-            status: "trial_active",
-            access_tier: "trialing",
-            trial_days: 30,
+            status: "approved_not_activated",
+            access_tier: "approved_not_activated",
+            trial_days: null,
             created_at: "2026-07-02T12:00:00.000Z",
           },
         ],
         audit_log: [
           {
             admin_email: "admin@example.com",
-            action: "admin_business_application_approved_full",
+            action: "admin_business_application_approved_for_setup_full",
             reason: "qa",
             created_at: "2026-07-02T12:01:00.000Z",
           },
@@ -396,6 +397,44 @@ function mockPayload(pathname, requestBody) {
       ],
     };
     return { ok: true, user: { id: "user-1", email: "owner@example.com" }, businesses: [business], business };
+  }
+
+  if (pathname.endsWith("/admin-qr-campaigns")) {
+    const campaign = {
+      id: "33333333-3333-4333-8333-333333333333",
+      campaign_id: "33333333-3333-4333-8333-333333333333",
+      business_id: "11111111-1111-4111-8111-111111111111",
+      business_name: "Sample Coffee",
+      slug: "q-samplecoffe",
+      display_name: "Counter sign",
+      source_type: "counter_sign",
+      destination_type: "app_download",
+      is_active: true,
+      created_at: "2026-07-02T12:00:00.000Z",
+      scan_count: 12,
+      likely_human_scan_count: 10,
+      likely_bot_scan_count: 2,
+      tracking_url: "https://www.twoferapp.com/r/q-samplecoffe",
+    };
+    if (requestBody?.action === "qr") {
+      return {
+        ok: true,
+        campaign,
+        qr_svg_data_url: "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20fill%3D%22white%22%2F%3E%3C%2Fsvg%3E",
+      };
+    }
+    if (requestBody?.action === "create" || requestBody?.action === "disable") return { ok: true, campaign };
+    return {
+      ok: true,
+      businesses: [{ id: campaign.business_id, name: campaign.business_name, status: "trialing" }],
+      analytics: {
+        days: 30,
+        campaigns: [campaign],
+        businesses: [{ business_id: campaign.business_id, business_name: campaign.business_name, scan_count: 12, likely_human_scan_count: 10, likely_bot_scan_count: 2 }],
+        sources: [{ source_type: "counter_sign", scan_count: 12, likely_human_scan_count: 10, likely_bot_scan_count: 2 }],
+        daily: [{ scan_date: "2026-07-02", scan_count: 12, likely_human_scan_count: 10, likely_bot_scan_count: 2 }],
+      },
+    };
   }
 
   if (pathname.endsWith("/admin-business-applications")) {
@@ -674,20 +713,20 @@ async function checkTrialRequests(page) {
       timeout: 5000,
     })
     .catch(() => issues.push("/admin/trial-requests/: applications did not load"));
-  const limitedButton = page.locator('button[data-decision="approve_limited"]').first();
-  if (await limitedButton.count()) {
-    await limitedButton.click();
+  const setupButton = page.locator('button[data-decision="approve_setup"]').first();
+  if (await setupButton.count()) {
+    await setupButton.click();
     await page
       .waitForFunction(() => !document.querySelector("[data-trial-status]")?.textContent?.includes("Saving decision"), null, {
         timeout: 5000,
       })
-      .catch(() => issues.push("/admin/trial-requests/: limited decision did not complete"));
+      .catch(() => issues.push("/admin/trial-requests/: setup approval did not complete"));
     const decisionStatus = await page.locator("[data-trial-status]").textContent().catch(() => "");
     if (/NetworkError|Could not save decision/i.test(decisionStatus || "")) {
-      issues.push(`/admin/trial-requests/: limited decision surfaced ${decisionStatus}`);
+      issues.push(`/admin/trial-requests/: setup approval surfaced ${decisionStatus}`);
     }
   } else {
-    issues.push("/admin/trial-requests/: limited decision button was missing");
+    issues.push("/admin/trial-requests/: setup approval button was missing");
   }
   const mobileLabels = await page.evaluate(() =>
     [...document.querySelectorAll(".admin-table[data-mobile-cards] tbody td")]
@@ -695,6 +734,26 @@ async function checkTrialRequests(page) {
       .every((td) => Boolean(td.dataset.label)),
   );
   if (!mobileLabels) issues.push("/admin/trial-requests/: generated mobile table cells are missing labels");
+  return issues;
+}
+
+async function checkQrCampaigns(page) {
+  const issues = [];
+  await page
+    .waitForFunction(() => document.querySelector("[data-qr-campaigns-body]")?.innerText?.includes("Sample Coffee"), null, { timeout: 5000 })
+    .catch(() => issues.push("/admin/qr-campaigns/: campaigns did not load"));
+  const qrButton = page.locator("button", { hasText: "Show QR" }).first();
+  if (!(await qrButton.count())) return [...issues, "/admin/qr-campaigns/: Show QR button is missing"];
+  await qrButton.click();
+  await page
+    .waitForFunction(() => document.querySelector("[data-qr-image]")?.getAttribute("src")?.startsWith("data:image/svg+xml"), null, { timeout: 5000 })
+    .catch(() => issues.push("/admin/qr-campaigns/: QR image did not render"));
+  const mobileLabels = await page.evaluate(() =>
+    [...document.querySelectorAll(".admin-table[data-mobile-cards] tbody td")]
+      .filter((td) => td.className !== "admin-row-detail")
+      .every((td) => Boolean(td.dataset.label)),
+  );
+  if (!mobileLabels) issues.push("/admin/qr-campaigns/: generated mobile table cells are missing labels");
   return issues;
 }
 
@@ -767,6 +826,7 @@ async function crawlRoute(browser, baseUrl, route, viewport) {
   }
   if (route === "/admin/" && viewport.name === "mobile") issues.push(...(await checkAdminDashboard(page)));
   if (route === "/admin/trial-requests/" && viewport.name === "mobile") issues.push(...(await checkTrialRequests(page)));
+  if (route === "/admin/qr-campaigns/" && viewport.name === "mobile") issues.push(...(await checkQrCampaigns(page)));
   if (route.startsWith("/quick-approve-trial/") && viewport.name === "mobile") issues.push(...(await checkQuickApproval(page)));
 
   if (SCREENSHOT_DIR && SCREENSHOT_ROUTES.has(route)) {

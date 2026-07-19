@@ -1,10 +1,48 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  resolveBusinessApplicationStateForAppAccessStatus,
   resolveBusinessAccessLevelForAppAccessStatus,
   resolveBusinessStatusForAppAccessStatus,
   resolveLocationEntitlementStatus,
 } from "./business-location-entitlement-sync.ts";
+
+describe("resolveBusinessApplicationStateForAppAccessStatus", () => {
+  it("mirrors setup, trial, paid, and grace access into application state", () => {
+    expect(resolveBusinessApplicationStateForAppAccessStatus("approved_not_activated")).toEqual({
+      status: "approved_not_activated",
+      accessTier: "approved_not_activated",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("trialing")).toEqual({
+      status: "trial_active",
+      accessTier: "trialing",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("active")).toEqual({
+      status: "active",
+      accessTier: "active",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("past_due_grace")).toEqual({
+      status: "active",
+      accessTier: "active",
+    });
+  });
+
+  it("mirrors terminal and support-only lifecycle states", () => {
+    expect(resolveBusinessApplicationStateForAppAccessStatus("expired")).toEqual({
+      status: "expired",
+      accessTier: "expired",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("canceled")).toEqual({
+      status: "canceled",
+      accessTier: "canceled",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("suspended")).toEqual({
+      status: "suspended",
+      accessTier: "suspended",
+    });
+    expect(resolveBusinessApplicationStateForAppAccessStatus("pending")).toBeNull();
+  });
+});
 
 describe("resolveBusinessAccessLevelForAppAccessStatus", () => {
   it("grants paid access for active and grace-period statuses", () => {
@@ -21,6 +59,12 @@ describe("resolveBusinessAccessLevelForAppAccessStatus", () => {
     expect(
       resolveBusinessAccessLevelForAppAccessStatus({ appAccessStatus: "trial_limited", currentAccessLevel: null }),
     ).toBe("limited_trial");
+  });
+
+  it("preserves approved setup-only access without granting paid or trial access", () => {
+    expect(
+      resolveBusinessAccessLevelForAppAccessStatus({ appAccessStatus: "approved_not_activated", currentAccessLevel: null }),
+    ).toBe("approved_not_activated");
   });
 
   it("explicitly downgrades canceled, expired, blocked, and suspended statuses to none", () => {
@@ -64,6 +108,12 @@ describe("resolveBusinessStatusForAppAccessStatus", () => {
   it("marks canceled explicitly", () => {
     expect(resolveBusinessStatusForAppAccessStatus({ appAccessStatus: "canceled", currentAccessLevel: "paid" }))
       .toBe("canceled");
+  });
+
+  it("keeps approved setup-only businesses in the setup-only status", () => {
+    expect(
+      resolveBusinessStatusForAppAccessStatus({ appAccessStatus: "approved_not_activated", currentAccessLevel: null }),
+    ).toBe("approved_not_activated");
   });
 
   it("never touches comped accounts", () => {
@@ -121,5 +171,15 @@ describe("resolveLocationEntitlementStatus", () => {
   it("defaults unrecognized/pending statuses to trial_eligible", () => {
     expect(resolveLocationEntitlementStatus({ appAccessStatus: "pending", trialType: null, cancelAtPeriodEnd: false }))
       .toBe("trial_eligible");
+  });
+
+  it("maps approved setup-only subscriptions to trial eligible entitlements without granting credits", () => {
+    expect(
+      resolveLocationEntitlementStatus({
+        appAccessStatus: "approved_not_activated",
+        trialType: null,
+        cancelAtPeriodEnd: false,
+      }),
+    ).toBe("trial_eligible");
   });
 });

@@ -84,6 +84,7 @@ export function normalizeCategory(value: string | null): string | null {
 }
 
 function businessStatusFromDecision(status: string | null | undefined): string {
+  if (status === "approved_not_activated") return "approved_not_activated";
   if (status === "trial_limited") return "limited_trial";
   if (status === "trial_active" || status === "trialing") return "trialing";
   if (status === "active") return "active";
@@ -94,6 +95,7 @@ function businessStatusFromDecision(status: string | null | undefined): string {
 }
 
 function accessLevelFromDecision(accessTier: string | null | undefined): string {
+  if (accessTier === "approved_not_activated") return "approved_not_activated";
   if (accessTier === "trial_limited") return "limited_trial";
   if (accessTier === "field_invited") return "limited_trial";
   if (accessTier === "trialing") return "full_trial";
@@ -506,7 +508,15 @@ export async function createOnboardingRequest(
       accepted_privacy_policy_version: "2026-07-01",
       raw_payload: rawPayload,
       normalized_payload: normalized,
-      status: args.status === "trial_limited" ? "trial_limited" : args.status === "waitlisted" ? "waitlisted" : args.status === "rejected" ? "rejected" : "submitted",
+      status: args.status === "trial_limited"
+        ? "trial_limited"
+        : args.status === "approved_not_activated"
+        ? "approved_not_activated"
+        : args.status === "waitlisted"
+        ? "waitlisted"
+        : args.status === "rejected"
+        ? "rejected"
+        : "submitted",
       risk_score: args.riskScore ?? null,
       risk_level: args.riskLevel ?? null,
       ip_address: args.ipAddress ?? null,

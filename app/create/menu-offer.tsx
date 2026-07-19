@@ -22,6 +22,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
@@ -91,9 +92,18 @@ export default function MenuOfferScreen() {
   const theme = Colors[colorScheme];
   const {
     businessId,
+    businessProfile,
+    isLoggedIn,
+    userId,
     loading: bizLoading,
     subscriptionTier,
   } = useBusiness();
+  const { access, loading: accessLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    businessStatus: businessProfile?.status ?? null,
+    subscriptionTier,
+    isLoggedIn,
+  });
   const { visibleLocations, loading: locLoading, error: locErr } = useBusinessLocations(
     businessId,
     subscriptionTier,
@@ -123,6 +133,7 @@ export default function MenuOfferScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
   );
+  const [savingDraft, setSavingDraft] = useState(false);
   const pairingPersistReady = useRef(false);
   const locationFlow = useMemo(
     () => resolveMenuOfferLocationFlow(visibleLocations.map((loc) => loc.id)),
@@ -228,6 +239,55 @@ export default function MenuOfferScreen() {
     } as Href);
   }, [structuredOffer, dealLocationIds, clearWizard, router, t]);
 
+  const saveTextDraft = useCallback(async () => {
+    if (!structuredOffer || !businessId || !userId || savingDraft) return;
+    setSavingDraft(true);
+    setBanner(null);
+    try {
+      const payload = {
+        structured_offer: structuredOffer,
+        offer_hint: buildOfferHintText(structuredOffer),
+        location_ids: dealLocationIds,
+        saved_at: new Date().toISOString(),
+      };
+      const { data: existing, error: readError } = await supabase
+        .from("business_deal_drafts")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("source", "menu_offer")
+        .eq("status", "draft")
+        .maybeSingle();
+      if (readError) throw readError;
+      const write = existing?.id
+        ? supabase
+            .from("business_deal_drafts")
+            .update({ payload, updated_at: new Date().toISOString() })
+            .eq("id", existing.id)
+        : supabase.from("business_deal_drafts").insert({
+            business_id: businessId,
+            owner_user_id: userId,
+            draft_type: "text_only",
+            source: "menu_offer",
+            payload,
+            status: "draft",
+          });
+      const { error: writeError } = await write;
+      if (writeError) throw writeError;
+      clearWizard();
+      setBanner({ message: t("menuOffer.textDraftSaved"), tone: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setBanner({
+        message: message
+          ? translateKnownApiMessage(message, t)
+          : t("menuOffer.textDraftSaveFailed"),
+        tone: "error",
+      });
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [businessId, clearWizard, dealLocationIds, savingDraft, structuredOffer, t, userId]);
+
   const onLocationNext = useCallback(() => {
     if (!primaryLocationId) {
       setBanner({ message: t("menuOffer.pickLocation"), tone: "error" });
@@ -297,7 +357,7 @@ export default function MenuOfferScreen() {
     t,
   ]);
 
-  if (bizLoading || locLoading) {
+  if (bizLoading || locLoading || accessLoading) {
     return (
       <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator color={theme.primary} />
@@ -664,8 +724,9 @@ export default function MenuOfferScreen() {
             </Text>
             <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
             <PrimaryButton
-              title={t("menuOffer.generateStrongVariants")}
-              onPress={goToAdCreation}
+              title={t(access.canGenerateAi ? "menuOffer.generateStrongVariants" : "menuOffer.saveTextDraft")}
+              onPress={access.canGenerateAi ? goToAdCreation : saveTextDraft}
+              disabled={savingDraft}
               style={{ minHeight: 64 }}
             />
           </View>

@@ -25,7 +25,7 @@
   function renderSignupRequired() {
     render(
       "Almost there",
-      "Your trial is approved. Finish setting up your business account first.",
+      "Your business is approved for setup. Sign in with the approved email to claim it before starting Checkout.",
       "",
     );
     if (fallbackNoteEl) fallbackNoteEl.hidden = false;

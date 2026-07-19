@@ -60,6 +60,23 @@
       ]
     },
     {
+      "source": "/r/:slug",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, private, max-age=0"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -127,6 +144,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/r/:slug",
+      "destination": "https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/qr-campaign-redirect?slug=:slug"
+    },
     {
       "source": "/quick-approve-trial",
       "destination": "/quick-approve-trial/index.html"
@@ -262,6 +283,14 @@
     {
       "source": "/admin/businesses",
       "destination": "/admin/businesses/index.html"
+    },
+    {
+      "source": "/admin/qr-campaigns",
+      "destination": "/admin/qr-campaigns/index.html"
+    },
+    {
+      "source": "/admin/qr-campaigns/",
+      "destination": "/admin/qr-campaigns/index.html"
     },
     {
       "source": "/admin/prospects",

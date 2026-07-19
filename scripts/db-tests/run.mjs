@@ -14,6 +14,7 @@ const suites = [
   "2c-rls-cross-tenant.mjs",
   "2d-billing-token-consume.mjs",
   "2e-public-visibility-and-publish-gate.mjs",
+  "2f-business-name-lock.mjs",
 ];
 
 let failed = 0;

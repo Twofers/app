@@ -1,6 +1,7 @@
 // Cron-triggered sweep that downgrades access for business subscriptions the
 // client can never expire on its own:
 //  - admin card-free trials whose trial_end has passed without conversion
+//  - paid Stripe subscriptions whose cancel-at-period-end access window passed
 //  - Stripe subscriptions whose past-due grace_period_until has passed
 //    without the payment recovering
 //
@@ -93,6 +94,58 @@ async function expireTrials(admin: any, nowIso: string, dryRun: boolean) {
   return { candidates: candidates.length, processed };
 }
 
+async function expirePaidCancellations(admin: any, nowIso: string, dryRun: boolean) {
+  const { data: rows, error } = await admin
+    .from("business_subscriptions")
+    .select("business_id,trial_type,trial_start,trial_end,current_period_start,current_period_end,cancel_at_period_end")
+    .eq("app_access_status", "active")
+    .eq("cancel_at_period_end", true)
+    .not("current_period_end", "is", null)
+    .lt("current_period_end", nowIso)
+    .limit(MAX_CANDIDATES);
+  if (error) throw error;
+
+  const candidates = (rows ?? []) as SubscriptionRow[];
+  if (dryRun) return { candidates: candidates.length, processed: 0 };
+
+  let processed = 0;
+  for (const row of candidates) {
+    const effectiveEnd = row.current_period_end ?? nowIso;
+    const { error: updateError } = await admin
+      .from("business_subscriptions")
+      .update({
+        app_access_status: "canceled",
+        billing_status: "canceled",
+        cancel_at_period_end: false,
+        canceled_at: effectiveEnd,
+        ended_at: effectiveEnd,
+        updated_at: nowIso,
+      })
+      .eq("business_id", row.business_id)
+      .eq("app_access_status", "active")
+      .eq("cancel_at_period_end", true)
+      .eq("current_period_end", row.current_period_end);
+    if (updateError) {
+      console.error("[expire-billing-access] paid cancellation expiry update failed:", updateError);
+      continue;
+    }
+    await applyBusinessBillingAccessState({
+      supabase: admin,
+      businessId: row.business_id,
+      provider: "stripe",
+      appAccessStatus: "canceled",
+      trialType: row.trial_type,
+      trialStart: row.trial_start,
+      trialEnd: row.trial_end,
+      currentPeriodStart: row.current_period_start,
+      currentPeriodEnd: row.current_period_end,
+      cancelAtPeriodEnd: false,
+    });
+    processed++;
+  }
+  return { candidates: candidates.length, processed };
+}
+
 async function expireGracePeriods(admin: any, nowIso: string, dryRun: boolean) {
   const { data: rows, error } = await admin
     .from("business_subscriptions")
@@ -165,11 +218,13 @@ serve(async (req) => {
 
   try {
     const trials = await expireTrials(admin, nowIso, dryRun);
+    const paidCancels = await expirePaidCancellations(admin, nowIso, dryRun);
     const grace = await expireGracePeriods(admin, nowIso, dryRun);
     return jsonResponse({
       ok: true,
       dry_run: dryRun,
       trial_expirations: trials,
+      paid_cancel_expirations: paidCancels,
       grace_expirations: grace,
     });
   } catch (err) {

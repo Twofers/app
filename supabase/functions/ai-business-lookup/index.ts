@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type BusinessLookupResult = {
   name: string;
@@ -265,6 +266,28 @@ serve(async (req) => {
     }
     if (isRedeemerUser(user)) {
       return forbiddenForRedeemerResponse(corsHeaders);
+    }
+
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: ownedBusinesses, error: businessError } = await admin
+      .from("businesses")
+      .select("id")
+      .eq("owner_id", user.id)
+      .limit(2);
+    if (businessError) throw businessError;
+    if (!Array.isArray(ownedBusinesses) || ownedBusinesses.length !== 1) {
+      return jsonResponse(corsHeaders, 403, {
+        error: "Approved business setup is required before business lookup.",
+        error_code: "BUSINESS_SETUP_CAPABILITY_REQUIRED",
+      });
+    }
+    const capabilities = await getBusinessCapabilities(admin as any, ownedBusinesses[0].id);
+    if (!capabilities.can_use_setup_tools) {
+      return jsonResponse(corsHeaders, 403, {
+        error: "Business lookup is unavailable for this account.",
+        error_code: "BUSINESS_SETUP_CAPABILITY_REQUIRED",
+        reason_code: capabilities.reason_code,
+      });
     }
 
     let body: Record<string, unknown>;

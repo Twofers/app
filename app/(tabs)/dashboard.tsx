@@ -616,6 +616,7 @@ export default function BusinessDashboard() {
     access: billingGateAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
+    businessStatus: businessProfile?.status ?? null,
     subscriptionTier,
     isLoggedIn,
   });
@@ -1262,7 +1263,10 @@ export default function BusinessDashboard() {
       if (billingBlocked) {
         return (
           <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
-            <MerchantAccessBlockedCard status={billingGateAccess.status} />
+            <MerchantAccessBlockedCard
+              status={billingGateAccess.status}
+              reason={billingGateAccess.reason}
+            />
           </View>
         );
       }
@@ -1479,6 +1483,7 @@ export default function BusinessDashboard() {
     [
       t,
       billingBlocked,
+      billingGateAccess.reason,
       billingGateAccess.status,
       deals.length,
       dealFilter,

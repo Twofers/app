@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Trial Requests | Twofer Admin</title>
+    <title>Business Access Requests | Twofer Admin</title>
     <meta name="robots" content="noindex,nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-site-hardening" />
+    <link rel="stylesheet" href="/styles.css?v=20260717-home-refresh" />
     <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
   </head>
   <body
@@ -26,7 +26,7 @@
           <a href="/admin">Overview</a>
           <a href="/admin/prospects">Prospects</a>
           <a href="/admin/sales-ai">Sales AI</a>
-          <a href="/admin/trial-requests" aria-current="page">Trial Requests</a>
+          <a href="/admin/trial-requests" aria-current="page">Business Access</a>
           <a href="/admin/businesses">Businesses</a>
           <a href="/admin/offers">Offers</a>
           <a href="/admin/billing/events">Billing</a>
@@ -46,13 +46,13 @@
       <div class="admin-title-row">
         <div>
           <p class="admin-kicker">Remote onboarding</p>
-          <h1>Trial Requests</h1>
-          <p class="lede">Review website requests by launch fit, category, duplicate risk, risk score, and next action.</p>
+          <h1>Business Access Requests</h1>
+          <p class="lede">Review website requests by launch fit, category, duplicate risk, risk score, and next action. Approval opens setup; the 30-day trial starts only after secure Checkout.</p>
         </div>
       </div>
       <section class="admin-grid three">
-        <article class="admin-card"><span>Approve limited</span><p>One live offer, limited claims, offer review required.</p></article>
-        <article class="admin-card"><span>Approve full</span><p>Founder/admin-approved trial with standard launch limits.</p></article>
+        <article class="admin-card"><span>Approve setup - basic</span><p>Owner can claim the business and finish profile/menu setup before activation.</p></article>
+        <article class="admin-card"><span>Approve setup - verified</span><p>Manual verification recorded. AI, publishing, credits, and new claims still wait for Checkout activation.</p></article>
         <article class="admin-card"><span>Reject or waitlist</span><p>Outside launch geography, prohibited categories, duplicate/spam signals.</p></article>
       </section>
       <section class="admin-section">
@@ -62,7 +62,7 @@
             <select name="status">
               <option value="open">Open review</option>
               <option value="all">All recent</option>
-              <option value="approved">Approved</option>
+              <option value="approved">Approved setup</option>
               <option value="waitlisted">Waitlisted</option>
               <option value="rejected">Rejected</option>
             </select>

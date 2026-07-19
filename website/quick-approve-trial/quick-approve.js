@@ -75,7 +75,7 @@
   if (confirmButton) {
     confirmButton.addEventListener("click", async () => {
       confirmButton.disabled = true;
-      setStatus(t("quickApproval.approving", "Approving the full 30-day trial…"));
+      setStatus(t("quickApproval.approving", "Approving setup access..."));
       try {
         const payload = await post("quick_confirm");
         if (detailsEl) detailsEl.hidden = true;
@@ -84,8 +84,8 @@
         if (resultEl) resultEl.hidden = false;
         setStatus(
           payload.approval_email_warning
-            ? `${t("quickApproval.approvedWarning", "Trial approved, but the welcome email needs follow-up.")} ${payload.approval_email_warning}`
-            : t("quickApproval.approved", "Trial approved successfully."),
+            ? `${t("quickApproval.approvedWarning", "Setup approved, but the approval email needs follow-up.")} ${payload.approval_email_warning}`
+            : t("quickApproval.approved", "Setup approved successfully."),
           payload.approval_email_warning ? "warning" : "info",
         );
       } catch (error) {

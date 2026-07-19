@@ -9,6 +9,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
@@ -236,6 +237,18 @@ serve(async (req) => {
       );
     }
 
+    const capabilities = await getBusinessCapabilities(admin as any, business_id);
+    if (!capabilities.can_extract_initial_menu) {
+      return new Response(
+        JSON.stringify({
+          error: "Menu extraction is not available for this business.",
+          error_code: "BUSINESS_MENU_EXTRACTION_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const imageUrlRaw = typeof body.image_url === "string" ? body.image_url.trim() : "";
     const imageBase64 = typeof body.image_base64 === "string" ? body.image_base64.trim() : "";
     const imageMime =
@@ -333,6 +346,38 @@ serve(async (req) => {
     }
 
     const canUseRouterFallbackWithoutOpenAi = Boolean(imageBase64) && routerCanUseGemini(geminiApiKey);
+    if (!openAiKey && !allowSyntheticWithoutKey && !canUseRouterFallbackWithoutOpenAi) {
+      // Return a clear configuration error so production cannot appear to have
+      // extracted real menu data when AI is not configured.
+      console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
+      return new Response(
+        JSON.stringify({
+          error:
+            "Menu scan is not configured yet. Please ask support to set OPENAI_API_KEY for this project.",
+          error_code: "OPENAI_NOT_CONFIGURED",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Reserve the setup-only allowance only after the request and provider
+    // configuration are known to be usable. The RPC serializes concurrent
+    // attempts, so one approved business cannot race past its one extraction.
+    const { data: allowanceConsumed, error: allowanceError } = await admin.rpc(
+      "consume_setup_menu_extraction_allowance",
+      { p_business_id: business_id },
+    );
+    if (allowanceError) throw allowanceError;
+    if (allowanceConsumed !== true) {
+      return new Response(
+        JSON.stringify({
+          error: "The setup menu-extraction allowance has already been used.",
+          error_code: "SETUP_MENU_EXTRACTION_LIMIT_REACHED",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (!openAiKey && allowSyntheticWithoutKey) {
       // Explicitly opt-in synthetic fallback for preview/dev projects only.
       // Pilot production must never silently label placeholder rows as OCR output.
@@ -351,20 +396,6 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (!openAiKey && !canUseRouterFallbackWithoutOpenAi) {
-      // Return a clear configuration error so production cannot appear to have
-      // extracted real menu data when AI is not configured.
-      console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
-      return new Response(
-        JSON.stringify({
-          error:
-            "Menu scan is not configured yet. Please ask support to set OPENAI_API_KEY for this project.",
-          error_code: "OPENAI_NOT_CONFIGURED",
-        }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const bizCategoryLabel = ((biz as { category?: string }).category ?? "").trim() || "local business";
     const instructionText = [
       `You extract menu line items from the attached menu image for a ${bizCategoryLabel} on a local deals app.`,

@@ -46,9 +46,14 @@ Priority #1 (public intake) plus adjacent hardening applied and validated. **Not
 - ✅ **I-EMAILURL** — the approve-button href is emitted only for an `https://` URL, so `escapeHtml` is never the sole guard on that attribute.
 - **Validation (both rounds):** `npm run typecheck:functions` (exit 0) · full edge-function suite **688/688** · `check-website-supabase-readiness.js` passed.
 
-**Deliberately NOT auto-fixed (need your input):**
-- **L6** (rename `verified_low_risk` / rebalance scoring) — a product & data-model decision with cross-surface ripple (DB, admin UI, quick-approval eligibility). Needs your call.
-- **L10** (`stripEndingPunctuation`) and **I-AI** (`AdAccessibilityText.tsx`) — both in the **AI-core-locked** area; per CLAUDE.md these need your explicit per-file approval before editing.
+**Round 3 — app-side + decisions (2026-07-13):**
+- ✅ **L9** — QA auto-login password now comes only from native launch arguments, never a deep-link URL param (kills the logcat/screen-record leak). In `app/auth-landing.tsx`; `tsc --noEmit` clean; **uncommitted** (rides with the staged QA-login work).
+- 🟡 **L6** — **accepted, won't fix** (low, human-gated; cheap mitigation would be security theater). See L6 above.
+- ⏸️ **L10** — **no change:** the current strip is already Dan-approved (manifest line 89), and the audit's "strip only periods" suggestion would *worsen* output (`Yum!.`); the only residual needs an impossible all-punctuation business name.
+- ⏸️ **I-AI** — `AdAccessibilityText.tsx` is **not** in the lock manifest, so it isn't gated; the change is a benign a11y normalization. Open offer: add it to the manifest if per-file gating is wanted.
+
+**Still your action:**
+- Push the 2 commits (`git push origin qa/db-guardrails-and-auth-tests`) — blocked for me by the permission mode.
 
 ---
 
@@ -144,8 +149,11 @@ Neither quick action is throttled. Responses are distinguishable: `410` invalid/
 
 **How to resolve:** Set `quick_approval_token_used_at` in the same guarded UPDATE that flips status to `trial_active` (or right after the claim, before `applyDecision`). Alternatively, retry the `used_at` write on the completion-failure branch instead of only clearing the claim.
 
-### L6 — Forgeable `verified_low_risk` state mints a one-click full-trial approval email (PLAUSIBLE)
+### L6 — Forgeable `verified_low_risk` state mints a one-click full-trial approval email (PLAUSIBLE) — 🟡 ACCEPTED (won't fix) 2026-07-13
 **`submit-business-application/index.ts:211`**
+
+> **Decision (Dan, 2026-07-13): accept the risk, no code change.** Rationale: the verifier downgraded this to low because the flow stays **human-gated** — a forged low-risk application only produces a review email with a one-click button; an admin must still click Confirm, and email confirmation is required before anything materializes, so nothing auto-grants. The cheap mitigation (require a `website_or_instagram` value) is **security theater** — that field is unverified free text an attacker can fake. The real fixes (resolve/verify the domain at submit; or rename `verified_low_risk` via a migration) are disproportionate to a low, human-gated finding. Revisit only if quick-approval is ever made non-interactive (auto-approve without a human click).
+
 
 `scoreApplication` reaches `≥70` purely from self-reported free text: phone (+10), a DFW keyword like "dallas" (+15), any address (+10), any website/instagram (+15), business_type containing "coffee/cafe/bakery" (+10) → 75. That state is exactly the quick-approval eligibility gate. The label `verified_low_risk` overstates a forgeable heuristic; the prohibited-category screen is naive substring matching.
 

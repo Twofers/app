@@ -59,10 +59,10 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 |----------|---------|
 | `claim-deal` | Create claim, `expires_at`, telemetry |
 | `redeem-token` | Staff QR / short-code redeem |
-| `begin-visual-redeem` | Consumer "Use Deal" start |
-| `complete-visual-redeem` | Consumer pass completion |
+| `begin-visual-redeem` | Legacy visual redeem start; current wallet Use Deal pass does not call it |
+| `complete-visual-redeem` | Legacy visual redeem completion; current wallet Use Deal pass does not call it |
 | `cancel-visual-redeem` | Deprecated path (returns 400); keep deployed if referenced |
-| `finalize-stale-redeems` | Auto-finalize stuck `redeeming` claims (~30s TTL) |
+| `finalize-stale-redeems` | Legacy auto-finalize for stuck `redeeming` claims; current wallet load does not call it |
 
 **Auth / account / analytics:**
 
@@ -242,10 +242,10 @@ Run on a **physical** device (iOS + Android if you ship both). Check off each it
 | Location | Location permission granted path (GPS) |
 | Deals | Claim deal |
 | Wallet | Active deal appears and countdown / redeem-by looks correct |
-| Redeem | **Use Deal** flow (slide → pass → complete) |
+| Redeem | **Use Deal** flow (slide → 30s QR/code pass → staff scan/manual code marks redeemed) |
+| Redeem | Let the 30s Use Deal QR window expire; show QR again; claim remains active until staff action |
 | Redeem | Force-kill app **during** redeem; reopen wallet — state sane, no duplicate redeem |
 | Redeem | Background app **during** redeem; return foreground — behavior correct |
-| Redeem | Stale `redeeming` auto-finalizes (~30s / `finalize-stale-redeems`) |
 | Wallet | Expired claim (past redeem-by) shows as ended / correct copy |
 | Deals | Ended / past campaign deals — browse + detail behavior |
 | Account | Delete account completes for consumer and business-owner accounts after explicit confirmation |

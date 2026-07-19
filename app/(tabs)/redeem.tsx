@@ -31,6 +31,7 @@ import {
 } from "@/lib/owner-redemption-security";
 import { isRedemptionCodeComplete, normalizeRedemptionCode } from "@/lib/redemption-mode-logic";
 import { localizedDealTitle } from "@/lib/deal-localization";
+import { useRegisterSuccessSound } from "@/hooks/use-register-success-sound";
 
 type RedeemMode = "scan" | "manual";
 
@@ -68,6 +69,8 @@ export default function RedeemScanner() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraPermissionRequesting, setCameraPermissionRequesting] = useState(false);
   const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraMountError, setCameraMountError] = useState<string | null>(null);
   const [mode, setMode] = useState<RedeemMode>("scan");
   const [scannerActive, setScannerActive] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -76,6 +79,7 @@ export default function RedeemScanner() {
   const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string; claimId: string | null } | null>(null);
   const [claimCodeInput, setClaimCodeInput] = useState("");
   const [reportVisible, setReportVisible] = useState(false);
+  const playRegisterSuccess = useRegisterSuccessSound();
 
   const loadOwnerSecurity = useCallback(async () => {
     if (!businessId) {
@@ -114,6 +118,8 @@ export default function RedeemScanner() {
       setBanner(null);
       setScanned(false);
       setScannerActive(false);
+      setCameraReady(false);
+      setCameraMountError(null);
       processingRef.current = false;
       return () => setOwnerPinInput("");
     }, []),
@@ -130,6 +136,8 @@ export default function RedeemScanner() {
     setScanned(false);
     if (mode === "manual") {
       setScannerActive(false);
+      setCameraReady(false);
+      setCameraMountError(null);
     }
   }, [mode]);
 
@@ -186,6 +194,7 @@ export default function RedeemScanner() {
         claimId: result.claim_id ?? null,
       });
       setClaimCodeInput("");
+      void playRegisterSuccess();
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : t("redeem.errRedeemFailed");
       setBanner({ message: translateKnownApiMessage(String(raw), t), tone: "error" });
@@ -571,6 +580,7 @@ export default function RedeemScanner() {
                 </View>
               ) : (
                 <>
+                  {cameraMountError ? <Banner message={cameraMountError} tone="error" /> : null}
                   <View
                     style={{
                       borderRadius: 18,
@@ -584,7 +594,50 @@ export default function RedeemScanner() {
                       facing="back"
                       onBarcodeScanned={scanned || processing ? undefined : (result) => void onScan(result.data)}
                       barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                      onCameraReady={() => {
+                        setCameraReady(true);
+                        setCameraMountError(null);
+                      }}
+                      onMountError={(event) => {
+                        setCameraReady(false);
+                        setCameraMountError(
+                          event.message ||
+                            t("redeem.cameraPermissionFailed", {
+                              defaultValue: "Camera permission did not open. Try again or enter the ticket code.",
+                            }),
+                        );
+                      }}
                     />
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: cameraReady ? "transparent" : "rgba(0,0,0,0.42)",
+                      }}
+                    >
+                      {!cameraReady ? (
+                        <>
+                          <ActivityIndicator color="#fff" />
+                          <Text style={{ marginTop: 10, color: "#fff", fontWeight: "800" }}>
+                            {t("redeem.cameraChecking", { defaultValue: "Checking camera permission..." })}
+                          </Text>
+                        </>
+                      ) : (
+                        <View
+                          style={{
+                            width: "64%",
+                            aspectRatio: 1,
+                            borderWidth: 3,
+                            borderColor: "rgba(255,255,255,0.92)",
+                            borderRadius: 18,
+                            backgroundColor: "rgba(0,0,0,0.08)",
+                          }}
+                        />
+                      )}
+                    </View>
                     {processing ? (
                       <View
                         style={{
@@ -601,7 +654,10 @@ export default function RedeemScanner() {
                     ) : null}
                   </View>
                   <Pressable
-                    onPress={() => setScanned(false)}
+                    onPress={() => {
+                      setScanned(false);
+                      setCameraMountError(null);
+                    }}
                     style={{
                       marginTop: Spacing.sm,
                       paddingVertical: Spacing.md,

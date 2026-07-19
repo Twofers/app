@@ -10,7 +10,7 @@ import { Colors, Gray, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
-import { claimDeal, beginVisualRedeem, finalizeStaleRedeems, releaseClaim } from "@/lib/functions";
+import { claimDeal, releaseClaim } from "@/lib/functions";
 import {
   DEFAULT_CLAIM_GRACE_MINUTES,
   getClaimRedeemDeadlineIso,
@@ -61,6 +61,7 @@ import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 import { clearWalletClaimToken, getWalletClaimToken } from "@/lib/wallet-claim-token-cache";
 import { supportedLocaleOrDefault } from "@/lib/supported-locales";
+import { useRegisterSuccessSound } from "@/hooks/use-register-success-sound";
 
 type ClaimRow = {
   id: string;
@@ -105,12 +106,6 @@ const WALLET_CLAIMS_BASE_SELECT =
 const WALLET_CLAIMS_SELECT =
   `id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,start_time,end_time,max_claims,price,timezone,${DEAL_STRUCTURED_DISPLAY_COLUMNS},businesses(name,address,location,latitude,longitude,is_demo))`;
 
-type BeginPayload = {
-  server_now: string;
-  redeem_started_at: string;
-  min_complete_at: string;
-};
-
 function claimNotRedeemable(row: ClaimRow, now: number) {
   const grace = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
   return isPastClaimRedeemDeadline(row.expires_at, now, grace);
@@ -140,8 +135,8 @@ type WalletListItem = ClaimRow | EndedListItem;
 
 type UseDealState =
   | null
-  | { row: ClaimRow; begin: null }
-  | { row: ClaimRow; begin: BeginPayload };
+  | { row: ClaimRow; confirmed: false }
+  | { row: ClaimRow; confirmed: true };
 
 export default function WalletScreen() {
   const { t, i18n } = useTranslation();
@@ -169,6 +164,7 @@ export default function WalletScreen() {
   const [releasingClaimId, setReleasingClaimId] = useState<string | null>(null);
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
+  const playRegisterSuccess = useRegisterSuccessSound();
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
@@ -234,7 +230,6 @@ export default function WalletScreen() {
     setBanner(null);
     setLoadFailed(false);
     try {
-      await finalizeStaleRedeems();
       const enrichedClaimsResult = await supabase
         .from("deal_claims")
         .select(WALLET_CLAIMS_SELECT)
@@ -339,6 +334,7 @@ export default function WalletScreen() {
     claimId: qrClaimId,
     enabled: qrVisible && !!qrClaimId,
     onRedeemed: ({ claimId }) => {
+      void playRegisterSuccess();
       // Flash the in-modal "Redeemed" confirmation (confetti + toast), then close and
       // reload — loadClaims() moves the card to Ended → Redeemed and fires the existing
       // save-this-business prompt for the just-redeemed claim.
@@ -616,38 +612,15 @@ export default function WalletScreen() {
       return;
     }
     if (row.claim_status === "redeeming") {
-      setUseDealBusy(true);
-      try {
-        const b = await beginVisualRedeem(row.id);
-        trackAppAnalyticsEvent({
-          event_name: "redeem_started",
-          claim_id: row.id,
-          deal_id: row.deal_id,
-          business_id: row.deals?.business_id ?? null,
-          context: { resumed: "1" },
-        });
-        setUseDealState({ row, begin: b });
-      } catch (err: unknown) {
-        const raw = err instanceof Error ? err.message : t("consumerWallet.errBeginRedeem");
-        setBanner(translateKnownApiMessage(String(raw), t));
-        trackAppAnalyticsEvent({
-          event_name: "redeem_failed",
-          claim_id: row.id,
-          deal_id: row.deal_id,
-          business_id: row.deals?.business_id ?? null,
-          context: { phase: "resume" },
-        });
-      } finally {
-        setUseDealBusy(false);
-      }
+      setUseDealState({ row, confirmed: true });
       return;
     }
-    setUseDealState({ row, begin: null });
+    setUseDealState({ row, confirmed: false });
   }
 
   async function onSlideConfirmed() {
     const row = useDealState?.row;
-    if (!row || useDealState.begin !== null) return;
+    if (!row || useDealState.confirmed) return;
     if (isDemoOffer(row.deals)) {
       setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
       setUseDealState(null);
@@ -656,15 +629,14 @@ export default function WalletScreen() {
     setUseDealBusy(true);
     setBanner(null);
     try {
-      const b = await beginVisualRedeem(row.id);
       trackAppAnalyticsEvent({
         event_name: "redeem_started",
         claim_id: row.id,
         deal_id: row.deal_id,
         business_id: row.deals?.business_id ?? null,
+        context: { method: "staff_scan_qr", phase: "pass_shown" },
       });
-      setUseDealState({ row, begin: b });
-      await loadClaims();
+      setUseDealState({ row, confirmed: true });
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : t("consumerWallet.errBeginRedeem");
       setBanner(translateKnownApiMessage(String(raw), t));
@@ -1036,11 +1008,35 @@ export default function WalletScreen() {
     [active, ended, t],
   );
 
-  const showSlideModal = useDealState !== null && useDealState.begin === null;
-  const showPassModal = useDealState !== null && useDealState.begin !== null;
+  const showSlideModal = useDealState !== null && !useDealState.confirmed;
+  const showPassModal = useDealState !== null && useDealState.confirmed;
   const passRow = showPassModal ? useDealState.row : null;
-  const passBegin = showPassModal ? useDealState.begin : null;
   const activeQrClaim = activeDealId ? claims.find((c) => c.deal_id === activeDealId) ?? null : null;
+
+  useClaimRedeemedWatch({
+    claimId: passRow?.id ?? null,
+    enabled: showPassModal && !!passRow,
+    intervalMs: 1000,
+    onRedeemed: ({ claimId }) => {
+      void playRegisterSuccess();
+      void clearWalletClaimToken(claimId);
+      trackAppAnalyticsEvent({
+        event_name: "redeem_completed",
+        claim_id: claimId,
+        deal_id: passRow?.deal_id ?? null,
+        business_id: passRow?.deals?.business_id ?? null,
+        context: { method: "staff_scan_qr" },
+      });
+      setTimeout(() => {
+        closeUseDealFlow();
+        void loadClaims();
+      }, 900);
+    },
+    onEnded: () => {
+      closeUseDealFlow();
+      void loadClaims();
+    },
+  });
 
   if (!isLoggedIn) {
     return <Redirect href="/auth-landing" />;
@@ -1159,7 +1155,7 @@ export default function WalletScreen() {
         />
       ) : null}
 
-      {passRow && passBegin ? (
+      {passRow ? (
         <WalletVisualPassModal
           visible={showPassModal}
           claimId={passRow.id}
@@ -1172,33 +1168,8 @@ export default function WalletScreen() {
             passRow.expires_at,
             passRow.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES,
           )}
-          minCompleteAtIso={passBegin.min_complete_at}
           nowMs={nowMs}
           onClose={closeUseDealFlow}
-          onRedeemed={() => {
-            trackAppAnalyticsEvent({
-              event_name: "redeem_completed",
-              claim_id: passRow.id,
-              deal_id: passRow.deal_id,
-              business_id: passRow.deals?.business_id ?? null,
-              context: { method: "visual" },
-            });
-            closeUseDealFlow();
-            void clearWalletClaimToken(passRow.id);
-            void loadClaims();
-          }}
-          onError={(msg) => {
-            setBanner(translateKnownApiMessage(msg, t));
-            trackAppAnalyticsEvent({
-              event_name: "redeem_failed",
-              claim_id: passRow.id,
-              deal_id: passRow.deal_id,
-              business_id: passRow.deals?.business_id ?? null,
-              context: { phase: "complete" },
-            });
-            closeUseDealFlow();
-            void loadClaims();
-          }}
         />
       ) : null}
 

@@ -309,7 +309,11 @@ function TabModeRedirect({
     e2e: browserE2EParam ?? String(params.e2e ?? ""),
     isDev: __DEV__,
   });
-  const { blocked: billingBlocked, loading: locationBillingLoading } = usePrimaryLocationBillingGate({
+  const {
+    blocked: billingBlocked,
+    access: businessAccess,
+    loading: locationBillingLoading,
+  } = usePrimaryLocationBillingGate({
     businessId,
     subscriptionTier,
     isLoggedIn,
@@ -320,7 +324,11 @@ function TabModeRedirect({
     mode === "business" &&
     Boolean(businessId) &&
     !billingLoading &&
-    billingBlocked;
+    billingBlocked &&
+    !businessAccess.canUseSetupTools &&
+    !businessAccess.canUseMenuTools &&
+    !businessAccess.canCreateTextDraft &&
+    !businessAccess.canRedeemExistingClaims;
 
   const tab = useMemo(() => {
     return deriveTabFromSegments(segments.map(String));

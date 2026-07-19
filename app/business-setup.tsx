@@ -30,6 +30,8 @@ import {
   type BusinessOnboardingContext,
 } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { isBusinessNameLocked } from "@/lib/business-name-change";
+import { BusinessNameChangeCard } from "@/components/business-name-change-request";
 import { isSiteImportEnabled } from "@/lib/runtime-env";
 import {
   importBusinessWebsite,
@@ -107,6 +109,12 @@ export default function BusinessSetupScreen() {
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
   const [onboardingContext, setOnboardingContext] = useState<BusinessOnboardingContext | null>(null);
+  // Existing business id + lifecycle status (from either prefill path). Once
+  // the business is publicly visible the name is locked server-side
+  // (migration 20260816120000); the UI mirrors that with a read-only field +
+  // the name change request card.
+  const [existingBusinessId, setExistingBusinessId] = useState<string | null>(null);
+  const [businessStatus, setBusinessStatus] = useState<string | null>(null);
   const [importedFromWebsite, setImportedFromWebsite] = useState(false);
   // Website-import (flag-gated). `websiteUrl` is populated by applyLookupResult
   // from the verified Google Places result; the card only shows once it's set.
@@ -169,16 +177,21 @@ export default function BusinessSetupScreen() {
   const resolvedCategory = category === "other" ? customCategory.trim() : category;
   const resolvedHours = hoursPreset === "custom_prompt" ? customHours.trim() : hoursPreset ? t(`businessSetup.hoursPreset.${hoursPreset}`) : "";
   const copyKeys = useMemo(() => getBusinessSetupCopyKeys(setupMode, busy), [setupMode, busy]);
+  const setupBypass = useMemo(
+    () =>
+      isAuthBypassEnabled({
+        skipSetup: String(params.skipSetup ?? ""),
+        e2e: String(params.e2e ?? ""),
+        isDev: __DEV__,
+      }),
+    [params.skipSetup, params.e2e],
+  );
+  const nameLocked = isBusinessNameLocked(businessStatus);
 
   useEffect(() => {
     if (authLoading) return;
-    const bypass = isAuthBypassEnabled({
-      skipSetup: String(params.skipSetup ?? ""),
-      e2e: String(params.e2e ?? ""),
-      isDev: __DEV__,
-    });
-    if (!bypass && !session?.user?.id) router.replace("/auth-landing");
-  }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
+    if (!setupBypass && !session?.user?.id) router.replace("/auth-landing");
+  }, [router, setupBypass, session?.user?.id, authLoading]);
 
   // Pre-fill the form when an existing business is found for this owner. Without
   // this, navigating back to /business-setup to "edit" shows an empty form, and
@@ -199,6 +212,8 @@ export default function BusinessSetupScreen() {
         if (context.business) {
           const row = context.business;
           setSetupMode("edit");
+          setExistingBusinessId(row.id);
+          setBusinessStatus(row.status ?? null);
           setImportedFromWebsite(
             Boolean(context.field_sources?.some((source) => source.source === "website_signup" || source.source === "app_login")),
           );
@@ -244,6 +259,8 @@ export default function BusinessSetupScreen() {
         return;
       }
       setSetupMode("edit");
+      setExistingBusinessId(row.id);
+      setBusinessStatus(row.status ?? null);
       setExistingLogoUrl((prev) => prev ?? (row.logo_url ?? null));
       setBusinessName((prev) => prev || (row.name ?? ""));
       setAddress((prev) => prev || (row.address ?? ""));
@@ -580,6 +597,10 @@ export default function BusinessSetupScreen() {
       // get_my_business() (helper falls back pre-migration) and branch instead.
       const { row: existingBiz, error: existingErr } = await fetchOwnerBusiness(supabase, uid);
       if (existingErr) throw new Error(existingErr.message);
+      if (!setupBypass && !existingBiz && !onboardingContext?.business) {
+        setBanner({ message: t("businessSetup.approvalRequired"), tone: "info" });
+        return;
+      }
 
       const bizPayload = {
         name: trimmed.businessName,
@@ -788,24 +809,57 @@ export default function BusinessSetupScreen() {
           </Pressable>
         </View>
 
-        <Field
-          label={t("businessSetup.businessName")}
-          value={businessName}
-          onChangeText={(s) => {
-            setBusinessName(s);
-            setLookupResults(null);
-            // Editing the name invalidates a prior verified match + its import.
-            if (websiteUrl) setWebsiteUrl("");
-            resetSiteImport();
-          }}
-          theme={theme}
-        />
+        {nameLocked ? (
+          <View>
+            <Text style={{ fontWeight: "700", marginBottom: 6, color: theme.text }}>
+              {t("businessSetup.businessName")}
+            </Text>
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                backgroundColor: theme.surfaceMuted ?? theme.surface,
+                paddingVertical: Spacing.sm,
+                paddingHorizontal: Spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 16, color: theme.text }}>{businessName}</Text>
+            </View>
+            <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6, color: theme.text }}>
+              {t("businessSetup.nameChange.lockedHint")}
+            </Text>
+          </View>
+        ) : (
+          <Field
+            label={t("businessSetup.businessName")}
+            value={businessName}
+            onChangeText={(s) => {
+              setBusinessName(s);
+              setLookupResults(null);
+              // Editing the name invalidates a prior verified match + its import.
+              if (websiteUrl) setWebsiteUrl("");
+              resetSiteImport();
+            }}
+            theme={theme}
+          />
+        )}
 
-        <SecondaryButton
-          title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
-          onPress={() => void onLookup()}
-          disabled={searching || detailsLoadingPlaceId !== null || !businessName.trim()}
-        />
+        {nameLocked && existingBusinessId && session?.user?.id ? (
+          <BusinessNameChangeCard
+            businessId={existingBusinessId}
+            userId={session.user.id}
+            currentName={businessName || null}
+          />
+        ) : null}
+
+        {!nameLocked && (
+          <SecondaryButton
+            title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+            onPress={() => void onLookup()}
+            disabled={searching || detailsLoadingPlaceId !== null || !businessName.trim()}
+          />
+        )}
 
         {searching && (
           <View style={{ alignItems: "center", paddingVertical: Spacing.sm }}>

@@ -20,9 +20,9 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-site-hardening" />
+    <link rel="stylesheet" href="/styles.css?v=20260717-home-refresh" />
   </head>
-  <body>
+  <body data-activation-status-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/business-activation-status">
     <header class="site-header">
       <nav class="nav" aria-label="Primary navigation">
         <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
@@ -43,13 +43,16 @@
           <p class="eyebrow" data-i18n="billing.success.eyebrow">Stripe confirmation</p>
           <h1 data-i18n="billing.success.heading">Billing confirmed</h1>
           <p class="lede" data-i18n="billing.success.lede">Stripe is confirming your subscription. Twofer will update your business access after the verified webhook reaches Supabase.</p>
+          <p class="status" data-activation-status role="status" aria-live="polite">Checking activation status…</p>
           <div class="hero-actions">
             <a class="button" href="/support" data-i18n="trial.contactSupport">Contact support</a>
             <a class="button button-secondary" href="/business" data-i18n="billing.common.backBusiness">Back to business access</a>
+            <a class="button button-secondary" data-activation-retry href="/business/billing/start" hidden>Retry activation</a>
           </div>
         </div>
       </section>
     </main>
-    <script src="/localization.js?v=20260712-site-hardening"></script>
+    <script src="/localization.js?v=20260717-home-refresh"></script>
+    <script src="/business/billing/activation-status.js?v=20260818-activation"></script>
   </body>
 </html>
