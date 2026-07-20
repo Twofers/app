@@ -120,10 +120,42 @@ async function main() {
       onFail: "An authenticated INSERT policy or grant exists — clients could forge consent (security bug)." });
 
   // --- case 6: grant via the edge function ----------------------------------
+  // This call doubles as an availability probe. Every check below depends on a
+  // grant actually existing, so if the function is not deployed to THIS project
+  // they must SKIP rather than run: with no consent row ever created,
+  // "another tenant cannot read", "revoke preserves history", "no admin_assisted
+  // row" and the publish-gate parity check would all pass while proving nothing.
+  // A suite that reports green because its dependency is absent is worse than
+  // one that fails.
   const granted = await fn(ctx, "set-promo-materials-authorization", {
     token: owner.token,
     body: { business_id: bizOwner.id, location_id: locOwner.id, action: "authorize", source: "app_settings" },
   });
+  if (granted.status === 404) {
+    const why = "set-promo-materials-authorization is not deployed to this project";
+    R.skip("owner CAN authorize through the edge function", why);
+    for (const name of [
+      "grant creates exactly one active row for the location",
+      "re-authorizing is idempotent (still one active row)",
+      "owner CAN read their own consent row (precondition for the leak check)",
+      "another tenant CANNOT read this business's consent rows",
+      "another tenant CANNOT revoke this business's consent",
+      "cross-tenant revoke attempt left the consent intact",
+      "precondition: an active consent row exists before revoking",
+      "owner CAN revoke through the edge function",
+      "after revoke the location reads as NOT authorized",
+      "revoke PRESERVES the historical row (never deletes)",
+      "re-granting after revoke appends a new row",
+      "precondition: authorization is active before the publish-gate comparison",
+      "can_business_publish returns the same result with and without authorization",
+      "a client claiming source=admin_assisted is downgraded, never recorded as admin",
+      "no admin_assisted row exists for either fixture business",
+    ]) {
+      R.skip(name, "requires the edge function");
+    }
+    console.log(`\n  NOTE: deploy set-promo-materials-authorization to this project, then re-run.`);
+    return;
+  }
   R.check("owner CAN authorize through the edge function",
     granted.ok && granted.json?.authorized === true,
     { detail: `HTTP ${granted.status} ${granted.text}`,
@@ -142,10 +174,19 @@ async function main() {
     { onFail: "Duplicate active consent rows — the partial unique index is missing (app bug)." });
 
   // --- case 5: cross-tenant denial ------------------------------------------
+  // Paired with the owner's own read: "the other tenant sees 0 rows" only means
+  // something if there IS a row to see. Asserting both sides makes an empty
+  // table impossible to mistake for a working policy.
+  const ownRead = await readAuthorizations(owner.token, bizOwner.id);
+  const ownRows = ownRead.json?.length ?? 0;
   const crossRead = await readAuthorizations(other.token, bizOwner.id);
+  R.check("owner CAN read their own consent row (precondition for the leak check)",
+    ownRead.ok && ownRows >= 1,
+    { detail: `HTTP ${ownRead.status} rows=${ownRows}`,
+      onFail: "Member-read policy denies the owner their own consent history (app bug)." });
   R.check("another tenant CANNOT read this business's consent rows",
-    crossRead.ok ? (crossRead.json?.length ?? 0) === 0 : isDenied(crossRead),
-    { detail: `HTTP ${crossRead.status} rows=${crossRead.json?.length}`,
+    ownRows >= 1 && (crossRead.ok ? (crossRead.json?.length ?? 0) === 0 : isDenied(crossRead)),
+    { detail: `owner sees ${ownRows}, other sees ${crossRead.json?.length}, HTTP ${crossRead.status}`,
       onFail: "Cross-tenant consent leak — the member-read policy is too broad (security bug)." });
 
   const crossWrite = await fn(ctx, "set-promo-materials-authorization", {
@@ -161,7 +202,15 @@ async function main() {
     { onFail: "A foreign caller mutated consent state (security bug)." });
 
   // --- case 7: revoke flips status but preserves history ---------------------
+  // Capture the pre-revoke state and assert it is non-empty: "0 active after"
+  // and "total unchanged" are both trivially true against an empty table, so
+  // without this the two checks below could pass having tested nothing.
   const beforeTotal = await totalCount(locOwner.id);
+  const beforeActive = await activeCount(locOwner.id);
+  R.check("precondition: an active consent row exists before revoking",
+    beforeActive === 1 && beforeTotal >= 1,
+    { detail: `active=${beforeActive} total=${beforeTotal}`,
+      onFail: "Nothing to revoke — the checks below would pass vacuously (test bug, not an app bug)." });
   const revoked = await fn(ctx, "set-promo-materials-authorization", {
     token: owner.token,
     body: { business_id: bizOwner.id, location_id: locOwner.id, action: "revoke", source: "app_settings" },
@@ -171,11 +220,12 @@ async function main() {
     { detail: `HTTP ${revoked.status} ${revoked.text}`,
       onFail: "Revoke path broken (app bug)." });
   R.check("after revoke the location reads as NOT authorized",
-    (await activeCount(locOwner.id)) === 0,
+    beforeActive === 1 && (await activeCount(locOwner.id)) === 0,
     { onFail: "revoked_at was not stamped — status would stay Authorized (app bug)." });
+  const afterTotal = await totalCount(locOwner.id);
   R.check("revoke PRESERVES the historical row (never deletes)",
-    (await totalCount(locOwner.id)) === beforeTotal,
-    { detail: `before=${beforeTotal} after=${await totalCount(locOwner.id)}`,
+    beforeTotal >= 1 && afterTotal === beforeTotal,
+    { detail: `before=${beforeTotal} after=${afterTotal}`,
       onFail: "Revoke deleted the row — consent history must be preserved for audit (app bug)." });
 
   // Re-granting after a revoke adds a NEW row rather than reviving the old one.
@@ -187,23 +237,6 @@ async function main() {
     (await totalCount(locOwner.id)) === beforeTotal + 1 && (await activeCount(locOwner.id)) === 1,
     { onFail: "Re-grant rewrote history instead of appending (app bug)." });
 
-  // --- client-supplied source can never claim the admin path ----------------
-  const forged = await fn(ctx, "set-promo-materials-authorization", {
-    token: owner.token,
-    body: { business_id: bizOther.id, location_id: locOther.id, action: "authorize", source: "admin_assisted" },
-  });
-  // The call is forbidden anyway (wrong tenant); the point is that no
-  // admin_assisted row can originate from a client token.
-  const forgedRows = await rest(
-    ctx,
-    "service",
-    `promo_materials_authorizations?select=id&source=eq.admin_assisted&business_id=eq.${bizOther.id}`,
-  );
-  R.check("a client token can never produce an admin_assisted row",
-    (forgedRows.json?.length ?? 0) === 0,
-    { detail: `HTTP ${forged.status} rows=${forgedRows.json?.length}`,
-      onFail: "The source whitelist regressed — clients could forge admin provenance (security bug)." });
-
   // --- case 9: publish gate is unaffected -----------------------------------
   async function canPublish(businessId) {
     const r = await rest(ctx, "service", "rpc/can_business_publish", {
@@ -212,7 +245,14 @@ async function main() {
     });
     return r.ok ? JSON.stringify(r.json) : `ERR ${r.status}`;
   }
-  // bizOwner currently HAS an active authorization; bizOther has none.
+  // Measure WITH an active authorization, then revoke and measure again. The
+  // precondition matters: if no row were active, both sides would measure the
+  // same unauthorized state and the comparison would prove nothing.
+  const activeBeforeGate = await activeCount(locOwner.id);
+  R.check("precondition: authorization is active before the publish-gate comparison",
+    activeBeforeGate === 1,
+    { detail: `active=${activeBeforeGate}`,
+      onFail: "Both sides of the comparison would be unauthorized (test bug, not an app bug)." });
   const withAuth = await canPublish(bizOwner.id);
   await fn(ctx, "set-promo-materials-authorization", {
     token: owner.token,
@@ -220,9 +260,38 @@ async function main() {
   });
   const withoutAuth = await canPublish(bizOwner.id);
   R.check("can_business_publish returns the same result with and without authorization",
-    withAuth === withoutAuth,
+    activeBeforeGate === 1 && withAuth === withoutAuth,
     { detail: `with=${withAuth} without=${withoutAuth}`,
       onFail: "The publish gate now depends on promotional-materials consent — it must stay fully isolated (app bug)." });
+
+  // --- client-supplied source can never claim the admin path ----------------
+  // Run against the owner's OWN business, on a location with no active row (the
+  // publish-gate step above just revoked it). A cross-tenant attempt would be
+  // rejected on authz alone and would never reach the source whitelist, so it
+  // could not distinguish a working whitelist from a broken one.
+  const forged = await fn(ctx, "set-promo-materials-authorization", {
+    token: owner.token,
+    body: { business_id: bizOwner.id, location_id: locOwner.id, action: "authorize", source: "admin_assisted" },
+  });
+  const forgedRow = await rest(
+    ctx,
+    "service",
+    `promo_materials_authorizations?select=id,source&location_id=eq.${locOwner.id}&revoked_at=is.null`,
+  );
+  const forgedSource = forgedRow.json?.[0]?.source ?? null;
+  R.check("a client claiming source=admin_assisted is downgraded, never recorded as admin",
+    forged.ok && forgedSource === "app_settings",
+    { detail: `HTTP ${forged.status} recorded source=${forgedSource}`,
+      onFail: "The source whitelist regressed — clients could forge admin provenance (security bug)." });
+  const anyAdminRows = await rest(
+    ctx,
+    "service",
+    `promo_materials_authorizations?select=id&source=eq.admin_assisted&business_id=in.(${bizOwner.id},${bizOther.id})`,
+  );
+  R.check("no admin_assisted row exists for either fixture business",
+    (anyAdminRows.json?.length ?? 0) === 0,
+    { detail: `rows=${anyAdminRows.json?.length}`,
+      onFail: "An admin_assisted row originated from a client token (security bug)." });
 }
 
 try {
