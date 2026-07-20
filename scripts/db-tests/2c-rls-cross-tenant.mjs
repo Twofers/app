@@ -48,10 +48,13 @@ async function main() {
   if (!bizA || !bizB) { R.check("fixture: both businesses seeded", false); return; }
   R.check("fixture: both businesses seeded", true);
 
-  // Since billing v4, business_locations.business_id FKs to business_profiles(id),
-  // and the app keeps business_profiles.id == businesses.id. Mirror that keying.
-  await seed("business_profiles", { id: bizA.id, user_id: aRealId, owner_id: aRealId, name: "Tenant A Cafe" });
-  await seed("business_profiles", { id: bizB.id, user_id: bId, owner_id: bId, name: "Tenant B Cafe" });
+  // business_locations.business_id holds businesses.id and (since 20260819120000)
+  // FKs to businesses(id). The billing profile is seeded only so tier lookups
+  // resolve; its own id is independent and is deliberately not used as a key.
+  // It links to the user via user_id / owner_id — there is no business_id column
+  // in any migration (the one in prod is undocumented drift).
+  await seed("business_profiles", { user_id: aRealId, owner_id: aRealId, name: "Tenant A Cafe" });
+  await seed("business_profiles", { user_id: bId, owner_id: bId, name: "Tenant B Cafe" });
 
   const locA = await seed("business_locations", { business_id: bizA.id, name: "A HQ", address: "1 A St" });
   const locB = await seed("business_locations", { business_id: bizB.id, name: "B HQ", address: "2 B St" });
@@ -73,7 +76,6 @@ async function main() {
 
   // --- PRIVATE cross-tenant READ must return nothing ---
   const privateReads = [
-    ["business_locations", locB && `business_locations?select=*&id=eq.${locB.id}`],
     ["business_media_import_jobs", jobB && `business_media_import_jobs?select=*&id=eq.${jobB.id}`],
     ["business_media_assets", assetB && `business_media_assets?select=*&id=eq.${assetB.id}`],
     ["billing_accounts", billB && `billing_accounts?select=*&owner_user_id=eq.${bId}`],
@@ -89,6 +91,20 @@ async function main() {
   }
 
   // --- PUBLIC catalog cross-tenant READ is allowed BY DESIGN ---
+  // business_locations belongs here, not in privateReads above: the pilot read
+  // policy ("Auth users can read business locations", live in prod since
+  // 2026-06-10, codified by 20260819120000) makes locations readable by ANY
+  // authenticated user, because shoppers must read them to render deals. A
+  // storefront address is public information. Cross-tenant WRITE is still
+  // denied — asserted below and exhaustively in 2g-business-locations-rls.mjs.
+  if (locB) {
+    const pubLoc = await rest(ctx, "anon", `business_locations?select=id&id=eq.${locB.id}`, { token: tA });
+    R.check("A can read B's business_location (pilot read policy, by design)",
+      pubLoc.ok && (pubLoc.json?.length ?? 0) === 1,
+      { detail: `HTTP ${pubLoc.status}, rows=${pubLoc.json?.length}`,
+        onFail: "Deal rendering depends on this read path; 0 rows means the pilot read policy is missing (app bug)." });
+  }
+
   const pubBiz = await rest(ctx, "anon", `businesses?select=id&id=eq.${bizB.id}`, { token: tA });
   R.check("A can read B's businesses row (public catalog, by design)", pubBiz.ok && (pubBiz.json?.length ?? 0) === 1,
     { detail: `HTTP ${pubBiz.status}, rows=${pubBiz.json?.length}`,
