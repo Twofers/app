@@ -119,8 +119,12 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
-    // 🔍 Verify user owns a business
-    const { data: businesses, error: businessError } = await supabase
+    // 🔍 Verify user owns a business.
+    // Filtering on owner_id needs a SELECT grant on that column, which
+    // anon/authenticated do not have (20260705120000), so this runs on the
+    // service-role client. Still scoped to the authenticated user.id, so the
+    // gate is unchanged.
+    const { data: businesses, error: businessError } = await supabaseAdmin
       .from("businesses")
       .select("id")
       .eq("owner_id", user.id)

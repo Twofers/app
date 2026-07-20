@@ -337,7 +337,7 @@ export default function AiDealStudioDevScreen() {
     }
     setBusinessLoading(true);
     setBusinessError(null);
-    const result = await fetchOwnerBusiness(supabase, session.user.id);
+    const result = await fetchOwnerBusiness(supabase);
     if (result.error) {
       setBusiness(null);
       setBusinessError(result.error.message);

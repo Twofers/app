@@ -53,10 +53,24 @@ async function get(token, pathq) {
   return { status: res.status, body };
 }
 
+// Still read-only: the only POST we make is to a SECURITY DEFINER read RPC.
+async function post(token, pathq, payload) {
+  const res = await fetch(`${URL_BASE}/rest/v1/${pathq}`, {
+    method: "POST",
+    headers: { apikey: ANON, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: j(payload),
+  });
+  const body = await res.json().catch(() => null);
+  return { status: res.status, body };
+}
+
 const { token, userId } = await signIn();
 console.log("Signed in as smoke user:", userId?.slice(0, 8) + "…");
 
-const biz = await get(token, `businesses?owner_id=eq.${userId}&select=id,name,owner_id`);
+// owner_id is not readable by `authenticated` (20260705120000) — neither as a
+// selected column nor as a filter — so this goes through the SECURITY DEFINER
+// get_my_business(), which is already scoped to the caller.
+const biz = await post(token, `rpc/get_my_business`, {});
 console.log("\nbusinesses (owned):", biz.status, j(biz.body));
 
 // business_profiles is gated by user_id OR owner_id — try both.

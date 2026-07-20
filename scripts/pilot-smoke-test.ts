@@ -58,12 +58,14 @@ async function run() {
 
   // --- Step 2: Get merchant's business ---
   console.log("2. Looking up merchant business...");
-  const { data: biz, error: bizErr } = await merchantClient
-    .from("businesses")
-    .select("id, name")
-    .eq("owner_id", mAuth.user!.id)
-    .limit(1)
-    .single();
+  // Filtering on owner_id requires a SELECT grant on that column, which
+  // authenticated does not have (20260705120000). get_my_business() is the
+  // SECURITY DEFINER path for owner-side reads and is already scoped to
+  // auth.uid().
+  const { data: bizRows, error: bizErr } = await merchantClient.rpc("get_my_business");
+  const biz = (Array.isArray(bizRows) ? bizRows[0] : bizRows) as
+    | { id: string; name: string }
+    | undefined;
   if (bizErr || !biz) {
     console.error("   FAIL: No business found for merchant:", bizErr?.message);
     process.exit(1);
