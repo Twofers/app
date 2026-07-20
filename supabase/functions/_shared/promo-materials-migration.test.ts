@@ -87,3 +87,48 @@ describe("promo_materials_authorizations migration", () => {
     expect(sql).not.toMatch(/location_entitlements|subscription|stripe/i);
   });
 });
+
+const fix = readFileSync(
+  join(process.cwd(), "supabase", "migrations", "20260819140000_fix_promo_materials_owner_read.sql"),
+  "utf8",
+);
+const fixSql = fix.replace(/--[^\n]*/g, "");
+
+describe("promo materials owner-read fix migration", () => {
+  // The original policy gated on is_business_member() alone, which resolves
+  // only through business_members. Owners created by app/business-setup.tsx
+  // have no membership row, so they could not read their own consent.
+  it("adds an owner arm to the member-read policy", () => {
+    expect(fixSql).toMatch(/DROP POLICY IF EXISTS promo_materials_authorizations_member_read/);
+    expect(fixSql).toMatch(/CREATE POLICY promo_materials_authorizations_member_read/);
+    expect(fixSql).toMatch(/COALESCE\(public\.user_owns_business\(business_id\), false\)/);
+    // The membership and admin arms must survive the rewrite.
+    expect(fixSql).toMatch(/COALESCE\(public\.is_business_member\(business_id\), false\)/);
+    expect(fixSql).toMatch(/COALESCE\(public\.admin_can\('business\.read'\), false\)/);
+  });
+
+  // A policy that read public.businesses directly would DENY rather than allow:
+  // authenticated holds no SELECT grant on that table since 20260705120000.
+  it("routes the ownership test through a SECURITY DEFINER helper, never a direct table read", () => {
+    expect(fixSql).toMatch(/CREATE OR REPLACE FUNCTION public\.user_owns_business\(p_business_id uuid\)/);
+    expect(fixSql).toMatch(/SECURITY DEFINER/);
+    expect(fixSql).toMatch(/REVOKE ALL ON FUNCTION public\.user_owns_business\(uuid\) FROM public/);
+    expect(fixSql).toMatch(/GRANT EXECUTE ON FUNCTION public\.user_owns_business\(uuid\) TO authenticated/);
+    // No direct `FROM public.businesses` inside the policy body itself.
+    const policyBody = fixSql.slice(fixSql.indexOf("CREATE POLICY promo_materials_authorizations_member_read"));
+    expect(policyBody).not.toMatch(/FROM public\.businesses/);
+  });
+
+  it("widens SELECT only — it must not grant writes or weaken the append-only guarantee", () => {
+    expect(fixSql).toMatch(/FOR SELECT/);
+    expect(fixSql).not.toMatch(/FOR (INSERT|UPDATE|DELETE|ALL)/);
+    expect(fixSql).not.toMatch(/GRANT[^;]*(INSERT|UPDATE|DELETE)[^;]*promo_materials_authorizations/i);
+    expect(fixSql).not.toMatch(/DROP TABLE|TRUNCATE/i);
+  });
+
+  it("stays inert with respect to every gate", () => {
+    expect(fixSql).not.toMatch(/can_business_publish/);
+    expect(fixSql).not.toMatch(/get_business_capabilities/);
+    expect(fixSql).not.toMatch(/location_entitlements|subscription|stripe/i);
+  });
+});
