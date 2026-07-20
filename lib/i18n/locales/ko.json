@@ -275,6 +275,7 @@
     "claimCreateFailed": "이용권을 만들 수 없습니다: {{detail}}",
     "redeemUnauthorized": "인증되지 않았습니다. 비즈니스 계정으로 로그인하세요.",
     "redeemNotBusinessOwner": "토큰을 사용하려면 비즈니스 소유자여야 합니다.",
+    "redeemRedemptionModeInactive": "티켓을 사용하려면 먼저 이 기기에서 사용 모드를 켜세요.",
     "redeemTokenMissing": "토큰이 없거나 올바르지 않습니다",
     "redeemTokenOrCodeMissing": "클레임 코드를 입력하거나 QR을 스캔하세요.",
     "redeemInvalidCode": "해당 클레임 코드와 일치하는 활성 티켓이 없습니다.",

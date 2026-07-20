@@ -41,6 +41,10 @@ const API_MESSAGE_KEY: Record<string, string> = {
 
   "Unauthorized. Please log in as a business owner.": "apiErrors.redeemUnauthorized",
   "You must be a business owner to redeem tokens.": "apiErrors.redeemNotBusinessOwner",
+  // Redemption Mode session gates (staff-redemption edge fn + preview/confirm RPC):
+  // show a clear "turn on Redemption Mode" message instead of raw server text.
+  "This endpoint is only for Redemption Mode staff sessions.": "apiErrors.redeemRedemptionModeInactive",
+  "Redemption session is not active.": "apiErrors.redeemRedemptionModeInactive",
   "Missing or invalid token": "apiErrors.redeemTokenMissing",
   "Missing or invalid token or claim code": "apiErrors.redeemTokenOrCodeMissing",
   "Invalid token": "apiErrors.redeemTokenInvalid",

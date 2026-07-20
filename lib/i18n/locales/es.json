@@ -275,6 +275,7 @@
     "claimCreateFailed": "No se pudo crear el reclamo: {{detail}}",
     "redeemUnauthorized": "No autorizado. Inicia sesión como titular del negocio.",
     "redeemNotBusinessOwner": "Solo este negocio puede canjear este ticket.",
+    "redeemRedemptionModeInactive": "Activa el Modo de canje en este dispositivo antes de canjear tickets.",
     "redeemTokenMissing": "Este QR no es válido.",
     "redeemTokenOrCodeMissing": "Introduce un código o escanea un QR.",
     "redeemInvalidCode": "Ese código no coincide con un ticket activo.",

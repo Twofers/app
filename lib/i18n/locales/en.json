@@ -275,6 +275,7 @@
     "claimCreateFailed": "Couldn't claim this deal. Try again.",
     "redeemUnauthorized": "Log in as the business owner to redeem tickets.",
     "redeemNotBusinessOwner": "Only this business can redeem this ticket.",
+    "redeemRedemptionModeInactive": "Turn on Redemption Mode on this device before redeeming tickets.",
     "redeemTokenMissing": "This QR isn't valid.",
     "redeemTokenOrCodeMissing": "Enter a claim code or scan a QR.",
     "redeemInvalidCode": "That claim code doesn’t match an active ticket.",
