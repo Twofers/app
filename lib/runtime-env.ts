@@ -143,7 +143,7 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV ?? "(unset)",
     EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING ?? "(unset)",
     EXPO_PUBLIC_APP_VARIANT: process.env.EXPO_PUBLIC_APP_VARIANT ?? "(unset)",
-    androidPackage: getAndroidPackageName(),
+    configuredAndroidPackage: getAndroidPackageName(),
     appVariant: getAppExtra().appVariant ?? "(unset)",
     AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",

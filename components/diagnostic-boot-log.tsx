@@ -28,13 +28,21 @@ export function DiagnosticBootLog() {
     didLog.current = true;
     const language = i18n.language;
     const tabMode = mode;
+    // `androidPackage` from app.config.js is derived from the variant flag at
+    // bundle time — in a dev-client it can differ from the installed native
+    // binary (that mismatch is why this line can't be trusted to identify a
+    // build). Relabel it as `configuredAndroidPackage` so the log never claims
+    // it's the real package; `nativeBuild` (read from the binary) is the
+    // trustworthy build identifier.
+    const { androidPackage: configuredAndroidPackage, ...appExtra } = getAppExtra();
     const payload = {
       version: getExpoAppVersion(),
       buildProfile: getBuildProfileLabel(),
       nativeBuild: getNativeBuildLabel(),
       executionEnvironment: getExecutionEnvironment(),
       previewOrDevClientProfile: isPreviewOrDevClientProfile(),
-      ...getAppExtra(),
+      ...appExtra,
+      configuredAndroidPackage,
       tabMode,
       language,
       authUserId: session?.user?.id ?? null,
