@@ -80,13 +80,19 @@ describe("promotional materials authorization (owner path)", () => {
     const gate = read("components/business-terms-gate.tsx");
     expect(gate).not.toMatch(/promo/i);
 
-    // The sync writes a consent row only behind its own explicit flag, which is
-    // separate from normalized.termsAccepted. This path is currently unreachable
-    // (see the NOTE in business-onboarding-sync.ts) — asserted for separation of
-    // the two consents, NOT as evidence that website intake grants placement.
+    // Stronger than the previous assertion: the shared onboarding module no
+    // longer writes a promo_materials_authorizations row at all. The website
+    // checkbox is only a preference recorded on the application; the grant is
+    // made by the authenticated owner. Terms acceptance and promotional
+    // authorization therefore share no code path whatsoever.
     const sync = read("supabase/functions/_shared/business-onboarding-sync.ts");
-    expect(sync).toMatch(/if \(normalized\.promoMaterialsAuthorized === true\) \{/);
-    expect(sync).toMatch(/source: "website_onboarding"/);
+    expect(sync).not.toMatch(/promo_materials_authorizations/);
+    expect(sync).not.toMatch(/grantAuthorization/);
+    expect(sync).not.toMatch(/source: "website_onboarding"/);
+
+    // The one live grant path stays owner-authenticated.
+    const grant = read("supabase/functions/set-promo-materials-authorization/index.ts");
+    expect(grant).toMatch(/grantAuthorization/);
   });
 
   // Required case 1: the website flag is optional and defaults to false.

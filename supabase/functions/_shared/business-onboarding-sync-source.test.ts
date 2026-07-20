@@ -24,18 +24,32 @@ describe("website-to-app business onboarding sync", () => {
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.can_business_publish/i);
   });
 
-  it("keeps client business signups invite-gated while allowing service-role onboarding", () => {
-    const originalGate = read("supabase/migrations/20260706120000_business_invite_gate.sql");
-    const serviceRoleGate = read("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql");
+  it("caps self-serve business creation per owner while allowing service-role onboarding", () => {
+    // Gate v3 (20260814130000) superseded the invite-code posture: v1
+    // (20260706120000) and v2 (20260730129000) required a
+    // business_invite_validations row, v3 explicitly dropped that requirement
+    // and replaced it with a per-owner cap. Assert v3, since that is the body
+    // CREATE OR REPLACE actually installs on businesses_require_invite_trg.
+    const gate = read("supabase/migrations/20260814130000_business_open_application_gate.sql");
+    expect(gate).toMatch(/CREATE OR REPLACE FUNCTION public\.businesses_require_invite/i);
+    // Admin/server onboarding paths bypass the cap and manage their own rules.
+    expect(gate).toMatch(/auth\.role\(\).*service_role/is);
+    // Pilot cap: one non-rejected/non-archived business per owner.
+    expect(gate).toMatch(/business limit reached/i);
+    expect(gate).toMatch(/b\.status NOT IN \('rejected', 'archived'\)/i);
+    // TOCTOU guard: two parallel inserts must not both read count=0.
+    expect(gate).toMatch(/pg_advisory_xact_lock\(hashtext\('businesses_owner_cap:/i);
+    // The v3 body must not reinstate the dropped validation-row requirement.
+    const v3Body = gate.slice(gate.indexOf("CREATE OR REPLACE FUNCTION public.businesses_require_invite"));
+    expect(v3Body).not.toMatch(/business_invite_validations/i);
+
+    // Materialization itself is SQL-side and requires a confirmed auth email;
+    // no edge function creates the business row from an onboarding snapshot.
+    const claimGate = read("supabase/migrations/20260817120000_approved_not_activated_activation_gate.sql");
+    expect(claimGate).toMatch(/CREATE OR REPLACE FUNCTION public\.claim_approved_business_application_for_user/i);
+    expect(claimGate).toMatch(/CONFIRMED_AUTH_EMAIL_REQUIRED/);
     const helper = read("supabase/functions/_shared/business-onboarding-sync.ts");
-    expect(originalGate).toMatch(/business invite required/i);
-    expect(originalGate).toMatch(/CREATE TRIGGER businesses_require_invite_trg/i);
-    expect(serviceRoleGate).toMatch(/auth\.role\(\).*service_role/is);
-    expect(serviceRoleGate).toMatch(/business_invite_validations/i);
-    expect(serviceRoleGate).toMatch(/business invite required/i);
-    expect(helper).toMatch(/ensureBusinessInviteValidation/);
-    expect(helper).toMatch(/from\("business_invite_validations"\)\.upsert/i);
-    expect(helper).toMatch(/code_used:\s*source === "admin_created" \? "admin_onboarding" : "reviewed_onboarding"/);
+    expect(helper).not.toMatch(/from\("businesses"\)\.insert/);
   });
 
   it("connects website submit to normalized onboarding without eager unauthenticated materialization", () => {
@@ -46,6 +60,10 @@ describe("website-to-app business onboarding sync", () => {
     // unverified email in the request body (account-takeover-adjacent risk).
     // Materialization happens only after the real owner authenticates in the
     // app, via get-business-onboarding-context.
+    //
+    // materializeBusinessForUser no longer exists anywhere (removed once
+    // claim_approved_business_application_for_user superseded it), so this
+    // assertion is now a guard against reintroducing that helper or its name.
     expect(source).not.toMatch(/materializeBusinessForUser/);
     expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).not.toMatch(/auth\.admin\.listUsers/);
@@ -70,6 +88,7 @@ describe("website-to-app business onboarding sync", () => {
 
     const context = read("supabase/functions/get-business-onboarding-context/index.ts");
     expect(context).toMatch(/claim_approved_business_application_for_user/);
+    // Reintroduction guard: the TS helper this replaced has been deleted.
     expect(context).not.toMatch(/materializeBusinessForUser/);
     expect(context).toMatch(/get_business_capabilities/);
     expect(context).not.toMatch(/stripe-create-checkout|customer-portal|STRIPE_SECRET_KEY/i);

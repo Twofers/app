@@ -2,6 +2,28 @@
 
 Status: PLAN — approved for implementation by Opus. Written 2026-07-19 after a read-only audit of the terms system, onboarding surfaces, location model, admin dashboard, and audit-log architecture.
 
+> **Amendment 2026-07-19 — website-signup consent path removed.**
+>
+> This plan's §1 and §4 describe `_shared/business-onboarding-sync.ts` as a
+> writer of `terms_acceptances` and `promo_materials_authorizations` for website
+> signups (see the `business-onboarding-sync.ts:286-311` and §4 "website-consent
+> sync" references below). **Those line references are now stale.** That code
+> lived in `syncDerivedRows`, reachable only from `materializeBusinessForUser`,
+> which was superseded by the SQL routine
+> `public.claim_approved_business_application_for_user`
+> (`supabase/migrations/20260817120000_approved_not_activated_activation_gate.sql`)
+> — the routine materializes a business only after the owner's email is
+> confirmed. The whole path was unreachable and has been deleted.
+>
+> The consent design is unchanged and intentional: the website checkbox is
+> recorded as a **preference** on `business_applications.promo_materials_authorized`,
+> and the actual authorization is granted by the authenticated owner via
+> `set-promo-materials-authorization` (or an admin via
+> `admin-promo-authorization`) — the same posture terms acceptance has. An
+> unauthenticated website form never grants placement permission.
+>
+> Read §1/§4 for product intent; read the code for current structure.
+
 ## 0. Objective (summary)
 
 Add an **optional** disclosure + consent letting a business authorize Twofer to place removable promotional materials (countertop displays, window decals, QR signs) at its location.

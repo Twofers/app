@@ -45,11 +45,12 @@ describe("explicit business terms acceptance", () => {
     expect(trialCreate).not.toMatch(/terms_acceptances/);
 
     const sync = read("supabase/functions/_shared/business-onboarding-sync.ts");
-    // The only place a terms_acceptances row is written from a snapshot is
-    // gated behind normalized.termsAccepted, which claim-link/admin-trial
-    // always leave false — so these businesses reach `terms_required` and
-    // must go through accept-business-terms explicitly.
-    expect(sync).toMatch(/if \(normalized\.termsAccepted\) \{/);
+    // Stronger than the previous assertion: the shared onboarding module no
+    // longer writes terms_acceptances at all, now that the snapshot
+    // materialization path is gone. The only writer is accept-business-terms,
+    // which requires an authenticated owner — so claimed/admin-created
+    // businesses reach `terms_required` and must accept explicitly.
+    expect(sync).not.toMatch(/terms_acceptances/);
   });
 
   it("exposes reason_code terms_required to the app via get-business-onboarding-context", () => {

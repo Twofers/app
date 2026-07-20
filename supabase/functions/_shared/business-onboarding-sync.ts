@@ -4,7 +4,6 @@ import {
   CURRENT_BUSINESS_TERMS_VERSION,
   CURRENT_PRIVACY_POLICY_VERSION,
 } from "./business-terms-version.ts";
-import { grantAuthorization, resolvePrimaryLocationId } from "./promo-materials.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -27,24 +26,19 @@ export type NormalizedBusinessOnboarding = {
   termsAccepted: boolean;
   privacyAcknowledged: boolean;
   /**
-   * Optional, opt-in only. Absent or false means "not authorized" and writes
-   * nothing — accepting the terms above must never imply this permission.
+   * Optional, opt-in only. Recorded as a *preference* on the application
+   * (business_applications.promo_materials_authorized) and carried in
+   * normalized_payload — it never grants anything by itself, and accepting the
+   * terms above must never imply this permission.
+   *
+   * The actual authorization row is written only by the authenticated owner
+   * via set-promo-materials-authorization (or by an admin via
+   * admin-promo-authorization) — the same posture terms acceptance has.
+   * This module used to grant it inline from an unauthenticated website
+   * signup; that path was unreachable and has been removed. Decided with Dan
+   * 2026-07-19; see docs/plans/promo-materials-authorization-plan.md.
    */
   promoMaterialsAuthorized?: boolean;
-};
-
-type MaterializeArgs = {
-  userId: string;
-  requestId?: string | null;
-  applicationId?: string | null;
-  normalized: NormalizedBusinessOnboarding;
-  decision?: {
-    status?: string | null;
-    access_tier?: string | null;
-    verification_status?: string | null;
-    risk_score?: number | null;
-  } | null;
-  source: "website_signup" | "app_login" | "merchant_app_edit" | "admin_created";
 };
 
 export function cleanString(value: unknown, maxLength: number): string | null {
@@ -96,34 +90,6 @@ export function normalizeCategory(value: string | null): string | null {
   return value?.trim().slice(0, 80) ?? null;
 }
 
-function businessStatusFromDecision(status: string | null | undefined): string {
-  if (status === "approved_not_activated") return "approved_not_activated";
-  if (status === "trial_limited") return "limited_trial";
-  if (status === "trial_active" || status === "trialing") return "trialing";
-  if (status === "active") return "active";
-  if (status === "review_required") return "pending_verification";
-  if (status === "waitlisted") return "pending_verification";
-  if (status === "rejected") return "rejected";
-  return "pending_verification";
-}
-
-function accessLevelFromDecision(accessTier: string | null | undefined): string {
-  if (accessTier === "approved_not_activated") return "approved_not_activated";
-  if (accessTier === "trial_limited") return "limited_trial";
-  if (accessTier === "field_invited") return "limited_trial";
-  if (accessTier === "trialing") return "full_trial";
-  if (accessTier === "active") return "paid";
-  if (accessTier === "waitlisted" || accessTier === "rejected") return "none";
-  return "pending";
-}
-
-function verificationFromDecision(value: string | null | undefined): string {
-  if (value === "verified_low_risk") return "basic_verified";
-  if (value === "needs_review") return "needs_more_info";
-  if (value === "rejected") return "failed";
-  return "not_started";
-}
-
 export function parsePromotableItems(raw: string | null): string[] {
   if (!raw) return [];
   return raw
@@ -154,213 +120,6 @@ export function calculateCompletionScore(values: {
   if (values.offerInterests?.trim()) score += 10;
   if (values.termsAccepted) score += 10;
   return Math.min(100, score);
-}
-
-async function upsertContactChannel(
-  supabase: DbClient,
-  businessId: string,
-  type: string,
-  value: string | null,
-  source: string,
-) {
-  if (!value) return;
-  const normalizedValue = type === "phone" ? normalizePhone(value) : value.trim().toLowerCase();
-  const { data: existing, error: selectError } = await supabase
-    .from("business_contact_channels")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("type", type)
-    .eq("is_primary", true)
-    .maybeSingle();
-  if (selectError) throw selectError;
-  const payload = {
-    business_id: businessId,
-    type,
-    value,
-    normalized_value: normalizedValue,
-    is_primary: true,
-    is_public: true,
-    source,
-  };
-  if (existing?.id) {
-    const { error } = await supabase.from("business_contact_channels").update(payload).eq("id", existing.id);
-    if (error) throw error;
-    return;
-  }
-  const { error } = await supabase.from("business_contact_channels").insert(payload);
-  if (error) throw error;
-}
-
-async function upsertFieldSource(
-  supabase: DbClient,
-  businessId: string,
-  fieldKey: string,
-  source: string,
-  value: unknown,
-  sourceRecordId?: string | null,
-  requiresReview = false,
-) {
-  const { error } = await supabase.from("business_profile_field_sources").upsert(
-    {
-      business_id: businessId,
-      field_key: fieldKey,
-      source,
-      source_record_id: sourceRecordId ?? null,
-      source_value: value == null ? null : value,
-      current_value: value == null ? null : value,
-      last_updated_at: new Date().toISOString(),
-      requires_review: requiresReview,
-      review_status: requiresReview ? "needs_review" : "not_required",
-    },
-    { onConflict: "business_id,field_key" },
-  );
-  if (error) throw error;
-}
-
-async function ensureBusinessInviteValidation(supabase: DbClient, userId: string, source: string) {
-  const { error } = await supabase.from("business_invite_validations").upsert(
-    {
-      user_id: userId,
-      validated_at: new Date().toISOString(),
-      code_used: source === "admin_created" ? "admin_onboarding" : "reviewed_onboarding",
-    },
-    { onConflict: "user_id", ignoreDuplicates: true },
-  );
-  if (error) throw error;
-}
-
-async function seedChecklist(supabase: DbClient, businessId: string, imported: NormalizedBusinessOnboarding) {
-  const rows = [
-    ["review_business_basics", "Review business basics", imported.businessName ? "imported" : "not_started"],
-    ["confirm_location", "Confirm location", imported.address ? "imported" : "not_started"],
-    ["verify_contact_info", "Verify contact info", imported.email || imported.phone ? "imported" : "not_started"],
-    ["confirm_slow_hours", "Confirm slow hours", imported.slowHours ? "imported" : "not_started"],
-    ["review_promotable_items", "Review items to promote", imported.offerInterests ? "imported" : "not_started"],
-    ["create_first_offer_draft", "Create first offer draft", imported.offerInterests ? "in_progress" : "not_started"],
-    ["review_offer_terms", "Review offer terms", "not_started"],
-    ["complete_redemption_training", "Complete redemption training", "not_started"],
-    ["confirm_staff_ready", "Confirm staff readiness", "not_started"],
-    ["await_admin_approval", "Await admin approval", "needs_review"],
-  ].map(([item_key, label, status]) => ({
-    business_id: businessId,
-    item_key,
-    label,
-    status,
-    is_required: true,
-  }));
-  const { error } = await supabase.from("business_setup_checklist").upsert(rows, {
-    onConflict: "business_id,item_key",
-  });
-  if (error) throw error;
-}
-
-async function syncDerivedRows(
-  supabase: DbClient,
-  businessId: string,
-  normalized: NormalizedBusinessOnboarding,
-  source: string,
-  sourceRecordId?: string | null,
-  actorUserId?: string | null,
-) {
-  const urlOrHandle = normalizeUrlOrHandle(normalized.websiteOrInstagram);
-  await upsertContactChannel(supabase, businessId, "email", normalized.email, source);
-  await upsertContactChannel(supabase, businessId, "phone", normalized.phone, source);
-  if (urlOrHandle.type && urlOrHandle.value) {
-    await upsertContactChannel(supabase, businessId, urlOrHandle.type, urlOrHandle.value, source);
-  }
-
-  if (normalized.slowHours) {
-    await supabase.from("business_slow_hours").delete().eq("business_id", businessId).eq("source", "website_signup");
-    const { error } = await supabase.from("business_slow_hours").insert({
-      business_id: businessId,
-      label: "Website request",
-      raw_text: normalized.slowHours,
-      confidence: 0.5,
-      source,
-    });
-    if (error) throw error;
-  }
-
-  const items = parsePromotableItems(normalized.offerInterests);
-  if (items.length > 0) {
-    await supabase.from("business_promotable_items").delete().eq("business_id", businessId).eq("source", "website_signup");
-    const { error } = await supabase.from("business_promotable_items").insert(
-      items.map((name) => ({
-        business_id: businessId,
-        name,
-        source_raw_text: normalized.offerInterests,
-        source,
-        suggested_offer_type: "bogo",
-      })),
-    );
-    if (error) throw error;
-  }
-
-  if (normalized.termsAccepted) {
-    const { error } = await supabase.from("terms_acceptances").upsert(
-      {
-        business_id: businessId,
-        user_id: actorUserId ?? null,
-        document_type: "business_terms",
-        document_version: CURRENT_BUSINESS_TERMS_VERSION,
-        source,
-      },
-      { onConflict: "business_id,document_type,document_version,source" },
-    );
-    if (error) throw error;
-  }
-  if (normalized.privacyAcknowledged) {
-    const { error } = await supabase.from("terms_acceptances").upsert(
-      {
-        business_id: businessId,
-        user_id: actorUserId ?? null,
-        document_type: "privacy_policy",
-        document_version: CURRENT_PRIVACY_POLICY_VERSION,
-        source,
-      },
-      { onConflict: "business_id,document_type,document_version,source" },
-    );
-    if (error) throw error;
-  }
-
-  // Strictly opt-in and strictly separate from the terms acceptance above: a
-  // false/absent flag writes nothing, leaving the business "Not authorized".
-  // Never gate anything on the outcome — a failure here must not fail the sync.
-  //
-  // NOTE: currently UNREACHABLE, like the rest of syncDerivedRows. The only
-  // caller, materializeBusinessForUser, was superseded by the SQL routine
-  // claim_approved_business_application_for_user (migration 20260817120000),
-  // which materializes a business only after the owner's email is confirmed.
-  // That is deliberate, and so is leaving this here rather than porting it:
-  // the website tick is recorded on business_applications.promo_materials_authorized
-  // as a preference, and the actual authorization is granted by the
-  // authenticated owner via set-promo-materials-authorization — the same
-  // posture terms acceptance now has. Decided with Dan 2026-07-19.
-  if (normalized.promoMaterialsAuthorized === true) {
-    try {
-      const resolved = await resolvePrimaryLocationId(supabase, businessId, null);
-      if (resolved.ok) {
-        await grantAuthorization(supabase, {
-          businessId,
-          locationId: resolved.locationId,
-          source: "website_onboarding",
-          userId: actorUserId ?? null,
-          authorizerName: normalized.contactName || null,
-        });
-      }
-    } catch (error) {
-      console.error("[business-onboarding-sync] promo materials authorization sync failed:", error);
-    }
-  }
-
-  await seedChecklist(supabase, businessId, normalized);
-  await upsertFieldSource(supabase, businessId, "business.display_name", source, normalized.businessName, sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "business.category", source, normalizeCategory(normalized.businessType), sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "location.primary_address", source, normalized.address, sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "contact.public_email", source, normalized.email, sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "contact.phone", source, normalized.phone, sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "slow_hours.raw_text", source, normalized.slowHours, sourceRecordId);
-  await upsertFieldSource(supabase, businessId, "promotable_items.raw_text", source, normalized.offerInterests, sourceRecordId);
 }
 
 export async function upsertBusinessProfileForOwner(
@@ -394,128 +153,6 @@ export async function upsertBusinessProfileForOwner(
   }
   const { error } = await supabase.from("business_profiles").insert(payload);
   if (error) throw error;
-}
-
-export async function materializeBusinessForUser(
-  supabase: DbClient,
-  args: MaterializeArgs,
-): Promise<{ businessId: string; created: boolean }> {
-  const category = normalizeCategory(args.normalized.businessType);
-  const score = calculateCompletionScore({
-    businessName: args.normalized.businessName,
-    category,
-    email: args.normalized.email,
-    phone: args.normalized.phone,
-    address: args.normalized.address,
-    slowHours: args.normalized.slowHours,
-    offerInterests: args.normalized.offerInterests,
-    termsAccepted: args.normalized.termsAccepted,
-  });
-  const urlOrHandle = normalizeUrlOrHandle(args.normalized.websiteOrInstagram);
-  const basePayload = {
-    name: args.normalized.businessName,
-    contact_name: args.normalized.contactName,
-    business_email: args.normalized.email,
-    public_email: args.normalized.email,
-    phone: normalizePhone(args.normalized.phone),
-    address: args.normalized.address,
-    location: args.normalized.address,
-    category,
-    hours_text: args.normalized.slowHours,
-    website_url: urlOrHandle.type === "website" ? urlOrHandle.value : null,
-    instagram_url: urlOrHandle.type === "instagram" ? urlOrHandle.value : null,
-    status: businessStatusFromDecision(args.decision?.status),
-    access_level: accessLevelFromDecision(args.decision?.access_tier),
-    verification_status: verificationFromDecision(args.decision?.verification_status),
-    risk_score: args.decision?.risk_score ?? null,
-    risk_level: args.decision?.risk_score == null ? null : args.decision.risk_score >= 70 ? "low" : args.decision.risk_score >= 40 ? "medium" : "high",
-    source: args.source,
-    source_onboarding_request_id: args.requestId ?? null,
-    profile_completion_score: score,
-    last_profile_completed_at: score >= 80 ? new Date().toISOString() : null,
-  };
-
-  const { data: existing, error: existingError } = await supabase
-    .from("businesses")
-    .select("id,current_profile_version")
-    .eq("owner_id", args.userId)
-    .maybeSingle();
-  if (existingError) throw existingError;
-
-  let businessId = existing?.id as string | undefined;
-  let created = false;
-  if (businessId) {
-    const existingVersion = Number((existing as { current_profile_version?: unknown }).current_profile_version ?? 1);
-    const { error } = await supabase
-      .from("businesses")
-      .update({ ...basePayload, current_profile_version: existingVersion + 1 })
-      .eq("id", businessId);
-    if (error) throw error;
-  } else {
-    await ensureBusinessInviteValidation(supabase, args.userId, args.source);
-    const { data, error } = await supabase
-      .from("businesses")
-      .insert({ owner_id: args.userId, ...basePayload })
-      .select("id")
-      .single();
-    if (error) throw error;
-    businessId = data.id as string;
-    created = true;
-  }
-
-  await upsertBusinessProfileForOwner(supabase, {
-    userId: args.userId,
-    name: args.normalized.businessName,
-    address: args.normalized.address,
-    category,
-    setupCompleted: score >= 60,
-  });
-
-  const { error: memberError } = await supabase.from("business_members").upsert(
-    {
-      business_id: businessId,
-      user_id: args.userId,
-      invited_email: args.normalized.email,
-      display_name: args.normalized.contactName,
-      role: "owner",
-      status: "active",
-      source: args.source,
-      linked_at: new Date().toISOString(),
-    },
-    { onConflict: "business_id,invited_email" },
-  );
-  if (memberError) throw memberError;
-
-  await syncDerivedRows(supabase, businessId, args.normalized, args.source, args.requestId ?? args.applicationId ?? null, args.userId);
-
-  if (args.requestId) {
-    await supabase.from("business_onboarding_requests").update({ business_id: businessId, status: "materialized" }).eq("id", args.requestId);
-    await supabase
-      .from("business_invites")
-      .update({
-        business_id: businessId,
-        accepted_by_user_id: args.userId,
-        accepted_at: new Date().toISOString(),
-        status: "accepted",
-      })
-      .eq("onboarding_request_id", args.requestId)
-      .eq("invited_email", args.normalized.email);
-  }
-  if (args.applicationId) {
-    await supabase.from("business_applications").update({ business_id: businessId, onboarding_request_id: args.requestId ?? null }).eq("id", args.applicationId);
-  }
-
-  await supabase.from("business_profile_revision_log").insert({
-    business_id: businessId,
-    actor_user_id: args.userId,
-    actor_type: args.source === "merchant_app_edit" ? "authenticated_business_owner" : "system",
-    source: args.source,
-    section_key: created ? "website_import" : "website_import_update",
-    after_value: args.normalized,
-    reason: "business_onboarding_sync",
-  });
-
-  return { businessId, created };
 }
 
 export async function createOnboardingRequest(
