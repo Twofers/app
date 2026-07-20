@@ -80,6 +80,14 @@ testsprite_tests/tmp/
 
 qa-artifacts/
 
+# Captured device/CLI output from QA runs — never commit.
+# These are raw logcat and expo-start dumps. They carry real auth user UUIDs (user
+# PII) and trip gitleaks' generic-api-key entropy heuristic, which reddened
+# secret-scan on every PR in 2026-07 (see .gitleaksignore, entries dated 2026-07-19).
+docs/qa/evidence/
+*_logcat.txt
+expo-start*.out.txt
+
 # Local signing/credential helper scripts — never commit
 set-signing-creds.ps1
 *-signing-creds.ps1
