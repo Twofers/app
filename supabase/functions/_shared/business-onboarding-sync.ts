@@ -1,9 +1,17 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import {
+  CURRENT_BUSINESS_TERMS_VERSION,
+  CURRENT_PRIVACY_POLICY_VERSION,
+} from "./business-terms-version.ts";
+import { grantAuthorization, resolvePrimaryLocationId } from "./promo-materials.ts";
+
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
-export const CURRENT_BUSINESS_TERMS_VERSION = "2026-07-01";
-export const CURRENT_PRIVACY_POLICY_VERSION = "2026-07-01";
+// Re-exported so existing importers (accept-business-terms and friends) keep
+// their current import path; the constants themselves live in
+// business-terms-version.ts.
+export { CURRENT_BUSINESS_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION };
 
 export type NormalizedBusinessOnboarding = {
   businessName: string;
@@ -18,6 +26,11 @@ export type NormalizedBusinessOnboarding = {
   launchArea: string | null;
   termsAccepted: boolean;
   privacyAcknowledged: boolean;
+  /**
+   * Optional, opt-in only. Absent or false means "not authorized" and writes
+   * nothing — accepting the terms above must never imply this permission.
+   */
+  promoMaterialsAuthorized?: boolean;
 };
 
 type MaterializeArgs = {
@@ -310,6 +323,36 @@ async function syncDerivedRows(
     if (error) throw error;
   }
 
+  // Strictly opt-in and strictly separate from the terms acceptance above: a
+  // false/absent flag writes nothing, leaving the business "Not authorized".
+  // Never gate anything on the outcome — a failure here must not fail the sync.
+  //
+  // NOTE: currently UNREACHABLE, like the rest of syncDerivedRows. The only
+  // caller, materializeBusinessForUser, was superseded by the SQL routine
+  // claim_approved_business_application_for_user (migration 20260817120000),
+  // which materializes a business only after the owner's email is confirmed.
+  // That is deliberate, and so is leaving this here rather than porting it:
+  // the website tick is recorded on business_applications.promo_materials_authorized
+  // as a preference, and the actual authorization is granted by the
+  // authenticated owner via set-promo-materials-authorization — the same
+  // posture terms acceptance now has. Decided with Dan 2026-07-19.
+  if (normalized.promoMaterialsAuthorized === true) {
+    try {
+      const resolved = await resolvePrimaryLocationId(supabase, businessId, null);
+      if (resolved.ok) {
+        await grantAuthorization(supabase, {
+          businessId,
+          locationId: resolved.locationId,
+          source: "website_onboarding",
+          userId: actorUserId ?? null,
+          authorizerName: normalized.contactName || null,
+        });
+      }
+    } catch (error) {
+      console.error("[business-onboarding-sync] promo materials authorization sync failed:", error);
+    }
+  }
+
   await seedChecklist(supabase, businessId, normalized);
   await upsertFieldSource(supabase, businessId, "business.display_name", source, normalized.businessName, sourceRecordId);
   await upsertFieldSource(supabase, businessId, "business.category", source, normalizeCategory(normalized.businessType), sourceRecordId);
@@ -504,8 +547,8 @@ export async function createOnboardingRequest(
       launch_area_confirmed: Boolean(normalized.launchArea),
       accepted_business_terms: normalized.termsAccepted,
       accepted_privacy_policy: normalized.privacyAcknowledged,
-      accepted_business_terms_version: "2026-07-01",
-      accepted_privacy_policy_version: "2026-07-01",
+      accepted_business_terms_version: CURRENT_BUSINESS_TERMS_VERSION,
+      accepted_privacy_policy_version: CURRENT_PRIVACY_POLICY_VERSION,
       raw_payload: rawPayload,
       normalized_payload: normalized,
       status: args.status === "trial_limited"

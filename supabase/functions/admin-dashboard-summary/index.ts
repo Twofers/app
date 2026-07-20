@@ -1088,6 +1088,7 @@ async function loadSection(
       claims_and_redemptions: null,
       trial_and_access: null,
       ai_usage: null,
+      promo_materials: [],
       business_health_error: null,
     };
   }
@@ -1135,10 +1136,16 @@ async function loadSection(
     }
   }
 
+  // Read-only promotional-materials consent status, one entry per location.
+  // Never gates anything; a failure here degrades to an empty list rather than
+  // failing the whole business detail view.
+  const promoMaterials = await loadPromoMaterialsDetail(supabaseAdmin, businessId);
+
   return {
     business: businessRow,
     applications: applications.data ?? [],
     audit_log: audit.data ?? [],
+    promo_materials: promoMaterials,
     health: healthDetail?.health ?? null,
     offer_activity: healthDetail?.offer_activity ?? null,
     claims_and_redemptions: healthDetail?.claims_and_redemptions ?? null,
@@ -1146,6 +1153,66 @@ async function loadSection(
     ai_usage: healthDetail?.ai_usage ?? null,
     business_health_error: businessHealthError,
   };
+}
+
+/** Label shown wherever an admin recorded consent on the business's behalf. */
+const ADMIN_ASSISTED_LABEL = "Recorded by Twofer on behalf of business";
+
+/**
+ * Per-location promotional-materials consent status for the admin business
+ * detail view. "Authorized" = an open (un-revoked) row exists. Revoked and
+ * superseded rows are returned as history so an admin can see the full trail.
+ */
+async function loadPromoMaterialsDetail(
+  supabaseAdmin: any,
+  businessId: string,
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const [locations, authorizations] = await Promise.all([
+      supabaseAdmin
+        .from("business_locations")
+        .select("id,name,address")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("promo_materials_authorizations")
+        .select(
+          "id,location_id,authorized_at,revoked_at,authorizer_name,authorizer_role,business_terms_version,source,permission_received_at,created_at",
+        )
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (locations.error) throw locations.error;
+    if (authorizations.error) throw authorizations.error;
+
+    const rows = (authorizations.data ?? []) as Array<Record<string, unknown>>;
+    return ((locations.data ?? []) as Array<Record<string, unknown>>).map((location) => {
+      const forLocation = rows.filter((row) => row.location_id === location.id);
+      const active = forLocation.find((row) => row.revoked_at == null) ?? null;
+      const latest = active ?? forLocation[0] ?? null;
+      return {
+        location_id: location.id,
+        location_name: location.name ?? null,
+        location_address: location.address ?? null,
+        status: active ? "authorized" : "not_authorized",
+        authorized_at: latest?.authorized_at ?? null,
+        revoked_at: latest?.revoked_at ?? null,
+        // Falls back to the source when no name was captured (website intake).
+        authorizer_name: latest?.authorizer_name ?? null,
+        authorizer_role: latest?.authorizer_role ?? null,
+        source: latest?.source ?? null,
+        business_terms_version: latest?.business_terms_version ?? null,
+        permission_received_at: latest?.permission_received_at ?? null,
+        recorded_on_behalf_label: latest?.source === "admin_assisted" ? ADMIN_ASSISTED_LABEL : null,
+        history: forLocation,
+      };
+    });
+  } catch (error) {
+    // Pre-migration schema, or a transient read failure: show nothing rather
+    // than breaking the business detail page.
+    console.warn("[admin-dashboard-summary] promo materials detail error:", error);
+    return [];
+  }
 }
 
 function utcMonthStart(offsetMonths = 0): Date {

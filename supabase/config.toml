@@ -788,3 +788,15 @@ entrypoint = "./functions/stripe-webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/import-business-website/index.ts"
+
+# Optional promotional-materials authorization (owner/manager, per location).
+[functions.set-promo-materials-authorization]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/set-promo-materials-authorization/index.ts"
+
+# Admin-assisted recording of an in-person promotional-materials authorization.
+[functions.admin-promo-authorization]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-promo-authorization/index.ts"

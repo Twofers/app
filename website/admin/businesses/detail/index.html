@@ -18,6 +18,7 @@
     data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
     data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
     data-admin-business-applications-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-applications"
+    data-admin-promo-authorization-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-promo-authorization"
     data-admin-section="business_detail"
   >
     <header class="site-header">
@@ -167,6 +168,38 @@
           <article class="admin-card"><span>AI quota risk</span><span class="admin-badge" data-ai-risk>&mdash;</span></article>
           <article class="admin-card"><span>AI month cost</span><span class="admin-badge" data-ai-cost>&mdash;</span></article>
         </div>
+      </section>
+
+      <section class="admin-section" aria-label="Promotional materials">
+        <div class="admin-section-header">
+          <div>
+            <h2>Promotional Materials</h2>
+            <p>Optional per-location permission to place removable Twofer materials. This does not affect publishing, billing, or verification.</p>
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Location</th><th>Status</th><th>Authorized by</th><th>Source</th><th>Authorized</th><th>Revoked</th></tr></thead>
+            <tbody data-promo-materials>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load promotional materials status.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <details class="admin-inline-details">
+          <summary>Record in-person authorization</summary>
+          <p class="admin-note">Use only when a business has given permission in person. The authorizing person's name, their role, and the date permission was given are all required, and the record is labeled &ldquo;Recorded by Twofer on behalf of business&rdquo;.</p>
+          <div class="admin-inline-actions">
+            <label>Location<select data-promo-location></select></label>
+            <label>Authorizer name<input type="text" data-promo-name maxlength="120" /></label>
+            <label>Authorizer role<input type="text" data-promo-role maxlength="60" placeholder="Owner, Manager" /></label>
+            <label>Date permission received<input type="date" data-promo-received /></label>
+          </div>
+          <div class="admin-inline-actions">
+            <button type="button" class="button button-small" data-promo-action="authorize">Record in-person authorization</button>
+            <button type="button" class="button button-small button-secondary" data-promo-action="revoke">Record revocation</button>
+          </div>
+          <p class="status" data-promo-status role="status" aria-live="polite"></p>
+        </details>
       </section>
 
       <section class="admin-section" id="business-record">

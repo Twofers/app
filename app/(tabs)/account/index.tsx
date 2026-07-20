@@ -48,6 +48,7 @@ import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { RedemptionModeSettings } from "@/components/redemption-mode-settings";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { getPromoMaterialsAuthorization, setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { isBusinessNameLocked } from "@/lib/business-name-change";
 import { BusinessNameChangeCard } from "@/components/business-name-change-request";
 import { getSupportEmail } from "@/lib/support-contact";
@@ -109,6 +110,10 @@ export default function AccountScreen() {
   /** null = unknown (no business, or column not deployed yet) — toggle hidden. */
   const [bizClaimNotif, setBizClaimNotif] = useState<boolean | null>(null);
   const [bizClaimNotifSaving, setBizClaimNotifSaving] = useState(false);
+  // Optional promotional-materials authorization. null = row hidden (table not
+  // readable yet, i.e. before the migration is applied).
+  const [promoAuth, setPromoAuth] = useState<boolean | null>(null);
+  const [promoAuthSaving, setPromoAuthSaving] = useState(false);
   const [repeatPolicyAvailable, setRepeatPolicyAvailable] = useState(false);
   const [repeatPolicyType, setRepeatPolicyType] = useState<RepeatClaimPolicyType>("NONE");
   const [repeatCooldownDays, setRepeatCooldownDays] = useState(DEFAULT_REPEAT_CLAIM_COOLDOWN_DAYS);
@@ -383,6 +388,60 @@ export default function AccountScreen() {
       cancelled = true;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) {
+      setPromoAuth(null);
+      return;
+    }
+    let cancelled = false;
+    void getPromoMaterialsAuthorization(businessId).then((status) => {
+      if (cancelled) return;
+      // getPromoMaterialsAuthorization returns null when the table isn't
+      // readable — hide the row rather than showing a control that can't work.
+      setPromoAuth(status ? status.authorized : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  function togglePromoAuth(next: boolean) {
+    if (!businessId || promoAuth === null || promoAuthSaving) return;
+    if (!next) {
+      // Repo convention: branded confirm, never Alert.alert. Revoking only
+      // flips the status — existing consent history is preserved server-side.
+      confirm({
+        title: t("account.promoAuthTitle"),
+        message: t("account.promoAuthRevokeConfirm"),
+        confirmLabel: t("account.promoAuthRevokeConfirmCta"),
+        cancelLabel: t("commonUi.cancel"),
+        onConfirm: () => void applyPromoAuth(false),
+      });
+      return;
+    }
+    void applyPromoAuth(true);
+  }
+
+  async function applyPromoAuth(next: boolean) {
+    if (!businessId || promoAuth === null) return;
+    const previous = promoAuth;
+    setPromoAuth(next);
+    setPromoAuthSaving(true);
+    try {
+      const status = await setPromoMaterialsAuthorization({
+        businessId,
+        action: next ? "authorize" : "revoke",
+        source: "app_settings",
+      });
+      setPromoAuth(status.authorized);
+    } catch {
+      setPromoAuth(previous);
+      setBanner({ message: t("account.errSaveProfileFailed"), tone: "error" });
+    } finally {
+      setPromoAuthSaving(false);
+    }
+  }
 
   async function toggleBizClaimNotif(next: boolean) {
     if (!businessId || bizClaimNotif === null) return;
@@ -1114,6 +1173,37 @@ export default function AccountScreen() {
                 accessibilityLabel={t("account.bizClaimNotifTitle")}
                 accessibilityHint={t("account.bizClaimNotifA11yHint")}
                 accessibilityState={getSwitchAccessibilityState(bizClaimNotif, bizClaimNotifSaving)}
+              />
+            </View>
+          ) : null}
+
+          {promoAuth !== null ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.md,
+                padding: Spacing.md,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+                  {t("account.promoAuthTitle")}
+                </Text>
+                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+                  {promoAuth ? t("account.promoAuthStatusOn") : t("account.promoAuthStatusOff")}
+                </Text>
+              </View>
+              <BrandedSwitch
+                value={promoAuth}
+                onValueChange={(v) => togglePromoAuth(v)}
+                disabled={promoAuthSaving}
+                accessibilityRole="switch"
+                accessibilityLabel={t("account.promoAuthTitle")}
+                accessibilityState={getSwitchAccessibilityState(promoAuth, promoAuthSaving)}
               />
             </View>
           ) : null}

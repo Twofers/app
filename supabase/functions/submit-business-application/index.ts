@@ -81,6 +81,7 @@ type Payload = {
   launch_area?: unknown;
   terms_accepted?: unknown;
   privacy_acknowledged?: unknown;
+  promo_materials_authorized?: unknown;
   company_website?: unknown;
 };
 
@@ -303,6 +304,9 @@ serve(async (req) => {
   const email = cleanEmail(payload.email);
   const termsAccepted = payload.terms_accepted === true;
   const privacyAcknowledged = payload.privacy_acknowledged === true;
+  // Optional and opt-in: absent, false, or any non-true value all mean "not
+  // authorized". Deliberately NOT part of the required-fields guard below.
+  const promoMaterialsAuthorized = payload.promo_materials_authorized === true;
 
   if (!businessName || !contactName || !email || !termsAccepted || !privacyAcknowledged) {
     return json(req, { error: "Missing required fields." }, 400);
@@ -350,6 +354,7 @@ serve(async (req) => {
       launchArea,
       termsAccepted,
       privacyAcknowledged,
+      promoMaterialsAuthorized,
     };
     const { data: application, error } = await supabase.from("business_applications").insert({
       business_name: businessName,
@@ -367,6 +372,7 @@ serve(async (req) => {
       // always reflects what was submitted even if that guard is ever changed.
       terms_accepted: termsAccepted,
       privacy_acknowledged: privacyAcknowledged,
+      promo_materials_authorized: promoMaterialsAuthorized,
       source: "website_start_trial",
       status: decision.status,
       access_tier: decision.access_tier,

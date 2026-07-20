@@ -505,7 +505,12 @@
     "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero.",
     "expandBizProfile": "Editar campos",
     "collapseBizProfile": "Ocultar campos",
-    "advancedOptions": "Más opciones"
+    "advancedOptions": "Más opciones",
+    "promoAuthTitle": "Materiales promocionales",
+    "promoAuthStatusOn": "Autorizado",
+    "promoAuthStatusOff": "No autorizado",
+    "promoAuthRevokeConfirm": "Los materiales promocionales se marcaran como No autorizado. Puedes retirar cualquier material promocional de Twofer de tu ubicacion en cualquier momento.",
+    "promoAuthRevokeConfirmCta": "Desactivar"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -1743,7 +1748,10 @@
       "menuSaveFailed": "No se pudieron guardar los platillos: puedes escanear tu menú más tarde.",
       "nothingFound": "No hay nada que importar de tu sitio. Agrega tus datos manualmente.",
       "rateLimited": "Llegaste al límite de importaciones de hoy. Inténtalo mañana."
-    }
+    },
+    "promoAuthOptionalLabel": "Opcional: materiales promocionales en tienda",
+    "promoAuthCheckbox": "Si, autorizo a Twofer a proporcionar y colocar materiales promocionales removibles en esta ubicacion. Entiendo que puedo moverlos o retirarlos en cualquier momento.",
+    "promoAuthDeferred": "Guardado. Puedes activar los materiales promocionales mas tarde en Cuenta."
   },
   "settingsConsumer": {
     "editTitle": "Perfil de comprador",

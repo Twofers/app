@@ -15,6 +15,7 @@ const suites = [
   "2d-billing-token-consume.mjs",
   "2e-public-visibility-and-publish-gate.mjs",
   "2f-business-name-lock.mjs",
+  "2h-promo-materials-authorization.mjs",
 ];
 
 let failed = 0;

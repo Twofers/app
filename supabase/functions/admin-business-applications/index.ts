@@ -382,6 +382,9 @@ function normalizedFromApplication(row: Record<string, unknown>): NormalizedBusi
     launchArea: typeof row.launch_area === "string" ? row.launch_area : null,
     termsAccepted: row.terms_accepted === true,
     privacyAcknowledged: row.privacy_acknowledged === true,
+    // Carries the applicant's optional website selection through to the sync,
+    // which writes a consent row only when this is true.
+    promoMaterialsAuthorized: row.promo_materials_authorized === true,
   };
 }
 

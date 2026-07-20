@@ -40,6 +40,7 @@ import {
   type SiteImportResult,
 } from "@/lib/business-site-import";
 import { splitMenuItemDescription } from "@/lib/menu-item-text";
+import { setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 
@@ -125,6 +126,9 @@ export default function BusinessSetupScreen() {
   const [selectedLogoCandidate, setSelectedLogoCandidate] = useState<number | null>(null);
   const [importItems, setImportItems] = useState<SiteImportMenuItem[]>([]);
   const [importConsent, setImportConsent] = useState(false);
+  // Optional promotional-materials authorization. Starts unchecked and never
+  // gates submit — declining is a first-class outcome with no warning styling.
+  const [promoAuthChecked, setPromoAuthChecked] = useState(false);
   const [logoFromImport, setLogoFromImport] = useState(false);
   // Shown inline when someone taps an imported logo before checking the
   // copyright-consent box — otherwise the tap is a silent no-op.
@@ -578,6 +582,26 @@ export default function BusinessSetupScreen() {
     }
   }
 
+  /**
+   * Records the optional promotional-materials authorization after a successful
+   * profile save. Returns false on failure so the caller can show a soft notice
+   * — this must never fail or block onboarding completion.
+   */
+  async function applyPromoAuthorization(businessId: string | null | undefined): Promise<boolean> {
+    if (!promoAuthChecked || !businessId) return true;
+    try {
+      await setPromoMaterialsAuthorization({
+        businessId,
+        action: "authorize",
+        source: "app_onboarding",
+      });
+      return true;
+    } catch (e) {
+      if (__DEV__) console.warn("[business-setup] promo materials authorization failed:", e);
+      return false;
+    }
+  }
+
   async function onSubmit() {
     if (busy) return;
     setBanner(null);
@@ -636,12 +660,16 @@ export default function BusinessSetupScreen() {
           }
         }
         const menuSaveOk = await saveImportedMenuItems(onboardingContext.business.id);
-        if (menuSaveOk) {
-          setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-          scheduleDashboardRedirect(250);
-        } else {
+        const promoOk = await applyPromoAuthorization(onboardingContext.business.id);
+        if (!menuSaveOk) {
           setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
           scheduleDashboardRedirect(1500);
+        } else if (!promoOk) {
+          setBanner({ message: t("businessSetup.promoAuthDeferred"), tone: "info" });
+          scheduleDashboardRedirect(1500);
+        } else {
+          setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+          scheduleDashboardRedirect(250);
         }
         return;
       }
@@ -696,12 +724,16 @@ export default function BusinessSetupScreen() {
 
       const savedBizId = existingBiz?.id ?? bizData?.id;
       const menuSaveOk = savedBizId ? await saveImportedMenuItems(savedBizId) : true;
-      if (menuSaveOk) {
-        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-        scheduleDashboardRedirect(250);
-      } else {
+      const promoOk = await applyPromoAuthorization(savedBizId);
+      if (!menuSaveOk) {
         setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
         scheduleDashboardRedirect(1500);
+      } else if (!promoOk) {
+        setBanner({ message: t("businessSetup.promoAuthDeferred"), tone: "info" });
+        scheduleDashboardRedirect(1500);
+      } else {
+        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+        scheduleDashboardRedirect(250);
       }
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);
@@ -1225,6 +1257,32 @@ export default function BusinessSetupScreen() {
               }}
             />
           ) : null}
+        </View>
+
+        {/*
+          Optional promotional-materials authorization. Kept visually separate
+          from the required legal block below and out of business-terms-gate.tsx
+          entirely, so it can never read as part of accepting the terms.
+        */}
+        <View style={{ gap: Spacing.xs }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+            {t("businessSetup.promoAuthOptionalLabel")}
+          </Text>
+          <Pressable
+            onPress={() => setPromoAuthChecked((prev) => !prev)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: promoAuthChecked }}
+            style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.xs }}
+          >
+            <MaterialIcons
+              name={promoAuthChecked ? "check-box" : "check-box-outline-blank"}
+              size={22}
+              color={promoAuthChecked ? theme.primary : theme.icon}
+            />
+            <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: theme.text }}>
+              {t("businessSetup.promoAuthCheckbox")}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ gap: Spacing.sm }}>

@@ -132,6 +132,19 @@
                   <span data-i18n="trial.promote">What would you like to promote? (optional)</span>
                   <textarea name="offer_interests" maxlength="500"></textarea>
                 </label>
+                <!--
+                  Optional promotional-materials consent. Deliberately lives here,
+                  inside the optional details block, and NOT beside the two required
+                  consent checkboxes below: accepting the Business Terms must never
+                  imply permission to place materials. Never pre-checked.
+                -->
+                <label class="check full">
+                  <input name="promo_materials_authorized" type="checkbox" />
+                  <span>
+                    <small data-i18n="trial.promoMaterialsTag">Optional</small>
+                    <span data-i18n="trial.promoMaterialsCheckbox">Yes, I authorize Twofer to provide and place removable promotional materials at this location. I understand that I may move or remove them at any time.</span>
+                  </span>
+                </label>
               </div>
             </details>
 
@@ -276,6 +289,9 @@
         const payload = Object.fromEntries(data.entries());
         payload.terms_accepted = data.get("terms_accepted") === "on";
         payload.privacy_acknowledged = data.get("privacy_acknowledged") === "on";
+        // Optional: an unchecked box is absent from FormData, so this is false
+        // unless the business explicitly opted in.
+        payload.promo_materials_authorized = data.get("promo_materials_authorized") === "on";
         try {
           const response = await fetch(document.body.dataset.applicationEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (response.status === 429) {

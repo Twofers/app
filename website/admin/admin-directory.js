@@ -2,6 +2,8 @@
   const authEndpoint = document.body.dataset.adminAuthEndpoint;
   const summaryEndpoint = document.body.dataset.adminSummaryEndpoint;
   const businessApplicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
+  const promoAuthorizationEndpoint = document.body.dataset.adminPromoAuthorizationEndpoint;
+  const ADMIN_ASSISTED_LABEL = "Recorded by Twofer on behalf of business";
   const section = document.body.dataset.adminSection;
   const tokenKey = "twofer_admin_access_token";
   const refreshTokenKey = "twofer_admin_refresh_token";
@@ -670,6 +672,27 @@
         { label: "Reason", value: (r) => r.reason || "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ], "No audit events for this business.");
+      // Read-only consent status per location. Rows an admin recorded on the
+      // business's behalf always carry the provenance label.
+      fillTable("[data-promo-materials]", payload.promo_materials || [], [
+        { label: "Location", value: (r) => r.location_name || r.location_address || r.location_id || "" },
+        { label: "Status", value: (r) => (r.status === "authorized" ? "Authorized" : "Not authorized") },
+        {
+          label: "Authorized by",
+          value: (r) => {
+            if (r.status !== "authorized") return "";
+            const who = [r.authorizer_name, r.authorizer_role].filter(Boolean).join(" — ");
+            return who || r.source || "";
+          },
+        },
+        {
+          label: "Source",
+          value: (r) => (r.recorded_on_behalf_label ? ADMIN_ASSISTED_LABEL : r.source || ""),
+        },
+        { label: "Authorized", value: (r) => (r.authorized_at ? formatDateTime(r.authorized_at) : "") },
+        { label: "Revoked", value: (r) => (r.revoked_at ? formatDateTime(r.revoked_at) : "") },
+      ], "No locations for this business.");
+      populatePromoLocations(payload.promo_materials || []);
       renderBusinessDrilldown(payload);
       const viewOffersLink = document.querySelector("[data-view-offers-link]");
       if (viewOffersLink) {
@@ -891,8 +914,95 @@
     }
   }
 
+  function populatePromoLocations(rows) {
+    const select = document.querySelector("[data-promo-location]");
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = "";
+    for (const row of rows) {
+      const option = document.createElement("option");
+      option.value = row.location_id || "";
+      option.textContent = row.location_name || row.location_address || row.location_id || "Location";
+      select.appendChild(option);
+    }
+    if (previous && rows.some((r) => r.location_id === previous)) select.value = previous;
+  }
+
+  /**
+   * Admin-assisted recording. Name, role, and the date permission was received
+   * are required client-side purely as UX; the edge function and a DB CHECK
+   * constraint both reject a record without them.
+   */
+  function initPromoAuthorizationActions() {
+    const buttons = document.querySelectorAll("[data-promo-action]");
+    if (!buttons.length) return;
+    const statusEl = document.querySelector("[data-promo-status]");
+    const setPromoStatus = (message, tone = "info") => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className = `status${tone === "danger" ? " error" : tone === "warning" ? " warning" : ""}`;
+    };
+
+    for (const button of buttons) {
+      button.addEventListener("click", async () => {
+        const action = button.dataset.promoAction;
+        const businessId = detailBusinessId();
+        const locationId = document.querySelector("[data-promo-location]")?.value || "";
+        const authorizerName = document.querySelector("[data-promo-name]")?.value.trim() || "";
+        const authorizerRole = document.querySelector("[data-promo-role]")?.value.trim() || "";
+        const permissionReceivedAt = document.querySelector("[data-promo-received]")?.value || "";
+
+        if (!businessId || !locationId) {
+          setPromoStatus("Select a location first.", "danger");
+          return;
+        }
+        if (!authorizerName || !authorizerRole || !permissionReceivedAt) {
+          setPromoStatus("Authorizer name, role, and the date permission was received are all required.", "danger");
+          return;
+        }
+        if (action === "revoke" && !window.confirm("Record a revocation for this location?")) return;
+
+        for (const b of buttons) b.disabled = true;
+        setPromoStatus(action === "revoke" ? "Recording revocation..." : "Recording authorization...");
+        try {
+          if (!promoAuthorizationEndpoint) throw new Error("Promotional materials endpoint is not configured.");
+          const token = await getAccessToken();
+          if (!token) throw new Error("Admin session not connected.");
+          const response = await fetch(promoAuthorizationEndpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              action,
+              business_id: businessId,
+              location_id: locationId,
+              authorizer_name: authorizerName,
+              authorizer_role: authorizerRole,
+              permission_received_at: permissionReceivedAt,
+            }),
+          });
+          const payload = await readJson(response);
+          if (response.status === 401 || response.status === 403) {
+            clearSession();
+            throw new Error(response.status === 401 ? "Admin session expired. Sign in again." : payload.error || "Forbidden.");
+          }
+          if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
+          setPromoStatus(action === "revoke" ? "Revocation recorded." : `Authorization recorded. ${ADMIN_ASSISTED_LABEL}.`);
+          await loadSection();
+        } catch (error) {
+          setPromoStatus(error instanceof Error ? error.message : "Could not record authorization.", "danger");
+        } finally {
+          for (const b of buttons) b.disabled = false;
+        }
+      });
+    }
+  }
+
   syncNavForSession();
   initBackToCommandCenterLink();
   initVerificationActions();
+  initPromoAuthorizationActions();
   loadSection();
 })();

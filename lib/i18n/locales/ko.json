@@ -505,7 +505,12 @@
     "aiDescNeedsNameCategory": "먼저 비즈니스 이름과 카테고리를 추가하세요.",
     "expandBizProfile": "전체 항목 편집",
     "collapseBizProfile": "항목 접기",
-    "advancedOptions": "추가 옵션"
+    "advancedOptions": "추가 옵션",
+    "promoAuthTitle": "홍보물",
+    "promoAuthStatusOn": "승인됨",
+    "promoAuthStatusOff": "승인되지 않음",
+    "promoAuthRevokeConfirm": "홍보물이 승인되지 않음으로 표시됩니다. 매장에 있는 Twofer 홍보물은 언제든지 제거할 수 있습니다.",
+    "promoAuthRevokeConfirmCta": "끄기"
   },
   "settingsScreen": {
     "title": "설정",
@@ -1280,7 +1285,7 @@
     "scanQrAtCounter": "카운터에서 QR 스캔",
     "timeLeftHeading": "남은 시간",
     "countdownLabel": "{{time}}",
-    "redeemAtLabel": "\uC0AC\uC6A9 \uC7A5\uC18C:",
+    "redeemAtLabel": "사용 장소:",
     "redeemByCaption": "{{datetime}}까지 사용 · 매장 현지 시간",
     "expiresLocal": "만료 {{datetime}}(매장 현지 시간)",
     "statRedeemed": "사용한 딜",
@@ -1743,7 +1748,10 @@
       "menuSaveFailed": "메뉴 항목을 저장하지 못했어요. 나중에 스캔할 수 있어요.",
       "nothingFound": "사이트에서 가져올 항목이 없어요. 직접 입력해 주세요.",
       "rateLimited": "오늘의 가져오기 한도에 도달했어요. 내일 다시 시도해 주세요."
-    }
+    },
+    "promoAuthOptionalLabel": "선택 사항: 매장 내 홍보물",
+    "promoAuthCheckbox": "예, Twofer가 이 매장에 제거 가능한 홍보물을 제공하고 설치하는 것을 승인합니다. 언제든지 옮기거나 제거할 수 있음을 이해합니다.",
+    "promoAuthDeferred": "저장되었습니다. 홍보물은 나중에 계정에서 켤 수 있습니다."
   },
   "settingsConsumer": {
     "editTitle": "쇼퍼 프로필",
