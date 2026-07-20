@@ -198,6 +198,22 @@ describe("deal eligibility inference", () => {
     }
   });
 
+  it("never seeds a 2-char offer-keyword fragment like 'Bu' (bug #4 regression)", () => {
+    // The length>=2 guard in the test above accepted "Bu" (the start of "Buy"):
+    // it seeded itemDescription "Bu", which passed the non-emptiness eligibility
+    // guard and reached ai-generate-ad-variants as a poisoned offer fact
+    // (COPY_FAILED). A candidate that is a proper prefix of an offer keyword must
+    // never seed.
+    for (const fragment of ["Bu", "Bo", "Ge", "Fr", "Pu", "Di", "Of"]) {
+      expect(inferDealEligibilityFormFromText(fragment), `fragment "${fragment}"`).toBeNull();
+    }
+    // ...but a real 2-char item that is NOT an offer-keyword prefix is kept —
+    // including non-English items (Korean gimbap), which a blanket length>=3 rule
+    // would wrongly discard.
+    expect(inferDealEligibilityFormFromText("김밥")).toMatchObject({ itemDescription: "김밥" });
+    expect(inferDealEligibilityFormFromText("PB")).toMatchObject({ itemDescription: "PB" });
+  });
+
   it("uses a plain item description to seed the default single-item discount", () => {
     expect(inferDealEligibilityFormFromText("Hot fudge sundae")).toMatchObject({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
