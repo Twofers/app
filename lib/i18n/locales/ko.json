@@ -123,6 +123,8 @@
     "emptyZeroBody": "라이브 딜은 하루 종일 새로 올라옵니다. 좋아하는 카페와 베이커리를 즐겨찾기에 추가하면, 근처에서 딜이 나오는 즉시 알려드릴게요.",
     "emptyZeroPenguinHint": "매주 더 많은 카페가 파일럿에 합류하고 있어요 — 즐겨찾기가 여러분 동네에 매장을 더 빨리 가져다줍니다.",
     "emptyZeroBrowseCta": "카페와 베이커리 둘러보기",
+    "timeLeftDH": "{{d}}일 {{h}}시간 남음",
+    "timeLeftD": "{{d}}일 남음",
     "timeLeftHM": "{{h}}시간 {{m}}분 남음",
     "timeLeftM": "{{m}}분 남음",
     "onlyOneLeft": "1개 남음",

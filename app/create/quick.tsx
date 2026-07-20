@@ -2,7 +2,7 @@
  * Deprecated: Quick Deal now uses the unified AI builder.
  * Keep this route as a compatibility redirect for old links and stale navigation.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 
@@ -24,13 +24,19 @@ function redirectedParams(params: Record<string, string | string[]>): Record<str
 export default function QuickDealRedirect() {
   const router = useRouter();
   const params = useLocalSearchParams();
-
+  // useLocalSearchParams returns a fresh object every render; depending on it re-ran
+  // this redirect in a loop (visible "Redirecting..." stall + downstream re-render
+  // churn). Fire once on mount — the params are available at first render.
+  const redirected = useRef(false);
   useEffect(() => {
+    if (redirected.current) return;
+    redirected.current = true;
     router.replace({
       pathname: "/create/ai",
       params: redirectedParams(params),
     } as Href);
-  }, [params, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>

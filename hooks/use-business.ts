@@ -66,6 +66,14 @@ export function businessRowToAiContext(b: BusinessInfo | null): BusinessContextP
 
 export function useBusiness() {
   const { session, isInitialLoading: authLoading } = useAuthSession();
+  // Depend on the identity fields rather than the session object. Supabase hands back
+  // a fresh session object on token refresh and on some provider re-renders, which
+  // changed `refresh`'s identity, which re-fired the effect below, which superseded
+  // its own in-flight fetch — a self-sustaining loop that logged
+  // "[useBusiness] refresh completed after unmount/stale" once a second and left
+  // "Create new offer" sitting on "Redirecting…" for ~17s before it settled.
+  const sessionUserId = session?.user?.id ?? null;
+  const sessionUserEmail = session?.user?.email ?? null;
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -83,7 +91,7 @@ export function useBusiness() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const uid = session?.user?.id;
+    const uid = sessionUserId;
     if (!uid) {
       setIsLoggedIn(false);
       setUserId(null);
@@ -106,7 +114,7 @@ export function useBusiness() {
 
     setIsLoggedIn(true);
     setUserId(uid);
-    setSessionEmail(session?.user?.email ?? null);
+    setSessionEmail(sessionUserEmail);
 
     // PII columns (contact_name, business_email, tone) and owner_id filters are
     // only readable via the get_my_business() SECURITY DEFINER RPC once the
@@ -157,7 +165,7 @@ export function useBusiness() {
 
     hasEverFetchedRef.current = true;
     setLoading(false);
-  }, [session, authLoading]);
+  }, [sessionUserId, sessionUserEmail, authLoading]);
 
   useEffect(() => {
     if (authLoading) return;

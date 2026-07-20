@@ -665,9 +665,17 @@ export function buildDealOfferContract(
   if (dealType === "BUY_ONE_GET_ONE_FREE" || dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     const requiredItem = canonicalizeOfferItem(cleanText(params.dealEligibility.requiredItemDescription)).canonical;
     const rawFreeItem = stripRewardPrefix(cleanText(params.dealEligibility.freeItemDescription));
+    // BUY_ONE_GET_ONE_FREE is same-item by definition — the reward IS the item the
+    // customer buys — and the BOGO form exposes no free-item input. Deriving the
+    // reward from freeItemDescription therefore only ever picks up stale state
+    // (a leftover value from the "Free item" / "% off" rules, or a free-text parser
+    // fragment). That contaminated the offer facts: a "drip coffee" BOGO shipped a
+    // contract with free_reward "Bu", which blocked publish and made AI copy
+    // generation fail with COPY_FAILED. A genuinely different reward item is the
+    // separate BUY_ONE_GET_SOMETHING_FREE deal type, which still reads the field.
     const freeItem =
       dealType === "BUY_ONE_GET_ONE_FREE"
-        ? canonicalizeOfferItem(rawFreeItem).canonical || requiredItem
+        ? requiredItem
         : canonicalizeOfferItem(rawFreeItem).canonical;
     if (!requiredItem || !freeItem) return null;
 
@@ -1012,7 +1020,14 @@ function validateBuyOneGetOneFree(
   contract: DealOfferContract,
   reasonCodes: string[],
 ): void {
-  const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "";
+  const requiredItem = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "";
+  // A BOGO contract can carry a reward item that differs from the purchased item:
+  // buildDealOfferContract keeps freeItemDescription whenever it is set. Free-item
+  // mentions must therefore be checked against the reward item, not the purchased
+  // one — otherwise the canonical offer line this module generates for such a
+  // contract ("Buy a drip coffee and get a free cookie") fails its own validation
+  // and publish is blocked, with no free-item field in the BOGO form to correct.
+  const freeItem = contract.freeReward?.itemName || requiredItem;
   const normalized = normalizeForSearch(text);
   if (/\bbuy\s+(?:two|2)\b/.test(normalized)) reasonCodes.push("REQUIRES_TWO_PURCHASES");
   if (/\b(second|2nd)\s+(?:item\s+)?(?:50|[1-9]\d)\s*%\s*off\b|\bhalf\s+off\b/.test(normalized)) {
@@ -1028,7 +1043,7 @@ function validateBuyOneGetOneFree(
   ];
   for (const match of [...itemBeforeFreeMatches, ...freeBeforeItemMatches]) {
     const candidate = match[1]?.trim() ?? "";
-    if (candidate && !containsItem(candidate, item)) {
+    if (candidate && !containsItem(candidate, freeItem)) {
       reasonCodes.push("CHANGES_FREE_ITEM");
       break;
     }
@@ -1042,12 +1057,12 @@ function validateBuyOneGetOneFree(
       ? rawCandidate.replace(/^.*\b(?:and|with)\s+(?:the|a|an|one)?\s+/, "").trim()
       : rawCandidate;
     if (/^(?:next|second|2nd)(?:\s+(?:one|item))?$/.test(candidate)) continue;
-    if (candidate && !containsItem(candidate, item)) {
+    if (candidate && !containsItem(candidate, freeItem)) {
       reasonCodes.push("CHANGES_FREE_ITEM");
       break;
     }
   }
-  if (!containsItem(normalized, item)) reasonCodes.push("MISSING_BOGO_ITEM");
+  if (!containsItem(normalized, requiredItem)) reasonCodes.push("MISSING_BOGO_ITEM");
 }
 
 function validatePercentOffSingleItem(

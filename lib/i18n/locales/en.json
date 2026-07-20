@@ -123,6 +123,8 @@
     "emptyZeroBody": "Deals can appear throughout the day. Save cafes and bakeries you like, and we'll let you know when they post.",
     "emptyZeroPenguinHint": "Your favorites help us highlight the shops you care about.",
     "emptyZeroBrowseCta": "Browse cafes and bakeries",
+    "timeLeftDH": "{{d}}d {{h}}h left",
+    "timeLeftD": "{{d}}d left",
     "timeLeftHM": "{{h}}h {{m}}m left",
     "timeLeftM": "{{m}}m left",
     "onlyOneLeft": "Only 1 left",

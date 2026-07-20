@@ -7,9 +7,12 @@
 // postgres and bypass RLS entirely, so only a probe with a REAL user JWT can
 // catch that class of bug.
 //
-// Reads .env for EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY and
-// signs in with TWOFER_SMOKE_EMAIL / TWOFER_SMOKE_PASSWORD (a throwaway shopper
-// test account — add those two lines to .env; never a real customer account).
+// Reads .env for EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY and signs
+// in with TWOFER_QA_SHOPPER_EMAIL / TWOFER_QA_SHOPPER_PASSWORD — a throwaway shopper
+// account; never a real customer, and never a business owner (see the owner guard
+// below). Falls back to TWOFER_SMOKE_* only so pre-existing setups keep running:
+// that variable is shared with business-side probes and has pointed at a
+// business-owning account, which makes every check here vacuous.
 //
 // Checks (all read-only):
 //   1. SELECT on deals          (consumer feed — the table that bricked the app)
@@ -55,15 +58,17 @@ function redactEmail(email) {
 const env = loadEnv();
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const EMAIL = env.TWOFER_SMOKE_EMAIL;
-const PASSWORD = env.TWOFER_SMOKE_PASSWORD;
+const EMAIL = env.TWOFER_QA_SHOPPER_EMAIL || env.TWOFER_SMOKE_EMAIL;
+const PASSWORD = env.TWOFER_QA_SHOPPER_PASSWORD || env.TWOFER_SMOKE_PASSWORD;
 
 if (!URL_BASE || !ANON) {
   console.error("Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in .env");
   process.exit(2);
 }
 if (!EMAIL || !PASSWORD) {
-  console.error("Missing TWOFER_SMOKE_EMAIL / TWOFER_SMOKE_PASSWORD in .env (throwaway shopper test account)");
+  console.error(
+    "Missing TWOFER_QA_SHOPPER_EMAIL / TWOFER_QA_SHOPPER_PASSWORD (or legacy TWOFER_SMOKE_*) — need a throwaway shopper account",
+  );
   process.exit(2);
 }
 
@@ -97,6 +102,22 @@ async function rest(token, pathAndQuery, init = {}) {
 
 const { token, userId } = await signIn();
 console.log(`Signed in as ${redactEmail(EMAIL)}`);
+
+// Guard this probe's own premise. Every check below only proves SHOPPER-level access.
+// A business owner reaches the same rows through owner-scoped policies, so running as
+// an owner can report all-pass while the shopper-facing policies lock out every real
+// customer — precisely the failure this file exists to catch.
+{
+  const owner = await rest(token, "rpc/get_my_business", { method: "POST", body: "{}" });
+  const ownsBusiness = owner.status < 400 && !["", "null", "[]"].includes(owner.body.trim());
+  if (ownsBusiness) {
+    console.warn(
+      "  WARNING  this account OWNS a business — the results below are NOT a valid\n" +
+        "           shopper-level RLS check. Point TWOFER_QA_SHOPPER_EMAIL /\n" +
+        "           TWOFER_QA_SHOPPER_PASSWORD at a throwaway shopper account.",
+    );
+  }
+}
 
 const checks = [
   ["deals SELECT", () => rest(token, "deals?select=id&limit=1")],

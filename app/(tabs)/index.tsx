@@ -40,6 +40,7 @@ import {
   shouldShowDealInNearbyFeed,
 } from "@/lib/consumer-feed-visibility";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
+import { dealCountdownLabel } from "@/lib/deal-countdown";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
 import { compactLocationLabel } from "@/lib/display-format";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
@@ -1081,13 +1082,9 @@ export default function HomeScreen() {
 
   const formatTimeLeft = useCallback(
     (endTimeIso: string) => {
-      const deltaMs = new Date(endTimeIso).getTime() - nowTick;
-      if (!Number.isFinite(deltaMs) || deltaMs <= 0) return t("dealDetail.expired");
-      const totalMin = Math.max(1, Math.floor(deltaMs / 60_000));
-      const h = Math.floor(totalMin / 60);
-      const m = totalMin % 60;
-      if (h > 0) return t("consumerHome.timeLeftHM", { h, m });
-      return t("consumerHome.timeLeftM", { m });
+      const label = dealCountdownLabel(new Date(endTimeIso).getTime() - nowTick);
+      if (!label) return t("dealDetail.expired");
+      return t(label.key, label.params);
     },
     [nowTick, t],
   );

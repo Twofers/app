@@ -36,6 +36,25 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+/**
+ * True when the locked offer line only repeats the headline and should not be
+ * rendered as its own row.
+ *
+ * Every composed-ad template prints the headline and then the locked offer line.
+ * A deal with no distinct AI creative headline falls back to the locked offer line
+ * as its display title, so both rows carry the same sentence — the consumer feed
+ * showed "Buy one house iced tea and get one free" twice, stacked.
+ */
+export function offerLineDuplicatesHeadline(
+  offerLine: string | null | undefined,
+  headline: string | null | undefined,
+): boolean {
+  const normalize = (value: string | null | undefined) =>
+    (value ?? "").toLowerCase().replace(/\s+/g, " ").replace(/[.!]+$/, "").trim();
+  const line = normalize(offerLine);
+  return line.length > 0 && line === normalize(headline);
+}
+
 export function buildApprovedAdCopy(params: {
   headline?: string | null;
   supportingCopy?: string | null;

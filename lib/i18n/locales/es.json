@@ -123,6 +123,8 @@
     "emptyZeroBody": "Las ofertas en vivo aparecen durante el día. Marca como favoritos los cafés y panaderías que te gustan, y te avisamos en cuanto publiquen una oferta cerca.",
     "emptyZeroPenguinHint": "Tus favoritos nos ayudan a destacar las tiendas que te importan.",
     "emptyZeroBrowseCta": "Explorar cafés y panaderías",
+    "timeLeftDH": "{{d}}d {{h}}h restantes",
+    "timeLeftD": "{{d}}d restantes",
     "timeLeftHM": "{{h}}h {{m}}m restantes",
     "timeLeftM": "{{m}}m restantes",
     "onlyOneLeft": "Solo queda 1",

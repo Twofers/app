@@ -82,9 +82,16 @@ export function dealEligibilityFormToInput(form: DealEligibilityFormState): Deal
   }
 
   const requiredItemDescription = clean(form.requiredItemDescription);
+  // BUY_ONE_GET_ONE_FREE is same-item by definition and the BOGO create form has no
+  // free-item input, so form.freeItemDescription can only hold stale state there —
+  // a value left behind by the "Free item" / "% off" rules or a free-text parser
+  // fragment. Preferring it shipped contaminated offer facts (a "drip coffee" BOGO
+  // sent freeItemDescription "Bu" to ai-generate-ad-variants, which failed with
+  // COPY_FAILED). Always mirror the purchased item instead. A genuinely different
+  // reward is BUY_ONE_GET_SOMETHING_FREE, which still reads the field.
   const freeItemDescription =
     form.dealType === "BUY_ONE_GET_ONE_FREE"
-      ? clean(form.freeItemDescription) || requiredItemDescription
+      ? requiredItemDescription
       : clean(form.freeItemDescription);
 
   return {
