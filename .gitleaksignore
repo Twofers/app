@@ -35,3 +35,32 @@ f474780e3da8ce0619bad933e200776342d1bc7d:lib/recent-publish.ts:generic-api-key:1
 # "-----BEGIN PRIVATE KEY-----" inside PEM-header-stripping code in importRs256Key(); the real
 # key arrives at runtime from the GOOGLE_WALLET_SERVICE_ACCOUNT_JSON secret. No key is stored.
 ca64bbabb5d38865a875525575f5a2b197d94a5d:supabase/functions/_shared/wallet-pass-sync.ts:private-key:80
+
+# Added 2026-07-19 — reviewed false positives (generic-api-key heuristic), no real secrets.
+# Same class as the twofer_rc_qa_20260607 entries above: every one of the 14 QA-evidence
+# findings matches on `authUserId": "<uuid>"` in captured device output (verified by reading
+# gitleaks' own redacted Match field). Auth user UUIDs are identifiers, not credentials.
+# Checked directly: no AIza-prefixed Google key and no Supabase key appears in these blobs.
+# The 15_security_and_privacy_audit.md hit matches the prose "tokens, <word>" in a sentence.
+#
+# These live on commits 01ce3092 / 0ebe01d8, which are NOT reachable from main but ARE on
+# pushed branches. Because ci.yml checks out with fetch-depth: 0, gitleaks walks every ref,
+# so they redden secret-scan on every PR until ignored here.
+#
+# docs/qa/evidence/** is now gitignored so device logs stop being committed — but that only
+# prevents new ones; these fingerprints are still required for the existing history.
+01ce3092444ac923231b31275eab222875de28f7:docs/full-system-audit/15_security_and_privacy_audit.md:generic-api-key:14
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk-real-accounts/expo-start-real.out.txt:generic-api-key:353
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk-real-accounts/expo-start-real.out.txt:generic-api-key:463
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/expo-start.out.txt:generic-api-key:143
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/expo-start.out.txt:generic-api-key:252
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:31
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:42
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:324
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:352
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:419
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:447
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:473
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:541
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:552
+0ebe01d80fb9b08e7580b4ac3cc3c9c3b377be1d:docs/qa/evidence/s10-dev-apk/s10_dev_apk_logcat.txt:generic-api-key:571
