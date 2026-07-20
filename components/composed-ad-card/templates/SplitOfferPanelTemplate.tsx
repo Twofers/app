@@ -31,6 +31,7 @@ export function SplitOfferPanelTemplate(props: ComposedAdTemplateProps) {
           presentation={presentation}
           tokens={tokens}
           fallbackVisualLabel={fallbackVisualLabel}
+          fit={surface === "consumer_feed" ? "contain" : "cover"}
         />
         {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
       </View>
@@ -70,7 +71,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    aspectRatio: 1,
+    aspectRatio: 3 / 2,
+    overflow: "hidden",
   },
   panel: {
     padding: 14,
