@@ -10,10 +10,12 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
  * `get_my_business()`, a SECURITY DEFINER function that returns the caller's
  * full row.
  *
- * That migration is NOT applied in production yet, so the RPC may not exist.
- * This helper tries the RPC first and falls back to the legacy direct select
- * when the RPC errors (e.g. function not found pre-migration). Once Dan applies
- * the migration the RPC succeeds and the fallback never runs.
+ * That migration IS applied in production (verified 2026-07-19: the RPC returns
+ * the caller's full row, and anon is correctly denied the PII columns). The
+ * legacy direct-select fallback that used to live here has been removed — it
+ * only ever worked because of an over-broad table-level SELECT grant on
+ * `businesses` in production, and once that grant is repaired the fallback
+ * would 42501 and mask the real RPC error behind a confusing second failure.
  */
 
 export type OwnerBusinessRow = {
@@ -35,31 +37,21 @@ export type OwnerBusinessRow = {
   current_profile_version: number | null;
 };
 
-const OWNER_BUSINESS_COLUMNS =
-  "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text,logo_url";
-
 export type OwnerBusinessResult = {
   row: OwnerBusinessRow | null;
   error: PostgrestError | null;
 };
 
+/**
+ * The RPC is already scoped to `auth.uid()`, so no owner id argument is needed —
+ * and passing one would be misleading, since a caller cannot read another
+ * owner's row through this path.
+ */
 export async function fetchOwnerBusiness(
   client: SupabaseClient,
-  ownerUserId: string,
 ): Promise<OwnerBusinessResult> {
   const rpc = await client.rpc("get_my_business");
-  if (!rpc.error) {
-    const rows = Array.isArray(rpc.data) ? rpc.data : rpc.data ? [rpc.data] : [];
-    return { row: (rows[0] as OwnerBusinessRow | undefined) ?? null, error: null };
-  }
-
-  // Pre-migration fallback: direct select still works while the table grant is
-  // unrestricted. Post-migration this would fail too, and we surface its error.
-  const direct = await client
-    .from("businesses")
-    .select(OWNER_BUSINESS_COLUMNS)
-    .eq("owner_id", ownerUserId)
-    .maybeSingle();
-  if (direct.error) return { row: null, error: direct.error };
-  return { row: (direct.data as OwnerBusinessRow | null) ?? null, error: null };
+  if (rpc.error) return { row: null, error: rpc.error };
+  const rows = Array.isArray(rpc.data) ? rpc.data : rpc.data ? [rpc.data] : [];
+  return { row: (rows[0] as OwnerBusinessRow | undefined) ?? null, error: null };
 }

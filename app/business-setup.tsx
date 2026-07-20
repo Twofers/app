@@ -248,10 +248,10 @@ export default function BusinessSetupScreen() {
       } catch (e) {
         if (__DEV__) console.warn("[business-setup] Onboarding context error:", e);
       }
-      // Owner reads of `businesses` go through get_my_business() — an
-      // `owner_id` filter stops working once the PII column-grant migration
-      // lands (the helper still falls back to a direct select pre-migration).
-      const { row, error } = await fetchOwnerBusiness(supabase, uid);
+      // Owner reads of `businesses` go through get_my_business(): an
+      // `owner_id` filter needs SELECT privilege on that column, which
+      // authenticated does not have (20260705120000).
+      const { row, error } = await fetchOwnerBusiness(supabase);
       if (cancelled) return;
       if (error || !row) {
         setSetupMode("create");
@@ -658,8 +658,8 @@ export default function BusinessSetupScreen() {
       // Not an upsert on owner_id anymore: `ON CONFLICT (owner_id) DO UPDATE`
       // reads excluded.owner_id, which needs SELECT privilege on that column —
       // revoked by the PII column-grant migration. Look up the existing row via
-      // get_my_business() (helper falls back pre-migration) and branch instead.
-      const { row: existingBiz, error: existingErr } = await fetchOwnerBusiness(supabase, uid);
+      // get_my_business() and branch instead.
+      const { row: existingBiz, error: existingErr } = await fetchOwnerBusiness(supabase);
       if (existingErr) throw new Error(existingErr.message);
 
       const bizPayload = {
