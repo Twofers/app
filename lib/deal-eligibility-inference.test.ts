@@ -129,6 +129,16 @@ describe("deal eligibility inference", () => {
     expect(inferDealEligibilityFormFromText("Buy one get one free")).toBeNull();
   });
 
+  it("never seeds a bare number/price/percent as an item (F7 regression)", () => {
+    // Offers that lead with the discount ("40 percent off any latte") type through
+    // an intermediate "40" keystroke that looked like a plain item and stuck in the
+    // single-item field; once the offer words followed, inference returned null and
+    // the stale number rode into AI generation. A bare number is never a menu item.
+    expect(inferDealEligibilityFormFromText("40")).toBeNull();
+    expect(inferDealEligibilityFormFromText("$5")).toBeNull();
+    expect(inferDealEligibilityFormFromText("5.99")).toBeNull();
+  });
+
   it("does not split items across 'and the … is on us' garbage (F-002 regression)", () => {
     expect(inferDealEligibilityFormFromText("Buy one vanilla latte and the o is on us.")).toBeNull();
   });

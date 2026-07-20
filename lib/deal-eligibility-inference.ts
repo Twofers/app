@@ -114,6 +114,13 @@ function isUsableItem(cleaned: string): boolean {
   const lower = cleaned.toLowerCase();
   if (NON_ITEM_WORDS.has(lower)) return false;
   if (isOfferGrammarFragment(lower)) return false;
+  // A bare number, price, or percent ("40", "40%", "$5", "5.99") is never a menu
+  // item. When an owner types an offer that leads with the discount ("40 percent
+  // off any latte"), the intermediate "40" keystroke looks like a plain item and
+  // gets seeded into the item slot; once the offer words follow, inference returns
+  // null and the stale number sticks in the field and reaches AI generation. Every
+  // real item name carries at least one letter, so reject purely numeric tokens.
+  if (/^[\d.,$%\s]+$/.test(cleaned)) return false;
   return true;
 }
 
