@@ -90,6 +90,49 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 
+  it("genericizeItems drops evocative brand tokens so a refused prompt can retry safely (F4)", () => {
+    const generic = buildGeminiAdImagePrompt(
+      {
+        businessId: "business-1",
+        businessName: "The Colonel's Brew",
+        businessCategory: "coffee shop",
+        offerTitle: "Buy one THE SERGEANT'S STRIPES, get one free",
+        paidItem: "THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+        freeItem: "THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+        dealType: "SAME_ITEM_BOGO",
+        creativeDirection: "A rugged military-camp coffee scene with sergeant stripes.",
+        stylePreset: "playful-twofer",
+        aspectRatio: "4:5",
+        imageSize: "1K",
+      },
+      { genericizeItems: true },
+    );
+
+    // No brand tokens a provider safety classifier can read literally.
+    expect(generic).not.toMatch(/sergeant/i);
+    expect(generic).not.toMatch(/colonel/i);
+    expect(generic).not.toMatch(/military/i);
+    // Asks for the business-category product instead, and keeps every text-free rule.
+    expect(generic).toContain("coffee shop product");
+    expect(generic).toContain("generated image must be text-free");
+    expect(generic).toContain("Do not add readable text.");
+
+    // The default (branded) prompt still carries the item name — so genericize changed it.
+    const branded = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "The Colonel's Brew",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one THE SERGEANT'S STRIPES, get one free",
+      paidItem: "THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+      freeItem: "THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+      dealType: "SAME_ITEM_BOGO",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+    expect(branded).toMatch(/sergeant/i);
+  });
+
   it("uses poster-ready framing for native poster mode without app branding in image mechanics fallback", () => {
     const prompt = buildGeminiAdImagePrompt({
       businessId: "business-1",

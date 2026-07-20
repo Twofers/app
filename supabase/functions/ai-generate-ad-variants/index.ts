@@ -3060,6 +3060,98 @@ async function produceImage(params: {
     gemini.attempts.some((attempt) => attempt.retry && attempt.success),
   );
 
+  // F4 (2026-07-20): the primary prompt embeds the merchant's exact item names as
+  // "required visible items". An evocative branded name (e.g. a coffee named after
+  // military insignia) makes both image providers refuse and return no image — the
+  // fallback chain then burns ~2 minutes before a hard IMAGE_REQUIRED. When the
+  // primary attempt produced no bytes, retry ONCE with a category-safe prompt that
+  // drops the brand tokens and asks only for the business-category product. The
+  // exact identity is rendered by the app as native text, so this stays faithful
+  // to the offer. Runs only on the no-image path, so working generations are
+  // untouched.
+  if (!imageBytes) {
+    const categorySafePrompt = buildGeminiAdImagePrompt(
+      {
+        businessId: params.businessId,
+        businessName: params.businessName,
+        businessCategory: params.businessCategory,
+        offerTitle: params.offerContract.canonicalOfferLine,
+        offerDescription: params.offerContract.canonicalShortTerms,
+        paidItem: offerItems.paidItem,
+        freeItem: offerItems.freeItem,
+        dealType: params.offerContract.dealType,
+        creativeDirection: params.creativeImageBrief,
+        customEditInstruction: revisionImageInstruction,
+        stylePreset,
+        aspectRatio: params.imageAspectRatio,
+        imageSize: "1K",
+      },
+      { genericizeItems: true },
+    );
+    const categoryGen = await generateGeminiAdImageWithTelemetry({
+      apiKey: params.geminiApiKey,
+      model: params.imageProviderConfig.geminiModel,
+      prompt: categorySafePrompt,
+      aspectRatio: params.imageAspectRatio,
+      imageSize: "1K",
+      estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+      retryOnFailure: false,
+    });
+    await logGeminiImageAttempts(params.costContext, "image_generation_category_safe", categoryGen.attempts);
+    providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(categoryGen.attempts));
+    if (categoryGen.bytes) {
+      const categoryPath = await uploadGeneratedBytes({
+        admin: params.admin,
+        businessId: params.businessId,
+        bytes: categoryGen.bytes,
+        contentType: categoryGen.mimeType,
+        provider: "gemini",
+        ts,
+        rand,
+      });
+      if (categoryPath) {
+        console.log(
+          JSON.stringify({ tag: "ai_ads_v2", event: "category_safe_image_used", businessId: params.businessId }),
+        );
+        return withImageSelection(
+          {
+            posterStoragePath: categoryPath,
+            source: "generated",
+            treatment: null,
+            prompt: categoryGen.prompt,
+            qa: imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: {
+                  all_required_items_present: true,
+                  items: [],
+                  missing_items: [],
+                  has_readable_text: false,
+                  has_forbidden_logo_or_brand: false,
+                  has_qr_code: false,
+                  has_unrelated_mascot_or_animal: false,
+                  has_crop_or_overlay_risk: false,
+                  forbidden_elements: [],
+                  crop_or_overlay_issues: [],
+                  notes:
+                    "Category-safe fallback image (brand tokens dropped after a provider refusal); item-name QA not applicable.",
+                },
+                requiredVisualItems: [],
+                sourceType: "ai_generated",
+              }),
+              0,
+              true,
+            ),
+            provider: "gemini",
+            model: gemini.model,
+            estimatedCostUsd: estimatedCostUsd + categoryGen.estimatedCostUsd,
+            attempts: providerAttempts,
+          },
+          { sourcePhotoPath: null, editMode: "none" },
+        );
+      }
+    }
+  }
+
   if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey: params.openAiKey,

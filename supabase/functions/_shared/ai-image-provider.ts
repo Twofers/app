@@ -175,13 +175,31 @@ function customEditInstruction(input: GenerateAdImageInput): string {
   ].join(" ");
 }
 
-export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
-  const businessName = cleanText(input.businessName, 120) || "local business";
+export function buildGeminiAdImagePrompt(
+  input: GenerateAdImageInput,
+  options: { genericizeItems?: boolean } = {},
+): string {
   const businessCategory = cleanText(input.businessCategory, 80) || "local cafe";
+  // F4 (2026-07-20): image providers can refuse an evocative branded item name
+  // as literal content — e.g. a coffee named after military ranks ("Sergeant's
+  // Stripes") returns no image from both Gemini and OpenAI, burning the whole
+  // fallback chain before a hard IMAGE_REQUIRED. genericizeItems drops the brand
+  // tokens — business name, item names, and the AI concept line — and asks only
+  // for the business-category product. Used as a fallback after a no-image
+  // refusal; the exact identity is rendered by the app as native text, so the ad
+  // stays faithful to the offer.
+  const genericSubject =
+    `an appealing, professionally photographed ${businessCategory} product (the actual food or drink being sold)`;
+  const businessName = options.genericizeItems
+    ? "a local business"
+    : cleanText(input.businessName, 120) || "local business";
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
-  const creativeDirection = cleanText(input.creativeDirection, 280);
-  const visualItems = [...new Set([paid, free].filter(Boolean))];
+  const creativeDirection = options.genericizeItems ? "" : cleanText(input.creativeDirection, 280);
+  const visualItems = options.genericizeItems ? [genericSubject] : [...new Set([paid, free].filter(Boolean))];
+  const mechanics = options.genericizeItems
+    ? `Feature ${genericSubject} as the clear main subject. The exact offer terms are rendered by the app, never in the image.`
+    : offerMechanics(input);
   const framing =
     input.aspectRatio === "4:5"
       ? "Use vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
@@ -197,7 +215,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "",
     `Business context for styling only, never render as text: ${businessName}`,
     `Business type for styling only: ${businessCategory}`,
-    `Offer mechanics: ${offerMechanics(input)}`,
+    `Offer mechanics: ${mechanics}`,
     "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
     creativeDirection ? `Selected AI ad concept for composition only, never render as text: ${creativeDirection}` : "",
