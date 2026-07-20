@@ -229,11 +229,13 @@ END $$;
 -- pattern `business_location_count` already established. Restoring the grant
 -- would undo an intentional security decision and is not an option.
 --
--- NOTE: this means prod's June hand-repair of the SELECT/UPDATE/DELETE policies
--- (which read `businesses` directly) is very likely non-functional in prod too.
--- It looks correct but cannot execute. It went unnoticed because there is no
--- location-edit UI and shopper reads go through the pilot policy, which does not
--- touch `businesses`. This migration fixes that as a side effect.
+-- NOTE: prod's June hand-repair of the SELECT/UPDATE/DELETE policies reads
+-- `businesses` directly and DOES currently execute there -- but only because
+-- prod holds a table-level SELECT grant on `businesses` for `authenticated`,
+-- which itself defeats 20260705120000's column-level PII restriction (owner_id,
+-- business_email, contact_name, tone). That over-grant is tracked as separate
+-- follow-up work. Routing through the definer helpers means these policies keep
+-- working after it is repaired; direct-reading policies would not.
 
 CREATE OR REPLACE FUNCTION public.user_owns_business(p_business_id uuid)
 RETURNS boolean

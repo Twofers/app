@@ -1,6 +1,6 @@
 # Plan: repair business_locations owner RLS policies + missing foreign key
 
-**Status: AUTHORED 2026-07-19 — migration + tests written and baseline-validated. Every APPLY step remains hard-gated on Dan.**
+**Status: COMPLETE — APPLIED TO PRODUCTION 2026-07-19 and verified. See §0.**
 **Written 2026-07-19. Executor: Claude Opus session. Investigation record: memory `location-cap-rls-investigation-2026-07-19` (session of 2026-07-19).**
 
 ---
@@ -20,9 +20,21 @@
 | §6 Test script | Authored: `scripts/db-tests/2g-business-locations-rls.mjs`, wired into `scripts/db-tests/run.mjs` |
 | §6 Baseline checks | `npm run typecheck` clean, `npm run lint` clean, `npm test` 1694/1694 passed |
 | §7.4 Supersede deferred doc | Done — `docs/deferred-supabase-steps.md` replaced with a pointer here |
+| §6.1 PRE-apply baseline (test) | **Done.** 6 passed / 3 failed / 2 skipped — INSERT denied 42501, and the FK was found pointing at `business_profiles`, proving the target-aware guard was necessary. |
+| §6.2 Apply to TEST project | **Done 2026-07-19**, by hand in the test project's SQL editor. Deliberately NOT `db push`: the test project is ~22 migrations behind, and a push would have carried them all, including a demo-data seed and another workstream's migration. Took two passes — the first exposed the grant trap. |
+| §6.3 POST-apply matrix (test) | **17 passed, 0 failed, 1 skipped** (anon SELECT, recorded not asserted). Cap boundaries at 1 and 3, cross-tenant INSERT/UPDATE/DELETE denied, UPDATE WITH CHECK blocks re-pointing, FK 23503 cites `businesses`, business deletion cascades. |
+| §7.3 **APPLY TO PRODUCTION** | **Done 2026-07-19**, by hand in the prod SQL editor. |
+| §6 Prod verification | **All green.** `probe-rls-smoke.mjs` 7/7 · FK embed `business_locations→businesses` returns **200** (and `→business_profiles` correctly 400 PGRST200) · `business_locations` 9→**3** rows, orphans 6→**0**, both known June orphans gone · `location_entitlements` 3 rows with **0 dangling** · 57 deals, **0** pointing at a missing location (the 44 NULL `location_id` rows are pre-existing — pre-apply checks confirmed 0 deals referenced any orphan, so nothing was nulled by this) · helper fns `user_owns_business`, `location_cap_for_current_user`, `business_location_count` all resolve on prod. |
 
-**Not done (Dan-gated):** applying to the test project, running the behavioral
-matrix, `supabase db push` to prod, `probe-rls-smoke.mjs`, device smoke, commit.
+**Caveat — no ledger row.** Both applies were done by hand in the SQL editor, so
+neither project has a `20260819120000` row in
+`supabase_migrations.schema_migrations`. The file is fully idempotent (guarded
+FK, `DROP POLICY IF EXISTS`, `DELETE ... WHERE NOT EXISTS`), so a later
+`db push` re-running it is harmless — but until then the ledger understates
+reality in both environments.
+
+**Still open:** device smoke of the deal-wizard location step — the user-visible
+path that has been silently broken, and the one thing the probes cannot confirm.
 
 ### Prod policy inventory (§4.1 result, 2026-07-19) — overturns §1
 
@@ -104,12 +116,30 @@ Both are `REVOKE ALL FROM public` + `GRANT EXECUTE TO authenticated`, and
 `user_owns_business` discloses nothing (a caller learns only whether *they* own
 the id they passed).
 
-**Implication for prod, still unverified:** prod's June hand-repair of the
-SELECT/UPDATE/DELETE policies reads `businesses` directly, so it is very likely
-non-functional in prod too — it looks correct but cannot execute. It went
-unnoticed because there is no location-edit UI and shopper reads go through the
-pilot policy, which does not touch `businesses`. **Confirm before prod apply**
-with the grant query in §6.
+**Implication for prod — RESOLVED 2026-07-19, the hypothesis was WRONG.** I
+claimed prod's hand-repaired policies were "very likely non-functional" there
+too. The grant query disproved it: prod holds a **table-level** SELECT on
+`businesses` for `authenticated`, so those policies execute fine. Retracted.
+
+The reason they work is itself a defect. `20260705120000` implements
+*column-level* grants — revoke table-wide SELECT, re-grant a safe column list
+that deliberately excludes `owner_id`, `business_email`, `contact_name`, `tone`,
+with owners expected to use the `get_my_business()` definer function. The test
+project matches that intent (hence its 42501). Prod does not; something later
+restored a full table-level SELECT.
+
+Proof the distinction is real rather than an artifact of the view:
+`information_schema.role_table_grants` lists table-level grants only. `anon` is
+absent from it yet can still read `businesses.name` (verified read-only) while
+being denied `owner_id` / `business_email` — so column-only grants do not appear
+there. `authenticated` *does* appear with SELECT, so its grant is genuinely
+table-wide, covering every PII column. Net effect: any logged-in user can read
+every business's `owner_id`, `business_email`, `contact_name`, `tone`.
+
+Tracked as separate follow-up work, out of scope here. The SECURITY DEFINER
+helpers remain the right design regardless — they work under both grant models,
+so these policies do not silently depend on the prod regression, and they will
+keep working once it is repaired (direct-reading policies would not).
 
 ### Deviations the live data forced
 
