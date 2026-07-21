@@ -2667,8 +2667,14 @@ async function produceFallbackImage(params: {
   sourcePhotoPath?: string | null;
   editMode?: MerchantImageEditMode;
   attempts?: readonly ImageProviderAttemptSummary[];
+  /**
+   * R4: false when the wall-clock budget is already spent. Stock fallback runs a
+   * vision QA pass per candidate, so on an exhausted chain it is the difference
+   * between returning a copy-only ad and being killed by the worker limit.
+   */
+  allowStockFallback?: boolean;
 }): Promise<ProducedImage> {
-  if (params.imageProviderConfig.stockFallbackEnabled) {
+  if (params.imageProviderConfig.stockFallbackEnabled && params.allowStockFallback !== false) {
     const stockPaths = await findStockImageFallbacks({
       admin: params.admin,
       requiredVisualItems: params.requiredVisualItems,
@@ -2746,8 +2752,52 @@ async function produceImage(params: {
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
   imageAspectRatio: AiImageAspectRatio;
+  /** Caller-owned sink for the wall-clock budget report (see R4 below). */
+  budgetSink?: { report?: { elapsed_ms: number; budget_ms: number; skipped_legs: string[] } };
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
+  // R4: the edge worker is killed with WORKER_RESOURCE_LIMIT at roughly 150s wall
+  // clock. This chain can queue up to four Gemini calls (primary + its retry, then
+  // the category-safe attempt + its retry) plus a gpt-image-1 fallback and a vision
+  // QA pass, which comfortably exceeds that — a 40%-off barber-fade deal reproduced
+  // the kill at ~150s twice. Escalating legs are now skipped when they cannot finish
+  // inside the budget, so the merchant lands on the deterministic fallback (an ad
+  // with no photo) instead of a hard dead end after 2.5 minutes of waiting.
+  const pipelineStartedAt = Date.now();
+  const pipelineBudgetMs = Math.max(30_000, envNumber("AI_IMAGE_PIPELINE_BUDGET_MS", 105_000));
+  const pipelineElapsedMs = (): number => Date.now() - pipelineStartedAt;
+  const pipelineSkippedLegs: string[] = [];
+  const pipelineHasBudgetFor = (leg: string, estimateMs: number): boolean => {
+    const elapsed = pipelineElapsedMs();
+    const allowed = elapsed + estimateMs <= pipelineBudgetMs;
+    if (!allowed) {
+      pipelineSkippedLegs.push(leg);
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "image_leg_skipped_for_budget",
+          leg,
+          elapsedMs: elapsed,
+          estimateMs,
+          budgetMs: pipelineBudgetMs,
+        }),
+      );
+    }
+    // Publish on every check (not just skips) so the response carries the budget
+    // picture regardless of which return path the chain takes.
+    publishBudgetReport();
+    return allowed;
+  };
+  // Written to a caller-owned sink rather than a module global: a Deno isolate can
+  // serve concurrent requests, so per-request state must not live at module scope.
+  const publishBudgetReport = (): void => {
+    if (!params.budgetSink) return;
+    params.budgetSink.report = {
+      elapsed_ms: pipelineElapsedMs(),
+      budget_ms: pipelineBudgetMs,
+      skipped_legs: [...pipelineSkippedLegs],
+    };
+  };
   const originalUploadedPhoto = async (): Promise<ProducedImage> => {
     let qa = originalPhotoQaTelemetry(params.merchantOverrideAcknowledged);
     if (params.photoPath) {
@@ -3098,7 +3148,8 @@ async function produceImage(params: {
   // exact identity is rendered by the app as native text, so this stays faithful
   // to the offer. Runs only on the no-image path, so working generations are
   // untouched.
-  if (!imageBytes) {
+  // 60s estimate: this leg passes retryOnFailure, so it is up to two Gemini calls.
+  if (!imageBytes && pipelineHasBudgetFor("gemini_category_safe", 60_000)) {
     const categorySafePrompt = buildGeminiAdImagePrompt(
       {
         businessId: params.businessId,
@@ -3344,19 +3395,24 @@ async function produceImage(params: {
     }
   }
 
-  if (useOpenAiFallback) {
+  // 45s estimate: a gpt-image-1 generation plus its upload. This is the leg most
+  // likely to push a slow chain past the worker limit, because it only runs after
+  // every Gemini attempt has already failed and burned its own time.
+  if (useOpenAiFallback && pipelineHasBudgetFor("openai_residual_fallback", 45_000)) {
     const result = await openAiFallback(providerAttempts);
     if (result.posterStoragePath || result.source === "stock" || result.source === "copy_only") {
       return result;
     }
   }
 
+  publishBudgetReport();
   return produceFallbackImage({
     admin: params.admin,
     openAiKey: params.openAiKey,
     geminiApiKey: params.geminiApiKey,
     prompt,
     requiredVisualItems,
+    allowStockFallback: pipelineHasBudgetFor("stock_fallback_qa", 20_000),
     imageProviderConfig: params.imageProviderConfig,
     costContext: params.costContext,
     sourcePhotoPath: params.photoPath,
@@ -4150,6 +4206,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // R4: per-request sink for the image pipeline's wall-clock budget report.
+    // Surfaced in the response because edge logs are not readable via the CLI, so a
+    // smoke has to be able to see which legs were skipped and why.
+    const imagePipelineBudget: { report?: { elapsed_ms: number; budget_ms: number; skipped_legs: string[] } } = {};
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
     if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
       // Copy-only revision: keep the existing image. If there is no existing image,
@@ -4174,6 +4234,7 @@ Deno.serve(async (req) => {
       );
     } else {
       imageResult = await produceImage({
+        budgetSink: imagePipelineBudget,
         openAiKey,
         geminiApiKey,
         admin,
@@ -4447,6 +4508,7 @@ Deno.serve(async (req) => {
       quota,
       image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
       poster_luma_debug: posterLumaDebug,
+      image_pipeline_budget: imagePipelineBudget.report ?? null,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
