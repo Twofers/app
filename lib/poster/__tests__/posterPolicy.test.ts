@@ -486,6 +486,25 @@ describe("poster policy", () => {
     }
   });
 
+  // S4. Poster copy is frozen into offer_versions at publish and never backfilled, so a
+  // business that renames leaves every published poster printing the old name. Observed
+  // live: a poster reading "Test Cafe" on a screen that said "The Colonel's Brew" three
+  // times around it. The canvas prefers the live name; this pins the sanitize behaviour it
+  // depends on \u2014 the live name goes through the same clamp and policy scan as a stored one.
+  it("sanitizes a substituted live business name the same way as a stored one", () => {
+    const stored = safeCopy({ business_name: "Test Cafe" });
+    const live = sanitizePosterCopy({ ...stored, business_name: "The Colonel's Brew" }, "The Colonel's Brew").copy;
+    expect(live.business_name).toBe("The Colonel's Brew");
+
+    // Over-long live names are clamped, not passed through raw.
+    const longName = "A".repeat(POSTER_TEXT_LIMITS.businessName + 12);
+    const clamped = sanitizePosterCopy({ ...stored, business_name: longName }, longName).copy;
+    expect(clamped.business_name.length).toBeLessThanOrEqual(POSTER_TEXT_LIMITS.businessName);
+
+    // A blank live name must not blank the poster \u2014 the caller falls back to the stored one.
+    expect(sanitizePosterCopy(stored, stored.business_name).copy.business_name).toBe("Test Cafe");
+  });
+
   // The mirror of the R9 lesson: a Spanish line must never END on a function word, the way
   // "AL COMPRAR 1 S\u00C1NDWICH DE" did, because Spanish hangs its qualifiers off "de".
   it("never leaves a Spanish offer line dangling on a function word", () => {

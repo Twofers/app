@@ -104,6 +104,14 @@ export type AdPosterCanvasProps = {
   /** Viewer's app language. Only used to pick poster copy when the poster viewer-language flag is on. */
   contentLocale?: SupportedLocale | null;
   /**
+   * The merchant's CURRENT name. Poster copy is frozen into offer_versions at publish and is
+   * never backfilled, so a business that renames leaves every already-published poster
+   * printing the old name — observed live as a poster reading "Test Cafe" on a screen that
+   * said "The Colonel's Brew" three times around it. The business name is identity, not an
+   * offer fact, so the live value wins when it is known. Omit it and the frozen value is used.
+   */
+  merchantName?: string | null;
+  /**
    * Dev/gallery override for the Look v2 render path. Undefined in production, so
    * shipped surfaces always resolve the look from the runtime flag. Only the
    * __DEV__ poster gallery sets this, to render V1 and V2 side-by-side without a
@@ -787,6 +795,7 @@ export function AdPosterCanvas({
   liveScheduleLabel,
   eyebrowLabel,
   contentLocale,
+  merchantName,
   forceLookV2,
   style,
 }: AdPosterCanvasProps) {
@@ -813,8 +822,13 @@ export function AdPosterCanvas({
       : undefined;
   const sanitized = useMemo(() => {
     if (!rawCopy) return null;
-    return sanitizePosterCopy(rawCopy, rawCopy.business_name || "Local Favorite").copy;
-  }, [rawCopy]);
+    // Prefer the live merchant name over the one frozen into the spec (see merchantName).
+    // Sanitized through the same path as the stored value, so the length clamp and the
+    // policy scan still apply to whatever the business is called today.
+    const liveName = (merchantName ?? "").trim();
+    const withLiveName = liveName ? { ...rawCopy, business_name: liveName } : rawCopy;
+    return sanitizePosterCopy(withLiveName, liveName || rawCopy.business_name || "Local Favorite").copy;
+  }, [rawCopy, merchantName]);
   const policy = sanitized ? assertPosterCopyPolicy(sanitized) : null;
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
