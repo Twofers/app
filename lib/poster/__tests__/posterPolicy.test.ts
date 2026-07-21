@@ -239,6 +239,59 @@ describe("poster policy", () => {
     expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
   });
 
+  it("keeps identity-bearing modifiers in the fallback headline", () => {
+    // R7, cause 1: "cold" was listed as a droppable size modifier, so posterItemLabel
+    // reduced "large cold brew" to "brew" and a live poster read "BREW FOR LESS" — at a
+    // shop called The Colonel's Brew. Size words are still droppable; temperature and
+    // freshness words are not, because they name the product.
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "large cold brew",
+    });
+
+    const headline = buildPosterCopyFromOfferDefinition({ definition }).headline;
+    expect(headline).toBe("COLD BREW FOR LESS");
+    expect(headline).not.toBe("BREW FOR LESS");
+    expect(headline.length).toBeLessThanOrEqual(POSTER_TEXT_LIMITS.headline);
+  });
+
+  it("keeps the modifiers in front of a known item word while they fit", () => {
+    // R7, cause 2: the known-word branch returned the matched word ALONE regardless of
+    // budget, so "12 ounce bag of whole bean coffee" became "coffee" — contentless on a
+    // poster for a coffee shop. The walk-back stops at "of", which marks the edge of the
+    // noun phrase.
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "12 ounce bag of whole bean coffee",
+    });
+
+    const headline = buildPosterCopyFromOfferDefinition({ definition }).headline;
+    expect(headline).toBe("WHOLE BEAN COFFEE FOR LESS");
+    expect(headline).not.toBe("COFFEE FOR LESS");
+    expect(headline.length).toBeLessThanOrEqual(POSTER_TEXT_LIMITS.headline);
+  });
+
+  it("still drops size words and never reaches past a post-modifier boundary", () => {
+    // The two guards that keep R7 from over-reaching. "Any large coffee drink" must not
+    // pick up "large"; "Cookie of your choice" is head-FIRST, so the walk-back must stop
+    // at "of" rather than dragging in "your choice".
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "Cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(buildPosterCopyFromOfferDefinition({ definition }).headline).toBe("COFFEE + COOKIE BREAK");
+  });
+
   it("keeps the head noun of a connector-joined item name", () => {
     // R6: posterItemLabel keeps only the last two meaningful words, so
     // "Haircut and fade" reduced to "and fade" and reached a live poster as the
@@ -280,7 +333,11 @@ describe("poster policy", () => {
     // SAVINGS", which honoured that rule but read as filler and is exactly the
     // shape POSTER_HEADLINE_FORMULAIC_VALUE now rejects in AI copy; the fallback
     // must not emit copy the gate would refuse.
-    expect(copy.headline).toBe("AMERICANO FOR LESS");
+    // R7 deliberately changed this expectation from "AMERICANO FOR LESS". The item is
+    // "Large iced americano": "Large" is a size word and is still dropped, but "iced"
+    // identifies the product and is now kept while it fits. This assertion doubles as the
+    // proof that R7's two guards pull in opposite directions correctly.
+    expect(copy.headline).toBe("ICED AMERICANO FOR LESS");
     expect(copy.headline).not.toMatch(/\b(?:savings|deal|special|offer)s?$/i);
     expect(copy.offer_line_1).toBe("50% OFF");
     expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");

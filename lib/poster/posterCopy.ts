@@ -63,11 +63,13 @@ const POSTER_ITEM_STOP_WORDS = new Set([
   "medium",
   "small",
   "regular",
-  "hot",
-  "iced",
-  "ice",
-  "cold",
-  "fresh",
+  // R7: "hot", "iced", "ice", "cold" and "fresh" USED to be listed here as droppable
+  // modifiers. They are not — they carry product identity rather than portion. "cold" is
+  // noise in "cold milk" but half the product name in "cold brew", and dropping it put
+  // "BREW FOR LESS" on a live poster at a shop called The Colonel's Brew. A flat list
+  // cannot tell those two uses apart, so the tie is now broken the other way: keep them
+  // and let the character budget decide what fits. Size words above stay droppable
+  // because they never identify a product.
 ]);
 
 // Connectors are never the head of an item name, and posterItemLabel keeps only the
@@ -106,20 +108,61 @@ function normalizePosterComparison(value: string): string {
     .trim();
 }
 
-function posterItemLabel(value: string): string {
+/**
+ * R7: the known-word branch used to return the matched word ALONE, discarding every
+ * modifier regardless of how much room the headline actually had. "12 ounce bag of whole
+ * bean coffee" became "coffee" — on a poster for a coffee shop, which is close to
+ * contentless — and "blueberry muffin" became "muffin".
+ *
+ * The discarded words nearly always fit: the headline limit is 28 and the label only needs
+ * to fit 19 once " for less" is appended. So walk BACKWARDS from the known word and keep
+ * the descriptive modifiers immediately in front of it while they fit the budget, stopping
+ * at a stop word or connector — those mark the edge of the noun phrase, which is what keeps
+ * "cookie of your choice" from reaching back past "of" and what keeps "any large coffee
+ * drink" from picking up "large".
+ */
+function expandKnownItemWord(words: string[], known: string, maxChars: number): string {
+  const index = words.lastIndexOf(known);
+  if (index < 0) return known;
+  let start = index;
+  let out = known;
+  while (start > 0) {
+    const candidateWord = words[start - 1];
+    if (POSTER_ITEM_STOP_WORDS.has(candidateWord) || POSTER_ITEM_CONNECTOR_WORDS.has(candidateWord)) break;
+    const candidate = `${candidateWord} ${out}`;
+    if (candidate.length > maxChars) break;
+    out = candidate;
+    start -= 1;
+  }
+  return out;
+}
+
+/**
+ * Shortens an item name to something that fits `maxChars` while still naming the product.
+ * `maxChars` defaults to the tightest real budget — the headline limit (28) minus the
+ * longest suffix the fallback appends (" for less", 9).
+ */
+function posterItemLabel(value: string, maxChars = POSTER_TEXT_LIMITS.headline - 9): string {
   const normalized = normalizePosterComparison(value);
   if (!normalized) return "";
   const words = normalized.split(/\s+/).filter(Boolean);
   const known = POSTER_KNOWN_ITEM_WORDS.find((word) => words.includes(word));
-  if (known && !(known === "drink" && words.includes("coffee"))) return known;
-  if (words.includes("coffee")) return "coffee";
+  if (known && !(known === "drink" && words.includes("coffee"))) {
+    return expandKnownItemWord(words, known, maxChars);
+  }
+  if (words.includes("coffee")) return expandKnownItemWord(words, "coffee", maxChars);
   const meaningful = words.filter(
     (word) => !POSTER_ITEM_STOP_WORDS.has(word) && !POSTER_ITEM_CONNECTOR_WORDS.has(word),
   );
   if (meaningful.length === 0) {
     return words.filter((word) => !POSTER_ITEM_CONNECTOR_WORDS.has(word)).slice(0, 2).join(" ");
   }
-  return meaningful.slice(-2).join(" ");
+  // Head-final tail, trimmed to what fits: "large cold brew" -> "cold brew".
+  let tail = meaningful.slice(-2).join(" ");
+  while (tail.length > maxChars && tail.includes(" ")) {
+    tail = tail.slice(tail.indexOf(" ") + 1);
+  }
+  return tail;
 }
 
 /**
@@ -339,8 +382,14 @@ export function buildPosterOfferLinesFromOfferDefinition(
 }
 
 function posterHeadlineFallback(definition: OfferDefinitionV1): string {
-  const firstItem = posterItemLabel(definition.qualifyingItems[0]?.displayName ?? "");
-  const rewardItem = posterItemLabel(definition.reward.displayNames[0] ?? "");
+  const paidName = definition.qualifyingItems[0]?.displayName ?? "";
+  const rewardName = definition.reward.displayNames[0] ?? "";
+  // Each branch appends a different suffix, so each gets its own budget rather than one
+  // shared worst case. Without this, R7's longer labels would overflow the pair branch and
+  // trade one fragment for another: two 17-char labels make a 37-char pair, which the
+  // 28-char headline clamp would then cut mid-phrase.
+  const firstItem = posterItemLabel(paidName, POSTER_TEXT_LIMITS.headline - " for less".length);
+  const rewardItem = posterItemLabel(rewardName, POSTER_TEXT_LIMITS.headline - " for less".length);
 
   if (definition.offerType === "percent_off_single_item") {
     // Not "<item> savings" / "local deal": the offer block already renders the
@@ -352,11 +401,16 @@ function posterHeadlineFallback(definition: OfferDefinitionV1): string {
   }
 
   if (definition.reward.rule === "same_item_free") {
-    return firstItem ? `${firstItem} bonus` : "local bonus";
+    const label = posterItemLabel(paidName, POSTER_TEXT_LIMITS.headline - " bonus".length);
+    return label ? `${label} bonus` : "local bonus";
   }
 
-  if (firstItem && rewardItem) {
-    const pair = `${firstItem} + ${rewardItem}`;
+  // " break" is only appended when the pair fits 22, so budget each side to keep it there.
+  const pairBudget = Math.floor((22 - " + ".length) / 2);
+  const paidPair = posterItemLabel(paidName, pairBudget);
+  const rewardPair = posterItemLabel(rewardName, pairBudget);
+  if (paidPair && rewardPair) {
+    const pair = `${paidPair} + ${rewardPair}`;
     return pair.length <= 22 ? `${pair} break` : pair;
   }
 
