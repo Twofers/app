@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildGeminiAdImagePrompt,
+  computeBandLuminanceFromRgba,
+  computeImageBandLuminanceDetailed,
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   resolveGeminiImageModel,
@@ -326,5 +328,61 @@ describe("Gemini image provider failure telemetry source guard", () => {
     expect(source).toMatch(/Gemini image output could not be converted to PNG/);
     expect(source).toMatch(/Gemini image generation failed before a usable response was returned/);
     expect(source).not.toMatch(/errorMessage:\s*String\(error\)\.slice/);
+  });
+});
+
+describe("computeBandLuminanceFromRgba", () => {
+  function solid(width: number, height: number, r: number, g: number, b: number): Uint8Array {
+    const data = new Uint8Array(width * height * 4);
+    for (let i = 0; i < width * height; i += 1) {
+      data[i * 4] = r;
+      data[i * 4 + 1] = g;
+      data[i * 4 + 2] = b;
+      data[i * 4 + 3] = 255;
+    }
+    return data;
+  }
+
+  it("reads ~0 for solid black and ~1 for solid white", () => {
+    expect(computeBandLuminanceFromRgba(solid(64, 80, 0, 0, 0), 64, 80)).toEqual({ top: 0, bottom: 0 });
+    expect(computeBandLuminanceFromRgba(solid(64, 80, 255, 255, 255), 64, 80)).toEqual({ top: 1, bottom: 1 });
+  });
+
+  it("measures the top and bottom bands independently", () => {
+    // Dark top quarter, bright bottom third — the poster's two overlay zones.
+    const width = 40;
+    const height = 100;
+    const data = solid(width, height, 255, 255, 255);
+    for (let y = 0; y < 25; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = (width * y + x) * 4;
+        data[i] = 0;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+      }
+    }
+    const luma = computeBandLuminanceFromRgba(data, width, height);
+    expect(luma).not.toBeNull();
+    expect(luma!.top).toBeLessThan(0.1);
+    expect(luma!.bottom).toBeGreaterThan(0.9);
+  });
+
+  it("returns null rather than throwing when the buffer is short or empty", () => {
+    expect(computeBandLuminanceFromRgba(new Uint8Array(0), 0, 0)).toBeNull();
+    expect(computeBandLuminanceFromRgba(new Uint8Array(16), 64, 80)).toBeNull();
+  });
+});
+
+describe("computeImageBandLuminanceDetailed", () => {
+  it("reports a reason code instead of a bare null when bytes are unusable", async () => {
+    const outcome = await computeImageBandLuminanceDetailed(new Uint8Array(4), "image/png");
+    expect(outcome.luma).toBeNull();
+    expect(outcome.reason).toBe("empty_bytes");
+  });
+
+  it("never leaks upstream bodies in the reason code", async () => {
+    const outcome = await computeImageBandLuminanceDetailed(new Uint8Array(64).fill(7), "image/png");
+    expect(outcome.luma).toBeNull();
+    expect(outcome.reason ?? "").toMatch(/^[a-z_]+(:[A-Za-z]+)?$/);
   });
 });

@@ -62,6 +62,12 @@ export type GeminiImageResult = {
   model: string;
   estimatedCostUsd: number;
   attempts: GeminiImageAttempt[];
+  /**
+   * Band luminance measured from the decoded pixels during JPEG->PNG conversion,
+   * when that conversion ran. Null when Gemini already returned PNG (no decode
+   * happened); callers fall back to decoding the in-memory bytes.
+   */
+  luma?: { top: number; bottom: number } | null;
 };
 
 type EnvReader = {
@@ -277,10 +283,10 @@ function base64ToBytes(value: string): Uint8Array {
 async function normalizeGeminiImageToPng(
   bytes: Uint8Array,
   mimeType: string | null,
-): Promise<{ bytes: Uint8Array; mimeType: "image/png"; converted: boolean }> {
+): Promise<{ bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: { top: number; bottom: number } | null }> {
   const normalizedMime = (mimeType ?? "image/png").toLowerCase();
   if (normalizedMime === "image/png") {
-    return { bytes, mimeType: "image/png", converted: false };
+    return { bytes, mimeType: "image/png", converted: false, luma: null };
   }
   if (normalizedMime !== "image/jpeg" && normalizedMime !== "image/jpg") {
     throw new Error(`Unsupported Gemini image MIME type: ${normalizedMime || "(missing)"}`);
@@ -311,7 +317,11 @@ async function normalizeGeminiImageToPng(
   if (typeof sync?.write !== "function") {
     throw new Error("PNG encoder is unavailable.");
   }
-  return { bytes: new Uint8Array(sync.write(png)), mimeType: "image/png", converted: true };
+  // We already hold decoded RGBA here — measure the legibility bands now rather
+  // than paying for a second decode (pngjs `sync.read`) later. That re-decode is
+  // the suspected reason poster.luma came back null in prod.
+  const luma = computeBandLuminanceFromRgba(decoded.data, decoded.width, decoded.height);
+  return { bytes: new Uint8Array(sync.write(png)), mimeType: "image/png", converted: true, luma };
 }
 
 /**
@@ -322,15 +332,57 @@ async function normalizeGeminiImageToPng(
  * its safe fallback scrim. Bands approximate the 4:5 poster crop (top ~0-24.5%,
  * bottom ~65.8-100% of image height).
  */
-export async function computeImageBandLuminance(
+export function computeBandLuminanceFromRgba(
+  data: Uint8Array,
+  width: number,
+  height: number,
+): { top: number; bottom: number } | null {
+  if (!width || !height || !data) return null;
+  if (data.length < width * height * 4) return null;
+  const lin = (c: number): number => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const band = (y0f: number, y1f: number): number => {
+    let sum = 0;
+    let n = 0;
+    const y0 = Math.max(0, Math.floor(y0f * height));
+    const y1 = Math.min(height, Math.ceil(y1f * height));
+    for (let y = y0; y < y1; y += 4) {
+      for (let x = 0; x < width; x += 4) {
+        const i = (width * y + x) * 4;
+        sum += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+        n++;
+      }
+    }
+    return n ? sum / n : 0.5;
+  };
+  const round = (v: number): number => Math.round(v * 1000) / 1000;
+  return { top: round(band(0, 0.245)), bottom: round(band(0.658, 1)) };
+}
+
+/**
+ * Decoder outcome for band luminance. `reason` is a short, self-authored code
+ * (never an upstream provider body) so a post-deploy smoke can tell WHY luma
+ * came back null instead of guessing — edge logs are not readable via the CLI.
+ */
+export type BandLuminanceOutcome = {
+  luma: { top: number; bottom: number } | null;
+  decoder: "png" | "jpeg" | null;
+  reason: string | null;
+};
+
+export async function computeImageBandLuminanceDetailed(
   bytes: Uint8Array,
   mimeType?: string | null,
-): Promise<{ top: number; bottom: number } | null> {
+): Promise<BandLuminanceOutcome> {
+  let decoder: "png" | "jpeg" | null = null;
   try {
-    if (!bytes || bytes.length < 16) return null;
+    if (!bytes || bytes.length < 16) return { luma: null, decoder: null, reason: "empty_bytes" };
     const looksPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
     const normalizedMime = (mimeType ?? "").toLowerCase();
     const treatAsPng = looksPng || normalizedMime === "image/png";
+    decoder = treatAsPng ? "png" : "jpeg";
     let width = 0;
     let height = 0;
     let data: Uint8Array | null = null;
@@ -340,7 +392,7 @@ export async function computeImageBandLuminance(
       const PngCtor = (pngModule as { PNG?: unknown; default?: { PNG?: unknown } }).PNG ??
         (pngModule as { default?: { PNG?: unknown } }).default?.PNG;
       const sync = (PngCtor as unknown as { sync?: { read?: (b: Uint8Array) => { width: number; height: number; data: Uint8Array } } })?.sync;
-      if (typeof sync?.read !== "function") return null;
+      if (typeof sync?.read !== "function") return { luma: null, decoder, reason: "png_sync_read_unavailable" };
       const png = sync.read(bytes);
       width = png.width;
       height = png.height;
@@ -350,7 +402,7 @@ export async function computeImageBandLuminance(
       const jpegModule = await import(jpegSpecifier);
       const decode = (jpegModule as { default?: { decode?: unknown }; decode?: unknown }).default?.decode ??
         (jpegModule as { decode?: unknown }).decode;
-      if (typeof decode !== "function") return null;
+      if (typeof decode !== "function") return { luma: null, decoder, reason: "jpeg_decode_unavailable" };
       const decoded = (decode as (b: Uint8Array, o: { useTArray: boolean }) => { width?: number; height?: number; data?: Uint8Array })(
         bytes,
         { useTArray: true },
@@ -359,30 +411,19 @@ export async function computeImageBandLuminance(
       height = decoded.height ?? 0;
       data = decoded.data ?? null;
     }
-    if (!width || !height || !data) return null;
-    const lin = (c: number): number => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    };
-    const band = (y0f: number, y1f: number): number => {
-      let sum = 0;
-      let n = 0;
-      const y0 = Math.max(0, Math.floor(y0f * height));
-      const y1 = Math.min(height, Math.ceil(y1f * height));
-      for (let y = y0; y < y1; y += 4) {
-        for (let x = 0; x < width; x += 4) {
-          const i = (width * y + x) * 4;
-          sum += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
-          n++;
-        }
-      }
-      return n ? sum / n : 0.5;
-    };
-    const round = (v: number): number => Math.round(v * 1000) / 1000;
-    return { top: round(band(0, 0.245)), bottom: round(band(0.658, 1)) };
-  } catch {
-    return null;
+    if (!width || !height || !data) return { luma: null, decoder, reason: "decode_no_pixels" };
+    const luma = computeBandLuminanceFromRgba(data, width, height);
+    return { luma, decoder, reason: luma ? null : "band_math_no_pixels" };
+  } catch (err) {
+    return { luma: null, decoder, reason: `decode_threw:${String((err as Error)?.name ?? "Error").slice(0, 40)}` };
   }
+}
+
+export async function computeImageBandLuminance(
+  bytes: Uint8Array,
+  mimeType?: string | null,
+): Promise<{ top: number; bottom: number } | null> {
+  return (await computeImageBandLuminanceDetailed(bytes, mimeType)).luma;
 }
 
 function normalizeGeminiErrorCode(status: number): string {
@@ -476,15 +517,16 @@ async function decodeGeminiImagePart(params: {
   imagePart: { data: string; mimeType: string | null };
   attemptBase: GeminiImageAttempt;
   startedAt: number;
-}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt }> {
+}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: { top: number; bottom: number } | null }> {
   const imageMimeType = params.imagePart.mimeType ?? "image/png";
-  let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
+  let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: { top: number; bottom: number } | null };
   try {
     normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(params.imagePart.data), imageMimeType);
   } catch {
     return {
       bytes: null,
       mimeType: null,
+      luma: null,
       attempt: {
         ...params.attemptBase,
         latencyMs: Date.now() - params.startedAt,
@@ -496,6 +538,7 @@ async function decodeGeminiImagePart(params: {
   return {
     bytes: normalizedImage.bytes,
     mimeType: normalizedImage.mimeType,
+    luma: normalizedImage.luma,
     attempt: {
       ...params.attemptBase,
       success: true,
@@ -515,7 +558,7 @@ async function attemptGeminiImageGeneration(params: {
   estimatedCostUsd: number;
   referenceImages?: AiImageReference[];
   retry: boolean;
-}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt }> {
+}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: { top: number; bottom: number } | null }> {
   const startedAt = Date.now();
   const useInteractionsApi = shouldUseInteractionsApi(params.model);
   const attemptBase: GeminiImageAttempt = {
@@ -539,6 +582,7 @@ async function attemptGeminiImageGeneration(params: {
     return {
       bytes: null,
       mimeType: null,
+      luma: null,
       attempt: {
         ...attemptBase,
         latencyMs: Date.now() - startedAt,
@@ -614,6 +658,7 @@ async function attemptGeminiImageGeneration(params: {
       return {
         bytes: null,
         mimeType: null,
+        luma: null,
         attempt: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
@@ -629,6 +674,7 @@ async function attemptGeminiImageGeneration(params: {
       return {
         bytes: null,
         mimeType: null,
+        luma: null,
         attempt: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
@@ -643,6 +689,7 @@ async function attemptGeminiImageGeneration(params: {
     return {
       bytes: null,
       mimeType: null,
+      luma: null,
       attempt: {
         ...attemptBase,
         latencyMs: Date.now() - startedAt,
@@ -687,6 +734,7 @@ export async function generateGeminiAdImageWithTelemetry(params: {
       model: params.model,
       estimatedCostUsd: first.attempt.success ? estimatedCostUsd : 0,
       attempts: [first.attempt],
+      luma: first.luma,
     };
   }
 
@@ -712,5 +760,6 @@ export async function generateGeminiAdImageWithTelemetry(params: {
     model: params.model,
     estimatedCostUsd: retry.attempt.success ? estimatedCostUsd : 0,
     attempts: [first.attempt, retry.attempt],
+    luma: retry.luma,
   };
 }

@@ -27,7 +27,7 @@ import {
 } from "../_shared/dalle-image.ts";
 import {
   buildGeminiAdImagePrompt,
-  computeImageBandLuminance,
+  computeImageBandLuminanceDetailed,
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   type AiImageProvider,
@@ -2265,6 +2265,16 @@ type OpenAiProducedImage = {
   prompt: string | null;
   qa: ImageQaTelemetry;
   attempts?: ImageProviderAttemptSummary[];
+  /**
+   * The bytes we just uploaded, kept in memory so poster-spec assembly can measure
+   * band luminance without re-downloading the object it just stored (that
+   * round-trip is why `poster.luma` came back null in prod). Absent for paths
+   * that never held bytes (stock, reused previous ad).
+   */
+  posterImageBytes?: Uint8Array | null;
+  posterImageMime?: string | null;
+  /** Luminance already measured from decoded pixels upstream, when available. */
+  posterImageLuma?: { top: number; bottom: number } | null;
 };
 
 type ProducedImageBase = OpenAiProducedImage & {
@@ -2623,7 +2633,16 @@ async function produceImageOpenAiOnly(params: {
     );
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
-  return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
+  return {
+    posterStoragePath: generatedPath,
+    source: "generated",
+    treatment: null,
+    prompt,
+    qa,
+    attempts: providerAttempts,
+    posterImageBytes: png,
+    posterImageMime: "image/png",
+  };
 }
 
 function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase {
@@ -3045,6 +3064,9 @@ async function produceImage(params: {
   let imageMimeType = gemini.mimeType;
   let imagePrompt = gemini.prompt;
   let estimatedCostUsd = gemini.estimatedCostUsd;
+  // Tracks alongside imageBytes so a retry's luminance replaces the first
+  // attempt's rather than describing bytes we discarded.
+  let imageLuma = gemini.luma ?? null;
   const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
     normalizeSourceAwareImageQaResult({
       raw: {
@@ -3260,6 +3282,7 @@ async function produceImage(params: {
           imageBytes = retryGeneration.bytes;
           imageMimeType = retryGeneration.mimeType;
           imagePrompt = retryGeneration.prompt;
+          imageLuma = retryGeneration.luma ?? null;
           estimatedCostUsd += retryGeneration.estimatedCostUsd;
         }
       }
@@ -3284,6 +3307,7 @@ async function produceImage(params: {
   if (qa.hardFailReasons.length > 0 || qa.missingItems.length > 0) {
     imageBytes = null;
     imageMimeType = null;
+    imageLuma = null;
   }
 
   if (imageBytes) {
@@ -3308,6 +3332,9 @@ async function produceImage(params: {
           model: gemini.model,
           estimatedCostUsd,
           attempts: providerAttempts,
+          posterImageBytes: imageBytes,
+          posterImageMime: imageMimeType,
+          posterImageLuma: imageLuma,
         },
         {
           sourcePhotoPath: null,
@@ -4199,25 +4226,52 @@ Deno.serve(async (req) => {
           compositionPlan: imageResult.prompt,
         })
       : null;
-    // Best-effort: measure the stored poster image's top/bottom band luminance so
-    // the native renderer sizes its legibility scrim to the image (vs a fixed
-    // fallback). Fail-safe — any storage/decode issue leaves luma off and the
-    // renderer keeps its safe fallback. Never blocks or fails generation.
+    // Best-effort: measure the poster image's top/bottom band luminance so the
+    // native renderer sizes its legibility scrim to the image (vs a fixed
+    // fallback). Fail-safe — any decode issue leaves luma off and the renderer
+    // keeps its safe fallback. Never blocks or fails generation.
+    let posterLumaDebug: { source: string | null; reason: string | null } | null = null;
     if (posterDraft && imageResult.posterStoragePath) {
       try {
-        const { data: blob } = await admin.storage
-          .from("deal-photos")
-          .download(imageResult.posterStoragePath);
-        if (blob) {
-          const luma = await computeImageBandLuminance(
-            new Uint8Array(await blob.arrayBuffer()),
-            (blob as { type?: string }).type ?? null,
+        let luma = imageResult.posterImageLuma ?? null;
+        // "upstream" = measured from pixels decoded during JPEG->PNG conversion;
+        // "memory" = decoded here from the bytes we just uploaded;
+        // "download" = last resort for paths that never held bytes (stock, reuse).
+        let lumaSource: "upstream" | "memory" | "download" | null = luma ? "upstream" : null;
+        let lumaReason: string | null = null;
+        if (!luma && imageResult.posterImageBytes) {
+          const outcome = await computeImageBandLuminanceDetailed(
+            imageResult.posterImageBytes,
+            imageResult.posterImageMime ?? null,
           );
-          if (luma) {
-            (posterDraft as { luma?: { top: number; bottom: number } }).luma = luma;
+          luma = outcome.luma;
+          lumaReason = outcome.reason;
+          if (luma) lumaSource = "memory";
+        }
+        if (!luma) {
+          const { data: blob } = await admin.storage
+            .from("deal-photos")
+            .download(imageResult.posterStoragePath);
+          if (blob) {
+            const outcome = await computeImageBandLuminanceDetailed(
+              new Uint8Array(await blob.arrayBuffer()),
+              (blob as { type?: string }).type ?? null,
+            );
+            luma = outcome.luma;
+            lumaReason = outcome.reason ?? lumaReason;
+            if (luma) lumaSource = "download";
+          } else if (!lumaReason) {
+            lumaReason = "storage_download_empty";
           }
         }
+        if (luma) {
+          (posterDraft as { luma?: { top: number; bottom: number } }).luma = luma;
+        }
+        // Carried in the response (not just logs) because edge logs are not
+        // readable via the CLI — this is how a smoke proves which path ran.
+        posterLumaDebug = { source: lumaSource, reason: luma ? null : lumaReason };
       } catch (lumaErr) {
+        posterLumaDebug = { source: null, reason: `threw:${String((lumaErr as Error)?.name ?? "Error").slice(0, 40)}` };
         console.log(JSON.stringify({ tag: "ai_ads_v2", event: "poster_luma_skipped", message: String(lumaErr) }));
       }
     }
@@ -4392,6 +4446,7 @@ Deno.serve(async (req) => {
       ads: [ad],
       quota,
       image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
+      poster_luma_debug: posterLumaDebug,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
