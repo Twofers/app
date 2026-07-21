@@ -27,6 +27,7 @@ import {
 } from "../_shared/dalle-image.ts";
 import {
   buildGeminiAdImagePrompt,
+  computeImageBandLuminance,
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   type AiImageProvider,
@@ -4198,6 +4199,28 @@ Deno.serve(async (req) => {
           compositionPlan: imageResult.prompt,
         })
       : null;
+    // Best-effort: measure the stored poster image's top/bottom band luminance so
+    // the native renderer sizes its legibility scrim to the image (vs a fixed
+    // fallback). Fail-safe — any storage/decode issue leaves luma off and the
+    // renderer keeps its safe fallback. Never blocks or fails generation.
+    if (posterDraft && imageResult.posterStoragePath) {
+      try {
+        const { data: blob } = await admin.storage
+          .from("deal-photos")
+          .download(imageResult.posterStoragePath);
+        if (blob) {
+          const luma = await computeImageBandLuminance(
+            new Uint8Array(await blob.arrayBuffer()),
+            (blob as { type?: string }).type ?? null,
+          );
+          if (luma) {
+            (posterDraft as { luma?: { top: number; bottom: number } }).luma = luma;
+          }
+        }
+      } catch (lumaErr) {
+        console.log(JSON.stringify({ tag: "ai_ads_v2", event: "poster_luma_skipped", message: String(lumaErr) }));
+      }
+    }
     let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
     if (shouldBuildLocalizationBundle()) {
       const merchantProfile = buildMerchantCreativeProfile({

@@ -202,7 +202,7 @@ export function buildGeminiAdImagePrompt(
     : offerMechanics(input);
   const framing =
     input.aspectRatio === "4:5"
-      ? "Use vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      ? "Use vertical 4:5 poster-ready framing that fills the entire frame edge to edge, with the product centered and calmer (not empty) photographic zones toward the top and bottom for native text."
       : "Use a composition that works as a square mobile feed image.";
   const referenceInstruction =
     input.referenceImages && input.referenceImages.length > 0
@@ -228,8 +228,8 @@ export function buildGeminiAdImagePrompt(
     "- Use natural lighting and a local business marketing style.",
     "- Avoid the glossy, fake, over-rendered AI look.",
     "- Keep every required item fully inside the center-safe area and away from crop edges.",
-    "- Leave clean visual space near the top or bottom for the app to overlay the exact offer text later.",
-    "- Keep the top and bottom overlay zones calm enough for native text contrast.",
+    "- Fill the whole vertical frame edge to edge with the photograph. No borders, margins, framing bars, letterboxing, vignette frames, or flat solid-color bands on any side — even when two items sit side by side, extend the scene (surface, background) to every edge instead of padding with empty space.",
+    "- The top and bottom zones must stay part of the photo (blurred background, table surface, soft shadow) but calm and low-contrast so the app can overlay text — calmer photography, never empty bands.",
     `- ${framing}`,
     "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
     "- Do not add readable text.",
@@ -312,6 +312,77 @@ async function normalizeGeminiImageToPng(
     throw new Error("PNG encoder is unavailable.");
   }
   return { bytes: new Uint8Array(sync.write(png)), mimeType: "image/png", converted: true };
+}
+
+/**
+ * Best-effort top/bottom band luminance (0..1) of a generated poster image, so the
+ * native renderer can size its legibility scrim to the image instead of a fixed
+ * fallback. Reuses the same pngjs/jpeg-js decoders already bundled for PNG
+ * conversion. Fail-safe: any decode problem returns null and the renderer keeps
+ * its safe fallback scrim. Bands approximate the 4:5 poster crop (top ~0-24.5%,
+ * bottom ~65.8-100% of image height).
+ */
+export async function computeImageBandLuminance(
+  bytes: Uint8Array,
+  mimeType?: string | null,
+): Promise<{ top: number; bottom: number } | null> {
+  try {
+    if (!bytes || bytes.length < 16) return null;
+    const looksPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const normalizedMime = (mimeType ?? "").toLowerCase();
+    const treatAsPng = looksPng || normalizedMime === "image/png";
+    let width = 0;
+    let height = 0;
+    let data: Uint8Array | null = null;
+    if (treatAsPng) {
+      const pngSpecifier = "pngjs";
+      const pngModule = await import(pngSpecifier);
+      const PngCtor = (pngModule as { PNG?: unknown; default?: { PNG?: unknown } }).PNG ??
+        (pngModule as { default?: { PNG?: unknown } }).default?.PNG;
+      const sync = (PngCtor as unknown as { sync?: { read?: (b: Uint8Array) => { width: number; height: number; data: Uint8Array } } })?.sync;
+      if (typeof sync?.read !== "function") return null;
+      const png = sync.read(bytes);
+      width = png.width;
+      height = png.height;
+      data = png.data;
+    } else {
+      const jpegSpecifier = "jpeg-js";
+      const jpegModule = await import(jpegSpecifier);
+      const decode = (jpegModule as { default?: { decode?: unknown }; decode?: unknown }).default?.decode ??
+        (jpegModule as { decode?: unknown }).decode;
+      if (typeof decode !== "function") return null;
+      const decoded = (decode as (b: Uint8Array, o: { useTArray: boolean }) => { width?: number; height?: number; data?: Uint8Array })(
+        bytes,
+        { useTArray: true },
+      );
+      width = decoded.width ?? 0;
+      height = decoded.height ?? 0;
+      data = decoded.data ?? null;
+    }
+    if (!width || !height || !data) return null;
+    const lin = (c: number): number => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    const band = (y0f: number, y1f: number): number => {
+      let sum = 0;
+      let n = 0;
+      const y0 = Math.max(0, Math.floor(y0f * height));
+      const y1 = Math.min(height, Math.ceil(y1f * height));
+      for (let y = y0; y < y1; y += 4) {
+        for (let x = 0; x < width; x += 4) {
+          const i = (width * y + x) * 4;
+          sum += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+          n++;
+        }
+      }
+      return n ? sum / n : 0.5;
+    };
+    const round = (v: number): number => Math.round(v * 1000) / 1000;
+    return { top: round(band(0, 0.245)), bottom: round(band(0.658, 1)) };
+  } catch {
+    return null;
+  }
 }
 
 function normalizeGeminiErrorCode(status: number): string {

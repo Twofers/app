@@ -86,7 +86,10 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("Do not add fake business names.");
     expect(prompt).toContain("Do not add app mascots, characters, animals, penguins");
     expect(prompt).toContain("center-safe area");
-    expect(prompt).toContain("top and bottom overlay zones");
+    // P1 (2026-07-20): full-bleed framing replaced the old "leave clean visual space" /
+    // "top and bottom overlay zones" wording that made the model letterbox two-item posters.
+    expect(prompt).toContain("Fill the whole vertical frame edge to edge");
+    expect(prompt).toContain("never empty bands");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 

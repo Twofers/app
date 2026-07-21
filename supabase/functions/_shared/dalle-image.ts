@@ -180,7 +180,7 @@ export function buildPhotoAdImagePrompt(params: {
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
   const framing =
     params.aspectRatio === "4:5"
-      ? "Vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      ? "Vertical 4:5 poster-ready framing that fills the whole frame edge to edge (no borders, letterboxing, or flat color bands), with the product centered and calmer photographic zones top and bottom for native text."
       : "Square 1:1 framing.";
   return [
     visualItems.length > 1
@@ -227,6 +227,12 @@ async function attemptImageGeneration(
   /** Poster flow historically used vivid + standard on DALL·E 3 only; ignored for GPT image models. */
   posterStyleDalle3?: boolean,
 ): Promise<OpenAiImageResult> {
+  // Ad images are rendered inside a 4:5 poster (cover-cropped). gpt-image-1 has no
+  // 4:5 option, so request its closest portrait (1024x1536, 2:3) rather than a
+  // square 1024x1024 — a square loses far more when cropped to 4:5 and is the
+  // reason F4-fallback posters came back visibly cropped. DALL·E stays square
+  // (legacy path; not the resolved generation model).
+  const size = usesGptImageGenerationShape(model) ? "1024x1536" : "1024x1024";
   const attemptBase: OpenAiImageAttempt = {
     model,
     endpoint: "images.generations",
@@ -236,7 +242,7 @@ async function attemptImageGeneration(
     success: false,
     errorCode: null,
     errorMessage: null,
-    size: "1024x1024",
+    size,
     quality: null,
     outputFormat: null,
   };
@@ -245,7 +251,7 @@ async function attemptImageGeneration(
       model,
       prompt,
       n: 1,
-      size: "1024x1024",
+      size,
     };
     if (isDalle3(model)) {
       payload.quality = posterStyleDalle3 ? "standard" : "hd";
