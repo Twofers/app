@@ -101,8 +101,10 @@ describe("approved-not-activated lifecycle", () => {
       expect(read(path), path).toMatch(/business-capabilities|getBusinessCapabilities/);
     }
     const menu = read("supabase/functions/ai-extract-menu/index.ts");
+    // The OpenAI request now routes through the shared prepaid/fallback wrapper; the
+    // allowance must still be consumed before that request is issued.
     expect(menu.indexOf("consume_setup_menu_extraction_allowance")).toBeLessThan(
-      menu.indexOf('fetch("https://api.openai.com'),
+      menu.indexOf('url: "https://api.openai.com/v1/responses"'),
     );
   });
 

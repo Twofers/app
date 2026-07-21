@@ -6,6 +6,7 @@ import {
 } from "./ai-provider-errors.ts";
 import { chatCompletionTuning } from "./openai-chat-model.ts";
 import { extractCommonJsonSchema } from "./ai-structured-schema.ts";
+import { fetchOpenAiWithFallback, resolveOpenAiKeyCandidates } from "./openai-fetch.ts";
 import {
   type ProviderAttempt,
   type StructuredGenerationRequest,
@@ -72,8 +73,11 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
     operation: params.request.operation,
     startedAt,
   };
-  const apiKey = (params.apiKey ?? "").trim();
-  if (!apiKey) {
+  // Key selection (prepaid -> existing) and fallback are centralized in
+  // ./openai-fetch.ts. The injected `apiKey` is treated as the existing key so
+  // dependency-injection tests keep working; prepaid is read from env in production.
+  const keyCandidates = resolveOpenAiKeyCandidates({ existingKeyOverride: params.apiKey });
+  if (keyCandidates.length === 0) {
     throw new AiProviderError({
       provider: "openai",
       model: params.model,
@@ -84,28 +88,32 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
   }
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: params.model,
-        response_format: {
-          type: "json_schema",
-          json_schema: openAiJsonSchema(params.request.jsonSchema),
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/chat/completions",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        messages: [
-          { role: "system", content: params.request.systemPrompt },
-          { role: "user", content: openAiUserContent(params.request) },
-        ],
-        ...chatCompletionTuning(params.model, {
-          maxTokens: params.request.maxOutputTokens,
-          reasoningEffort: params.request.reasoningLevel ?? "medium",
+        body: JSON.stringify({
+          model: params.model,
+          response_format: {
+            type: "json_schema",
+            json_schema: openAiJsonSchema(params.request.jsonSchema),
+          },
+          messages: [
+            { role: "system", content: params.request.systemPrompt },
+            { role: "user", content: openAiUserContent(params.request) },
+          ],
+          ...chatCompletionTuning(params.model, {
+            maxTokens: params.request.maxOutputTokens,
+            reasoningEffort: params.request.reasoningLevel ?? "medium",
+          }),
         }),
-      }),
-      signal: AbortSignal.timeout(params.request.timeoutMs),
+        signal: AbortSignal.timeout(params.request.timeoutMs),
+      },
+      candidates: keyCandidates,
+      logTag: "ai_text_provider",
     });
     const requestId = openAiRequestIdFromHeaders(res.headers);
     if (!res.ok) {

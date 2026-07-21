@@ -4,6 +4,7 @@ import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-cha
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import { fetchOpenAiWithFallback } from "../_shared/openai-fetch.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -550,13 +551,17 @@ serve(async (req) => {
       },
     };
 
-    const openAiRes = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: openAiRes } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/responses",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(responsesBody),
       },
-      body: JSON.stringify(responsesBody),
+      existingKeyOverride: openAiKey,
+      logTag: "ai_extract_menu",
     });
 
     if (!openAiRes.ok) {

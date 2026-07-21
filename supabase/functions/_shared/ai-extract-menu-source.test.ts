@@ -22,7 +22,10 @@ describe("ai-extract-menu source guards", () => {
       'const { data: allowanceConsumed, error: allowanceError } = await admin.rpc',
       missingKeyIndex,
     );
-    const providerCallIndex = source.indexOf("const openAiRes = await fetch", missingKeyIndex);
+    const providerCallIndex = source.indexOf(
+      "const { response: openAiRes } = await fetchOpenAiWithFallback",
+      missingKeyIndex,
+    );
 
     expect(syntheticIndex).toBeGreaterThan(-1);
     expect(missingKeyIndex).toBeGreaterThan(-1);
@@ -41,7 +44,10 @@ describe("ai-extract-menu source guards", () => {
 
   it("routes base64 menu images through the shared provider router", () => {
     const routerIndex = source.indexOf("const imageBytes = decodeBase64Image(imageBase64)");
-    const providerCallIndex = source.indexOf("const openAiRes = await fetch", routerIndex);
+    const providerCallIndex = source.indexOf(
+      "const { response: openAiRes } = await fetchOpenAiWithFallback",
+      routerIndex,
+    );
 
     expect(routerIndex).toBeGreaterThan(-1);
     expect(providerCallIndex).toBeGreaterThan(routerIndex);

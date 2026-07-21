@@ -5,7 +5,14 @@
  * - ai-compose-offer: single poster with baked-in text.
  * - ai-generate-ad-variants: photographic single ad — no baked-in text; the app UI renders
  *   the headline above the image.
+ *
+ * OpenAI runs only as the fallback image provider (Gemini is primary). When an OpenAI
+ * image request is made, key selection (prepaid -> existing) and the auth fallback are
+ * handled centrally by ./openai-fetch.ts. Models, prompts, payloads, the image-model
+ * ladder, timeouts, and telemetry are unchanged.
  */
+
+import { fetchOpenAiWithFallback } from "./openai-fetch.ts";
 
 /**
  * Allowlisted image model ids only — never accept model names from clients.
@@ -254,14 +261,18 @@ async function attemptImageGeneration(
       attemptBase.quality = "high";
       attemptBase.outputFormat = "png";
     }
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/images/generations",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
       },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
+      existingKeyOverride: openAiKey,
+      logTag,
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
@@ -501,24 +512,33 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
   }
   try {
     const model = RESOLVED_IMAGE_EDIT_MODEL;
-    const form = new FormData();
-    form.append("model", model);
-    form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
-    form.append("size", "1024x1024");
-    form.append("quality", "high");
-    form.append("output_format", "png");
-    form.append("n", "1");
-    if (!isDalle2(model)) {
-      form.append("input_fidelity", "high");
-    }
-    const blob = new Blob([imageBytes as BlobPart], { type: normalizeEditMime(imageMime) || "image/png" });
-    form.append("image", blob, editFilenameForMime(imageMime));
+    // Rebuild the multipart body per attempt so the prepaid -> existing key retry
+    // sends a fresh, unconsumed form (a FormData request body is single-use).
+    const buildEditForm = (): FormData => {
+      const form = new FormData();
+      form.append("model", model);
+      form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
+      form.append("size", "1024x1024");
+      form.append("quality", "high");
+      form.append("output_format", "png");
+      form.append("n", "1");
+      if (!isDalle2(model)) {
+        form.append("input_fidelity", "high");
+      }
+      const blob = new Blob([imageBytes as BlobPart], { type: normalizeEditMime(imageMime) || "image/png" });
+      form.append("image", blob, editFilenameForMime(imageMime));
+      return form;
+    };
 
-    const res = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/images/edits",
+      init: {
+        method: "POST",
+        signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
+      },
+      buildBody: buildEditForm,
+      existingKeyOverride: openAiKey,
+      logTag,
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {

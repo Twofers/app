@@ -36,6 +36,7 @@ import {
   type GeminiImageAttempt,
 } from "../_shared/ai-image-provider.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { fetchOpenAiWithFallback } from "../_shared/openai-fetch.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -466,17 +467,22 @@ async function callResearchModel(params: {
         temperature: isWebSearch ? undefined : 0.4,
       }),
     };
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/chat/completions",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        // Bound the (web-search) research call so a slow model can't, together with
+        // copy + image, push total server time past the app's 120s invoke budget.
+        // On timeout the catch below returns null → graceful fallback, never a hard error.
+        signal: AbortSignal.timeout(25_000),
       },
-      body: JSON.stringify(body),
-      // Bound the (web-search) research call so a slow model can't, together with
-      // copy + image, push total server time past the app's 120s invoke budget.
-      // On timeout the catch below returns null → graceful fallback, never a hard error.
-      signal: AbortSignal.timeout(25_000),
+      existingKeyOverride: openAiKey,
+      logTag: "ai_ads_v2",
+      event: "research_openai_key_source",
     });
     if (!res.ok) {
       console.log(
