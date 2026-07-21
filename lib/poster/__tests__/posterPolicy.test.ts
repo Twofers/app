@@ -214,6 +214,28 @@ describe("poster policy", () => {
     expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
   });
 
+  it("keeps the head noun of a connector-joined item name", () => {
+    // R6: posterItemLabel keeps only the last two meaningful words, so
+    // "Haircut and fade" reduced to "and fade" and reached a live poster as the
+    // headline "AND FADE FOR LESS" — a fragment on a paid ad. Connectors are now
+    // dropped before the slice so the head noun survives.
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "Haircut and fade",
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Haircut and fade 40% off",
+      businessCategory: "Barber shop",
+    });
+
+    expect(copy.headline).not.toMatch(/^(?:and|or|but|plus)\b/i);
+    expect(copy.headline).toContain("HAIRCUT");
+  });
+
   it("does not let percent-off mechanics become the poster hero", () => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",

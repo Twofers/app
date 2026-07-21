@@ -70,6 +70,13 @@ const POSTER_ITEM_STOP_WORDS = new Set([
   "fresh",
 ]);
 
+// Connectors are never the head of an item name, and posterItemLabel keeps only the
+// LAST two meaningful words. Without this set a three-word item reduces to a
+// fragment: "Haircut and fade" -> ["haircut","and","fade"] -> slice(-2) -> "and
+// fade", which reached a live poster as the headline "AND FADE FOR LESS". Dropping
+// the connector instead yields "haircut fade", which keeps the head noun.
+const POSTER_ITEM_CONNECTOR_WORDS = new Set(["and", "or", "plus", "with", "n"]);
+
 const POSTER_KNOWN_ITEM_WORDS = [
   "americano",
   "coffee",
@@ -106,8 +113,12 @@ function posterItemLabel(value: string): string {
   const known = POSTER_KNOWN_ITEM_WORDS.find((word) => words.includes(word));
   if (known && !(known === "drink" && words.includes("coffee"))) return known;
   if (words.includes("coffee")) return "coffee";
-  const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
-  if (meaningful.length === 0) return words.slice(0, 2).join(" ");
+  const meaningful = words.filter(
+    (word) => !POSTER_ITEM_STOP_WORDS.has(word) && !POSTER_ITEM_CONNECTOR_WORDS.has(word),
+  );
+  if (meaningful.length === 0) {
+    return words.filter((word) => !POSTER_ITEM_CONNECTOR_WORDS.has(word)).slice(0, 2).join(" ");
+  }
   return meaningful.slice(-2).join(" ");
 }
 
