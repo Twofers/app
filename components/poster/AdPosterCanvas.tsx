@@ -58,6 +58,36 @@ const POSTER_V2_OFFER_LINE_LINE_HEIGHT = 58;
 const POSTER_V2_SCHEDULE_TEXT_SIZE = 26;
 const POSTER_V2_SCHEDULE_LINE_HEIGHT = 32;
 
+// Luminance-aware legibility over photos. The template text colors (e.g. `fresh`'s
+// dark teal) are tuned for the template's light no-image gradient; over a photo
+// they can drop to ~1:1 contrast (headline invisible on dark subjects like coffee
+// or brisket). When an image is present we render the copy in light ink and darken
+// the top band by an amount scaled to the image's own top-band luminance
+// (`spec.luma.top`, 0..1, computed where the pixels are accessible). The bottom
+// band already carries a heavy offer scrim, so it only needs the light ink.
+const POSTER_ON_IMAGE_HEADLINE = "#FFFFFF"; // headline + offer-secondary (hero copy)
+const POSTER_ON_IMAGE_MUTED = "#EFEAE1"; // business name + schedule (soft warm white)
+const POSTER_SCRIM_TARGET_LUMA = 0.2; // effective top-band luminance we want behind light ink
+// Used when the spec carries no measured luminance (e.g. posters generated before the
+// server computes it). Sized to keep light ink ≥3:1 even over a near-white top band
+// (~0.88 luma → 0.88*(1-0.66)=0.30 effective); slightly over-darkens already-dark tops,
+// which is safe. Posters that do carry spec.luma get an optimally-sized scrim instead.
+const POSTER_TOP_SCRIM_FALLBACK = 0.66;
+
+/** Top-band black-scrim alpha needed to bring image luminance `l` (0..1) down to the target. */
+function topScrimAlphaForLuma(l: number | null | undefined): number {
+  if (l == null || !Number.isFinite(l)) return POSTER_TOP_SCRIM_FALLBACK;
+  const needed = l > POSTER_SCRIM_TARGET_LUMA ? 1 - POSTER_SCRIM_TARGET_LUMA / l : 0;
+  return Math.min(0.85, Math.max(0, needed));
+}
+
+/** Optional per-band luminance the renderer consumes for the adaptive scrim. */
+type PosterBandLuma = { top?: number | null; bottom?: number | null } | null | undefined;
+function readPosterLuma(spec: PosterSpecV1 | null | undefined): PosterBandLuma {
+  const raw = (spec as unknown as { luma?: PosterBandLuma })?.luma;
+  return raw && typeof raw === "object" ? raw : null;
+}
+
 export type AdPosterCanvasProps = {
   spec?: PosterSpecV1 | null;
   copy?: PosterCopyV1 | null;
@@ -67,6 +97,13 @@ export type AdPosterCanvasProps = {
   eyebrowLabel?: string | null;
   /** Viewer's app language. Only used to pick poster copy when the poster viewer-language flag is on. */
   contentLocale?: SupportedLocale | null;
+  /**
+   * Dev/gallery override for the Look v2 render path. Undefined in production, so
+   * shipped surfaces always resolve the look from the runtime flag. Only the
+   * __DEV__ poster gallery sets this, to render V1 and V2 side-by-side without a
+   * Metro restart. Does not change production behavior.
+   */
+  forceLookV2?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -153,9 +190,11 @@ function PosterLine({
 function PosterBackground({
   imageUri,
   templateId,
+  topScrim = 0,
 }: {
   imageUri?: string | null;
   templateId: PosterTemplateId;
+  topScrim?: number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
 
@@ -171,6 +210,19 @@ function PosterBackground({
           style={StyleSheet.absoluteFill}
         />
       )}
+      {topScrim > 0 ? (
+        // Luminance-aware top-band scrim so light headline/business copy always
+        // clears contrast, sized to the image's own top-band brightness.
+        <LinearGradient
+          colors={[
+            `rgba(0,0,0,${topScrim.toFixed(3)})`,
+            `rgba(0,0,0,${(topScrim * 0.5).toFixed(3)})`,
+            "rgba(0,0,0,0.00)",
+          ]}
+          locations={[0, 0.16, 0.3]}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       {templateId === "fresh" ? (
         <>
           <LinearGradient
@@ -209,16 +261,20 @@ function TopCopyBlock({
   copy,
   eyebrowLabel,
   templateId,
+  onImage,
   scale,
 }: {
   copy: PosterCopyV1;
   eyebrowLabel?: string | null;
   templateId: PosterTemplateId;
+  onImage: boolean;
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const heroLine = posterText(copy.headline || copy.offer_line_2);
   const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
+  const businessColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.business;
+  const headlineColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
 
   return (
     <View
@@ -239,7 +295,7 @@ function TopCopyBlock({
         width={POSTER_COPY_WIDTH}
         size={POSTER_BUSINESS_TEXT_SIZE}
         lineHeight={POSTER_BUSINESS_LINE_HEIGHT}
-        color={theme.business}
+        color={businessColor}
         scale={scale}
       />
       {eyebrow ? (
@@ -261,7 +317,7 @@ function TopCopyBlock({
         width={POSTER_COPY_WIDTH}
         size={POSTER_HERO_TEXT_SIZE}
         lineHeight={POSTER_HERO_LINE_HEIGHT}
-        color={theme.headline}
+        color={headlineColor}
         lines={2}
         scale={scale}
       />
@@ -273,17 +329,21 @@ function OfferBlock({
   copy,
   liveScheduleLabel,
   templateId,
+  onImage,
   scale,
 }: {
   copy: PosterCopyV1;
   liveScheduleLabel?: string | null;
   templateId: PosterTemplateId;
+  onImage: boolean;
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const primaryLine = posterText(copy.offer_line_1);
   const secondaryLine = posterText(copy.offer_line_2 || copy.headline);
   const scheduleLine = posterText(liveScheduleLabel);
+  const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
+  const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
 
   return (
     <>
@@ -339,7 +399,7 @@ function OfferBlock({
           style={{
             width: "100%",
             marginTop: scale(28),
-            color: theme.headline,
+            color: secondaryColor,
             fontSize: scale(POSTER_OFFER_TEXT_SIZE),
             lineHeight: scale(POSTER_OFFER_LINE_HEIGHT),
             fontWeight: "900",
@@ -361,7 +421,7 @@ function OfferBlock({
           width={POSTER_COPY_WIDTH}
           size={POSTER_SCHEDULE_TEXT_SIZE}
           lineHeight={POSTER_SCHEDULE_LINE_HEIGHT}
-          color={theme.subline}
+          color={scheduleColor}
           scale={scale}
         />
       ) : null}
@@ -375,6 +435,8 @@ function PosterContent({
   liveScheduleLabel,
   eyebrowLabel,
   templateId,
+  onImage,
+  topScrim,
   scale,
 }: {
   copy: PosterCopyV1;
@@ -382,13 +444,15 @@ function PosterContent({
   liveScheduleLabel?: string | null;
   eyebrowLabel?: string | null;
   templateId: PosterTemplateId;
+  onImage: boolean;
+  topScrim: number;
   scale: (value: number) => number;
 }) {
   return (
     <>
-      <PosterBackground imageUri={imageUri} templateId={templateId} />
-      <TopCopyBlock copy={copy} eyebrowLabel={eyebrowLabel} templateId={templateId} scale={scale} />
-      <OfferBlock copy={copy} liveScheduleLabel={liveScheduleLabel} templateId={templateId} scale={scale} />
+      <PosterBackground imageUri={imageUri} templateId={templateId} topScrim={topScrim} />
+      <TopCopyBlock copy={copy} eyebrowLabel={eyebrowLabel} templateId={templateId} onImage={onImage} scale={scale} />
+      <OfferBlock copy={copy} liveScheduleLabel={liveScheduleLabel} templateId={templateId} onImage={onImage} scale={scale} />
     </>
   );
 }
@@ -457,17 +521,21 @@ function TopCopyBlockV2({
   eyebrowLabel,
   templateId,
   fontFamily,
+  onImage,
   scale,
 }: {
   copy: PosterCopyV1;
   eyebrowLabel?: string | null;
   templateId: PosterTemplateId;
   fontFamily?: string;
+  onImage: boolean;
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const heroLine = posterText(copy.headline || copy.offer_line_2);
   const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
+  const businessColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.business;
+  const headlineColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
 
   return (
     <View
@@ -481,11 +549,6 @@ function TopCopyBlockV2({
         zIndex: 9,
       }}
     >
-      <LinearGradient
-        colors={["rgba(0,0,0,0.60)", "rgba(0,0,0,0.34)", "rgba(0,0,0,0.00)"]}
-        locations={[0, 0.14, 0.30]}
-        style={StyleSheet.absoluteFill}
-      />
       <PosterLineV2
         value={copy.business_name}
         top={44}
@@ -493,7 +556,7 @@ function TopCopyBlockV2({
         width={POSTER_COPY_WIDTH}
         size={POSTER_V2_BUSINESS_TEXT_SIZE}
         lineHeight={POSTER_V2_BUSINESS_LINE_HEIGHT}
-        color={theme.business}
+        color={businessColor}
         letterSpacing={POSTER_V2_BUSINESS_LETTER_SPACING}
         fontFamily={fontFamily}
         scale={scale}
@@ -518,7 +581,7 @@ function TopCopyBlockV2({
         width={POSTER_COPY_WIDTH}
         size={POSTER_V2_HERO_TEXT_SIZE}
         lineHeight={POSTER_V2_HERO_LINE_HEIGHT}
-        color={theme.headline}
+        color={headlineColor}
         lines={2}
         fontFamily={fontFamily}
         scale={scale}
@@ -532,18 +595,22 @@ function OfferBlockV2({
   liveScheduleLabel,
   templateId,
   fontFamily,
+  onImage,
   scale,
 }: {
   copy: PosterCopyV1;
   liveScheduleLabel?: string | null;
   templateId: PosterTemplateId;
   fontFamily?: string;
+  onImage: boolean;
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const primaryLine = posterText(copy.offer_line_1);
   const secondaryLine = posterText(copy.offer_line_2 || copy.headline);
   const scheduleLine = posterText(liveScheduleLabel);
+  const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
+  const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
 
   return (
     <>
@@ -604,7 +671,7 @@ function OfferBlockV2({
           style={{
             width: "100%",
             marginTop: scale(24),
-            color: theme.headline,
+            color: secondaryColor,
             fontSize: scale(POSTER_V2_OFFER_LINE_TEXT_SIZE),
             lineHeight: scale(POSTER_V2_OFFER_LINE_LINE_HEIGHT),
             fontWeight: "900",
@@ -626,7 +693,7 @@ function OfferBlockV2({
           width={POSTER_COPY_WIDTH}
           size={POSTER_V2_SCHEDULE_TEXT_SIZE}
           lineHeight={POSTER_V2_SCHEDULE_LINE_HEIGHT}
-          color={theme.subline}
+          color={scheduleColor}
           fontFamily={fontFamily}
           scale={scale}
         />
@@ -642,6 +709,8 @@ function PosterContentV2({
   eyebrowLabel,
   templateId,
   fontFamily,
+  onImage,
+  topScrim,
   scale,
 }: {
   copy: PosterCopyV1;
@@ -650,13 +719,15 @@ function PosterContentV2({
   eyebrowLabel?: string | null;
   templateId: PosterTemplateId;
   fontFamily?: string;
+  onImage: boolean;
+  topScrim: number;
   scale: (value: number) => number;
 }) {
   return (
     <>
-      <PosterBackground imageUri={imageUri} templateId={templateId} />
-      <TopCopyBlockV2 copy={copy} eyebrowLabel={eyebrowLabel} templateId={templateId} fontFamily={fontFamily} scale={scale} />
-      <OfferBlockV2 copy={copy} liveScheduleLabel={liveScheduleLabel} templateId={templateId} fontFamily={fontFamily} scale={scale} />
+      <PosterBackground imageUri={imageUri} templateId={templateId} topScrim={topScrim} />
+      <TopCopyBlockV2 copy={copy} eyebrowLabel={eyebrowLabel} templateId={templateId} fontFamily={fontFamily} onImage={onImage} scale={scale} />
+      <OfferBlockV2 copy={copy} liveScheduleLabel={liveScheduleLabel} templateId={templateId} fontFamily={fontFamily} onImage={onImage} scale={scale} />
     </>
   );
 }
@@ -684,6 +755,7 @@ export function AdPosterCanvas({
   liveScheduleLabel,
   eyebrowLabel,
   contentLocale,
+  forceLookV2,
   style,
 }: AdPosterCanvasProps) {
   const [width, setWidth] = useState(0);
@@ -695,7 +767,9 @@ export function AdPosterCanvas({
       ? posterCopyFromSpecForLocale(spec, contentLocale)
       : posterCopyFromSpec(spec));
   const resolvedTemplate = posterTemplateOrDefault(templateId ?? spec?.template_id);
-  const lookV2Enabled = isPosterLookV2Enabled();
+  const lookV2Enabled = forceLookV2 ?? isPosterLookV2Enabled();
+  const onImage = Boolean(imageUri);
+  const topScrim = onImage ? topScrimAlphaForLuma(readPosterLuma(spec)?.top) : 0;
   // Fonts load in the background; until then (or if loading ever fails) fontsLoaded stays
   // false and the poster keeps rendering with the system font — it must never render blank.
   const [fontsLoaded] = useFonts({ Outfit_900Black, BlackHanSans_400Regular });
@@ -738,6 +812,8 @@ export function AdPosterCanvas({
           eyebrowLabel={eyebrowLabel}
           templateId={resolvedTemplate}
           fontFamily={displayFontFamily}
+          onImage={onImage}
+          topScrim={topScrim}
           scale={scale}
         />
       ) : (
@@ -747,6 +823,8 @@ export function AdPosterCanvas({
           liveScheduleLabel={liveScheduleLabel}
           eyebrowLabel={eyebrowLabel}
           templateId={resolvedTemplate}
+          onImage={onImage}
+          topScrim={topScrim}
           scale={scale}
         />
       )}
