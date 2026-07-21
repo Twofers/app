@@ -4490,6 +4490,10 @@ Deno.serve(async (req) => {
           error: "AI image generation failed. Try again.",
           error_code: "IMAGE_REQUIRED",
           image_failure: imageFailure,
+          // R4: this is the failure path that most needs the budget picture — it is
+          // where a chain that ran out of wall clock lands. Without it, an operator
+          // cannot tell "every provider refused" from "we ran out of time".
+          image_pipeline_budget: imagePipelineBudget.report ?? null,
           quota,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
