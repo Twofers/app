@@ -201,6 +201,74 @@ function fitItemLine(value: string, maxChars: number): string {
   return clean;
 }
 
+// Spanish is head-INITIAL: "galleta de tu elección" names the product in its first word and
+// hangs qualifiers off "de". `fitItemLine`'s suffix bias is therefore backwards for it, and
+// POSTER_ITEM_STOP_WORDS is English-only, so it would happily emit "DE TU ELECCIÓN".
+const ES_LEADING_DETERMINERS = new Set([
+  "cualquier", "cualquiera", "un", "una", "unos", "unas",
+  "el", "la", "los", "las", "tu", "tus", "su", "sus", "mi", "mis",
+]);
+const ES_TRAILING_FUNCTION_WORDS = new Set([
+  "de", "del", "la", "el", "los", "las", "tu", "tus", "su", "sus",
+  "y", "con", "a", "al", "en", "para",
+]);
+
+/**
+ * Fit a LOCALIZED item name, keeping the words that actually name the product.
+ *
+ * English and Korean are head-final, so `fitItemLine`'s suffix bias is right for them.
+ * Spanish is head-initial, so it needs the mirror image: drop a leading determiner, then
+ * keep the longest fitting PREFIX, never ending on a function word.
+ *
+ * Nothing is dropped while the name still fits — "cualquier bebida" must not quietly become
+ * "bebida", because "cualquier" ("any") is part of what the merchant is offering.
+ */
+function fitLocalizedItem(value: string, maxChars: number, locale: SupportedLocale): string {
+  if (locale !== "es-US") return fitItemLine(value, maxChars);
+  const clean = cleanText(value);
+  if (!clean || clean.length <= maxChars) return clean;
+  let words = clean.split(/\s+/);
+  if (words.length > 1 && ES_LEADING_DETERMINERS.has(words[0].toLowerCase())) {
+    words = words.slice(1);
+  }
+  const trimTrailing = (slice: string[]): string[] => {
+    let out = slice;
+    while (out.length > 1 && ES_TRAILING_FUNCTION_WORDS.has(out[out.length - 1].toLowerCase())) {
+      out = out.slice(0, -1);
+    }
+    return out;
+  };
+  for (let end = words.length; end >= 1; end -= 1) {
+    const candidate = trimTrailing(words.slice(0, end)).join(" ");
+    if (candidate && candidate.length <= maxChars) return candidate;
+  }
+  return trimTrailing(words).join(" ");
+}
+
+const ITEM_PROBE = "";
+
+/**
+ * Compose an offer line from a locale template, fitting the ITEM to whatever the template's
+ * fixed words leave over.
+ *
+ * Clamping the FINISHED line is what deleted the offer in Spanish. English states the offer
+ * with a prefix ("FREE <item>"), so a front clamp only ever shortens the item; es-US and
+ * ko-KR state it with a suffix ("<item> GRATIS", "<item> 무료"), so the same clamp eats the
+ * one word that says anything is free. "GALLETA DE TU ELECCIÓN GRATIS" is 29 against a
+ * 28-char budget and lost GRATIS by a single character. Measuring the affix first keeps the
+ * fixed words safe by construction, in every locale.
+ */
+function composeOfferLine(
+  compose: (itemName: string) => string,
+  itemName: string,
+  locale: SupportedLocale,
+  maxChars: number,
+): string {
+  const overhead = compose(ITEM_PROBE).length - ITEM_PROBE.length;
+  const fitted = fitLocalizedItem(itemName, Math.max(1, maxChars - overhead), locale);
+  return compose(fitted);
+}
+
 function lineItem(value: string, maxChars = 22): string {
   return sanitizePosterText(value, { fallback: "LOCAL DEAL", maxChars });
 }
@@ -361,7 +429,10 @@ export function buildPosterOfferLinesFromOfferDefinition(
   if (definition.reward.rule === "percent_off_single_item") {
     return {
       offer_line_1: lineItem(discountBadge(locale, definition.reward.discountPercent), 20),
-      offer_line_2: lineItem(fitItemLine(rewardItem || firstItem || localizedOffer.compactOfferLine, 24), 24),
+      offer_line_2: lineItem(
+        fitLocalizedItem(rewardItem || firstItem || localizedOffer.compactOfferLine, 24, locale),
+        24,
+      ),
     };
   }
 
@@ -371,13 +442,22 @@ export function buildPosterOfferLinesFromOfferDefinition(
   if (definition.reward.rule === "same_item_free") {
     return {
       offer_line_1: lineItem(sameItemBadge(locale, paidQuantity, rewardQuantity), 18),
-      offer_line_2: lineItem(fitItemLine(firstItem || localizedOffer.compactOfferLine, 24), 24),
+      offer_line_2: lineItem(
+        fitLocalizedItem(firstItem || localizedOffer.compactOfferLine, 24, locale),
+        24,
+      ),
     };
   }
 
   return {
-    offer_line_1: lineItem(freeRewardBadge(locale, rewardItem, rewardQuantity), 28),
-    offer_line_2: lineItem(purchaseContextLine(locale, firstItem, paidQuantity), 28),
+    offer_line_1: lineItem(
+      composeOfferLine((name) => freeRewardBadge(locale, name, rewardQuantity), rewardItem, locale, 28),
+      28,
+    ),
+    offer_line_2: lineItem(
+      composeOfferLine((name) => purchaseContextLine(locale, name, paidQuantity), firstItem, locale, 28),
+      28,
+    ),
   };
 }
 

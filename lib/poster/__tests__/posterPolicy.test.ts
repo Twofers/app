@@ -409,6 +409,56 @@ describe("poster policy", () => {
       offer_line_2: "\uBCA0\uC774\uAE00 X 1 \uAD6C\uB9E4 \uC2DC",
     });
   });
+
+  // Session-4 regression. Spanish and Korean state the offer with a SUFFIX
+  // ("<item> GRATIS", "<item> \uBB34\uB8CC"), so clamping the finished line from the front deleted
+  // the only word that said anything was free: "galleta de tu elecci\u00F3n GRATIS" is 29
+  // characters against a 28 budget and lost GRATIS by one. Found on the live Colonel's Brew
+  // cookie deal, which no Spanish shopper could have understood.
+  it("keeps the free/discount word when a localized item overruns the offer line", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+
+    const es = buildPosterOfferLinesFromOfferDefinition(definition, "es-US");
+    expect(es.offer_line_1).toContain("GRATIS");
+    expect(es).toEqual({ offer_line_1: "GALLETA GRATIS", offer_line_2: "AL COMPRAR 1 BEBIDA DE CAF\u00C9" });
+
+    const ko = buildPosterOfferLinesFromOfferDefinition(definition, "ko-KR");
+    expect(ko.offer_line_1).toContain("\uBB34\uB8CC");
+
+    // English is head-final and states the offer with a PREFIX, so it must be untouched.
+    expect(buildPosterOfferLinesFromOfferDefinition(definition, "en-US")).toEqual({
+      offer_line_1: "FREE COOKIE OF YOUR CHOICE",
+      offer_line_2: "WITH ANY LARGE COFFEE DRINK",
+    });
+  });
+
+  // The mirror of the R9 lesson: a Spanish line must never END on a function word, the way
+  // "AL COMPRAR 1 S\u00C1NDWICH DE" did, because Spanish hangs its qualifiers off "de".
+  it("never leaves a Spanish offer line dangling on a function word", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "breakfast sandwich",
+      freeItemQuantity: 1,
+      freeItemDescription: "hash brown",
+      freeItemDiscountPercent: 100,
+    });
+
+    const es = buildPosterOfferLinesFromOfferDefinition(definition, "es-US");
+    expect(es.offer_line_2).toBe("AL COMPRAR 1 S\u00C1NDWICH");
+    for (const line of [es.offer_line_1, es.offer_line_2]) {
+      expect(line).not.toMatch(/\s(DE|DEL|CON|Y|A|AL|EN|PARA|TU|SU|LA|EL)$/);
+    }
+  });
 });
 
 describe("poster text fit", () => {
