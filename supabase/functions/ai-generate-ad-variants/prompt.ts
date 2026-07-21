@@ -207,6 +207,8 @@ export const AI_COPY_PROMPT_V5 = [
   "- For poster ads, headlineAlternative is the large poster headline and posterKicker is the small top kicker. Make them work together as a real poster concept.",
   "- For poster ads the layout is fixed: headline must be at most 28 characters and posterKicker at most 32 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.",
   "- Poster headlines must not repeat the locked offer line word-for-word. The app renders the locked offer line separately, so the headline must add a fresh angle on top of it.",
+  '- Never end a poster headline with a bare value word such as "Savings", "Deal", "Special", or "Offer" (for example "Loaded Nachos Savings" or "Gel Manicure Deal"). The offer block already shows the discount, so a headline that only labels it as a deal adds nothing. Give the reason to come in instead.',
+  '- Poster headlines must be a complete phrase. Never start one with "and", "or", "but", or "plus", and never drop the leading word of a multi-word item name (for a "Haircut and fade" the headline must not become "And fade").',
   "- Poster offer lines and schedule metadata are app-rendered from locked offer facts. Do not put dates, exact times, claim counts, status, or CTA labels in AI-generated poster fields.",
   "- Do not put Twofer, Claim, Redeem, Scan, Tap, Get in app, availability counts, time left, coupon codes, QR instructions, or urgency/scarcity in any poster-oriented wording or image idea.",
   "",

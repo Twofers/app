@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateAdCopyStyleGate, selectStyleSafeCopyCandidate } from "./ad-copy-style-gate";
+import {
+  evaluateAdCopyStyleGate,
+  isFormulaicValueHeadline,
+  selectStyleSafeCopyCandidate,
+  startsWithDanglingConnector,
+} from "./ad-copy-style-gate";
 import type { AdSpecV3TextField, AdSpecV3TextProvenance } from "./ad-spec";
 
 const aiProvenance: Record<AdSpecV3TextField, AdSpecV3TextProvenance> = {
@@ -226,5 +231,70 @@ describe("ad copy style gate", () => {
     expect(selection.selectedIndex).toBeNull();
     expect(selection.gate.ok).toBe(true);
     expect(selection.copy.displayHook).toBe("Buy a latte and get a free scone");
+  });
+});
+
+describe("startsWithDanglingConnector (R6)", () => {
+  it("catches a headline whose head noun was dropped", () => {
+    // Observed live: item "Haircut and fade" -> headline "AND FADE SAVINGS".
+    expect(startsWithDanglingConnector("AND FADE SAVINGS")).toBe(true);
+    expect(startsWithDanglingConnector("and fade savings")).toBe(true);
+    expect(startsWithDanglingConnector("  Or Two Lattes")).toBe(true);
+    expect(startsWithDanglingConnector("But Better")).toBe(true);
+    expect(startsWithDanglingConnector("Plus A Free Latte")).toBe(true);
+  });
+
+  it("does not flag legitimate openers", () => {
+    // Articles and prepositions validly begin headlines — only conjunctions do not.
+    expect(startsWithDanglingConnector("The Colonel's Brew")).toBe(false);
+    expect(startsWithDanglingConnector("A Latte For Two")).toBe(false);
+    expect(startsWithDanglingConnector("With Every Order")).toBe(false);
+    expect(startsWithDanglingConnector("Weekend Nails, Lighter Price")).toBe(false);
+    expect(startsWithDanglingConnector("Mission: Two Lattes")).toBe(false);
+  });
+
+  it("does not flag a word that merely starts with a connector's letters", () => {
+    expect(startsWithDanglingConnector("Andouille Sausage Plate")).toBe(false);
+    expect(startsWithDanglingConnector("Orange Juice Deal Day")).toBe(false);
+    expect(startsWithDanglingConnector("Butter Croissant Morning")).toBe(false);
+  });
+
+  it("is safe on empty input", () => {
+    expect(startsWithDanglingConnector("")).toBe(false);
+  });
+});
+
+describe("isFormulaicValueHeadline (R5)", () => {
+  it("catches the <item> savings/deal template", () => {
+    // All three appeared in a single generation batch.
+    expect(isFormulaicValueHeadline("LOADED NACHOS SAVINGS")).toBe(true);
+    expect(isFormulaicValueHeadline("ACAI BOWL SAVINGS")).toBe(true);
+    expect(isFormulaicValueHeadline("BIRRIA TACOS SAVINGS")).toBe(true);
+    expect(isFormulaicValueHeadline("Gel Manicure Deal")).toBe(true);
+    expect(isFormulaicValueHeadline("Brisket Plate Specials")).toBe(true);
+    expect(isFormulaicValueHeadline("Latte Offer")).toBe(true);
+  });
+
+  it("does not flag a headline that merely contains a value word", () => {
+    expect(isFormulaicValueHeadline("Deal Of The Week Latte")).toBe(false);
+    expect(isFormulaicValueHeadline("Savings Start With Coffee")).toBe(false);
+    expect(isFormulaicValueHeadline("Two Lattes, One Great Deal Today")).toBe(false);
+  });
+
+  it("does not flag copy with an actual hook", () => {
+    expect(isFormulaicValueHeadline("Weekend Nails, Lighter Price")).toBe(false);
+    expect(isFormulaicValueHeadline("Mission: Two Lattes")).toBe(false);
+    expect(isFormulaicValueHeadline("Two Rounds Of Stripes")).toBe(false);
+  });
+
+  it("does not flag the bare value word alone (needs a preceding word)", () => {
+    expect(isFormulaicValueHeadline("Savings")).toBe(false);
+    expect(isFormulaicValueHeadline("Deal")).toBe(false);
+  });
+
+  it("handles accents and collapses whitespace", () => {
+    expect(isFormulaicValueHeadline("Açaí Bowl Savings")).toBe(true);
+    expect(isFormulaicValueHeadline("  Birria   Tacos   Savings  ")).toBe(true);
+    expect(isFormulaicValueHeadline("")).toBe(false);
   });
 });

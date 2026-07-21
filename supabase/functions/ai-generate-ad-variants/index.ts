@@ -78,7 +78,11 @@ import {
   type DealOfferContract,
   type ValidatedDealCopy,
 } from "../../../lib/deal-offer-contract.ts";
-import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import {
+  evaluateAdCopyStyleGate,
+  isFormulaicValueHeadline,
+  startsWithDanglingConnector,
+} from "../../../lib/ad-copy-style-gate.ts";
 import { buildDeterministicRevisionFallbackCopy } from "../../../lib/ai-revision-fallback-copy.ts";
 import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
 import {
@@ -1526,6 +1530,15 @@ function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealO
   }
   if (!headline) return [...new Set(reasons)];
   if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
+
+  // R6/R5 headline-craft gates. Both live in lib/ad-copy-style-gate.ts as pure,
+  // unit-tested predicates rather than inline regexes here.
+  if (startsWithDanglingConnector(headline)) {
+    reasons.push("POSTER_HEADLINE_DANGLING_CONNECTOR");
+  }
+  if (isFormulaicValueHeadline(headline)) {
+    reasons.push("POSTER_HEADLINE_FORMULAIC_VALUE");
+  }
 
   const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
   if (canonicalOffer && headline === canonicalOffer) {

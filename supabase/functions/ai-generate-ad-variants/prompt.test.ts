@@ -73,6 +73,15 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Poster headlines must not repeat the locked offer line word-for-word");
   });
 
+  it("bans formulaic value-word headlines and dropped-head-noun fragments", () => {
+    // Paired with the POSTER_HEADLINE_FORMULAIC_VALUE / _DANGLING_CONNECTOR gates:
+    // the prompt steers away up front, the gate rejects anything that slips through.
+    expect(basePrompt.system).toContain('Never end a poster headline with a bare value word');
+    expect(basePrompt.system).toContain("Poster headlines must be a complete phrase");
+    // Guidance must stay pattern-level, not a list of banned item names.
+    expect(basePrompt.system).not.toMatch(/Birria Tacos Savings|Acai Bowl Savings/i);
+  });
+
   it("includes the category playbook, merchant profile, creative brief, and five lane instructions", () => {
     expect(basePrompt.system).toContain("Write one positive creative brief and exactly five");
     expect(basePrompt.system).toContain("CATEGORY PLAYBOOK");
