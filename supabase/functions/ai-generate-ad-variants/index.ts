@@ -3095,7 +3095,11 @@ async function produceImage(params: {
       aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
-      retryOnFailure: false,
+      // Retry on a transient failure: this is the last real shot at an image
+      // before the deterministic no-image path, and a single attempt is flaky
+      // against provider hiccups (a lone attempt failed on-device even though the
+      // same prompt succeeded via API).
+      retryOnFailure: true,
     });
     await logGeminiImageAttempts(params.costContext, "image_generation_category_safe", categoryGen.attempts);
     providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(categoryGen.attempts));
