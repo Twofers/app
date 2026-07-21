@@ -67,7 +67,13 @@ const POSTER_V2_SCHEDULE_LINE_HEIGHT = 32;
 // band already carries a heavy offer scrim, so it only needs the light ink.
 const POSTER_ON_IMAGE_HEADLINE = "#FFFFFF"; // headline + offer-secondary (hero copy)
 const POSTER_ON_IMAGE_MUTED = "#EFEAE1"; // business name + schedule (soft warm white)
-const POSTER_SCRIM_TARGET_LUMA = 0.2; // effective top-band luminance we want behind light ink
+// Effective luminance we want behind light ink AT THE TOP EDGE of the poster. `spec.luma`
+// is WCAG relative luminance (the server linearizes sRGB before averaging). Note this
+// governs y=0 only: the scrim then falls off, so a block's real contrast depends on where
+// it sits, not on this number alone (see the gradient stops below). Retuning it is a weak
+// lever because alpha saturates — on a luma-0.755 photo, 0.20 -> 0.18 moves alpha 0.735 ->
+// 0.762 and the measured headline just 4.01:1 -> 4.08:1.
+const POSTER_SCRIM_TARGET_LUMA = 0.2;
 // Used when the spec carries no measured luminance (e.g. posters generated before the
 // server computes it). Sized to keep light ink ≥3:1 even over a near-white top band
 // (~0.88 luma → 0.88*(1-0.66)=0.30 effective); slightly over-darkens already-dark tops,
@@ -213,13 +219,23 @@ function PosterBackground({
       {topScrim > 0 ? (
         // Luminance-aware top-band scrim so light headline/business copy always
         // clears contrast, sized to the image's own top-band brightness.
+        //
+        // The stops must outlast the copy they protect. POSTER_TOP_BAND_HEIGHT is 330 of
+        // 1350 (0.244), and the headline — the largest, most important block — sits at
+        // 0.110-0.236, i.e. at the very END of the band. An earlier falloff (0.5 alpha by
+        // 0.16, gone by 0.30) put the headline under only ~0.33 effective alpha while
+        // topScrim was being sized for y=0, where no text lives. On a bright photo that
+        // measured 4.01:1 — and because alpha saturates near 1 - target/luma, retuning
+        // POSTER_SCRIM_TARGET_LUMA could not fix it (0.20 -> 0.18 bought +0.07). Holding
+        // the scrim across the band the copy actually occupies is what moves it: same
+        // cell measures 4.99:1. Dark images are untouched (alpha is 0 below the target).
         <LinearGradient
           colors={[
             `rgba(0,0,0,${topScrim.toFixed(3)})`,
-            `rgba(0,0,0,${(topScrim * 0.5).toFixed(3)})`,
+            `rgba(0,0,0,${(topScrim * 0.6).toFixed(3)})`,
             "rgba(0,0,0,0.00)",
           ]}
-          locations={[0, 0.16, 0.3]}
+          locations={[0, 0.2, 0.32]}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
