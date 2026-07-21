@@ -28,7 +28,13 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).toContain("eyebrowLabel");
     expect(source).toContain("copy.subline || eyebrowLabel");
     expect(source).toContain("posterText(copy.offer_line_1)");
-    expect(source).toContain("posterText(copy.offer_line_2 || copy.headline)");
+    // S2: neither slot may borrow the other. The hero used to fall back to offer_line_2 and
+    // the secondary used to fall back to the headline, so a non-English poster — which has
+    // no translated hero — printed the same sentence twice in two type sizes.
+    expect(source).toContain("posterText(copy.offer_line_2)");
+    expect(source).not.toContain("copy.offer_line_2 || copy.headline");
+    expect(source).not.toContain("copy.headline || copy.offer_line_2");
+    expect(source).toContain("secondaryCandidate === posterText(copy.headline)");
     expect(source).not.toContain("samePosterLine");
     expect(source).not.toContain("badgeTop");
     expect(source).not.toContain("badgeTextColor");

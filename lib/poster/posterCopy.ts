@@ -544,13 +544,16 @@ function copyForLocale(
   const lines = buildPosterOfferLinesFromOfferDefinition(definition, locale);
   return {
     ...base,
-    headline:
-      locale === "en-US"
-        ? base.headline
-        : sanitizePosterText(lines.offer_line_2, {
-            fallback: base.headline,
-            maxChars: POSTER_TEXT_LIMITS.headline,
-          }),
+    // The AI writes the creative headline in English only, and `validatePosterSpecV1` binds
+    // BOTH offer lines to the deterministic lines for every locale (facts are authoritative),
+    // so there is no spare slot a localized hook could occupy. Substituting an offer line
+    // here is what made every es/ko poster print the same sentence twice in two type sizes:
+    // the hero said "AL COMPRAR 1 CUALQUIER" and so did the line under it. Leave the hero
+    // EMPTY instead. The offer is still stated in full by offer_line_1 + offer_line_2, and
+    // `assertPosterCopyPolicy` treats a missing headline as a warning, not a failure.
+    // Fill this once the localization bundle can supply a translated headline at
+    // poster-build time — today it is generated after the poster spec is built.
+    headline: locale === "en-US" ? base.headline : "",
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
     subline: undefined,
@@ -564,7 +567,12 @@ export function buildPosterCopyByLanguage(params: {
   return Object.fromEntries(
     SUPPORTED_LOCALES.map((locale) => {
       const copy = copyForLocale(params.definition, locale, params.baseCopy);
-      return [locale, sanitizePosterCopy(copy, params.baseCopy.business_name).copy];
+      const sanitized = sanitizePosterCopy(copy, params.baseCopy.business_name).copy;
+      // `sanitizePosterCopy` fills an empty headline from `offer_line_1` — a sensible safety
+      // net for the English path, but for a non-English locale it would re-create exactly
+      // the duplicate `copyForLocale` just removed, this time hero-vs-gold instead of
+      // hero-vs-white. Re-assert the empty hero after sanitizing.
+      return [locale, locale === "en-US" ? sanitized : { ...sanitized, headline: "" }];
     }),
   ) as Record<SupportedLocale, PosterCopyV1>;
 }

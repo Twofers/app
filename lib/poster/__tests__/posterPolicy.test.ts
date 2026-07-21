@@ -440,6 +440,52 @@ describe("poster policy", () => {
     });
   });
 
+  // S2. Every non-English poster used to print one sentence twice: copyForLocale set
+  // headline := offer_line_2, and nothing deduped, so the hero and the line under it were
+  // the same string in two type sizes. Facts are authoritative \u2014 validatePosterSpecV1 binds
+  // both offer lines to the deterministic lines for every locale \u2014 so the hero, not an
+  // offer line, is the slot that gives way.
+  it("never repeats an offer line as the poster hero in any locale", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+    const spec = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      sourceAssetPath: "biz_123/ai_ad_generated.png",
+      renderedAssetPath: null,
+      headline: "Coffee + cookie break",
+      businessCategory: "Coffee shop",
+    });
+
+    for (const locale of ["en-US", "es-US", "ko-KR"] as const) {
+      const copy = spec.copy_by_language[locale];
+      const rendered = [copy.headline, copy.offer_line_1, copy.offer_line_2].filter(Boolean);
+      expect(new Set(rendered).size, `${locale} repeats a line`).toBe(rendered.length);
+      // The offer itself must still be stated in full, in every locale.
+      expect(copy.offer_line_1).toBeTruthy();
+      expect(copy.offer_line_2).toBeTruthy();
+    }
+
+    // English keeps its creative hero; the others have none to translate, so they go without
+    // rather than duplicating. If a localized headline ever lands, this is what changes.
+    expect(spec.copy_by_language["en-US"].headline).toBe("COFFEE + COOKIE BREAK");
+    expect(spec.copy_by_language["es-US"].headline).toBe("");
+    expect(spec.copy_by_language["ko-KR"].headline).toBe("");
+
+    // An empty hero must not fail the gate \u2014 a missing headline is a warning, not a failure.
+    for (const locale of ["es-US", "ko-KR"] as const) {
+      expect(assertPosterCopyPolicy(spec.copy_by_language[locale]).passed).toBe(true);
+    }
+  });
+
   // The mirror of the R9 lesson: a Spanish line must never END on a function word, the way
   // "AL COMPRAR 1 S\u00C1NDWICH DE" did, because Spanish hangs its qualifiers off "de".
   it("never leaves a Spanish offer line dangling on a function word", () => {

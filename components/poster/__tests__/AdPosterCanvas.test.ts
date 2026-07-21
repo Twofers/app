@@ -40,7 +40,12 @@ describe("AdPosterCanvas source contract", () => {
     ).toBeGreaterThanOrEqual(2);
     expect(source).toContain('"TRY OUR"');
     expect(source).toContain("posterText(copy.offer_line_1)");
-    expect(source).toContain("posterText(copy.offer_line_2 || copy.headline)");
+    // S2: neither slot may borrow the other — see lib/poster-canvas-source.test.ts. Pinned
+    // in both variants because the duplicate had to be removed from V1 and V2 alike.
+    expect(source).toContain("posterText(copy.offer_line_2)");
+    expect(source).not.toContain("copy.offer_line_2 || copy.headline");
+    expect(source).not.toContain("copy.headline || copy.offer_line_2");
+    expect(source).toContain("secondaryCandidate === posterText(copy.headline)");
     expect(source).not.toContain("samePosterLine");
     expect(source).not.toContain("badgeTop");
     expect(source).not.toContain("badgeTextColor");

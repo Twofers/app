@@ -287,7 +287,11 @@ function TopCopyBlock({
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
-  const heroLine = posterText(copy.headline || copy.offer_line_2);
+  // No fallback into an offer line: both offer lines are always rendered by OfferBlock, so
+  // borrowing one for the hero only ever prints it twice. A locale with no translated
+  // headline legitimately has no hero (see copyForLocale), and every line here is absolutely
+  // positioned, so an empty hero leaves a gap rather than shifting anything.
+  const heroLine = posterText(copy.headline);
   const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
   const businessColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.business;
   const headlineColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
@@ -356,7 +360,11 @@ function OfferBlock({
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const primaryLine = posterText(copy.offer_line_1);
-  const secondaryLine = posterText(copy.offer_line_2 || copy.headline);
+  // Specs published before 2026-07-21 stored the hero and this line as the SAME string for
+  // every non-English locale, and stored specs are never backfilled — so the renderer is the
+  // only thing that can stop those posters printing it twice for the rest of their run.
+  const secondaryCandidate = posterText(copy.offer_line_2);
+  const secondaryLine = secondaryCandidate === posterText(copy.headline) ? "" : secondaryCandidate;
   const scheduleLine = posterText(liveScheduleLabel);
   const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
   const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
@@ -548,7 +556,11 @@ function TopCopyBlockV2({
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
-  const heroLine = posterText(copy.headline || copy.offer_line_2);
+  // No fallback into an offer line: both offer lines are always rendered by OfferBlock, so
+  // borrowing one for the hero only ever prints it twice. A locale with no translated
+  // headline legitimately has no hero (see copyForLocale), and every line here is absolutely
+  // positioned, so an empty hero leaves a gap rather than shifting anything.
+  const heroLine = posterText(copy.headline);
   const eyebrow = sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel));
   const businessColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.business;
   const headlineColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
@@ -623,7 +635,11 @@ function OfferBlockV2({
 }) {
   const theme = POSTER_TEMPLATES[templateId];
   const primaryLine = posterText(copy.offer_line_1);
-  const secondaryLine = posterText(copy.offer_line_2 || copy.headline);
+  // Specs published before 2026-07-21 stored the hero and this line as the SAME string for
+  // every non-English locale, and stored specs are never backfilled — so the renderer is the
+  // only thing that can stop those posters printing it twice for the rest of their run.
+  const secondaryCandidate = posterText(copy.offer_line_2);
+  const secondaryLine = secondaryCandidate === posterText(copy.headline) ? "" : secondaryCandidate;
   const scheduleLine = posterText(liveScheduleLabel);
   const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
   const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
