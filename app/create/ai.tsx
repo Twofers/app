@@ -2791,6 +2791,16 @@ export default function AiDealScreen() {
     if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
     if (code === "LOCATION_BILLING_SUSPENDED") return t("createAi.errPublishBillingSuspended");
     if (code === "BUSINESS_LOCATION_VERIFICATION_REQUIRED") return t("createAi.errPublishVerificationRequired");
+    // A profile-review hold is NOT an access/billing problem — a sensitive field
+    // (address or phone) was changed and is pending review. Point the owner at the
+    // fields instead of the generic "access does not allow publishing" copy. Other
+    // capability reasons keep today's message (fall through).
+    if (code === "BUSINESS_PUBLISH_CAPABILITY_REQUIRED" && publishCapabilityReasonCode(err) === "profile_review_required") {
+      return t("createAi.errPublishProfileReviewRequired", {
+        defaultValue:
+          "Your business address or phone number was changed and needs a quick review before you can publish. Open Business Setup, confirm those details, and save.",
+      });
+    }
 
     if (
       lower.includes("must be at least 40") ||
@@ -2852,6 +2862,13 @@ export default function AiDealScreen() {
           (reason): reason is string => typeof reason === "string" && reason.trim().length > 0,
         )
       : [];
+  }
+
+  // Singular capability reason (e.g. "profile_review_required") threaded from the
+  // publish edge function's response body via lib/offer-version-publish.ts.
+  function publishCapabilityReasonCode(err: unknown): string | undefined {
+    const reason = (err as { reasonCode?: unknown } | null)?.reasonCode;
+    return typeof reason === "string" && reason.trim().length > 0 ? reason : undefined;
   }
 
   function isPosterPublishSpecError(err: unknown): boolean {

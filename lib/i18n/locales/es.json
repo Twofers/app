@@ -2001,6 +2001,7 @@
     "errPublishVersionUnavailable": "Al servidor le falta la configuración de publicación más reciente. Se necesita la migración OfferVersion antes de publicar este anuncio.",
     "errPublishBillingSuspended": "La facturación de esta ubicación está suspendida. Restáurala antes de publicar.",
     "errPublishVerificationRequired": "Esta ubicación del negocio debe verificarse antes de publicar.",
+    "errPublishProfileReviewRequired": "Se cambió la dirección o el número de teléfono de tu negocio y necesita una revisión rápida antes de publicar. Abre Configurar negocio, confirma esos datos y guarda.",
     "errSaveTemplateFailed": "Saving template failed.",
     "generationOwnershipBody": "Esta cuenta no puede crear ni publicar anuncios para este negocio. Inicia sesión con la cuenta del dueño para continuar.",
     "generationQuotaBody": "La generación con AI está pausada para esta cuenta por ahora. Puedes escribir el anuncio tú mismo o volver a intentar cuando se reinicie.",

@@ -1449,6 +1449,7 @@
     "errPublishVersionUnavailable": "The server is missing the latest publish setup. This needs the OfferVersion migration before this ad can go live.",
     "errPublishBillingSuspended": "Billing for this location is suspended. Restore billing before publishing.",
     "errPublishVerificationRequired": "This business location must be verified before publishing.",
+    "errPublishProfileReviewRequired": "Your business address or phone number was changed and needs a quick review before you can publish. Open Business Setup, confirm those details, and save.",
     "errSaveTemplateFailed": "Couldn't save this template.",
     "generationOwnershipBody": "This account cannot create or publish ads for this business. Log in with the owner account to continue.",
     "generationQuotaBody": "AI generation is paused for this account right now. You can write the ad yourself, or try AI again when it resets.",
