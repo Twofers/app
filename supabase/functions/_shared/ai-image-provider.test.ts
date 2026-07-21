@@ -95,6 +95,35 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 
+  it("tells the model where the text bands are, not just that they should be calm", () => {
+    // Run-3 finding: across the corpus the TOP band came back the busiest part of the
+    // image (mean horizontal contrast 0.26 vs 0.23 in the middle; 5 of 6 cells inverted),
+    // which is precisely the band the headline is printed over. The old wording only asked
+    // for "calm" zones in the abstract. These assertions pin the three things that make the
+    // instruction actionable: the fractions, the subject's lane, and the named offenders.
+    const prompt = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "The Colonel's Brew",
+      businessCategory: "coffee shop",
+      offerTitle: "40% off one iced vanilla latte",
+      paidItem: "Iced vanilla latte",
+      dealType: "PERCENT_OFF_ITEM",
+      stylePreset: "realistic-local-ad",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+
+    expect(prompt).toContain("top quarter");
+    expect(prompt).toContain("bottom third");
+    // The subject's lane, so the hero cannot be composed under the copy.
+    expect(prompt).toMatch(/25% to 65% of the height/);
+    // The specific high-contrast offenders. Naming them is the difference between a
+    // guideline the model follows and one it does not.
+    expect(prompt).toContain("Keep windows, lamps, bright highlights, shelves, doorways, hard edges");
+    // Must not regress into the pre-P1 letterboxing wording.
+    expect(prompt).not.toContain("Leave clean visual space");
+  });
+
   it("genericizeItems drops evocative brand tokens so a refused prompt can retry safely (F4)", () => {
     const generic = buildGeminiAdImagePrompt(
       {

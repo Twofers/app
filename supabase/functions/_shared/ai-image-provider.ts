@@ -235,7 +235,16 @@ export function buildGeminiAdImagePrompt(
     "- Avoid the glossy, fake, over-rendered AI look.",
     "- Keep every required item fully inside the center-safe area and away from crop edges.",
     "- Fill the whole vertical frame edge to edge with the photograph. No borders, margins, framing bars, letterboxing, vignette frames, or flat solid-color bands on any side — even when two items sit side by side, extend the scene (surface, background) to every edge instead of padding with empty space.",
-    "- The top and bottom zones must stay part of the photo (blurred background, table surface, soft shadow) but calm and low-contrast so the app can overlay text — calmer photography, never empty bands.",
+    // Zone geometry, stated as fractions the model can actually act on. The app prints its
+    // largest type over the top quarter and the bottom third, so those are the two places
+    // the photograph must be quietest — yet measured across the corpus they came back the
+    // BUSIEST (mean horizontal contrast 0.26 in the top band vs 0.23 in the middle, 5 of 6
+    // cells inverted). A generic "keep it calm" bullet did not carry; naming the fractions,
+    // the subject's lane, and the specific high-contrast offenders is the fix.
+    "- Composition by zone: the app prints large text across the top quarter of the image and across the bottom third. Build the photograph around that. Place the hero subject entirely in the middle lane, roughly 25% to 65% of the height — it must not intrude into the top quarter or run down into the bottom third.",
+    "- The top quarter must read as ONE continuous, softly defocused backdrop — a plain wall, a single wash of background tone, or a heavily out-of-focus interior with nothing picked out. Keep windows, lamps, bright highlights, shelves, doorways, hard edges, and any second point of interest out of it. A busy or high-contrast top band is the most common reason the headline becomes hard to read.",
+    "- The bottom third is the same: one continuous surface or soft shadow falloff, with no cutlery, props, garnish, or bright spots competing.",
+    "- Both zones must still be real photography (defocused background, table surface, soft shadow) — quiet, but never empty bands.",
     `- ${framing}`,
     "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
     "- Do not add readable text.",
