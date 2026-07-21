@@ -110,15 +110,64 @@ export type StrongDealRejectReason =
   | "entire_order"
   | "no_strong_language";
 
+/**
+ * Structured, already-validated offer facts. When these say the deal is strong, they
+ * OUTRANK the prose scan below.
+ *
+ * R13: without this the guard could only ask whether the *wording* contained a strong-deal
+ * phrase, so a genuine 40%-off deal was blocked from publishing because the AI happened to
+ * write "for 40% less" instead of "40% off" — and the error told the merchant to fix an
+ * offer that was never wrong. Publishing succeeded or failed on the model's choice of
+ * synonym. The facts were always available and simply were not consulted.
+ */
+export type StrongDealStructuredOffer = {
+  dealType?: string | null;
+  discountPercent?: number | null;
+  freeItemQuantity?: number | null;
+  freeItemDiscountPercent?: number | null;
+};
+
+const FREE_ITEM_DEAL_TYPES = new Set(["BUY_ONE_GET_ONE_FREE", "BUY_ONE_GET_SOMETHING_FREE"]);
+
+function numeric(value: unknown): number | null {
+  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Does the structured contract, on its own, describe a strong deal? Returns null when there
+ * are no usable structured facts, so the caller falls through to the prose rules unchanged.
+ */
+export function structuredOfferIsStrong(offer?: StrongDealStructuredOffer | null): boolean | null {
+  if (!offer) return null;
+  const dealType = typeof offer.dealType === "string" ? offer.dealType.trim().toUpperCase() : "";
+  const discountPercent = numeric(offer.discountPercent);
+  const freeItemQuantity = numeric(offer.freeItemQuantity);
+  const freeItemDiscountPercent = numeric(offer.freeItemDiscountPercent);
+
+  if (FREE_ITEM_DEAL_TYPES.has(dealType)) return true;
+  if (freeItemQuantity !== null && freeItemQuantity >= 1 && (freeItemDiscountPercent === null || freeItemDiscountPercent >= 100)) {
+    return true;
+  }
+  if (discountPercent !== null) return discountPercent >= 39.5;
+  if (!dealType) return null;
+  return null;
+}
+
 export function validateStrongDealOnly(input: {
   title: string;
   description?: string | null;
   /** Optional explicit percentage for future percentage-based offer types. */
   discountPercent?: number | null;
+  /** Authoritative offer facts. Present at publish; absent for free-text callers. */
+  structuredOffer?: StrongDealStructuredOffer | null;
 }): { ok: true } | { ok: false; reason: StrongDealRejectReason; message: string } {
   const title = (input.title ?? "").trim();
   const description = (input.description ?? "").trim();
   const text = `${title}\n${description}`.toLowerCase();
+  const structured = structuredOfferIsStrong(
+    input.structuredOffer ?? (input.discountPercent != null ? { discountPercent: input.discountPercent } : null),
+  );
 
   // ── 1. FREE ITEM — always pass ──────────────────────────────────────────────
   const hasSecondItemDiscount = SECOND_ITEM_DISCOUNT_PATTERNS.some((p) => p.test(text));
@@ -131,15 +180,22 @@ export function validateStrongDealOnly(input: {
     return { ok: false, reason: "entire_order", message: STRONG_DEAL_ONLY_MESSAGE };
   }
 
+  // R13: the structured contract is authoritative, so a deal it certifies as strong passes
+  // here regardless of how the copy happens to word it. Deliberately placed alongside the
+  // prose free-item check rather than above the two shape rejections, so it can only turn a
+  // REJECT into a PASS for offers whose own facts already say they qualify — no previously
+  // passing offer starts failing, and "buy X + N% off Y" / entire-order shapes still reject.
+  // Note this also means a stray low percentage in the prose no longer vetoes a deal the
+  // contract says is 40%+, which is exactly the false rejection R13 was about.
   const hasFreeItem = FREE_ITEM_PATTERNS.some((p) => p.test(text));
-  if (hasFreeItem) return { ok: true };
+  if (hasFreeItem || structured === true) return { ok: true };
 
   // ── 2. CONDITIONAL DISCOUNT — reject when no free item ────────────────────
   const hasConditional = CONDITIONAL_DISCOUNT_PATTERNS.some((p) => p.test(text));
   if (hasConditional) return { ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE };
 
   // ── 3. PERCENT FLOOR ───────────────────────────────────────────────────────
-  if (typeof input.discountPercent === "number" && input.discountPercent < 39.5) {
+  if (structured === false) {
     return { ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE };
   }
   const percents = extractPercents(text);

@@ -61,6 +61,12 @@ export type QuickDealAdValidationContext = {
   eligibilityResult: DealEligibilityResult;
 };
 
+/** DealEligibilityInput accepts numbers or numeric strings; the guard wants numbers. */
+function numericOrNull(value: unknown): number | null {
+  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
@@ -235,7 +241,18 @@ export function validateQuickDealAd(
 
   const strongGuard =
     headline && offer
-      ? validateStrongDealOnly({ title: headline, description: guardDescription })
+      ? validateStrongDealOnly({
+          title: headline,
+          description: guardDescription,
+          // R13: the eligibility input is the validated offer. Passing it stops a valid deal
+          // being blocked because the copy said "40% less" rather than "40% off".
+          structuredOffer: {
+            dealType: context.dealEligibility?.dealType ?? null,
+            discountPercent: numericOrNull(context.dealEligibility?.discountPercent),
+            freeItemQuantity: numericOrNull(context.dealEligibility?.freeItemQuantity),
+            freeItemDiscountPercent: numericOrNull(context.dealEligibility?.freeItemDiscountPercent),
+          },
+        })
       : null;
   if (strongGuard && !strongGuard.ok) {
     pushUnique(errors, {

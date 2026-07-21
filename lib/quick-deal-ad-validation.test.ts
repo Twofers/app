@@ -69,8 +69,34 @@ describe("validateQuickDealAd", () => {
     );
 
     expect(result.ok).toBe(false);
+    // R13 changed which rule catches this, and the distinction is the point. The offer here
+    // is a genuine buy-bagel-get-coffee-free deal — it IS strong — so
+    // RULE_STRONG_DEAL_REQUIRED must NOT fire; what is wrong is that the copy fails to say
+    // so, which is RULE_VALUE_PRESENT's job. Conflating the two is how a merchant ended up
+    // being told to fix an offer that was never wrong.
     expect(result.blockingErrors.map((error) => error.ruleId)).toEqual(
-      expect.arrayContaining(["RULE_VALUE_PRESENT", "RULE_STRONG_DEAL_REQUIRED"]),
+      expect.arrayContaining(["RULE_VALUE_PRESENT"]),
     );
+    expect(result.blockingErrors.map((error) => error.ruleId)).not.toContain("RULE_STRONG_DEAL_REQUIRED");
+  });
+
+  it("still blocks a genuinely weak offer with RULE_STRONG_DEAL_REQUIRED", () => {
+    const result = validateQuickDealAd(
+      {
+        headline: "10% off a latte",
+        offer: "Get 10% off any latte this week.",
+        cta: "Claim deal",
+      },
+      contextFor({
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 10,
+        itemDescription: "latte",
+        itemRetailValueCents: 500,
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.blockingErrors.map((error) => error.ruleId)).toContain("RULE_STRONG_DEAL_REQUIRED");
   });
 });

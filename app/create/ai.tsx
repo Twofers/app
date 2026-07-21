@@ -241,6 +241,12 @@ const SCHEDULE_PRESETS = [
   { key: "weekends", days: [6, 7], startMin: 600, endMin: 840 },
 ] as const;
 
+/** Eligibility fields arrive as numbers or numeric strings; the strong-deal guard wants numbers. */
+function toGuardNumber(value: unknown): number | null {
+  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function dateFromMinutes(minutes: number): Date {
   const d = new Date();
   d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
@@ -3539,6 +3545,15 @@ export default function AiDealScreen() {
     const strongGuard = validateStrongDealOnly({
       title: title.trim(),
       description: composedDescription,
+      // R13: this is the publish path where a genuine 40%-off deal was blocked because the
+      // AI wrote "for 40% less" instead of "40% off". The merchant's own structured offer
+      // has been validated by this point — consult it rather than the model's word choice.
+      structuredOffer: {
+        dealType: eligibilityInput.dealType ?? null,
+        discountPercent: toGuardNumber(eligibilityInput.discountPercent),
+        freeItemQuantity: toGuardNumber(eligibilityInput.freeItemQuantity),
+        freeItemDiscountPercent: toGuardNumber(eligibilityInput.freeItemDiscountPercent),
+      },
     });
     if (!strongGuard.ok) {
       const key = `dealQuality.strongGuard.${strongGuard.reason}`;
@@ -4540,6 +4555,9 @@ export default function AiDealScreen() {
           liveScheduleLabel={posterLiveScheduleLabel}
           eyebrowLabel={posterEyebrowLabel}
           contentLocale={supportedLocaleOrDefault(i18n.language)}
+          // S4: the merchant must preview the same name the shopper will see, or preview
+          // and publish disagree — a §7 hard fail.
+          merchantName={businessName}
         />
       </View>
     );
