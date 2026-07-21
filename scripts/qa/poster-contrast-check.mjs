@@ -102,7 +102,13 @@ function meanRegion(png, x0, y0, w, h) {
 }
 
 const template = String(args.template || "fresh");
-const theme = THEME[template] || THEME.fresh;
+// RUN 2: 18afd6d7 switched image-backed posters to light ink
+// (POSTER_ON_IMAGE_HEADLINE / POSTER_ON_IMAGE_MUTED in AdPosterCanvas.tsx). Scoring a
+// post-fix render against the pre-fix dark-teal theme reports phantom failures, so
+// --onimage selects the ink the renderer actually uses over a photo. Keep the gold accent.
+const ON_IMAGE_INK = { headline: "#FFFFFF", business: "#EFEAE1", subline: "#EFEAE1", accent: "#F6C445" };
+const theme = args.onimage ? ON_IMAGE_INK : THEME[template] || THEME.fresh;
+if (args.onimage) console.log("ink model: ON-IMAGE (post-18afd6d7 light ink)\n");
 
 function verdict(cr, big) {
   const floor = big ? 3.0 : 4.5;

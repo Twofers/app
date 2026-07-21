@@ -12,6 +12,14 @@ export type PosterGalleryCell = {
   offerLine: string | null;
   sourcePath: string | null;
   photoSource: string | null;
+  /**
+   * Run-2 stress cells only. Passed straight to AdPosterCanvas's `copy` prop,
+   * which takes precedence over spec resolution — so KO/ES cells render
+   * deterministically without depending on the poster viewer-language flag.
+   */
+  copyByLocale?: Record<string, Record<string, string>>;
+  /** Run-2 note explaining what the cell is probing. */
+  stressNote?: string;
 };
 export const POSTER_GALLERY_CORPUS: PosterGalleryCell[] = [
   {
@@ -303,3 +311,151 @@ export const POSTER_GALLERY_CORPUS: PosterGalleryCell[] = [
     "photoSource": "generated"
   }
 ];
+
+// ---------------------------------------------------------------------------
+// [aiqa] RUN 2 — Tier 1 spec-mutation stress cells. Zero image spend: these
+// reuse the run-1 backgrounds and mutate only the spec, which is legitimate
+// because AdPosterCanvas does not care where a spec came from.
+//
+// They probe what run 1 never generated: the text-fit limits at exactly their
+// maximum (POSTER_TEXT_LIMITS = business 34 / headline 28 / subline 32 — at the
+// limit, not over it, since clampPosterText already truncates over-limit text),
+// Korean display type (BlackHanSans, the D4 font check), Spanish diacritic
+// ascenders/descenders, and the luma-absent fallback that prod runs today.
+//
+// Backgrounds span the measured luminance range so every text case is judged on
+// both a dark and a light subject rather than by luck.
+const BG_DARK = "04d699d3-618b-4707-a6bd-afc23f486f5a/ai_ad_generated_1784592017290_57cff007.png"; // i02, luma 0.082
+const BG_LIGHT = "04d699d3-618b-4707-a6bd-afc23f486f5a/ai_ad_gemini_1784592147517_3a9b5b6c.png"; // i01, luma 0.755
+const BG_MID = "04d699d3-618b-4707-a6bd-afc23f486f5a/ai_ad_gemini_1784587637712_70371f80.png"; // i04, luma 0.387
+const LUMA_DARK = { top: 0.082, bottom: 0.146 };
+const LUMA_LIGHT = { top: 0.755, bottom: 0.52 };
+const LUMA_MID = { top: 0.387, bottom: 0.188 };
+
+const MAX_EN = {
+  business_name: "Colonel's Brew Roasting Company Co", // 34 = limit
+  headline: "TWO LATTES FOR ONE OPERATION", // 28 = limit
+  offer_line_1: "2 FOR 1",
+  offer_line_2: "LATTE + CAPPUCCINO",
+  subline: "STANDARD ISSUE MORNING BRIEFINGS", // 32 = limit
+};
+const MAX_ES = {
+  business_name: "La Cafetería del Coronel Brew",
+  headline: "DOS LATTES POR UNA MISIÓN",
+  offer_line_1: "2 POR 1",
+  offer_line_2: "LATTE Y CAPUCHINO",
+  subline: "LISTO PARA LA SESIÓN DE MAÑANA",
+};
+const MAX_KO = {
+  business_name: "콜로넬스 브루 로스팅 컴퍼니",
+  headline: "라떼 두 잔 작전 개시",
+  offer_line_1: "1+1",
+  offer_line_2: "라떼",
+  subline: "아침 브리핑 준비 완료",
+};
+
+function stressSpec(copy: Record<string, string>): unknown {
+  return {
+    version: 1,
+    enabled: true,
+    template_id: "fresh",
+    aspect_ratio: "4:5",
+    source_asset_path: null,
+    rendered_asset_path: null,
+    copy,
+    copy_by_language: { "en-US": MAX_EN, "es-US": MAX_ES, "ko-KR": MAX_KO },
+    layout_policy: {
+      text_align: "center",
+      safe_area_percent: 8,
+      max_lines: { business_name: 1, headline: 2, offer_line_1: 1, offer_line_2: 1, subline: 1 },
+    },
+    content_policy: {
+      no_app_brand_token: true,
+      no_cta: true,
+      no_scarcity: true,
+      no_mutable_live_facts: true,
+      image_text_free: true,
+    },
+    policy: { passed: true, reasonCodes: [], removedTerms: [], warnings: [] },
+  };
+}
+
+const LOCALE_COPY = { "en-US": MAX_EN, "es-US": MAX_ES, "ko-KR": MAX_KO };
+
+export const POSTER_STRESS_CELLS: PosterGalleryCell[] = [
+  {
+    id: "s01",
+    label: "Max-length EN copy over DARK subject",
+    spec: stressSpec(MAX_EN),
+    luma: LUMA_DARK,
+    kicker: MAX_EN.subline,
+    offerLine: "Buy one latte and get one free",
+    sourcePath: BG_DARK,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Every text field at its exact limit (34/28/32) on the darkest background. Worst case for both wrapping and contrast.",
+  },
+  {
+    id: "s02",
+    label: "Max-length EN copy over LIGHT subject",
+    spec: stressSpec(MAX_EN),
+    luma: LUMA_LIGHT,
+    kicker: MAX_EN.subline,
+    offerLine: "Buy one latte and get one free",
+    sourcePath: BG_LIGHT,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Same maxed copy on the lightest background — light ink over a bright top band is the opposite failure mode to s01.",
+  },
+  {
+    id: "s03",
+    label: "Korean (BlackHanSans) over DARK — D4 font check",
+    spec: stressSpec(MAX_KO),
+    luma: LUMA_DARK,
+    kicker: MAX_KO.subline,
+    offerLine: "라떼 한 잔 구매 시 한 잔 무료",
+    sourcePath: BG_DARK,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Korean display type. If BlackHanSans_400Regular has not loaded the poster silently renders system font — check the fontsLoaded readout, not just the glyphs.",
+  },
+  {
+    id: "s04",
+    label: "Korean over LIGHT",
+    spec: stressSpec(MAX_KO),
+    luma: LUMA_LIGHT,
+    kicker: MAX_KO.subline,
+    offerLine: "라떼 한 잔 구매 시 한 잔 무료",
+    sourcePath: BG_LIGHT,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Korean glyphs have taller ink coverage than Latin — verifies the scrim still carries them on a bright top band.",
+  },
+  {
+    id: "s05",
+    label: "Spanish diacritics over MID subject",
+    spec: stressSpec(MAX_ES),
+    luma: LUMA_MID,
+    kicker: MAX_ES.subline,
+    offerLine: "Compra un latte y llévate otro gratis",
+    sourcePath: BG_MID,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Í/Ó/Ñ ascenders above the cap line — checks that accents are not clipped by the headline box or the scrim edge.",
+  },
+  {
+    id: "s06",
+    label: "luma ABSENT over DARK — 0.66 fallback scrim",
+    spec: stressSpec(MAX_EN),
+    luma: null,
+    kicker: MAX_EN.subline,
+    offerLine: "Buy one latte and get one free",
+    sourcePath: BG_DARK,
+    photoSource: "generated",
+    copyByLocale: LOCALE_COPY,
+    stressNote: "Exactly what prod renders today (poster.luma is null until 3d4caa80 deploys). Guards the fixed 0.66 fallback so the luma work cannot regress the no-luma path.",
+  },
+];
+
+/** Run-1 corpus + run-2 stress cells. The gallery renders this. */
+export const POSTER_GALLERY_ALL: PosterGalleryCell[] = [...POSTER_GALLERY_CORPUS, ...POSTER_STRESS_CELLS];
