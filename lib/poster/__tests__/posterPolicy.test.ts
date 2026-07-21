@@ -123,6 +123,31 @@ describe("poster policy", () => {
     });
   });
 
+  it("keeps the product noun when a long item name will not fit the offer line", () => {
+    // R9: offer lines are the poster's FACT channel, but clampPosterText fills from the
+    // FRONT, so a head-final item name keeps its modifiers and loses its noun. Observed on
+    // a live published poster (Tier-3 J4): "12 ounce bag of whole bean coffee" rendered as
+    // "12 OUNCE BAG OF WHOLE" — 21 chars under a 24 limit, naming no product at all.
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "12 ounce bag of whole bean coffee",
+    });
+
+    // Guard against a vacuous test: this is what the front-filling clamp alone still
+    // produces, and it is exactly the fragment that shipped. If this ever stops holding,
+    // the assertions below have stopped proving anything.
+    expect(clampPosterText("12 OUNCE BAG OF WHOLE BEAN COFFEE", 24)).toBe("12 OUNCE BAG OF WHOLE");
+
+    const lines = buildPosterOfferLinesFromOfferDefinition(definition);
+    expect(lines.offer_line_1).toBe("40% OFF");
+    expect(lines.offer_line_2).toBe("BAG OF WHOLE BEAN COFFEE");
+    // The invariants that matter: it still names the product, and it still fits.
+    expect(lines.offer_line_2.endsWith("COFFEE")).toBe(true);
+    expect(lines.offer_line_2.length).toBeLessThanOrEqual(24);
+  });
+
   it("builds sanitized poster copy from authoritative offer facts", () => {
     const definition = definitionFor({
       dealType: "BUY_ONE_GET_ONE_FREE",

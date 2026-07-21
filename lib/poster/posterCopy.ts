@@ -122,6 +122,42 @@ function posterItemLabel(value: string): string {
   return meaningful.slice(-2).join(" ");
 }
 
+/**
+ * English item names are head-final: the noun that identifies the product sits at the END
+ * ("12 ounce bag of whole bean COFFEE"). `clampPosterText` fills from the FRONT, so an
+ * over-long item keeps its modifiers and drops the noun. Observed live on a published
+ * poster (Tier-3 J4): "12 ounce bag of whole bean coffee" rendered as
+ *
+ *     40% OFF
+ *     12 OUNCE BAG OF WHOLE      <- 21 chars; " BEAN" would take it to 26 over a 24 limit
+ *
+ * which names no product at all. Offer lines are the poster's FACT channel, and deal facts
+ * are authoritative — a shorter COMPLETE phrase beats a longer fragment.
+ *
+ * So prefer the longest word-aligned SUFFIX that fits, then drop any leading stop or
+ * connector word so we never emit "OF WHOLE BEAN COFFEE". The same suffix bias is why
+ * `posterItemLabel` uses `slice(-2)`. Returns the input untouched when it already fits or
+ * when no suffix helps, leaving the caller's clamp as the last resort.
+ */
+function fitItemLine(value: string, maxChars: number): string {
+  const clean = cleanText(value);
+  if (!clean || clean.length <= maxChars) return clean;
+  const words = clean.split(/\s+/);
+  for (let start = 1; start < words.length; start += 1) {
+    let slice = words.slice(start);
+    while (
+      slice.length > 1 &&
+      (POSTER_ITEM_STOP_WORDS.has(slice[0].toLowerCase()) ||
+        POSTER_ITEM_CONNECTOR_WORDS.has(slice[0].toLowerCase()))
+    ) {
+      slice = slice.slice(1);
+    }
+    const candidate = slice.join(" ");
+    if (candidate && candidate.length <= maxChars) return candidate;
+  }
+  return clean;
+}
+
 function lineItem(value: string, maxChars = 22): string {
   return sanitizePosterText(value, { fallback: "LOCAL DEAL", maxChars });
 }
@@ -282,7 +318,7 @@ export function buildPosterOfferLinesFromOfferDefinition(
   if (definition.reward.rule === "percent_off_single_item") {
     return {
       offer_line_1: lineItem(discountBadge(locale, definition.reward.discountPercent), 20),
-      offer_line_2: lineItem(rewardItem || firstItem || localizedOffer.compactOfferLine, 24),
+      offer_line_2: lineItem(fitItemLine(rewardItem || firstItem || localizedOffer.compactOfferLine, 24), 24),
     };
   }
 
@@ -292,7 +328,7 @@ export function buildPosterOfferLinesFromOfferDefinition(
   if (definition.reward.rule === "same_item_free") {
     return {
       offer_line_1: lineItem(sameItemBadge(locale, paidQuantity, rewardQuantity), 18),
-      offer_line_2: lineItem(firstItem || localizedOffer.compactOfferLine, 24),
+      offer_line_2: lineItem(fitItemLine(firstItem || localizedOffer.compactOfferLine, 24), 24),
     };
   }
 
