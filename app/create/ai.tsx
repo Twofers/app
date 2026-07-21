@@ -971,6 +971,7 @@ export default function AiDealScreen() {
     businessPreferredLocale,
     businessName,
     businessProfile,
+    loading: businessLoading,
   } = useBusiness();
   const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
   const automaticLocalizationApprovalEnabled = isAiV5AutomaticVerifiedBundleApprovalEnabled();
@@ -4290,6 +4291,17 @@ export default function AiDealScreen() {
     } finally {
       setSavingTemplate(false);
     }
+  }
+
+  // `isLoggedIn`/`businessId` both start falsy while useBusiness() resolves, so
+  // without this gate a signed-in merchant sees "Please log in to create deals."
+  // for the length of the business fetch every time this screen mounts.
+  if (businessLoading) {
+    return (
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
   }
 
   if (!isLoggedIn) {
