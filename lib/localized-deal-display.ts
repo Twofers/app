@@ -164,13 +164,67 @@ function customerLocalizationFromDeal(
   );
 }
 
+// Hiragana, Katakana, CJK ideographs and Hangul. A 2-character Korean word like 라떼
+// ("latte") is a whole content word, so the Latin ">2 characters" rule would throw away
+// almost every Korean token and make two unrelated Korean sentences look identical.
+const CJK_RE = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/u;
+
+/** Content words, for deciding whether two strings say the same thing. */
+function significantTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .filter((word) => (CJK_RE.test(word) ? word.length >= 2 : word.length > 2)),
+  );
+}
+
+/**
+ * S13: the description was assembled from the AI's supporting copy, the deterministic
+ * primary offer line and the terms line — three PARAPHRASES of the same offer. Exact-match
+ * dedup never fired, so a live deal read:
+ *
+ *   "Buy any large coffee drink and the cookie of your choice is on us. Buy any large
+ *    coffee drink and get a free cookie of your choice Purchase any large c…"
+ *
+ * Paraphrases share their content words even when no substring matches, so compare token
+ * overlap instead of equality.
+ *
+ * The threshold sits where it does because the two populations are far apart, not because
+ * 0.6 is magic. Measured: the live duplicate scored 0.82 and a looser paraphrase of the same
+ * offer scores 0.67, while the terms line — which carries the address, the claim limit and
+ * the schedule, and must NEVER be dropped — scores under 0.3 against any supporting copy,
+ * because almost all of its content words appear nowhere else. Anywhere in 0.5-0.7 separates
+ * them; the tests pin both sides of the gap.
+ */
+const RESTATEMENT_OVERLAP = 0.6;
+
+function alreadySaid(candidate: string, existing: string): boolean {
+  const candidateTokens = significantTokens(candidate);
+  // Nothing comparable: KEEP the text. Showing the offer twice is a blemish; deleting the
+  // only statement of it is a customer-facing failure, so the uncertain case must not drop.
+  if (candidateTokens.size === 0) return false;
+  const existingTokens = significantTokens(existing);
+  let shared = 0;
+  for (const token of candidateTokens) if (existingTokens.has(token)) shared += 1;
+  return shared / candidateTokens.size >= RESTATEMENT_OVERLAP;
+}
+
+/** Never run two sentences together the way "…of your choice Purchase any large…" did. */
+function endSentence(text: string): string {
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
+}
+
 function joinUniqueText(values: Array<string | null | undefined>): string {
   const parts: string[] = [];
   for (const value of values) {
     const text = cleanText(value);
-    if (text && !parts.includes(text)) parts.push(text);
+    if (!text) continue;
+    if (parts.some((part) => part === text || alreadySaid(text, part))) continue;
+    parts.push(text);
   }
-  return parts.join(" ");
+  return parts.map(endSentence).join(" ");
 }
 
 function numeric(value: unknown): number | null {
