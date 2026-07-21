@@ -296,7 +296,12 @@ function posterHeadlineFallback(definition: OfferDefinitionV1): string {
   const rewardItem = posterItemLabel(definition.reward.displayNames[0] ?? "");
 
   if (definition.offerType === "percent_off_single_item") {
-    return firstItem ? `${firstItem} savings` : "local deal";
+    // Not "<item> savings" / "local deal": the offer block already renders the
+    // discount, so labelling it a deal says nothing the poster does not already
+    // show, and it reads as filler on a paid ad. Both old strings are also exactly
+    // what POSTER_HEADLINE_FORMULAIC_VALUE now rejects in AI copy — the
+    // deterministic fallback must not emit copy the gate would refuse.
+    return firstItem ? `${firstItem} for less` : "A local price drop";
   }
 
   if (definition.reward.rule === "same_item_free") {

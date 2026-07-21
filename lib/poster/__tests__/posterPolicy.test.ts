@@ -228,7 +228,13 @@ describe("poster policy", () => {
       businessCategory: "Cafe",
     });
 
-    expect(copy.headline).toBe("AMERICANO SAVINGS");
+    // The rule under test is that the discount must not become the headline — the
+    // offer block renders it. The deterministic fallback used to say "<ITEM>
+    // SAVINGS", which honoured that rule but read as filler and is exactly the
+    // shape POSTER_HEADLINE_FORMULAIC_VALUE now rejects in AI copy; the fallback
+    // must not emit copy the gate would refuse.
+    expect(copy.headline).toBe("AMERICANO FOR LESS");
+    expect(copy.headline).not.toMatch(/\b(?:savings|deal|special|offer)s?$/i);
     expect(copy.offer_line_1).toBe("50% OFF");
     expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");
   });
