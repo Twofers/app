@@ -178,6 +178,44 @@ export function getDealClaimScheduleBlock(
   }
 }
 
+/**
+ * When can a customer no longer claim this deal — today?
+ *
+ * S14: the feed counted down to `end_time` and nothing else, so a deal that runs
+ * "Mon-Fri 3:03 PM-11:03 PM" until the 30th advertised "8d 7h left" at 3:12 PM when the real
+ * answer was 7h 51m, after which it shuts until Monday. The number whose entire job is to
+ * create urgency was the one that was wrong, and wrong in the direction that makes the offer
+ * look more available than it is. Deal detail already got this right from the same data.
+ *
+ * Returns the earlier of `end_time` and the close of today's recurring window. Falls back to
+ * `end_time` whenever the recurring fields cannot be read, so a misconfigured deal degrades
+ * to the old behaviour rather than losing its countdown.
+ */
+export function getDealClaimDeadline(deal: RecurringInfo, now = new Date()): Date | null {
+  const end = deal?.end_time ? new Date(deal.end_time) : null;
+  const endMs = end?.getTime();
+  if (endMs == null || !Number.isFinite(endMs)) return null;
+  if (!deal.is_recurring) return end;
+
+  const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
+  const windowEnd = deal.window_end_minutes;
+  if (!days.length || windowEnd == null) return end;
+
+  try {
+    const { day, minutes } = getLocalParts(now, dealTimeZone(deal));
+    // Not running today, or today's window has already closed: the caller is showing a
+    // status rather than a countdown, so leave the campaign end date alone.
+    if (!days.includes(day) || minutes >= windowEnd) return end;
+    // Minutes-until-close is timezone-independent once we know the local clock, which avoids
+    // reconstructing a local calendar date across DST.
+    const closesAtMs = now.getTime() + (windowEnd - minutes) * 60_000;
+    return new Date(Math.min(endMs, closesAtMs));
+  } catch (e) {
+    devWarn("[deal-time] getDealClaimDeadline failed (bad dates/timezone?)", e);
+    return end;
+  }
+}
+
 export type FormatValiditySummaryOptions = {
   lang?: string;
   /** Prefix before end date when only `end_time` is set (e.g. t('commonUi.dealEndsVerb')). */

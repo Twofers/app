@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { claimDeal } from "@/lib/functions";
 import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled, scheduleClaimExpiryReminder } from "@/lib/notifications";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
-import { isDealActiveNow } from "@/lib/deal-time";
+import { getDealClaimDeadline, isDealActiveNow } from "@/lib/deal-time";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/banner";
@@ -1080,9 +1080,12 @@ export default function HomeScreen() {
     }
   }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, loadHidden, userId, hydrateLocationFromPrefs]);
 
+  // S14: count down to when the customer can no longer claim TODAY, not to the campaign's
+  // end date. A recurring deal that closes at 11:03 PM must not advertise "8d 7h left".
   const formatTimeLeft = useCallback(
-    (endTimeIso: string) => {
-      const label = dealCountdownLabel(new Date(endTimeIso).getTime() - nowTick);
+    (deal: Deal) => {
+      const deadline = getDealClaimDeadline(deal, new Date(nowTick));
+      const label = dealCountdownLabel((deadline?.getTime() ?? new Date(deal.end_time).getTime()) - nowTick);
       if (!label) return t("dealDetail.expired");
       return t(label.key, label.params);
     },
@@ -1213,7 +1216,7 @@ export default function HomeScreen() {
                   : ("ended" as const),
           statusLabel,
           quantityRemainingLabel: isLive ? scarcityLabel : null,
-          timeRemainingLabel: isLive ? formatTimeLeft(item.end_time) : null,
+          timeRemainingLabel: isLive ? formatTimeLeft(item) : null,
           claimAvailable: isLive && !itemIsDemo && claimingDealId !== item.id,
         };
 
@@ -1381,7 +1384,7 @@ export default function HomeScreen() {
             <View style={{ marginTop: Spacing.xs, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
               <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
               <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14, flexShrink: 1 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
-                {isLive ? formatTimeLeft(item.end_time) : statusLabel}
+                {isLive ? formatTimeLeft(item) : statusLabel}
               </Text>
               {isLive && scarcityLabel ? (
                 <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
