@@ -35,15 +35,16 @@ describe("deal form dirty snapshots", () => {
       validityMode: "one-time",
       title: "Taco Tuesday",
       posterHeadlineText: "TACO TUESDAY TREAT",
-      posterSublineText: "FRESH OFF THE GRILL",
       startTime: "2026-07-01T18:00:00.000Z",
       endTime: "2026-07-01T20:00:00.000Z",
     });
+    // R12 removed posterSublineText, which this test used to vary. The poster headline is
+    // now the only poster-only text field, so vary that instead — the behaviour under test
+    // (a poster-only edit still counts as unsaved) is unchanged.
     const posterEdited = buildDealFormDirtySnapshot({
       validityMode: "one-time",
       title: "Taco Tuesday",
-      posterHeadlineText: "TACO TUESDAY TREAT",
-      posterSublineText: "HOT AND READY",
+      posterHeadlineText: "TACO TUESDAY DEAL",
       startTime: "2026-07-01T18:00:00.000Z",
       endTime: "2026-07-01T20:00:00.000Z",
     });

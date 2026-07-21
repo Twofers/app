@@ -42,28 +42,37 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("disabled={savingTemplate || !canPublish}");
   });
 
-  it("keeps poster headline and subheadline live-editable through preview and publish", () => {
-    // Preview and publish build the poster from the SAME live fields; the stale
+  it("keeps the poster headline live-editable through preview and publish", () => {
+    // Preview and publish build the poster from the SAME live field; the stale
     // generated spec is only a fallback when no offer definition exists.
     expect(createAiSource).toContain("const [posterHeadlineText, setPosterHeadlineText] = useState(\"\");");
-    expect(createAiSource).toContain("const [posterSublineText, setPosterSublineText] = useState(\"\");");
     expect(createAiSource).toContain(
       "const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;",
     );
     const previewHeadline = "headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,";
-    const publishSubline = "subline: posterSublineText.trim() || null,";
     expect(createAiSource.split(previewHeadline).length - 1).toBe(2);
-    expect(createAiSource.split(publishSubline).length - 1).toBe(2);
     // Seeded from every generated/revised ad and restored image version.
     expect(createAiSource).toContain("setPosterHeadlineText(ad.poster?.copy?.headline ?? \"\");");
-    expect(createAiSource).toContain("setPosterSublineText(ad.poster?.copy?.subline ?? \"\");");
-    // Visible fit limits on the inputs plus a publish-time block, never a silent rewrite.
+    // Visible fit limit on the input plus a publish-time block, never a silent rewrite.
     expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.headline}");
-    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
     expect(createAiSource).toContain("checkMerchantPosterHeadline(posterHeadlineText)");
-    expect(createAiSource).toContain("checkMerchantPosterSubline(posterSublineText)");
     expect(createAiSource).toContain("createAi.errPosterTextTooLong");
     expect(createAiSource).toContain("createAi.errPosterTextNotAllowed");
+  });
+
+  it("no longer offers a poster subheadline the renderer cannot show", () => {
+    // R12: copyForLocale drops `subline` for every locale and the canvas renders
+    // copy_by_language, so the poster eyebrow was structurally unreachable — yet the
+    // publish screen showed an editable field with a live 32-char counter. The field is
+    // gone and both spec builders pin subline to null, so it cannot creep back via the
+    // merchant path or a model that ignores the prompt.
+    expect(createAiSource).not.toContain("posterSublineText");
+    expect(createAiSource).not.toContain("setPosterSublineText");
+    expect(createAiSource).not.toContain("checkMerchantPosterSubline");
+    expect(createAiSource).not.toContain("createAi.editPosterSubheadline");
+    expect(createAiSource).not.toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
+    // Both the preview and the publish spec builders pass a literal null.
+    expect(createAiSource.split("subline: null,").length - 1).toBe(2);
 
     for (const locale of ["en", "es", "ko"] as const) {
       const createAi = readLocale(locale).createAi;

@@ -26,21 +26,28 @@ describe("ai-generate-ad-variants revision source guard", () => {
     expect(source).toContain("revision_feedback_no_candidate_match");
   });
 
-  it("requires a subheadline/kicker revision request to actually change the kicker", () => {
+  it("still recognises subheadline feedback as copy feedback, without enforcing a kicker change", () => {
+    // R12: the poster has no kicker slot, so the kicker is permanently empty. The intent
+    // detection stays — it is what stops the image-only shortcut swallowing this feedback —
+    // but the enforcement had to go: `kicker_unchanged_for_subheadline_feedback` was a HARD
+    // FAIL, and against a permanently-empty kicker it would have failed EVERY candidate for
+    // any feedback mentioning a subheadline. Subheadline feedback now means the card
+    // description, and hasVisibleRevisionCopyChange still rejects a no-op revision.
     expect(source).toContain("requiresKickerChange");
     expect(source).toContain(
       "/\\b(?:kicker|eyebrow|sub[\\s-]?headings?|sub[\\s-]?headlines?|sub[\\s-]?lines?|sub[\\s-]?titles?|supporting (?:copy|line|text)|second line|small(?:er)? (?:line|text))\\b/",
     );
-    expect(source).toContain("function revisionKickerChanged");
-    expect(source).toContain("kicker_unchanged_for_subheadline_feedback");
-    expect(source).toContain("function deterministicRevisedKicker");
-    expect(source).toContain("revision_deterministic_kicker_fallback");
-    expect(source).toContain("REVISION_DETERMINISTIC_KICKER");
-    // The kicker counts as visible revision copy so kicker-only changes are
-    // accepted and kicker-ignoring candidates can be scored against feedback.
-    expect(source).toContain("nextKicker.length > 0 && nextKicker !== previousKicker");
-    // Image-only shortcut must not swallow kicker feedback.
+    // Image-only shortcut must not swallow subheadline feedback.
     expect(source).toContain("!intent.requiresKickerChange &&");
+    // The enforcement and its backstop are gone, and must not come back while the poster
+    // has no kicker slot — they would hard-fail every candidate.
+    expect(source).not.toContain("kicker_unchanged_for_subheadline_feedback");
+    expect(source).not.toContain("function revisionKickerChanged");
+    expect(source).not.toContain("function deterministicRevisedKicker");
+    expect(source).not.toContain("REVISION_DETERMINISTIC_KICKER");
+    // Nothing may feed a kicker into the poster spec.
+    expect(source).not.toContain("subline: copy.poster_kicker");
+    expect(source).toContain("subline: null,");
   });
 
   it("rejects poster candidates whose text cannot fit the poster layout", () => {

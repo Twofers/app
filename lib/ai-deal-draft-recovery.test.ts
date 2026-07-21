@@ -116,7 +116,6 @@ describe("AI deal draft recovery", () => {
       title: "",
       promoLine: "",
       posterHeadlineText: "AFTERNOON PICK ME UP",
-      posterSublineText: "BAKED FRESH DAILY",
       ctaText: "",
       description: "",
       eligibilityForm,
@@ -138,7 +137,6 @@ describe("AI deal draft recovery", () => {
     expect(draft).not.toBeNull();
     const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
     expect(parsed?.posterHeadlineText).toBe("AFTERNOON PICK ME UP");
-    expect(parsed?.posterSublineText).toBe("BAKED FRESH DAILY");
   });
 
   it("defaults missing poster text fields on older stored drafts", () => {
@@ -174,11 +172,9 @@ describe("AI deal draft recovery", () => {
     expect(draft).not.toBeNull();
     const legacy = { ...draft } as Record<string, unknown>;
     delete legacy.posterHeadlineText;
-    delete legacy.posterSublineText;
 
     const parsed = parseAiDealRecoveryDraft(JSON.stringify(legacy), "biz-1");
     expect(parsed?.posterHeadlineText).toBe("");
-    expect(parsed?.posterSublineText).toBe("");
   });
 
   it("preserves an explicit standard-card draft choice", () => {

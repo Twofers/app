@@ -825,30 +825,9 @@ async function generateCopy(params: {
       };
     }
   }
-  if (isRevision && previousAd) {
-    const revisionIntent = parseRevisionFeedbackIntent(revisionFeedback);
-    if (revisionIntent.requiresKickerChange && !revisionKickerChanged(selected, previousAd)) {
-      const revisedKicker = deterministicRevisedKicker(offerContract, previousAd);
-      console.log(
-        JSON.stringify({
-          tag: "ai_ads_v2",
-          event: "revision_deterministic_kicker_fallback",
-          businessId: offerContract.businessId,
-          kickerCleared: !revisedKicker,
-        }),
-      );
-      selected = {
-        ...selected,
-        poster_kicker: revisedKicker,
-        validation_reason_codes: [
-          ...new Set([
-            ...selected.validation_reason_codes,
-            "REVISION_DETERMINISTIC_KICKER",
-          ]),
-        ],
-      };
-    }
-  }
+  // R12: the deterministic-kicker backstop lived here. It substituted a fact-safe kicker
+  // when the merchant asked for a different subheadline and no candidate changed it. The
+  // poster has no kicker slot now, so there is nothing to back-stop.
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
   const copyAlternatives = buildCopyAlternatives({
@@ -1341,26 +1320,8 @@ function shouldUseDeterministicRevisionCopyFallback(params: {
   return true;
 }
 
-function revisionKickerChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
-  return normalizeRevisionCopyText(candidate.poster_kicker) !== previousRevisionKicker(previousAd);
-}
-
-/**
- * Backstop when the merchant asked for a different subheadline/kicker but no
- * candidate changed it: use the offer's own item name as a fact-safe kicker, or
- * drop the kicker entirely rather than return the complained-about line again.
- */
-function deterministicRevisedKicker(contract: DealOfferContract, previousAd: SingleAd): string | undefined {
-  const itemName = (
-    contract.requiredPurchase?.itemName ??
-    contract.singleItemDiscount?.itemName ??
-    contract.freeReward?.itemName ??
-    ""
-  ).replace(/\s+/g, " ").trim();
-  const fits = itemName.length > 0 && itemName.length <= POSTER_TEXT_LIMITS.subline;
-  if (fits && normalizeRevisionCopyText(itemName) !== previousRevisionKicker(previousAd)) return itemName;
-  return undefined;
-}
+// R12: revisionKickerChanged and deterministicRevisedKicker lived here. Both existed only
+// to enforce and back-stop kicker changes, and the poster has no kicker slot now.
 
 function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
   const nextHeadline = normalizeRevisionCopyText(candidate.headline);
@@ -1417,11 +1378,11 @@ function scoreRevisionFeedbackFit(params: {
   }
   if (headlineChanged) softScore += 2;
 
-  const kickerChanged = revisionKickerChanged(candidate, previousAd);
-  if (intent.requiresKickerChange && !kickerChanged) {
-    hardFailReasons.push("kicker_unchanged_for_subheadline_feedback");
-  }
-  if (intent.requiresKickerChange && kickerChanged) softScore += 2;
+  // R12: there is no kicker any more, so "the subheadline is unchanged" can no longer be a
+  // hard fail — the kicker is permanently empty, which would make EVERY candidate fail for
+  // any feedback mentioning a subheadline/subline/supporting line. Subheadline feedback now
+  // means the card description (the prompt says so too), and the generic
+  // hasVisibleRevisionCopyChange guard still rejects a revision that changed nothing.
 
   if (intent.wantsShorter) {
     const previousLength = revisionPreviousVisibleLength(previousAd);
@@ -4295,7 +4256,12 @@ Deno.serve(async (req) => {
           sourceAssetPath: imageResult.posterStoragePath,
           renderedAssetPath: null,
           headline: copy.headline,
-          subline: copy.poster_kicker,
+          // R12: the poster has no kicker slot. `copyForLocale` drops `subline` for every
+          // locale and the canvas renders copy_by_language, so anything set here was
+          // discarded before render — while still being offered to the merchant as an
+          // editable field. Pinned to null so it cannot come back through a model that
+          // ignores the prompt. The field remains on the type for stored-spec compatibility.
+          subline: null,
           businessCategory: businessContext.category,
           compositionPlan: imageResult.prompt,
         })

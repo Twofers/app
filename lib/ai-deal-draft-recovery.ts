@@ -27,7 +27,6 @@ export type AiDealRecoveryDraft = {
   title: string;
   promoLine: string;
   posterHeadlineText: string;
-  posterSublineText: string;
   ctaText: string;
   description: string;
   eligibilityForm: DealEligibilityFormState;
@@ -56,7 +55,6 @@ type DraftCandidate = Omit<
   | "creativeFormat"
   | "previewFormat"
   | "posterHeadlineText"
-  | "posterSublineText"
 > & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
@@ -65,7 +63,6 @@ type DraftCandidate = Omit<
   previewFormat?: AiDealDraftCreativeFormat | null;
   // Optional so drafts saved before poster text editing existed still parse.
   posterHeadlineText?: string | null;
-  posterSublineText?: string | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -137,7 +134,6 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
       draft.title.trim() ||
       draft.promoLine.trim() ||
       draft.posterHeadlineText.trim() ||
-      draft.posterSublineText.trim() ||
       draft.ctaText.trim() ||
       draft.description.trim() ||
       draft.generatedAd ||
@@ -176,7 +172,6 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     title: cleanDisplayTitle(input.title),
     promoLine: cleanString(input.promoLine),
     posterHeadlineText: cleanString(input.posterHeadlineText),
-    posterSublineText: cleanString(input.posterSublineText),
     ctaText: cleanString(input.ctaText),
     description: cleanString(input.description),
     eligibilityForm: input.eligibilityForm ?? createDefaultDealEligibilityFormState(),
@@ -219,7 +214,6 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       title: parsed.title ?? "",
       promoLine: parsed.promoLine ?? "",
       posterHeadlineText: parsed.posterHeadlineText ?? "",
-      posterSublineText: parsed.posterSublineText ?? "",
       ctaText: parsed.ctaText ?? "",
       description: parsed.description ?? "",
       eligibilityForm: parsed.eligibilityForm as DealEligibilityFormState,

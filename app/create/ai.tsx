@@ -110,7 +110,6 @@ import { buildOfferDefinitionV1FromContract, type OfferDefinitionV1 } from "../.
 import {
   buildPosterSpecFromOfferDefinition,
   checkMerchantPosterHeadline,
-  checkMerchantPosterSubline,
 } from "@/lib/poster/posterCopy";
 import { POSTER_TEXT_LIMITS } from "@/lib/poster/posterPolicy";
 import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
@@ -1069,7 +1068,6 @@ export default function AiDealScreen() {
   // subheadline/kicker). Seeded from the generated poster copy and editable
   // until publish; title/promoLine stay the card-format copy.
   const [posterHeadlineText, setPosterHeadlineText] = useState("");
-  const [posterSublineText, setPosterSublineText] = useState("");
   const [ctaText, setCtaText] = useState("");
   const [description, setDescription] = useState("");
   const [maxClaims, setMaxClaims] = useState("10");
@@ -1654,7 +1652,6 @@ export default function AiDealScreen() {
     lastSentPhotoTreatmentRef.current = restored.photo_treatment ?? null;
     if (restored.poster?.copy) {
       setPosterHeadlineText(restored.poster.copy.headline ?? "");
-      setPosterSublineText(restored.poster.copy.subline ?? "");
     }
     setAdAccepted(false);
     setManualDraftUnlocked(true);
@@ -1684,7 +1681,6 @@ export default function AiDealScreen() {
         title,
         promoLine,
         posterHeadlineText,
-        posterSublineText,
         ctaText,
         description,
         dealEligibility: JSON.stringify(eligibilityForm),
@@ -1711,7 +1707,6 @@ export default function AiDealScreen() {
       title,
       promoLine,
       posterHeadlineText,
-      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -1760,7 +1755,6 @@ export default function AiDealScreen() {
     title,
     promoLine,
     posterHeadlineText,
-    posterSublineText,
     ctaText,
     description,
     price,
@@ -1881,7 +1875,6 @@ export default function AiDealScreen() {
     setTitle(draft.title);
     setPromoLine(draft.promoLine);
     setPosterHeadlineText(draft.posterHeadlineText);
-    setPosterSublineText(draft.posterSublineText);
     setCtaText(draft.ctaText);
     setDescription(draft.description);
     setEligibilityForm(draft.eligibilityForm);
@@ -1974,7 +1967,6 @@ export default function AiDealScreen() {
       title,
       promoLine,
       posterHeadlineText,
-      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -2025,7 +2017,6 @@ export default function AiDealScreen() {
     title,
     promoLine,
     posterHeadlineText,
-    posterSublineText,
     ctaText,
     description,
     eligibilityForm,
@@ -2125,7 +2116,6 @@ export default function AiDealScreen() {
         setDescription(loadedDescription);
         setPromoLine("");
         setPosterHeadlineText("");
-        setPosterSublineText("");
         setCtaText("");
         setPrice(loadedPrice);
         setPhotoUri(null);
@@ -2166,7 +2156,6 @@ export default function AiDealScreen() {
             title: loadedTitle,
             promoLine: "",
             posterHeadlineText: "",
-            posterSublineText: "",
             ctaText: "",
             description: loadedDescription,
             dealEligibility: JSON.stringify(loadedEligibilityForm),
@@ -2215,7 +2204,6 @@ export default function AiDealScreen() {
         setDescription(row.description ?? "");
         setPromoLine("");
         setPosterHeadlineText("");
-        setPosterSublineText("");
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
         setEligibilityForm(createDefaultDealEligibilityFormState());
@@ -2426,7 +2414,6 @@ export default function AiDealScreen() {
     setGeneratedAd(null);
     setImageVersions([]);
     setPosterHeadlineText("");
-    setPosterSublineText("");
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
@@ -2681,7 +2668,6 @@ export default function AiDealScreen() {
     setTitle(draft.title);
     setPromoLine(draft.promo_line);
     setPosterHeadlineText(ad.poster?.copy?.headline ?? "");
-    setPosterSublineText(ad.poster?.copy?.subline ?? "");
     setCtaText(draft.cta_text);
     setDescription(draft.offer_details);
     aiDraftBaselineRef.current = {
@@ -3784,11 +3770,8 @@ export default function AiDealScreen() {
         // Merchant-typed poster text must publish exactly as previewed: block on
         // fit/policy problems instead of letting the sanitizer silently rewrite it.
         const posterHeadlineCheck = checkMerchantPosterHeadline(posterHeadlineText);
-        const posterSublineCheck = checkMerchantPosterSubline(posterSublineText);
-        if (!posterHeadlineCheck.ok || !posterSublineCheck.ok) {
-          const overLimit =
-            posterHeadlineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT") ||
-            posterSublineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT");
+        if (!posterHeadlineCheck.ok) {
+          const overLimit = posterHeadlineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT");
           showPublishError(
             overLimit
               ? t("createAi.errPosterTextTooLong", {
@@ -3808,7 +3791,7 @@ export default function AiDealScreen() {
         const posterFactsCheck = checkMerchantDealTitleAgainstOffer(
           {
             title: posterHeadlineText.trim() || null,
-            supportingLine: posterSublineText.trim() || null,
+            supportingLine: null,
           },
           offerContract,
         );
@@ -3832,7 +3815,7 @@ export default function AiDealScreen() {
               sourceAssetPath: finalStoragePath,
               renderedAssetPath: null,
               headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
-              subline: posterSublineText.trim() || null,
+              subline: null, // R12: the poster has no kicker slot
               businessCategory: businessContextForAi.category,
               compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
             })
@@ -4201,7 +4184,6 @@ export default function AiDealScreen() {
             title,
             promoLine,
             posterHeadlineText,
-            posterSublineText,
             ctaText,
             description,
             dealEligibility: JSON.stringify(eligibilityForm),
@@ -4343,14 +4325,13 @@ export default function AiDealScreen() {
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath ?? null,
           renderedAssetPath: null,
           headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
-          subline: posterSublineText.trim() || null,
+          subline: null, // R12: the poster has no kicker slot
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
         })
       : null;
   const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;
   const posterHeadlineEditCheck = checkMerchantPosterHeadline(posterHeadlineText);
-  const posterSublineEditCheck = checkMerchantPosterSubline(posterSublineText);
   const showPosterPreview = Boolean(effectivePosterSpec);
   const posterPreviewImageUri = adImageUri ?? selectedPhotoUri;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
@@ -5912,15 +5893,12 @@ export default function AiDealScreen() {
                         {t("createAi.posterHeadlineNotAllowed")}
                       </Text>
                     ) : null}
-                    <Text style={{ marginTop: 12, color: theme.text }}>
-                      {t("createAi.editPosterSubheadline")} ({posterSublineText.trim().length}/{POSTER_TEXT_LIMITS.subline})
-                    </Text>
-                    <TextInput value={posterSublineText} maxLength={POSTER_TEXT_LIMITS.subline} onChangeText={(value) => { setPosterSublineText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.posterSubheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
-                    {!posterSublineEditCheck.ok ? (
-                      <Text style={{ marginTop: 4, fontSize: 13, color: theme.danger }}>
-                        {t("createAi.posterSubheadlineNotAllowed")}
-                      </Text>
-                    ) : null}
+                    {/* R12: the poster subheadline editor lived here. The poster canvas
+                        renders copy_by_language, and copyForLocale drops `subline` for
+                        every locale, so whatever the merchant typed was discarded before
+                        render — a field with a live character counter that could not
+                        affect the poster. Removed rather than made to render, because the
+                        kicker copy quality was itself unsolved (see R10). */}
                   </>
                 ) : null}
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>

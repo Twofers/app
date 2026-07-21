@@ -96,7 +96,6 @@ export const AD_COPY_JSON_SCHEMA = {
             strategyId: { type: "string", enum: [...AD_COPY_STRATEGY_IDS] },
             strategyReason: { type: "string" },
             headlineAlternative: { type: "string" },
-            posterKicker: { type: "string" },
             description: { type: "string" },
             pushTitle: { type: "string" },
             pushBody: { type: "string" },
@@ -110,7 +109,6 @@ export const AD_COPY_JSON_SCHEMA = {
             "strategyId",
             "strategyReason",
             "headlineAlternative",
-            "posterKicker",
             "description",
             "pushTitle",
             "pushBody",
@@ -196,7 +194,16 @@ export const AI_COPY_PROMPT_V5 = [
   "",
   "FIELD RULES:",
   "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.",
-  "- posterKicker: short poster top kicker, target 1-3 words, ideally under 24 characters and never more than 32. It may be empty. Derive it from the specific product, customer moment, merchant context, or deal angle, and it must fit the actual item being offered. Use the CATEGORY PLAYBOOK natural customer moments as kicker inspiration; never use a moment that belongs to a different business category. Do not use generic defaults such as Try our, Our deal, Special offer, or Menu pick unless the available facts make that phrase uniquely natural. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
+  // R12: posterKicker used to be requested here. The poster canvas renders
+  // copy_by_language, and copyForLocale drops `subline` for every locale, so the kicker
+  // could never appear on a poster — it was generated, length-checked, offered to the
+  // merchant as an editable field, and then discarded before render. Asking for it spent
+  // tokens and invited copy-quality problems on a line no customer could see.
+  "- Do not return a posterKicker. Posters render a headline and the locked offer block only; there is no kicker slot.",
+  // This category-congruence rule used to live inside the posterKicker field rule. It is
+  // not kicker-specific — it governs every customer moment the model reaches for — so it
+  // is kept as its own rule now that the kicker rule is gone.
+  "- Use the CATEGORY PLAYBOOK natural customer moments as inspiration for the headline and description; never use a moment that belongs to a different business category, and it must fit the actual item being offered.",
   "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
@@ -204,8 +211,8 @@ export const AI_COPY_PROMPT_V5 = [
   "- cta: short verb-first action label, max 26 characters.",
   "- imageBrief: short visual idea using only verified offer and merchant facts; no text in image.",
   "- merchantSpecificContextLimited: true only for the merchant_specific lane when verified merchant context is sparse.",
-  "- For poster ads, headlineAlternative is the large poster headline and posterKicker is the small top kicker. Make them work together as a real poster concept.",
-  "- For poster ads the layout is fixed: headline must be at most 28 characters and posterKicker at most 32 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.",
+  "- For poster ads, headlineAlternative is the large poster headline. It carries the whole poster concept on its own.",
+  "- For poster ads the layout is fixed: the headline must be at most 28 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.",
   "- Poster headlines must not repeat the locked offer line word-for-word. The app renders the locked offer line separately, so the headline must add a fresh angle on top of it.",
   '- Never end a poster headline with a bare value word such as "Savings", "Deal", "Special", or "Offer" (for example "Loaded Nachos Savings" or "Gel Manicure Deal"). The offer block already shows the discount, so a headline that only labels it as a deal adds nothing. Give the reason to come in instead.',
   '- Poster headlines must be a complete phrase. Never start one with "and", "or", "but", or "plus", and never drop the leading word of a multi-word item name (for a "Haircut and fade" the headline must not become "And fade").',
@@ -242,8 +249,7 @@ export const AI_COPY_PROMPT_V5 = [
   "Percent off, non-cafe item:",
   "  Facts: item=spicy braised chicken plate, discountPercent=40, business category=restaurant_food.",
   "  Good headlineAlternative: 40% off the spicy braised chicken plate",
-  "  Good posterKicker: Dinner deal",
-  "  Bad posterKicker: Coffee break, because this offer has nothing to do with coffee.",
+  "  Bad headlineAlternative: Coffee break, because this offer has nothing to do with coffee.",
   "Missing optional information:",
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
@@ -476,8 +482,8 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     revisionBlock.push("Treat preset adjustments and user feedback as instructions, not reusable ad wording.");
     revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
     revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
-    revisionBlock.push("If the merchant mentions title, headline, top text, or wording, revise headlineAlternative and posterKicker first; the poster offer lines remain locked to offer facts.");
-    revisionBlock.push("If the merchant mentions the subheadline, sub-headline, kicker, subline, subtitle, eyebrow, supporting line, or the small text near the headline, they mean posterKicker on posters and the description on cards: you must return a different, complete posterKicker (or an empty one if nothing fits) and revise the description to match.");
+    revisionBlock.push("If the merchant mentions title, headline, top text, or wording, revise headlineAlternative first; the poster offer lines remain locked to offer facts.");
+    revisionBlock.push("If the merchant mentions the subheadline, sub-headline, kicker, subline, subtitle, eyebrow, supporting line, or the small text near the headline, they mean the description on cards: revise the description. Posters have no kicker slot, so never return a posterKicker.");
     revisionBlock.push("If the adjustment is about tone, rewrite the framing and word choice while preserving the exact locked offer facts.");
   }
 
@@ -508,9 +514,9 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     ...(creativeFormat === "poster_v1"
       ? [
           "POSTER FORMAT DIRECTION:",
-          "- Choose posterKicker and headlineAlternative as the poster's top creative idea.",
+          "- headlineAlternative is the poster's top creative idea and carries it alone; the poster has no kicker slot.",
           "- The app derives the bottom offer lines and schedule line from locked offer facts and live schedule metadata.",
-          "- Never rely on headlineAlternative or posterKicker to carry dates, times, claim counts, app CTA text, or scarcity.",
+          "- Never rely on headlineAlternative to carry dates, times, claim counts, app CTA text, or scarcity.",
         ]
       : []),
     "Each candidate must have a different opening idea and a different strategy reason. Avoid paraphrasing the same headline five ways.",
@@ -518,7 +524,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",
     "",
     "Return this exact JSON shape:",
-    '{ "creativeBrief": { "targetCustomerMoment": "string", "exactCustomerHook": "string", "merchantTruthUsed": ["string"], "offerTruthUsed": ["string"], "desiredFeeling": "string", "naturalLanguageDirection": "string", "visualStory": "string", "factsNotToInvent": ["string"] }, "variants": [{ "candidateId": "string", "strategyId": "value_clarity", "strategyReason": "string", "headlineAlternative": "string", "posterKicker": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string", "cta": "string", "imageBrief": "string", "merchantSpecificContextLimited": false }] }',
+    '{ "creativeBrief": { "targetCustomerMoment": "string", "exactCustomerHook": "string", "merchantTruthUsed": ["string"], "offerTruthUsed": ["string"], "desiredFeeling": "string", "naturalLanguageDirection": "string", "visualStory": "string", "factsNotToInvent": ["string"] }, "variants": [{ "candidateId": "string", "strategyId": "value_clarity", "strategyReason": "string", "headlineAlternative": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string", "cta": "string", "imageBrief": "string", "merchantSpecificContextLimited": false }] }',
   ].join("\n");
 
   return {
