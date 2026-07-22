@@ -711,10 +711,17 @@ Found 2026-07-22 during the approved publish QA on the S10. **Reproduced twice.*
 
 Symptom: tapping **Publish deal** fails with
 `Publish failed — "Approve the exact ad preview again before publishing."`
-It reproduces on a *recovered* draft AND on a clean **generate → "Use this ad" → publish**
-run with no edits in between. No deal is created: the guard returns before
-`publish-offer-version` is ever invoked, so nothing reached the server and there is
-nothing to clean up.
+No deal is created: the guard returns before `publish-offer-version` is ever invoked, so
+nothing reached the server and there is nothing to clean up.
+
+> **Correction (2026-07-22 second review): only ONE of the two observed blocks is a bug.**
+> Run 1 (the recovered draft) blocking was **designed behavior**: recovery deliberately
+> nulls approval hashes (they are session-only), the "Approve your changes" panel *was*
+> on screen (visible in the first run-1 UI dump at y≈1884/2182), and publish was tapped
+> without re-approving. That block is the system working. The earlier claim of
+> "reproduced twice" overstated the evidence. The genuine anomaly is **run 2**: fresh
+> generate → "Use this ad" → publish ~60s later with zero edits in between — that should
+> never block, and it did.
 
 ### Root cause — CORRECTED
 
@@ -755,20 +762,38 @@ that instant. The only way they can differ at publish time is that
 **`selectedComposedPresentationHash` drifts after `acceptAd` runs** — the approval is stale
 the moment it is granted.
 
-`acceptAd` itself flips `setAdAccepted(true)` and `setManualDraftUnlocked(true)` in the same
-update. If either feeds the hash — via `showPosterFormat`, `livePosterPreviewSpec`, or
-`effectivePosterSpec` (`ai.tsx:4470`), which all feed `selectedPresentationReviewContext`
-(`ai.tsx:4588`) — then accepting the ad mutates the very value it just approved. The UI
-visibly changes from review mode to editor mode on accept, which is consistent with that.
+#### Verification pass (2026-07-22, second review): mechanisms eliminated one by one
 
-**Proven:** the block is at `3656` and reduces to a hash inequality between accept-time and
-publish-time *preview* hashes. **Not proven:** exactly which input drifts; that needs
-runtime instrumentation of `selectedComposedPresentationHash` across the accept transition,
-which means editing a locked file and was not done unattended.
+A follow-up static audit checked every candidate mechanism. The earlier guess that
+"`acceptAd` flips state that feeds the hash" is **disproven** — `adAccepted` and
+`manualDraftUnlocked` feed no hash input (`livePosterPreviewSpec` at `ai.tsx:4455` is gated
+on `showPosterFormat && offerDefinition` only, both stable across accept). All eliminations,
+each verified in source:
 
-The `COMPOSED_PUBLISH_BLOCKED` telemetry at `ai.tsx:3658` already emits both
-`presentation_hash` and `approved_presentation_hash`. Reading those two values from a real
-device run is the fastest way to finish this diagnosis.
+| # | Mechanism | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | `"unavailable"` QA decision blocks publish | **Dead** | `runDeterministicAdCompositeQa` returns only `pass`/`repair`/`block` (`ad-composite-qa.ts:166`). The `decision: "unavailable"` at `ai.tsx:690` is a different type (`AdImageSelectionQa`), never flows into `selectedComposedCompositeQa` (`ai.tsx:4603`). |
+| 2 | Screenshot-QA requirement | **Dead** | `EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED` is unset in this dev env → `selectedComposedScreenshotQaRequired` is always false. |
+| 3 | `acceptAd` stamped `null` (flag mismatch) | **Dead** | `shouldBindComposedPresentationApproval` (`ai.tsx:4644`) = `composedAdPreviewEnabled ∥ …`; `composedAdPreviewEnabled` (`ai.tsx:4487`) is an OR of three V4 flags, all `true` on-device per the boot log. A real hash was stamped. |
+| 4 | Fields seeded *at accept* (hash drifts on seed) | **Dead** | `applyAdToDraft` runs at generation-complete (`ai.tsx:3085`) and revision-complete (`:3294`), never inside `acceptAd`. Fields were already seeded before the accept tap. |
+| 5 | Accept-state feeds the hash | **Dead** | Traced every hash input; none reads `adAccepted`/`manualDraftUnlocked`. |
+| 6 | Volatile field in the hashed spec (minted id/timestamp) | **Dead** | `createAdPresentationHash` hashes a fixed *projection* (imageAssetId, crop, focalPoint, templateId, themeId, flags, copy lines, offer lines, versions, localeOverrides, reviewContext) — no ids, no dates. `buildDefaultAdPresentationSpec` mints nothing volatile. |
+| 7 | Async signed-URL flip (`adImageUri`) | **Dead** | `adImageUri` (`ai.tsx:4445`) is `buildPublicDealPhotoUrl(currentAdStoragePath)` — synchronous public URL, no token refresh. |
+| 8 | Clock-derived offer facts (hash drifts per minute) | **Dead as traced** | `displayScheduleSummary` is `useMemo` on schedule state; `buildOwnerLanguagePreview` takes only state. No `Date.now()` found in any hash input path. |
+| 9 | A focus/blur handler nulls the approval | **Dead** | Zero `onFocus` handlers in `ai.tsx`. Of the 11 `setApprovedComposedPresentationHash(null)` sites, none can run between accept and the guard without user action (they live in restore/regenerate/revise/format-switch/edit paths). |
+| 10 | Accept never completed in run 2 | **Dead** | `startGeneration` resets `adAccepted(false)` (`~ai.tsx:2480`), the review CTA ("Use this ad") renders in that state, and it *disappeared* from every post-tap dump — `acceptAd` reached `setAdAccepted(true)` (`:3422`), which sits *after* the approval stamp (`:3414`). |
+
+**What survives:** some hash input is a pure function of React state that changed between
+the accept render and the publish render with no user edits — and every traced input claims
+to be stable. Static analysis cannot close that gap; the model is missing something the
+runtime will show immediately.
+
+**Decisive next step (small, needs Dan's per-file approval on `app/create/ai.tsx`):**
+temporarily log `stablePresentationJson(payload)` — the exact pre-hash string from
+`lib/ad-presentation-hash.ts` — at accept-time and at guard-time, reproduce one blocked
+publish via Metro, and diff the two strings. The changed field names the bug. The existing
+`COMPOSED_PUBLISH_BLOCKED` telemetry (`ai.tsx:3658`) already carries both hashes and will
+confirm inequality, but only the payload diff identifies *which* field moved.
 
 ### Earlier (superseded) hypothesis, kept for the record
 
@@ -828,15 +853,20 @@ Suggested direction for whoever picks it up:
 4. Add a regression test asserting the hash is stable across accept for an otherwise
    unmodified draft — that is the invariant with no coverage today.
 
-### Second, lower-severity finding: approval dead end
+### Second, lower-severity finding: approval dead end — NARROWED on second review
 
-When `generatedAd` exists, `adAccepted` is `false`, and the hash does not match, publish is
-blocked telling the merchant to approve — but **no approve control renders**. The approve
-block (`ai.tsx:6100`) requires `acceptedDraftRequiresReapproval`, which (`ai.tsx:4658`)
-requires `adAccepted`; the publish guard has no such term. Recovered drafts land in exactly
-this state, and the only escape is "Start over", which discards the draft. Fixing the
-primary hash bug may make this unreachable in practice, but the asymmetry should still be
-closed.
+The original claim ("recovered drafts land in a state with no approve control") was partly
+wrong: when a recovered draft has `adAccepted === true` (the ad was accepted before the
+draft was saved), `acceptedDraftRequiresReapproval` is true and the **"Approve changes"
+panel does render** — run 1's own UI dumps show it. The genuine dead end is narrower:
+
+- **`generatedAd && !adAccepted` after recovery** (the merchant generated but never tapped
+  "Use this ad" before leaving). The publish guard (`ai.tsx:3656`) blocks on `!adAccepted`,
+  the approve panel (`ai.tsx:6100` via `:4658`) requires `adAccepted` so it does not render,
+  and whether the review section's "Use this ad" CTA is reachable in the recovered layout is
+  unverified. If it is not, "Start over" is the only escape.
+
+Worth closing, but it is an edge state, not the mainline blocker.
 
 ---
 
@@ -885,3 +915,72 @@ closed.
   dashboards over the `stage_timings_ms` / `image_pipeline_budget` telemetry.
 - **Security cleanup outside the repo** (unchanged from the original handoff): rotate the
   Supabase tokens and the business-account password pasted in the earlier session.
+
+---
+
+## UPDATED PLAN (2026-07-22, after full verification pass)
+
+A second review re-verified every claim in this handoff against source. Two earlier
+findings were corrected (run-1 block = designed behavior; the approval dead end is narrower
+than claimed), ten candidate mechanisms for the publish block were eliminated with
+line-level evidence (table above), and one new edge case was found. Everything shipped
+remains green: commits `b42ae69a` (code, validated 1879/1879 + all gates) and
+`ca91e728`/`677dec75` (verified doc-only, so the validated code state is untouched).
+`ai-generate-ad-variants` v190 remains ACTIVE in production.
+
+### Verified-done (no action)
+
+| Item | Proof |
+| --- | --- |
+| Publish error sanitization (client) | Code in `b42ae69a`; device-validated: blocked publish rendered localized copy, not raw text |
+| Localization ∥ image chain | Deployed prod v190, smoke `HEALTHY`; live generation ≤33s vs 44.6s baseline (single sample) |
+| Draft-recovery end-time fix | 3 regression tests green; guards inverted *and* zero-length windows |
+| CRLF red-test repair | Suite 1879/1879 |
+| Poster subheadline renders (R12 fear) | On-device screenshots: merchant-typed subline on poster in source locale |
+| Editor QA / redirect fix / draft recovery | All exercised on-device via Metro, current-tree JS confirmed by boot log `gitCommit` |
+
+### P0 — Unblock poster publishing (blocked pending Dan)
+
+1. **Approve a temporary instrumentation edit to `app/create/ai.tsx`** (locked): log
+   `stablePresentationJson(payload)` at accept-time and inside the `ai.tsx:3656` guard.
+2. Repro once via Metro (recipe in this doc; `adb reverse` + dev-client deep link), diff
+   the two payload strings → the drifting field is named. All cheap theories are already
+   eliminated (see table), so the diff will be immediately meaningful.
+3. Fix so the approved binding survives — by making the drifting input render-stable or by
+   re-binding approval when it settles. **Never by relaxing the guard.**
+4. Add the missing invariant test: the presentation hash is identical across the accept
+   transition for an unmodified draft.
+5. Device-verify: generate → accept → publish **succeeds**; confirm the deal goes live;
+   then clean up the test deal (Dan approved real publishes; app is in testing).
+6. Then close the narrowed dead end: recovered draft with `generatedAd && !adAccepted`
+   must always render an accept path.
+
+### P1 — Persistence and hygiene
+
+7. **Rebuild + install the dev APK** (needs Dan: build gate). The S10's embedded bundle is
+   still Jul 20 / commit-32d96d81-era; every fix QA'd this session was served by Metro and
+   evaporates on the next cold start without it.
+8. **Correct the lock file's R12 narrative** (needs Dan: lock-file approval). Code is
+   right; the lock's story describes a removal that never shipped.
+9. On-device cleanup when convenient: an accepted QA draft ("Your next latte stop") sits
+   in recovery; 2 AI generations were consumed this session.
+
+### P2 — Real but small
+
+10. **Window inversion at publish (verified in source, new):** the `endTime <= startTime`
+    validation (`ai.tsx:2654`) runs against raw state, but the past-start clamp
+    (`ai.tsx:3748`) runs later — publishing after the end time produces an inverted
+    window server-side unless the edge function catches it. Verify server behavior, then
+    move the validation after the clamp (or clamp both).
+11. Preview-vs-publish review-context input asymmetry (`effectiveDraftSourceLocale` /
+    `effectivePosterSpec` vs `supportedSourceLocaleForPublish` / `posterForPublishSpec`):
+    unify inputs; update the source-contract test that currently pins both spellings.
+12. 401-with-no-code maps to `errPublishPermission` ("Log in with the owner account…");
+    `friendlySession` ("Session expired…") is the better fit for expiry. One-branch polish.
+
+### P3 — Standing items
+
+13. Latency follow-ups (deferred set above; image-attempt reduction stays "leave alone" per Dan).
+14. Rotate the previously pasted Supabase tokens + business-account password (outside repo).
+15. Dev build intentionally points at production Supabase (Dan 2026-07-22); revisit only if
+    the CLAUDE.md separate-dev-project rule is meant to bind again.
