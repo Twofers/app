@@ -705,6 +705,79 @@ Before merging or handing off:
 
 ---
 
+## HIGH — publishing an AI poster ad is blocked on this branch
+
+Found 2026-07-22 during the approved publish QA on the S10. **Reproduced twice.**
+
+Symptom: tapping **Publish deal** fails with
+`Publish failed — "Approve the exact ad preview again before publishing."`
+It reproduces on a *recovered* draft AND on a clean **generate → "Use this ad" → publish**
+run with no edits in between. No deal is created: the guard returns before
+`publish-offer-version` is ever invoked, so nothing reached the server and there is
+nothing to clean up.
+
+### Root cause
+
+The guard at `app/create/ai.tsx:3994` blocks when
+`approvedComposedPresentationHash !== publishComposedPresentationHash`. Those two hashes
+are built from `buildLiveAdPresentationReviewContext(...)` at two sites that do not agree:
+
+| input | preview / approve (`ai.tsx:4588`) | publish (`ai.tsx:3979`) |
+| --- | --- | --- |
+| `sourceLocale` | `effectiveDraftSourceLocale` | `supportedSourceLocaleForPublish` |
+| `poster` | `effectivePosterSpec` | `posterForPublishSpec` |
+
+`title`, `promoLine`, `ctaText` and `description` are the same live state on both sides, so
+they are not the divergence. The two candidates are:
+
+1. **The poster spec.** `effectivePosterSpec` (`ai.tsx:4470`) is
+   `livePosterPreviewSpec ?? generatedAd?.poster ?? null` — so when `livePosterPreviewSpec`
+   is null the preview hashes **the server-generated poster spec**. `posterForPublishSpec`
+   (`ai.tsx:3906`) *always* rebuilds locally via `buildPosterSpecFromOfferDefinition`.
+   `AdPresentationReviewContext` projects only `templateId`, `headline`, `subline`,
+   `offerLine1`, `offerLine2` — so asset-path differences are ruled out, but a server-built
+   vs locally-rebuilt `headline`/`offerLine1`/`offerLine2` can easily differ. This is the
+   likeliest culprit.
+2. **The source locale.** Two different variables, and
+   `lib/create-ai-ux-source.test.ts` *pins both spellings*
+   (`toContain("sourceLocale: effectiveDraftSourceLocale")` and
+   `toContain("sourceLocale: supportedSourceLocaleForPublish")`), so the asymmetry is
+   locked in by a test rather than flagged by one.
+
+### Why it is new
+
+`lib/ad-presentation-hash.ts` gained `reviewContext` in the prior session's batch (see
+`git diff 32d96d81 b42ae69a -- lib/ad-presentation-hash.ts`). Folding the live editable
+fields into the hash is the right safety model — preview must equal publish — but it makes
+the hash sensitive to *any* approve-vs-publish input difference, and two such differences
+were already present. Before that change the hash ignored these fields, so the mismatch
+was invisible.
+
+### Not fixed here, deliberately
+
+This is core AI-create review/publish behaviour in a locked file. A careless fix (for
+example relaxing the guard) would let unapproved creative publish — exactly what the lock
+exists to prevent — and it cannot be validated without further device cycles. Dan's
+blanket "approve anything" was not treated as sufficient for this per CLAUDE.md.
+
+Suggested direction for whoever picks it up: make both sides build the review context from
+the *same* inputs — most likely have the preview use the same locally-rebuilt poster spec
+that publish uses, rather than falling back to `generatedAd.poster` — then reconcile the
+two `sourceLocale` variables and update the source-contract test that currently pins them
+apart. Add a test asserting the two hashes are equal for an unmodified accepted draft.
+
+### Second, lower-severity finding: approval dead end
+
+When `generatedAd` exists, `adAccepted` is `false`, and the hash does not match, publish is
+blocked telling the merchant to approve — but **no approve control renders**. The approve
+block (`ai.tsx:6100`) requires `acceptedDraftRequiresReapproval`, which (`ai.tsx:4658`)
+requires `adAccepted`; the publish guard has no such term. Recovered drafts land in exactly
+this state, and the only escape is "Start over", which discards the draft. Fixing the
+primary hash bug may make this unreachable in practice, but the asymmetry should still be
+closed.
+
+---
+
 ## Session close, 2026-07-22 (Claude)
 
 ### Shipped
@@ -736,10 +809,14 @@ Before merging or handing off:
   describes a poster-subheadline removal that is not in this tree. Correcting it means
   editing the lock file itself, which needs Dan's explicit per-file approval — deliberately
   not done unattended. The code is correct; only the narrative is wrong.
-- **Publish-path device QA.** Not possible on this build:
-  `aiStudioDevPublishingDisabled: true`. The publish-error sanitization is covered by unit
-  and source-contract tests only. Verifying it on-device needs either a build with
-  publishing enabled or an accepted real publish.
+- **Publish-path device QA — RUN 2026-07-22, Dan approved publishing.** Publishing is in
+  fact reachable on this build (`EXPO_PUBLIC_QA_ALLOW_PROD_SUPABASE_DEV_PUBLISHING`), so the
+  earlier "not possible" note was wrong. The run surfaced the HIGH publish-blocking bug
+  documented above. It also **validated the error sanitization end-to-end**: the failure
+  rendered as the friendly localized `errPresentationApprovalRequired` copy, not raw server
+  text, which confirms the new `if (!code) return null;` gate does not swallow legitimate
+  coded errors. A genuine success-path publish is still unverified, because the hash bug
+  blocks it.
 - **Remaining latency ideas**, all deferred: async/background image completion, instant
   deterministic fallback when image budget is exhausted, per-business research/menu context
   caching, deferring localization until after merchant acceptance, and production
