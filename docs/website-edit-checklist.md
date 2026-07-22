@@ -32,7 +32,7 @@ Current inventory (re-count with the grep below if in doubt):
 |---|---|
 | `styles.css` | 40 pages |
 | `localization.js` | 22 pages |
-| `store-links.js` | 3 pages (`/`, `/s`, `/business/billing/checkout`) |
+| `store-links.js` | 5 pages (`/`, `/s`, `/support`, `/business/thanks`, `/business/billing/checkout`) |
 | `launch-signup.js` | 1 page (`/`) |
 
 - [ ] Bump the `?v=` to `YYYYMMDD-shortslug` on **all** including pages, for
@@ -59,9 +59,15 @@ A file appearing twice with different versions means a page was missed.
       strings are the one sanctioned exception).
 - [ ] On the affected page, toggle EN → ES → KO: text switches, no raw key
       names visible, console clean.
-- [ ] i18n parity check passes (if `npm run check:website-i18n` exists — see
-      plan item W11; until then, eyeball that each key appears 3× in
-      `localization.js`).
+- [ ] `npm run check:website-i18n` passes. It checks en/es/ko key parity, that
+      every `data-i18n*` key in markup resolves, and that Spanish strings keep
+      their diacritics.
+- [ ] Spanish accents that the guard cannot judge were read by eye. Its
+      denylist deliberately omits words whose unaccented form is also valid
+      ("mas", "esta", "si", "publica", and plurals like "opciones"), so a
+      passing check is not proof the new copy is accented — only that it did
+      not regress on the unambiguous words. Never fix accents with a scripted
+      find-replace.
 
 ## 5. New page (if you added a route)
 

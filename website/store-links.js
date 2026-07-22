@@ -47,11 +47,31 @@ window.TWOFER_STORE_LINKS = {
     ko: "앱 준비되면 알려주세요",
   };
 
+  // Must match localization.js's STORAGE_KEY and its resolution order.
+  const LOCALE_STORAGE_KEY = "twofer_site_locale";
+
+  function normalize(value) {
+    const raw = String(value || "").toLowerCase();
+    if (raw.startsWith("es")) return "es";
+    if (raw.startsWith("ko")) return "ko";
+    return "";
+  }
+
+  // Resolved the same way localization.js resolves it, rather than by reading
+  // documentElement.lang. On the homepage this script runs from <head> while
+  // localization.js is at the end of <body>, so at first paint lang is still
+  // the static "en" and the badges rendered in English before swapping on the
+  // locale-change event -- a visible flash for Spanish and Korean visitors,
+  // and permanently wrong artwork if that later render never happened.
   function currentLocale() {
-    const lang = (document.documentElement.lang || "en").toLowerCase();
-    if (lang.startsWith("es")) return "es";
-    if (lang.startsWith("ko")) return "ko";
-    return "en";
+    try {
+      const stored = normalize(window.localStorage.getItem(LOCALE_STORAGE_KEY));
+      if (stored) return stored;
+    } catch {
+      // Local storage can be disabled in private browsing.
+    }
+    const browserLocale = Array.isArray(navigator.languages) ? navigator.languages[0] : navigator.language;
+    return normalize(browserLocale) || normalize(document.documentElement.lang) || "en";
   }
 
   // Which store button to show first. iPadOS 13+ reports a Macintosh UA, so
