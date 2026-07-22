@@ -78,6 +78,70 @@ describe("reuse deal prefill params", () => {
     expect(params).not.toHaveProperty("prefillTimezone");
   });
 
+  it("keeps the stored deal type when the optional item values are blank", () => {
+    // Observed on an S10 on 2026-07-22: reusing a BOGO deal opened the create
+    // screen on "40%+ off item" with an empty item and "Not eligible yet".
+    // hasCompleteEligibility wants the item retail values and inference wants a
+    // price, but the create form labels all three "(optional)", so an ordinary
+    // BOGO fell through both and no eligibility param was emitted at all.
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "Buy one latte and get one free",
+        description: "Purchase one latte to receive one latte free.",
+        deal_type: "BUY_ONE_GET_ONE_FREE",
+        required_item_description: "latte",
+        required_item_retail_value_cents: null,
+        free_item_description: "latte",
+        free_item_retail_value_cents: null,
+        price: null,
+        is_recurring: false,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T19:00:00.000Z") },
+    );
+
+    const eligibility = JSON.parse(params.prefillDealEligibility) as { dealType: string; requiredItemDescription: string };
+    expect(eligibility.dealType).toBe("BUY_ONE_GET_ONE_FREE");
+    expect(eligibility.requiredItemDescription).toBe("latte");
+  });
+
+  it("lets inference fill blanks without overriding the stored deal type", () => {
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "Buy one latte and get one free",
+        description: "Purchase one latte to receive one latte free.",
+        deal_type: "BUY_ONE_GET_ONE_FREE",
+        required_item_description: "",
+        price: 6,
+        is_recurring: false,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T19:00:00.000Z") },
+    );
+
+    const eligibility = JSON.parse(params.prefillDealEligibility) as {
+      dealType: string;
+      requiredItemDescription: string;
+      requiredItemRetailValue: string;
+    };
+    expect(eligibility.dealType).toBe("BUY_ONE_GET_ONE_FREE");
+    // Blank stored fields fall back to the inferred ones rather than staying empty.
+    expect(eligibility.requiredItemDescription).toBe("Buy one latte and get one free");
+    expect(eligibility.requiredItemRetailValue).toBe("6");
+  });
+
+  it("still infers when the row carries no usable deal type", () => {
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "Buy one latte and get one free",
+        description: "Purchase one latte to receive one latte free.",
+        price: 6,
+        is_recurring: false,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T19:00:00.000Z") },
+    );
+
+    expect(JSON.parse(params.prefillDealEligibility).dealType).toBe("BUY_ONE_GET_ONE_FREE");
+  });
+
   it("grows a duplicated window that is shorter than its own claim cutoff", () => {
     // Observed on an S10 on 2026-07-22. The source deal was ended early, so it
     // recorded a 2-minute run (9:43–9:45) while still carrying the merchant's

@@ -109,12 +109,56 @@ function inferReusableEligibility(title: string, description: string, price: str
   return null;
 }
 
+const EXPLICIT_DEAL_TYPES = new Set([
+  "BUY_ONE_GET_ONE_FREE",
+  "BUY_ONE_GET_SOMETHING_FREE",
+  "PERCENT_OFF_SINGLE_ITEM",
+]);
+
+// dealEligibilityFormFromDealRow falls back to PERCENT_OFF_SINGLE_ITEM when a row
+// carries no usable deal_type, so the form alone cannot tell "the row says percent
+// off" from "the row said nothing". Read the column to know which it was.
+function hasExplicitStoredDealType(deal: ReusableDeal): boolean {
+  const raw = typeof deal.deal_type === "string" ? deal.deal_type.trim().toUpperCase() : "";
+  return EXPLICIT_DEAL_TYPES.has(raw);
+}
+
+function fillBlanksFrom(
+  stored: DealEligibilityFormState,
+  inferred: DealEligibilityFormState,
+): DealEligibilityFormState {
+  return {
+    dealType: stored.dealType,
+    discountPercent: stored.discountPercent.trim() || inferred.discountPercent,
+    itemDescription: stored.itemDescription.trim() || inferred.itemDescription,
+    itemRetailValue: stored.itemRetailValue.trim() || inferred.itemRetailValue,
+    requiredItemDescription: stored.requiredItemDescription.trim() || inferred.requiredItemDescription,
+    requiredItemRetailValue: stored.requiredItemRetailValue.trim() || inferred.requiredItemRetailValue,
+    freeItemDescription: stored.freeItemDescription.trim() || inferred.freeItemDescription,
+    freeItemRetailValue: stored.freeItemRetailValue.trim() || inferred.freeItemRetailValue,
+  };
+}
+
 function buildEligibilityParam(deal: ReusableDeal, title: string, description: string, price: string): string {
   const fromStoredColumns = dealEligibilityFormFromDealRow(deal as Record<string, unknown>);
-  const form = hasCompleteEligibility(fromStoredColumns)
-    ? fromStoredColumns
-    : inferReusableEligibility(title, description, price);
-  return form ? JSON.stringify(form) : "";
+  if (hasCompleteEligibility(fromStoredColumns)) return JSON.stringify(fromStoredColumns);
+
+  const inferred = inferReusableEligibility(title, description, price);
+
+  // The row's own deal_type is authoritative and must not be dropped just because
+  // other columns are blank. hasCompleteEligibility demands the item retail values,
+  // and inference needs a price — but the create form labels all three "(optional)",
+  // so an ordinary BOGO fails the completeness check and then infers to null when no
+  // price was entered. With no param emitted the create screen fell back to its own
+  // default, PERCENT_OFF_SINGLE_ITEM with an empty item, and the owner was shown the
+  // WRONG offer rule sitting on "Not eligible yet" — observed reusing a BOGO deal on
+  // an S10 on 2026-07-22. Keep the stored type and let inference fill the gaps.
+  if (hasExplicitStoredDealType(deal)) {
+    const usableInference = inferred && inferred.dealType === fromStoredColumns.dealType ? inferred : null;
+    return JSON.stringify(usableInference ? fillBlanksFrom(fromStoredColumns, usableInference) : fromStoredColumns);
+  }
+
+  return inferred ? JSON.stringify(inferred) : "";
 }
 
 function splitStoredDescription(description: string): { promoLine: string; details: string } {
