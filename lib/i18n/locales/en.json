@@ -349,6 +349,8 @@
     "invalidBody": "Finish the required offer rules before choosing schedule and generating an ad."
   },
   "createQuick": {
+    "prefillFromAiCompose": "Deal prefilled from AI Compose.",
+    "prefillFromMenuOffer": "Deal prefilled from your menu item.",
     "errCutoffDuration": "Redemption cutoff must be shorter than the deal duration.",
     "titleScreen": "Quick deal",
     "heading": "Create a deal",
@@ -1150,6 +1152,33 @@
     "continueToApp": "Continue"
   },
   "createAi": {
+    "actualPhotoFinalSelected": "Actual photo selected as final ad",
+    "actualPhotoFinalHelp": "Twofer will publish this photo unless you generate a new AI ad.",
+    "photoGuidanceSelected": "Used for AI guidance",
+    "photoGuidanceHelp": "Twofer uses this photo to understand the item, then creates a polished ad.",
+    "useActualPhotoAsFinal": "Use actual photo as final ad",
+    "usePhotoAsGuidance": "Use for AI guidance instead",
+    "recoverDraftTitle": "Finish your deal?",
+    "recoverDraftBody": "We found an unfinished ad draft for this business.",
+    "continueDraft": "Continue draft",
+    "startOverDraft": "Start over",
+    "draftRecoveredBanner": "Draft recovered. Review it before publishing.",
+    "draftClearedBanner": "Draft cleared. Start a fresh deal when you're ready.",
+    "fallbackTemplateReady": "Fallback ad ready. Review the details, then publish when it looks right.",
+    "fallbackTemplateBody": "AI had trouble, but your confirmed photo and deal details can still make a clean fallback ad.",
+    "useFallbackTemplate": "Use fallback template",
+    "editFallbackDetails": "Edit details",
+    "composedChangePhoto": "Change photo",
+    "composedTryAnotherStyle": "Try another style",
+    "posterScheduleDaily": "Daily",
+    "errImageRequired": "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+    "errPresentationApprovalRequired": "Approve the exact ad preview again before publishing.",
+    "errLocalizationApprovalRequired": "Approve the exact multilingual preview again before publishing.",
+    "errCompositeQaBlocked": "This ad preview failed layout checks. Try another style or change the photo.",
+    "errCompositeScreenshotQaRequired": "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
+    "compositeQaBlocked": "This ad layout needs a safer preview before publishing. Try another style or change the photo.",
+    "compositeScreenshotQaRequired": "This ad needs visual review before it can be approved. Try another style or use the split layout.",
+    "localizationApprovalBlocked": "The language versions need a safer verified preview before publishing. Try generating again or use the fallback ad.",
     "titleScreen": "AI ads",
     "stepOfTotal": "Step {{current}} of {{total}}",
     "loginPrompt": "Please log in to create deals.",
@@ -1486,6 +1515,7 @@
     "mapRetry": "Retry"
   },
   "commonUi": {
+    "done": "Done",
     "ok": "OK",
     "cancel": "Cancel",
     "clear": "Clear",
@@ -1811,6 +1841,9 @@
     "alertWindowBody": "Enter a valid start and end time"
   },
   "offersDashboard": {
+    "deleteOldDealConfirmTitle": "Delete old deal?",
+    "deleteOldDealConfirmBody": "This removes {{title}} from My offers and deletes its dashboard history. This cannot be undone.",
+    "errDeleteOldDeal": "Could not delete this old deal.",
     "subtitle": "This month at a glance · tap a deal for details",
     "periodHint": "Figures reflect the current calendar month unless noted.",
     "engagementOpensSub": "Deal opens this month",

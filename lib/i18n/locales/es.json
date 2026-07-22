@@ -349,6 +349,8 @@
     "invalidBody": "Completa las reglas obligatorias de la oferta antes de elegir el horario y generar un anuncio."
   },
   "createQuick": {
+    "prefillFromAiCompose": "Oferta rellenada desde AI Compose.",
+    "prefillFromMenuOffer": "Oferta rellenada desde tu producto del menú.",
     "errCutoffDuration": "El cierre de canje debe ser más corto que la duración de la oferta.",
     "titleScreen": "Oferta rápida",
     "heading": "Crea una oferta",
@@ -1158,6 +1160,7 @@
     "mapRetry": "Reintentar"
   },
   "commonUi": {
+    "done": "Listo",
     "ok": "OK",
     "cancel": "Cancelar",
     "clear": "Borrar",
@@ -1483,6 +1486,9 @@
     "alertWindowBody": "Introduce hora de inicio y fin válidas"
   },
   "offersDashboard": {
+    "deleteOldDealConfirmTitle": "¿Eliminar la oferta antigua?",
+    "deleteOldDealConfirmBody": "Esto quita {{title}} de Mis ofertas y borra su historial del panel. No se puede deshacer.",
+    "errDeleteOldDeal": "No se pudo eliminar esta oferta antigua.",
     "subtitle": "Este mes de un vistazo · toca un deal para detalles",
     "periodHint": "Cifras del mes natural en curso salvo que se indique lo contrario.",
     "engagementOpensSub": "Aperturas de ofertas este mes",
@@ -1787,6 +1793,33 @@
     "errExport": "No se pudo generar la exportación."
   },
   "createAi": {
+    "actualPhotoFinalSelected": "Foto real seleccionada como anuncio final",
+    "actualPhotoFinalHelp": "Twofer publicará esta foto a menos que generes un nuevo anuncio con IA.",
+    "photoGuidanceSelected": "Se usa como guía para la IA",
+    "photoGuidanceHelp": "Twofer usa esta foto para entender el producto y luego crea un anuncio pulido.",
+    "useActualPhotoAsFinal": "Usar la foto real como anuncio final",
+    "usePhotoAsGuidance": "Usarla como guía para la IA",
+    "recoverDraftTitle": "¿Terminar tu oferta?",
+    "recoverDraftBody": "Encontramos un borrador de anuncio sin terminar para este negocio.",
+    "continueDraft": "Continuar el borrador",
+    "startOverDraft": "Empezar de nuevo",
+    "draftRecoveredBanner": "Borrador recuperado. Revísalo antes de publicar.",
+    "draftClearedBanner": "Borrador borrado. Crea una oferta nueva cuando quieras.",
+    "fallbackTemplateReady": "Anuncio de respaldo listo. Revisa los detalles y publica cuando se vea bien.",
+    "fallbackTemplateBody": "La IA tuvo problemas, pero con tu foto confirmada y los datos de la oferta aún podemos crear un anuncio de respaldo limpio.",
+    "useFallbackTemplate": "Usar la plantilla de respaldo",
+    "editFallbackDetails": "Editar los detalles",
+    "composedChangePhoto": "Cambiar la foto",
+    "composedTryAnotherStyle": "Probar otro estilo",
+    "posterScheduleDaily": "A diario",
+    "errImageRequired": "Cada oferta necesita una imagen. Agrega una foto o genera de nuevo para que la IA cree una.",
+    "errPresentationApprovalRequired": "Vuelve a aprobar la vista previa exacta del anuncio antes de publicar.",
+    "errLocalizationApprovalRequired": "Vuelve a aprobar la vista previa multilingüe exacta antes de publicar.",
+    "errCompositeQaBlocked": "Esta vista previa no pasó las comprobaciones de diseño. Prueba otro estilo o cambia la foto.",
+    "errCompositeScreenshotQaRequired": "Esta vista previa necesita una revisión visual antes de publicar. Prueba otro estilo o usa un diseño más seguro.",
+    "compositeQaBlocked": "Este diseño necesita una vista previa más segura antes de publicar. Prueba otro estilo o cambia la foto.",
+    "compositeScreenshotQaRequired": "Este anuncio necesita una revisión visual antes de aprobarse. Prueba otro estilo o usa el diseño dividido.",
+    "localizationApprovalBlocked": "Las versiones en otros idiomas necesitan una vista previa verificada más segura antes de publicar. Genera de nuevo o usa el anuncio de respaldo.",
     "titleScreen": "Anuncios con IA",
     "stepOfTotal": "Paso {{current}} de {{total}}",
     "loginPrompt": "Inicia sesión para crear ofertas.",
