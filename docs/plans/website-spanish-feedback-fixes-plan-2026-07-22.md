@@ -1,10 +1,19 @@
 # Website Spanish-reviewer feedback — verification + fix plan (2026-07-22)
 
-> **PHASE 2 (L2) IMPLEMENTED 2026-07-22 — committed locally, NOT yet deployed or
-> pushed.** ES + KO app screenshots captured on the S10, cropped to the existing
-> asset's 740×1334 framing, wired through a new `data-i18n-src` mechanism.
-> Verified locally. Deploy + push await Dan (both hard-gated). See the Phase 2
-> block below the Phase 1 record.
+> **PHASE 2 (L2) SHIPPED 2026-07-22 — committed `fa25c8b8`, DEPLOYED to
+> production, and PUSHED.** ES + KO app screenshots captured on the S10, cropped
+> to the existing asset's 740×1334 framing, wired through a new `data-i18n-src`
+> mechanism. Vercel deploy `dpl_4P2QMusMwsCfzDZ2S7kzVmdr7go6` (READY/production,
+> aliased www.twoferapp.com); pushed `c3315bf7..fa25c8b8`. Verified live: new
+> `?v=20260722-l2-feed`, all three feed assets serve `200 image/webp`, the
+> mockup src swaps es/ko at 740×1334, and Phase 1 content (hero "hora feliz",
+> ES badges) is intact alongside it. See the Phase 2 block below.
+>
+> Note: between the Phase 1 and Phase 2 pushes the branch was rebased by another
+> process (6 commits — the Backfill/BOGO/lock cluster — reordered around the
+> Phase 1 commits). Nothing was lost: all Phase 1 + Phase 2 commits remain
+> ancestors of HEAD, the push was a clean fast-forward, and the Phase 1 website
+> strings were re-verified present in the deployed files.
 >
 > **PHASE 1 SHIPPED 2026-07-22 — committed, DEPLOYED to production, and PUSHED.**
 > Dan approved Phase 1 (L1, L3, L4, L5, L6) with the wording below, then approved
@@ -14,7 +23,7 @@
 > | Item | Status |
 > |---|---|
 > | L1 ES hero "hora feliz" | Shipped, live |
-> | L2 localized app screenshots | **Implemented, committed local; deploy+push pending** |
+> | L2 localized app screenshots | Shipped, live |
 > | L3 bait-and-switch ES + KO | Shipped, live |
 > | L4 store-badge first-paint locale | Shipped, live |
 > | L5 Spanish diacritics (~370 strings) | Shipped, live (hand-proofread) |
