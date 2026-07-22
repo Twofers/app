@@ -1240,7 +1240,12 @@ a:hover {
 }
 
 .language-set button {
-  min-height: 0;
+  /* WCAG 2.2 AA wants pointer targets of at least 24x24 CSS px. These were
+     30x22, which fails on phones. Sizing the hit area only -- the visual
+     weight of the switcher is unchanged. */
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
   border: 0;
   border-radius: 7px;
   padding: 5px 7px;
@@ -4434,5 +4439,108 @@ pre.admin-note {
 @media (max-width: 980px) {
   .home-page .business-photo-band img.band-app-shot {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Official store badges
+   Artwork is downloaded unmodified from Apple's marketing toolbox and Google
+   Play's badge endpoint, and swapped per locale by store-links.js. Both brands
+   require the images be used as supplied: never recolor, crop, stretch, or add
+   effects to the badge itself. Only the surrounding box is styled here.
+--------------------------------------------------------------------------- */
+
+.store-badge-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  line-height: 0;
+}
+
+.store-badge-link:hover {
+  transform: none;
+  opacity: 0.86;
+}
+
+.store-badge {
+  display: block;
+  width: auto;
+  max-width: 100%;
+}
+
+/* Measured, not guessed: Apple's SVG artwork fills its box edge to edge (0%
+   padding), while Google's PNG bakes in 32.8% vertical clear space -- content
+   is 168px inside a 250px canvas. So equal element heights would render
+   Google's visible button noticeably smaller.
+   Google at 60px tall puts its visible button at 60 x 0.672 = 40px, matching
+   Apple at 40px. Apple then gets 10px of CSS padding so it carries the clear
+   space Apple's own guidelines require and Google supplies internally, leaving
+   both boxes 60px tall with identically sized artwork. */
+.store-badge--apple {
+  box-sizing: content-box;
+  height: 40px;
+  padding: 10px;
+}
+
+.store-badge--google {
+  height: 60px;
+}
+
+.store-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.footer-stores {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 26px;
+}
+
+.footer-stores a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: rgb(255 255 255 / 86%);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+/* Same 24x24 minimum as the language switcher: these were 17px-tall text
+   links. Padding only, so the footer layout is unchanged. */
+.footer-links a,
+.footer-inner > a[href^="mailto:"] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+@media (max-width: 720px) {
+  /* Full-width stacked action buttons are easier to hit one-handed. The
+     badges keep their intrinsic size and sit centered side by side -- they
+     fit within 375px, and stretching badge artwork is not permitted. */
+  .cta-row,
+  .inline-cta {
+    justify-content: center;
+  }
+
+  .cta-row > .button,
+  .inline-cta > .button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .cta-row > .store-badge-link,
+  .inline-cta > .store-badge-link {
+    flex: 0 0 auto;
   }
 }
