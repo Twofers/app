@@ -85,6 +85,16 @@ describe("OpenAI image provider failure telemetry source guard", () => {
     expect(source).not.toMatch(/errorMessage:\s*errBody\.slice/);
     expect(source).not.toMatch(/await res\.text\(\)/);
   });
+
+  it("caps image calls and model fallback with the request image deadline", () => {
+    expect(source).toMatch(/type AiImageDeadline/);
+    expect(source).toMatch(/latencyMs:\s*number/);
+    expect(source).toMatch(/aiImageAttemptTimeoutMs\(deadline,\s*timeoutLeg,\s*IMAGE_CALL_TIMEOUT_MS\)/);
+    expect(source).toMatch(/shouldRetryAiImageAttempt\(firstAttempt,\s*deadline,\s*20_000\)/);
+    expect(source).toMatch(/canSpendAiImageDeadline\(deadline,\s*"openai_model_fallback",\s*35_000\)/);
+    expect(source).toMatch(/"OpenAI image generation skipped because the request deadline was nearly exhausted."/);
+    expect(source).toMatch(/"OpenAI image edit skipped because the request deadline was nearly exhausted."/);
+  });
 });
 
 describe("OpenAI image edit custom instruction source guard", () => {

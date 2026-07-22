@@ -60,19 +60,14 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.errPosterTextNotAllowed");
   });
 
-  it("no longer offers a poster subheadline the renderer cannot show", () => {
-    // R12: copyForLocale drops `subline` for every locale and the canvas renders
-    // copy_by_language, so the poster eyebrow was structurally unreachable — yet the
-    // publish screen showed an editable field with a live 32-char counter. The field is
-    // gone and both spec builders pin subline to null, so it cannot creep back via the
-    // merchant path or a model that ignores the prompt.
-    expect(createAiSource).not.toContain("posterSublineText");
-    expect(createAiSource).not.toContain("setPosterSublineText");
-    expect(createAiSource).not.toContain("checkMerchantPosterSubline");
-    expect(createAiSource).not.toContain("createAi.editPosterSubheadline");
-    expect(createAiSource).not.toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
-    // Both the preview and the publish spec builders pass a literal null.
-    expect(createAiSource.split("subline: null,").length - 1).toBe(2);
+  it("keeps a manual poster subheadline live-editable through preview and publish", () => {
+    expect(createAiSource).toContain("const [posterSublineText, setPosterSublineText] = useState(\"\");");
+    expect(createAiSource).toContain("setPosterSublineText(ad.poster?.copy?.subline ?? \"\");");
+    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
+    expect(createAiSource).toContain("checkMerchantPosterSubline(posterSublineText)");
+    expect(createAiSource.split("subline: posterSublineText.trim() || null,").length - 1).toBe(2);
+    expect(createAiSource).toContain("sourceLocale: effectiveDraftSourceLocale");
+    expect(createAiSource).toContain("sourceLocale: supportedSourceLocaleForPublish");
 
     for (const locale of ["en", "es", "ko"] as const) {
       const createAi = readLocale(locale).createAi;
@@ -82,9 +77,61 @@ describe("AI create UX source guards", () => {
       expect(createAi.posterSubheadlinePlaceholder, `${locale} posterSubheadlinePlaceholder`).toBeTruthy();
       expect(createAi.posterHeadlineNotAllowed, `${locale} posterHeadlineNotAllowed`).toBeTruthy();
       expect(createAi.posterSubheadlineNotAllowed, `${locale} posterSubheadlineNotAllowed`).toBeTruthy();
+      expect(createAi.approveChangesTitle, `${locale} approveChangesTitle`).toBeTruthy();
+      expect(createAi.approveChangesBody, `${locale} approveChangesBody`).toBeTruthy();
+      expect(createAi.approveChangesButton, `${locale} approveChangesButton`).toBeTruthy();
       expect(createAi.errPosterTextTooLong, `${locale} errPosterTextTooLong`).toBeTruthy();
       expect(createAi.errPosterTextNotAllowed, `${locale} errPosterTextNotAllowed`).toBeTruthy();
     }
+  });
+
+  it("keeps every accepted text editor mounted while invalidating stale approvals", () => {
+    const invalidationStart = createAiSource.indexOf("function invalidateAcceptedAdDraft()");
+    const invalidationEnd = createAiSource.indexOf("function acceptAd()", invalidationStart);
+    const invalidationSource = createAiSource.slice(invalidationStart, invalidationEnd);
+
+    expect(invalidationSource).not.toContain("setAdAccepted(false)");
+    expect(invalidationSource).toContain("setManualDraftUnlocked(true)");
+    expect(invalidationSource).toContain("setApprovedComposedPresentationHash(null)");
+    expect(invalidationSource).toContain("setApprovedLocalizationApprovalHash(null)");
+    expect(invalidationSource).toContain('setPublishStatus("idle")');
+
+    for (const setter of [
+      "setPosterHeadlineText(value)",
+      "setPosterSublineText(value)",
+      "setTitle(value)",
+      "setPromoLine(value)",
+      "setCtaText(value)",
+      "setDescription(value)",
+    ]) {
+      expect(createAiSource).toContain(`${setter}; invalidateAcceptedAdDraft();`);
+    }
+  });
+
+  it("approves and publishes the live edited snapshot without restoring stale AI copy", () => {
+    const acceptStart = createAiSource.indexOf("function acceptAd()");
+    const acceptEnd = createAiSource.indexOf("function useFallbackTemplateAd()", acceptStart);
+    const acceptSource = createAiSource.slice(acceptStart, acceptEnd);
+
+    expect(createAiSource).toContain('import { buildAiDealReviewDraft } from "../../lib/ai-deal-review-draft";');
+    expect(createAiSource).toContain("const reviewGeneratedAd = liveReviewDraft.ad;");
+    expect(createAiSource).toContain("generatedAd: reviewGeneratedAd,");
+    expect(createAiSource).toContain("ad: reviewGeneratedAd,");
+    expect(acceptSource).not.toContain("applyAdToDraft(generatedAd)");
+    expect(acceptSource).toContain("setManualDraftUnlocked(true)");
+    expect(createAiSource).toContain("acceptedDraftRequiresReapproval");
+    expect(createAiSource).toContain('t("createAi.approveChangesButton")');
+    expect(createAiSource.split("reviewContext:").length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("restores generated drafts into an editable, explicitly unapproved state", () => {
+    // Matched by regex, not a literal: git normalizes app/create/ai.tsx to CRLF
+    // on Windows checkouts, so a hardcoded "\n" in the expected string cannot
+    // match. \s+ spans either line ending, like the assertion below.
+    expect(createAiSource).toMatch(/manualDraftUnlocked \|\|\s+\(!generatedAd && hasDraftCopy\)/);
+    expect(createAiSource).toMatch(
+      /setApprovedComposedPresentationHash\(null\);\s+setApprovedLocalizationApprovalHash\(null\);\s+setManualDraftUnlocked\(draft\.manualDraftUnlocked/,
+    );
   });
 
   it("keeps past-template loading errors scoped to the templates area", () => {

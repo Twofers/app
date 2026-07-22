@@ -30,7 +30,7 @@ describe("ai-generate-ad-variants ownership source guard", () => {
     const quotaFetchIndex = source.indexOf("await fetchAdQuota", capabilityIndex);
     const creditReservationIndex = source.indexOf("reserveChargeableImageRevisionCredit", capabilityIndex);
     const openAiKeyCheckIndex = source.indexOf("if (!openAiKey)", capabilityIndex);
-    const researchIndex = source.indexOf("await researchMenuItem", capabilityIndex);
+    const researchIndex = source.indexOf('research = await timeStage("research"', capabilityIndex);
 
     expect(source).toMatch(/import \{ getBusinessCapabilities \} from "\.\.\/_shared\/business-capabilities\.ts"/);
     expect(capabilityIndex).toBeGreaterThan(businessNameIndex);
@@ -42,5 +42,6 @@ describe("ai-generate-ad-variants ownership source guard", () => {
     expect(creditReservationIndex).toBeGreaterThan(capabilityIndex);
     expect(openAiKeyCheckIndex).toBeGreaterThan(capabilityIndex);
     expect(researchIndex).toBeGreaterThan(capabilityIndex);
+    expect(source.slice(researchIndex, researchIndex + 260)).toMatch(/researchMenuItem/);
   });
 });

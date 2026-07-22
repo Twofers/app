@@ -38,7 +38,9 @@ describe("AdPosterCanvas source contract", () => {
     expect(
       source.split("sanitizedPosterEyebrow(posterText(copy.subline || eyebrowLabel))").length - 1,
     ).toBeGreaterThanOrEqual(2);
-    expect(source).toContain('"TRY OUR"');
+    expect(source).toContain("isGenericPosterKicker(value)");
+    expect(source).toContain('from "@/lib/poster/posterPolicy"');
+    expect(source).not.toContain("GENERIC_POSTER_KICKERS");
     expect(source).toContain("posterText(copy.offer_line_1)");
     // S2: neither slot may borrow the other — see lib/poster-canvas-source.test.ts. Pinned
     // in both variants because the duplicate had to be removed from V1 and V2 alike.

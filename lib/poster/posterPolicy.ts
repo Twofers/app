@@ -17,6 +17,26 @@ export const POSTER_TEXT_LIMITS = {
   subline: 32,
 } as const;
 
+const GENERIC_POSTER_KICKERS = new Set([
+  "TRY OUR",
+  "OUR DEAL",
+  "SPECIAL OFFER",
+  "MENU PICK",
+  "PRUEBA NUESTRO",
+  "NUESTRA OFERTA",
+  "OFERTA ESPECIAL",
+  "RECOMENDACIÓN DEL MENÚ",
+  "추천 메뉴",
+  "특별 혜택",
+  "오늘의 메뉴",
+]);
+
+export function isGenericPosterKicker(value: string | null | undefined): boolean {
+  return GENERIC_POSTER_KICKERS.has(
+    typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLocaleUpperCase() : "",
+  );
+}
+
 type PatternRule = {
   code: string;
   label: string;

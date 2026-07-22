@@ -21,6 +21,17 @@ describe("ai-studio-generate-draft source guard", () => {
     expect(source).toMatch(/aspectRatio:\s*"4:5"/);
   });
 
+  it("keeps image generation copy-only by default but deadline-aware when enabled", () => {
+    expect(source).toMatch(/copyOnly:\s*bool\(body\.copy_only,\s*true\)/);
+    expect(source).toMatch(/AI_STUDIO_ENABLE_IMAGE_GENERATION/);
+    expect(source).toMatch(/createAiImageDeadline/);
+    expect(source).toMatch(/AI_STUDIO_IMAGE_REQUEST_DEADLINE_MS/);
+    expect(source).toMatch(/firstAttemptLeg:\s*"ai_studio_gemini_image"/);
+    expect(source).toMatch(/retryAttemptLeg:\s*"ai_studio_gemini_image_retry"/);
+    expect(source).toMatch(/image_deadline:\s*imageResult\.deadlineReport/);
+    expect(source).toMatch(/stage_timings_ms:\s*stageTimingsMs/);
+  });
+
   it("keeps the dev draft poster-first and source/rendered asset contract explicit", () => {
     expect(source).toMatch(/kicker:\s*\{\s*type:\s*"string"\s*\}/);
     expect(source).toMatch(/offer_line_1:\s*\{\s*type:\s*"string"\s*\}/);

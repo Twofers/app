@@ -100,6 +100,8 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.adAccepted).toBe(true);
     expect(parsed?.creativeFormat).toBe("poster_v1");
     expect(parsed?.previewFormat).toBe("poster_v1");
+    expect(parsed?.adAccepted).toBe(true);
+    expect(parsed?.manualDraftUnlocked).toBe(true);
   });
 
   it("round-trips edited poster text and treats it as recoverable on its own", () => {
@@ -116,6 +118,7 @@ describe("AI deal draft recovery", () => {
       title: "",
       promoLine: "",
       posterHeadlineText: "AFTERNOON PICK ME UP",
+      posterSublineText: "BAKED FRESH DAILY",
       ctaText: "",
       description: "",
       eligibilityForm,
@@ -137,6 +140,7 @@ describe("AI deal draft recovery", () => {
     expect(draft).not.toBeNull();
     const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
     expect(parsed?.posterHeadlineText).toBe("AFTERNOON PICK ME UP");
+    expect(parsed?.posterSublineText).toBe("BAKED FRESH DAILY");
   });
 
   it("defaults missing poster text fields on older stored drafts", () => {
@@ -172,9 +176,11 @@ describe("AI deal draft recovery", () => {
     expect(draft).not.toBeNull();
     const legacy = { ...draft } as Record<string, unknown>;
     delete legacy.posterHeadlineText;
+    delete legacy.posterSublineText;
 
     const parsed = parseAiDealRecoveryDraft(JSON.stringify(legacy), "biz-1");
     expect(parsed?.posterHeadlineText).toBe("");
+    expect(parsed?.posterSublineText).toBe("");
   });
 
   it("preserves an explicit standard-card draft choice", () => {
@@ -257,6 +263,61 @@ describe("AI deal draft recovery", () => {
 
     expect(parsed?.startTime).toBe("2026-06-30T17:25:00.000Z");
     expect(parsed?.endTime).toBe("2026-06-30T18:25:00.000Z");
+  });
+
+  it("rebuilds an end time that does not follow its start time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    // Observed on an S10: a recovered draft opened with its start refreshed to
+    // 11:33 PM but its end still on the previous session's 10:56 PM, so the
+    // poster rendered a "REDEEM BY" time already in the past.
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T03:56:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.startTime).toBe("2026-07-22T04:33:00.000Z");
+    // Rebuilt from the start (+1h), not restored from the stale value.
+    expect(parsed?.endTime).toBe("2026-07-22T05:33:00.000Z");
+    expect(new Date(parsed!.endTime).getTime()).toBeGreaterThan(new Date(parsed!.startTime).getTime());
+  });
+
+  it("keeps an end time equal to the start from surviving recovery", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T04:33:00.000Z",
+    } as Parameters<typeof buildAiDealRecoveryDraft>[0]);
+
+    // A zero-length window is just as unpublishable as an inverted one.
+    expect(draft?.endTime).toBe("2026-07-22T05:33:00.000Z");
+  });
+
+  it("preserves a valid restored end time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T06:00:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.endTime).toBe("2026-07-22T06:00:00.000Z");
   });
 
   it("rejects malformed, old, and different-business drafts", () => {

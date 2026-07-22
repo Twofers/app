@@ -15,6 +15,7 @@ import { BlackHanSans_400Regular } from "@expo-google-fonts/black-han-sans";
 import { Radii } from "@/constants/theme";
 import {
   assertPosterCopyPolicy,
+  isGenericPosterKicker,
   sanitizePosterCopy,
 } from "@/lib/poster/posterPolicy";
 import { posterCopyForLocale } from "@/lib/poster/posterAdSpec";
@@ -144,10 +145,8 @@ function posterText(value: string | null | undefined): string {
 // generic defaults at render time so both the owner preview and already-stored
 // consumer poster specs never show them. Values are compared after posterText
 // uppercasing; anything else passes through untouched.
-const GENERIC_POSTER_KICKERS = new Set(["TRY OUR", "OUR DEAL", "SPECIAL OFFER", "MENU PICK"]);
-
 function sanitizedPosterEyebrow(value: string): string {
-  return GENERIC_POSTER_KICKERS.has(value.trim()) ? "" : value;
+  return isGenericPosterKicker(value) ? "" : value;
 }
 
 function PosterLine({

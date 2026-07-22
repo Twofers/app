@@ -16,6 +16,7 @@ import {
   assertPosterCopyPolicy,
   checkPosterTextFit,
   clampPosterText,
+  isGenericPosterKicker,
   POSTER_TEXT_LIMITS,
   sanitizePosterCopy,
   sanitizePosterText,
@@ -64,6 +65,25 @@ describe("poster policy", () => {
       "SCARCITY_ONLY",
     );
     expect(assertPosterCopyPolicy(safeCopy({ subline: "Redeem now" })).reasonCodes).toContain("CTA_REDEEM");
+  });
+
+  it("rejects generic merchant poster subheadlines through the shared policy", () => {
+    for (const value of [
+      "Try our",
+      " OUR   DEAL ",
+      "special offer",
+      "MENU PICK",
+      "Oferta especial",
+      "추천 메뉴",
+    ]) {
+      expect(isGenericPosterKicker(value)).toBe(true);
+      expect(checkMerchantPosterSubline(value)).toMatchObject({
+        ok: false,
+        reasonCodes: ["POSTER_SUBLINE_GENERIC_KICKER"],
+      });
+    }
+    expect(isGenericPosterKicker("Baked fresh daily")).toBe(false);
+    expect(checkMerchantPosterSubline("Baked fresh daily").ok).toBe(true);
   });
 
   it("preserves a real business name after removing only the app token", () => {
@@ -362,7 +382,9 @@ describe("poster policy", () => {
     expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");
   });
 
-  it("normalizes publish poster specs to English copy for hosted validator compatibility", () => {
+  it.each(["en-US", "es-US", "ko-KR"] as const)(
+    "normalizes publish poster specs to the %s source copy for hosted validator compatibility",
+    (sourceLocale) => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
       appliesTo: "SINGLE_ITEM",
@@ -377,17 +399,20 @@ describe("poster policy", () => {
       sourceAssetPath: "biz_123/ai_ad_generated.png",
       renderedAssetPath: null,
       headline: "Large americano",
+      sourceLocale,
       businessCategory: "Cafe",
     });
-    const publishSpec = normalizePosterSpecForPublish(spec);
+    const publishSpec = normalizePosterSpecForPublish(spec, sourceLocale);
 
     expect(Object.keys(spec.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
-    expect(Object.keys(publishSpec.copy_by_language)).toEqual(["en-US"]);
+    expect(Object.keys(publishSpec.copy_by_language)).toEqual([sourceLocale]);
+    expect(publishSpec.copy).toEqual(spec.copy_by_language[sourceLocale]);
     expect(validatePosterSpecV1(publishSpec, { offerDefinition: definition, businessId: "biz_123" })).toEqual({
       valid: true,
       reasonCodes: [],
     });
-  });
+    },
+  );
 
   it("localizes poster badge and context lines from offer facts", () => {
     const definition = definitionFor({
@@ -484,6 +509,33 @@ describe("poster policy", () => {
     for (const locale of ["es-US", "ko-KR"] as const) {
       expect(assertPosterCopyPolicy(spec.copy_by_language[locale]).passed).toBe(true);
     }
+  });
+
+  it("renders merchant poster text only in the deal source language", () => {
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "bibimbap",
+    });
+    const spec = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      headline: "오늘의 비빔밥",
+      subline: "점심 한정",
+      sourceLocale: "ko-KR",
+      businessCategory: "Korean restaurant",
+    });
+
+    expect(spec.copy_by_language["ko-KR"]).toMatchObject({
+      headline: "오늘의 비빔밥",
+      subline: "점심 한정",
+    });
+    expect(spec.copy_by_language["en-US"].headline).toBe("");
+    expect(spec.copy_by_language["en-US"].subline).toBeUndefined();
+    expect(spec.copy_by_language["es-US"].headline).toBe("");
+    expect(spec.copy_by_language["es-US"].subline).toBeUndefined();
   });
 
   // S4. Poster copy is frozen into offer_versions at publish and never backfilled, so a

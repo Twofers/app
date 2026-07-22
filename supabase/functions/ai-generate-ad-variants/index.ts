@@ -26,6 +26,15 @@ import {
   type OpenAiImageAttempt,
 } from "../_shared/dalle-image.ts";
 import {
+  aiImageDeadlineReport,
+  aiImageElapsedMs,
+  aiImageRemainingMs,
+  canSpendAiImageDeadline,
+  createAiImageDeadline,
+  type AiImageDeadline,
+  type AiImageDeadlineReport,
+} from "../_shared/ai-image-deadline.ts";
+import {
   buildGeminiAdImagePrompt,
   computeImageBandLuminanceDetailed,
   generateGeminiAdImageWithTelemetry,
@@ -2267,6 +2276,7 @@ type ImageProviderAttemptSummary = {
   model: string | null;
   success: boolean;
   errorCode: string | null;
+  latencyMs: number | null;
   retry: boolean;
 };
 
@@ -2277,6 +2287,7 @@ function summarizeOpenAiImageAttempts(attempts: readonly OpenAiImageAttempt[]): 
     model: attempt.model,
     success: attempt.success,
     errorCode: attempt.errorCode,
+    latencyMs: attempt.latencyMs,
     retry: false,
   }));
 }
@@ -2288,6 +2299,7 @@ function summarizeGeminiImageAttempts(attempts: readonly GeminiImageAttempt[]): 
     model: attempt.model,
     success: attempt.success,
     errorCode: attempt.errorCode,
+    latencyMs: attempt.latencyMs,
     retry: attempt.retry,
   }));
 }
@@ -2316,6 +2328,7 @@ async function produceImageOpenAiOnly(params: {
   revisionFeedback?: string;
   costContext: AiCostContext;
   imageAspectRatio: AiImageAspectRatio;
+  imageDeadline?: AiImageDeadline;
 }): Promise<OpenAiProducedImage> {
   const {
     openAiKey,
@@ -2388,6 +2401,8 @@ async function produceImageOpenAiOnly(params: {
         imageBytes,
         imageMime,
         treatment: photoTreatment,
+        deadline: params.imageDeadline,
+        timeoutLeg: "openai_photo_edit",
         customEditInstruction: [
           params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
           imageRevisionInstruction({
@@ -2455,7 +2470,13 @@ async function produceImageOpenAiOnly(params: {
     }),
     aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
   });
-  let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
+  let imageGeneration = await generatePhotoAdImageWithTelemetry(
+    openAiKey,
+    prompt,
+    "ai_ads_v2",
+    params.imageDeadline,
+    "openai_primary",
+  );
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
   let providerAttempts = summarizeOpenAiImageAttempts(imageGeneration.attempts);
   let png = imageGeneration.bytes;
@@ -2532,7 +2553,13 @@ async function produceImageOpenAiOnly(params: {
       // miss keeps the first image / existing fallback instead of a second image.
       const retryGeneration =
         MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
-          ? await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt)
+          ? await generatePhotoAdImageWithTelemetry(
+            openAiKey,
+            retryPrompt,
+            "ai_ads_v2",
+            params.imageDeadline,
+            "openai_required_item_retry",
+          )
           : null;
       if (retryGeneration) {
         await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
@@ -2726,8 +2753,10 @@ async function produceImage(params: {
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
   imageAspectRatio: AiImageAspectRatio;
+  imageDeadline: AiImageDeadline;
+  stageTimingsMs?: Record<string, number>;
   /** Caller-owned sink for the wall-clock budget report (see R4 below). */
-  budgetSink?: { report?: { elapsed_ms: number; budget_ms: number; skipped_legs: string[] } };
+  budgetSink?: { report?: AiImageDeadlineReport };
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
   // R4: the edge worker is killed with WORKER_RESOURCE_LIMIT at roughly 150s wall
@@ -2737,23 +2766,19 @@ async function produceImage(params: {
   // the kill at ~150s twice. Escalating legs are now skipped when they cannot finish
   // inside the budget, so the merchant lands on the deterministic fallback (an ad
   // with no photo) instead of a hard dead end after 2.5 minutes of waiting.
-  const pipelineStartedAt = Date.now();
-  const pipelineBudgetMs = Math.max(30_000, envNumber("AI_IMAGE_PIPELINE_BUDGET_MS", 105_000));
-  const pipelineElapsedMs = (): number => Date.now() - pipelineStartedAt;
-  const pipelineSkippedLegs: string[] = [];
+  const pipelineElapsedMs = (): number => aiImageElapsedMs(params.imageDeadline);
   const pipelineHasBudgetFor = (leg: string, estimateMs: number): boolean => {
-    const elapsed = pipelineElapsedMs();
-    const allowed = elapsed + estimateMs <= pipelineBudgetMs;
+    const allowed = canSpendAiImageDeadline(params.imageDeadline, leg, estimateMs);
     if (!allowed) {
-      pipelineSkippedLegs.push(leg);
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
           event: "image_leg_skipped_for_budget",
           leg,
-          elapsedMs: elapsed,
+          elapsedMs: pipelineElapsedMs(),
           estimateMs,
-          budgetMs: pipelineBudgetMs,
+          remainingMs: aiImageRemainingMs(params.imageDeadline),
+          budgetMs: params.imageDeadline.budgetMs,
         }),
       );
     }
@@ -2766,11 +2791,7 @@ async function produceImage(params: {
   // serve concurrent requests, so per-request state must not live at module scope.
   const publishBudgetReport = (): void => {
     if (!params.budgetSink) return;
-    params.budgetSink.report = {
-      elapsed_ms: pipelineElapsedMs(),
-      budget_ms: pipelineBudgetMs,
-      skipped_legs: [...pipelineSkippedLegs],
-    };
+    params.budgetSink.report = aiImageDeadlineReport(params.imageDeadline, Date.now(), params.stageTimingsMs);
   };
   const originalUploadedPhoto = async (): Promise<ProducedImage> => {
     let qa = originalPhotoQaTelemetry(params.merchantOverrideAcknowledged);
@@ -3021,6 +3042,9 @@ async function produceImage(params: {
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      deadline: params.imageDeadline,
+      firstAttemptLeg: "gemini_photo_reference",
+      retryAttemptLeg: "gemini_photo_reference_retry",
     });
     await logGeminiImageAttempts(params.costContext, "image_edit", gemini.attempts);
     const geminiAttempts = summarizeGeminiImageAttempts(gemini.attempts);
@@ -3081,6 +3105,9 @@ async function produceImage(params: {
     aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
     estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+    deadline: params.imageDeadline,
+    firstAttemptLeg: "gemini_primary",
+    retryAttemptLeg: "gemini_primary_retry",
   });
   await logGeminiImageAttempts(params.costContext, "image_generation", gemini.attempts);
   let providerAttempts = summarizeGeminiImageAttempts(gemini.attempts);
@@ -3149,6 +3176,10 @@ async function produceImage(params: {
       aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+      deadline: params.imageDeadline,
+      firstAttemptLeg: "gemini_category_safe",
+      retryAttemptLeg: "gemini_category_safe_retry",
+      fastRetryMaxLatencyMs: 15_000,
       // Retry on a transient failure: this is the last real shot at an image
       // before the deterministic no-image path, and a single attempt is flaky
       // against provider hiccups (a lone attempt failed on-device even though the
@@ -3267,6 +3298,8 @@ async function produceImage(params: {
               aspectRatio: params.imageAspectRatio,
               imageSize: "1K",
               estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+              deadline: params.imageDeadline,
+              firstAttemptLeg: "gemini_required_item_retry",
               retryOnFailure: false,
             })
           : null;
@@ -3483,6 +3516,7 @@ function imageProviderAttemptTelemetry(attempt: ImageProviderAttemptSummary) {
     model: attempt.model,
     success: attempt.success,
     error_code: attempt.errorCode,
+    latency_ms: attempt.latencyMs,
     retry: attempt.retry,
   };
 }
@@ -3611,6 +3645,7 @@ function buildGenerationTelemetry(params: {
   localizationResult?: VerifiedAdLocalizationBundleResult | null;
   posterDraft?: PosterDraftV1 | null;
   requestedCreativeFormat?: "standard_card" | "poster_v1";
+  stageTimingsMs?: Record<string, number>;
 }) {
   const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
@@ -3626,6 +3661,7 @@ function buildGenerationTelemetry(params: {
     events,
     success: productionSuccess,
     total_latency_ms: totalLatencyMs,
+    stage_timings_ms: params.stageTimingsMs ?? {},
     structured_offer: offerTelemetry(offerContract),
     generated: {
       headline: copy.headline,
@@ -4076,6 +4112,24 @@ Deno.serve(async (req) => {
       ownerUserId: user.id,
       requestGroupId,
     };
+    const stageTimingsMs: Record<string, number> = {};
+    const timeStage = async <T>(stage: string, work: () => Promise<T>): Promise<T> => {
+      const startedAt = Date.now();
+      try {
+        return await work();
+      } finally {
+        stageTimingsMs[stage] = Date.now() - startedAt;
+      }
+    };
+    const imageDeadline = createAiImageDeadline({
+      startedAtMs: requestStartedAtMs,
+      budgetMs: Math.max(
+        60_000,
+        envNumber("AI_IMAGE_REQUEST_DEADLINE_MS", envNumber("AI_IMAGE_PIPELINE_BUDGET_MS", 132_000)),
+      ),
+      reserveMs: Math.max(5_000, envNumber("AI_IMAGE_REQUEST_RESERVE_MS", 12_000)),
+      minAttemptMs: Math.max(10_000, envNumber("AI_IMAGE_MIN_PROVIDER_TIMEOUT_MS", 15_000)),
+    });
 
     const previousAd = isRevision ? coerceSingleAd(previousAdRaw as Record<string, unknown>) : null;
     const sourceHint = hintText || previousAd?.item_research.item_name || "";
@@ -4084,15 +4138,18 @@ Deno.serve(async (req) => {
     if (isRevision && previousAd) {
       // Reuse research from the previous ad — revisions iterate, they don't re-look up
       research = previousAd.item_research;
+      stageTimingsMs.research = 0;
     } else {
-      research = await researchMenuItem({
-        openAiKey,
-        geminiApiKey,
-        itemHint: sourceHint,
-        businessName,
-        businessLocation: businessContext.location ?? "",
-        costContext,
-      });
+      research = await timeStage("research", () =>
+        researchMenuItem({
+          openAiKey,
+          geminiApiKey,
+          itemHint: sourceHint,
+          businessName,
+          businessLocation: businessContext.location ?? "",
+          costContext,
+        })
+      );
     }
 
     let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
@@ -4112,6 +4169,7 @@ Deno.serve(async (req) => {
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
+      stageTimingsMs.copy = 0;
       copy = {
         headline: previousAd.headline,
         subheadline: previousAd.subheadline,
@@ -4132,24 +4190,26 @@ Deno.serve(async (req) => {
       };
     } else {
       try {
-        copy = await generateCopy({
-          openAiKey,
-          geminiApiKey,
-          itemHint: sourceHint,
-          research,
-          businessName,
-          businessContext,
-          offerContract,
-          offerScheduleSummary,
-          quantityLimit,
-          redemptionLimit,
-          outputLanguage,
-          revisionPreset: revisionPreset || undefined,
-          revisionFeedback: revisionFeedback || undefined,
-          previousAd: previousAd ?? undefined,
-          creativeFormat: creativeRequest.requestedFormat,
-          costContext,
-        });
+        copy = await timeStage("copy", () =>
+          generateCopy({
+            openAiKey,
+            geminiApiKey,
+            itemHint: sourceHint,
+            research,
+            businessName,
+            businessContext,
+            offerContract,
+            offerScheduleSummary,
+            quantityLimit,
+            redemptionLimit,
+            outputLanguage,
+            revisionPreset: revisionPreset || undefined,
+            revisionFeedback: revisionFeedback || undefined,
+            previousAd: previousAd ?? undefined,
+            creativeFormat: creativeRequest.requestedFormat,
+            costContext,
+          })
+        );
       } catch {
         console.log(
           JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", errorCode: "COPY_FAILED" }),
@@ -4169,6 +4229,7 @@ Deno.serve(async (req) => {
             events: ["quick_deal_ai_generation_failed"],
             stage: "copy",
             total_latency_ms: Date.now() - requestStartedAtMs,
+            stage_timings_ms: stageTimingsMs,
             structured_offer: offerTelemetry(offerContract),
           },
         });
@@ -4180,14 +4241,91 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Localization is started HERE, before the image chain, and awaited after it ──
+    // Localization consumes offer FACTS and `copy`; it never reads the generated
+    // image. `sourceAssetIds` is the only image-derived field on the definition and
+    // it is a pure passthrough — buildOfferDisclosureLine's own Pick<> signature
+    // cannot see it, and no canonical line, disclosure id or hash derives from it —
+    // so every fact localization needs is final once `copy` is done. Run serially
+    // this cost a measured ~8s on top of a ~44.6s generation (image ~24.3s,
+    // localization ~8.0s); overlapped it is effectively free. Same provider calls,
+    // same output, same spend.
+    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
+    const offerDefinitionFacts = buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput!,
+      redemptionLimit,
+      schedule: {
+        mode: "summary_only",
+        summary: offerScheduleSummary,
+      },
+      sourceAssetIds: [],
+    });
+    const localizationPromise = shouldBuildLocalizationBundle()
+      ? timeStage("localization", () =>
+          generateVerifiedAdLocalizationBundle({
+            request: {
+              adVersionId: `draft:${requestGroupId}`,
+              sourceLocale,
+              targetLocales: [...SUPPORTED_LOCALES],
+              sourceCreative: {
+                strategy: copy.copy_source ?? null,
+                headline: copy.headline,
+                supportingCopy: copy.short_description || copy.subheadline,
+                imageAltText: localizationImageAltText({
+                  businessName,
+                  headline: copy.headline,
+                  offerLine: offerDefinitionFacts.canonicalOfferLine,
+                }),
+              },
+              creativeBrief: {
+                targetCustomerMoment: "",
+                exactCustomerHook: offerDefinitionFacts.canonicalOfferLine,
+                desiredFeeling: "",
+                naturalLanguageDirection: "",
+              },
+              offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinitionFacts),
+              protectedTerms: protectedTermsForLocalization(offerDefinitionFacts),
+              localizedTerms: [],
+              merchantProfile: buildMerchantCreativeProfile({
+                businessId,
+                businessName,
+                category: businessContext.category,
+                tone: businessContext.tone,
+                location: businessContext.location,
+                address: businessContext.address,
+                description: businessContext.description,
+                itemHint: sourceHint,
+                research,
+              }),
+              generationRunId: requestGroupId,
+            },
+            offerDefinition: offerDefinitionFacts,
+            deps: {
+              openAiApiKey: openAiKey,
+              geminiApiKey,
+              admin,
+              config: resolveAiTextProviderConfig(),
+            },
+            providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
+            repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+            semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+          })
+        )
+      : null;
+    // If the image chain throws, nothing below awaits this promise. Attach a sink so
+    // a localization rejection can never surface as an unhandled rejection and kill
+    // the isolate; `await localizationPromise` still rejects normally.
+    localizationPromise?.catch(() => {});
+
     // R4: per-request sink for the image pipeline's wall-clock budget report.
     // Surfaced in the response because edge logs are not readable via the CLI, so a
     // smoke has to be able to see which legs were skipped and why.
-    const imagePipelineBudget: { report?: { elapsed_ms: number; budget_ms: number; skipped_legs: string[] } } = {};
+    const imagePipelineBudget: { report?: AiImageDeadlineReport } = {};
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
     if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
       // Copy-only revision: keep the existing image. If there is no existing image,
       // fall through to image generation because every deal must have an image.
+      stageTimingsMs.image = 0;
       imageResult = withImageSelection(
         {
           posterStoragePath: previousAd.poster_storage_path ?? null,
@@ -4207,43 +4345,44 @@ Deno.serve(async (req) => {
         },
       );
     } else {
-      imageResult = await produceImage({
-        budgetSink: imagePipelineBudget,
-        openAiKey,
-        geminiApiKey,
-        admin,
-        userClient,
-        businessId,
-        photoPath: effectivePhotoPath || null,
-        photoTreatment: effectivePhotoTreatment,
-        imageSourceMode,
-        imageEditMode,
-        customImageEditInstruction,
-        merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
-        research,
-        itemHint: sourceHint,
-        businessName,
-        businessCategory: businessContext.category,
-        offerContract,
-        creativeImageBrief: copy.image_brief,
-        revisionPreset: revisionPreset || undefined,
-        revisionFeedback: revisionFeedback || undefined,
-        imageProviderConfig,
-        costContext,
-        imageAspectRatio: creativeRequest.imageAspectRatio,
-      });
+      imageResult = await timeStage("image", () =>
+        produceImage({
+          budgetSink: imagePipelineBudget,
+          imageDeadline,
+          stageTimingsMs,
+          openAiKey,
+          geminiApiKey,
+          admin,
+          userClient,
+          businessId,
+          photoPath: effectivePhotoPath || null,
+          photoTreatment: effectivePhotoTreatment,
+          imageSourceMode,
+          imageEditMode,
+          customImageEditInstruction,
+          merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
+          research,
+          itemHint: sourceHint,
+          businessName,
+          businessCategory: businessContext.category,
+          offerContract,
+          creativeImageBrief: copy.image_brief,
+          revisionPreset: revisionPreset || undefined,
+          revisionFeedback: revisionFeedback || undefined,
+          imageProviderConfig,
+          costContext,
+          imageAspectRatio: creativeRequest.imageAspectRatio,
+        })
+      );
     }
+    imagePipelineBudget.report = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
-    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
-    const offerDefinition = buildOfferDefinitionV1FromContract(offerContract, {
-      dealEligibility: eligibilityInput!,
-      redemptionLimit,
-      schedule: {
-        mode: "summary_only",
-        summary: offerScheduleSummary,
-      },
-      sourceAssetIds: imageResult.posterStoragePath ? [imageResult.posterStoragePath] : [],
-    });
+    // Same facts localization already received, plus the asset the image chain just
+    // produced. Spread rather than rebuilt so the two objects cannot drift: every
+    // other field is byte-identical to what localization was verified against.
+    const offerDefinition = imageResult.posterStoragePath
+      ? { ...offerDefinitionFacts, sourceAssetIds: [imageResult.posterStoragePath] }
+      : offerDefinitionFacts;
     const posterDraft = creativeRequest.posterEnabled
       ? buildPosterSpecFromOfferDefinition({
           definition: offerDefinition,
@@ -4271,6 +4410,7 @@ Deno.serve(async (req) => {
     // fallback). Fail-safe — any decode issue leaves luma off and the renderer
     // keeps its safe fallback. Never blocks or fails generation.
     let posterLumaDebug: { source: string | null; reason: string | null } | null = null;
+    const posterLumaStartedAt = Date.now();
     if (posterDraft && imageResult.posterStoragePath) {
       try {
         let luma = imageResult.posterImageLuma ?? null;
@@ -4313,65 +4453,26 @@ Deno.serve(async (req) => {
       } catch (lumaErr) {
         posterLumaDebug = { source: null, reason: `threw:${String((lumaErr as Error)?.name ?? "Error").slice(0, 40)}` };
         console.log(JSON.stringify({ tag: "ai_ads_v2", event: "poster_luma_skipped", message: String(lumaErr) }));
+      } finally {
+        stageTimingsMs.poster_luma = Date.now() - posterLumaStartedAt;
       }
+    } else {
+      stageTimingsMs.poster_luma = 0;
     }
     let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
-    if (shouldBuildLocalizationBundle()) {
-      const merchantProfile = buildMerchantCreativeProfile({
-        businessId,
-        businessName,
-        category: businessContext.category,
-        tone: businessContext.tone,
-        location: businessContext.location,
-        address: businessContext.address,
-        description: businessContext.description,
-        itemHint: sourceHint,
-        research,
-      });
-      localizationResult = await generateVerifiedAdLocalizationBundle({
-        request: {
-          adVersionId: `draft:${requestGroupId}`,
-          sourceLocale,
-          targetLocales: [...SUPPORTED_LOCALES],
-          sourceCreative: {
-            strategy: copy.copy_source ?? null,
-            headline: copy.headline,
-            supportingCopy: copy.short_description || copy.subheadline,
-            imageAltText: localizationImageAltText({
-              businessName,
-              headline: copy.headline,
-              offerLine: offerDefinition.canonicalOfferLine,
-            }),
-          },
-          creativeBrief: {
-            targetCustomerMoment: "",
-            exactCustomerHook: offerDefinition.canonicalOfferLine,
-            desiredFeeling: "",
-            naturalLanguageDirection: "",
-          },
-          offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinition),
-          protectedTerms: protectedTermsForLocalization(offerDefinition),
-          localizedTerms: [],
-          merchantProfile,
-          generationRunId: requestGroupId,
-        },
-        offerDefinition,
-        deps: {
-          openAiApiKey: openAiKey,
-          geminiApiKey,
-          admin,
-          config: resolveAiTextProviderConfig(),
-        },
-        providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
-        repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
-        semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
-      });
+    if (localizationPromise) {
+      // Started before the image chain; by now it has usually already resolved.
+      // stageTimingsMs.localization therefore overlaps stageTimingsMs.image — it is
+      // still the true duration of the localization work, not added wall clock.
+      localizationResult = await localizationPromise;
       await logTextProviderAttempts(costContext, "ad_localization_transcreation", localizationResult.transcreation.attempts);
       await logTextProviderAttempts(costContext, "ad_localization_translation_qa", localizationResult.semanticQa.attempts);
       await logTextProviderAttempts(costContext, "ad_localization_repaired_translation_qa", localizationResult.repairedSemanticQa.attempts);
       for (const repair of Object.values(localizationResult.repairs)) {
         if (repair) await logTextProviderAttempts(costContext, "ad_localization_repair", repair.attempts);
       }
+    } else {
+      stageTimingsMs.localization = 0;
     }
 
     const ad: SingleAd = {
@@ -4420,6 +4521,7 @@ Deno.serve(async (req) => {
      */
     const imageProductionFailed = imageResult.posterStoragePath === null;
     const productionSuccess = !imageProductionFailed;
+    imagePipelineBudget.report = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
     await admin.from("ai_generation_logs").insert({
       business_id: businessId,
@@ -4450,6 +4552,7 @@ Deno.serve(async (req) => {
         localizationResult,
         posterDraft,
         requestedCreativeFormat: creativeRequest.requestedFormat,
+        stageTimingsMs,
       }),
     });
 
@@ -4469,6 +4572,7 @@ Deno.serve(async (req) => {
           error: "AI image generation failed. Try again.",
           error_code: "IMAGE_REQUIRED",
           image_failure: imageFailure,
+          stage_timings_ms: stageTimingsMs,
           // R4: this is the failure path that most needs the budget picture — it is
           // where a chain that ran out of wall clock lands. Without it, an operator
           // cannot tell "every provider refused" from "we ran out of time".
@@ -4492,6 +4596,7 @@ Deno.serve(async (req) => {
       image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
       poster_luma_debug: posterLumaDebug,
       image_pipeline_budget: imagePipelineBudget.report ?? null,
+      stage_timings_ms: stageTimingsMs,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

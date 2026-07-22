@@ -27,6 +27,7 @@ export type AiDealRecoveryDraft = {
   title: string;
   promoLine: string;
   posterHeadlineText: string;
+  posterSublineText: string;
   ctaText: string;
   description: string;
   eligibilityForm: DealEligibilityFormState;
@@ -55,6 +56,7 @@ type DraftCandidate = Omit<
   | "creativeFormat"
   | "previewFormat"
   | "posterHeadlineText"
+  | "posterSublineText"
 > & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
@@ -63,6 +65,7 @@ type DraftCandidate = Omit<
   previewFormat?: AiDealDraftCreativeFormat | null;
   // Optional so drafts saved before poster text editing existed still parse.
   posterHeadlineText?: string | null;
+  posterSublineText?: string | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -134,6 +137,7 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
       draft.title.trim() ||
       draft.promoLine.trim() ||
       draft.posterHeadlineText.trim() ||
+      draft.posterSublineText.trim() ||
       draft.ctaText.trim() ||
       draft.description.trim() ||
       draft.generatedAd ||
@@ -151,7 +155,18 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
   const now = new Date();
   const defaultSchedule = createDefaultOneTimeDealSchedule(now);
   const startTime = cleanDate(input.startTime, defaultSchedule.startTime);
-  const endTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
+  // cleanDate only proves a date parses, not that the window is coherent. A
+  // recovered draft can pair a refreshed start with a stale end — observed on an
+  // S10 on 2026-07-22, where a recovered draft opened with start Jul 21 11:33 PM
+  // and end Jul 21 10:56 PM, 37 minutes earlier. That renders a "REDEEM BY" time
+  // already in the past and cannot publish, with nothing in the UI flagging it.
+  // An end that does not follow its start is not recoverable state, so rebuild it
+  // from the start rather than restoring it.
+  const restoredEndTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
+  const endTime =
+    restoredEndTime.getTime() > startTime.getTime()
+      ? restoredEndTime
+      : createOneTimeDealScheduleFromStart(startTime).endTime;
   const draft: AiDealRecoveryDraft = {
     version: AI_DEAL_DRAFT_VERSION,
     businessId,
@@ -172,6 +187,7 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     title: cleanDisplayTitle(input.title),
     promoLine: cleanString(input.promoLine),
     posterHeadlineText: cleanString(input.posterHeadlineText),
+    posterSublineText: cleanString(input.posterSublineText),
     ctaText: cleanString(input.ctaText),
     description: cleanString(input.description),
     eligibilityForm: input.eligibilityForm ?? createDefaultDealEligibilityFormState(),
@@ -187,7 +203,11 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     publishLocationIds: cleanStringArray(input.publishLocationIds),
     generatedAd,
     adAccepted: input.adAccepted === true,
-    manualDraftUnlocked: input.manualDraftUnlocked === true,
+    // Approval hashes are intentionally session-only. Any recovered generated
+    // or formerly accepted ad must reopen in the editor so the owner can review
+    // and approve the exact live snapshot again.
+    manualDraftUnlocked:
+      input.manualDraftUnlocked === true || input.adAccepted === true || generatedAd != null,
   };
   return hasRecoverableAiDealDraft(draft) ? draft : null;
 }
@@ -214,6 +234,7 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       title: parsed.title ?? "",
       promoLine: parsed.promoLine ?? "",
       posterHeadlineText: parsed.posterHeadlineText ?? "",
+      posterSublineText: parsed.posterSublineText ?? "",
       ctaText: parsed.ctaText ?? "",
       description: parsed.description ?? "",
       eligibilityForm: parsed.eligibilityForm as DealEligibilityFormState,

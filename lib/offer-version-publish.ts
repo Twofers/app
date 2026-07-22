@@ -77,6 +77,35 @@ export type PublishMechanicsValidationCopy = Pick<
 
 type ErrorWithCode = Error & { code?: string; reasonCodes?: string[]; reasonCode?: string };
 
+// Stable client-side code for "the publish endpoint never ran". Unlike the
+// server's error_code values this is minted here, because the failures it
+// covers happen before our function body executes and therefore have no
+// structured response body of their own.
+export const PUBLISH_SERVICE_UNAVAILABLE_CODE = "PUBLISH_SERVICE_UNAVAILABLE";
+
+const PUBLISH_SERVICE_UNAVAILABLE_MESSAGE = "The publish service is temporarily unavailable.";
+
+// Signatures emitted by the Supabase Edge Runtime itself when a function cannot
+// be booted or is torn down mid-request: the eszip bundle could not be fetched,
+// the isolate failed to boot, or the worker hit a platform limit. A merchant saw
+// "Couldn't publish this deal. Could not load bundle" because this text was
+// echoed straight into the publish banner. It is infrastructure detail, carries
+// no error_code, and the only useful merchant action is to retry.
+const EDGE_RUNTIME_FAILURE_PATTERNS: RegExp[] = [
+  /(?:could\s*not|couldn'?t|failed\s+to|unable\s+to)\s+load\s+(?:the\s+)?bundle/i,
+  /\bboot[\s_-]?error\b/i,
+  /\bworker[\s_-]?(?:limit|boot[\s_-]?error|timeout)\b/i,
+  /\bworker\s+(?:terminated|already\s+retired|did\s+not\s+respond)/i,
+  /\beszip\b/i,
+  /\bfailed\s+to\s+create\s+the\s+graph\b/i,
+];
+
+export function isEdgeRuntimeFailureMessage(message: string | null | undefined): boolean {
+  const text = message?.trim();
+  if (!text) return false;
+  return EDGE_RUNTIME_FAILURE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 function cleanDisplayText(value: string | null | undefined): string {
   return value?.trim().replace(/\s+/g, " ") ?? "";
 }
@@ -285,7 +314,15 @@ export async function publishOfferVersionedDeal(
   });
   if (error) {
     const fromBody = await readInvokeErrorBody(error);
-    throwInvokeError(fromBody.message ?? parsePublishFunctionError(error), fromBody.code, fromBody.reasonCodes, fromBody.reasonCode);
+    const rawMessage = fromBody.message ?? parsePublishFunctionError(error);
+    // A structured error_code means our function body ran and reported a real
+    // publish outcome, so keep it. Without one, an Edge Runtime failure
+    // signature means the function never booted — report it as a retryable
+    // outage rather than leaking the runtime's own wording to the merchant.
+    if (!fromBody.code && isEdgeRuntimeFailureMessage(rawMessage)) {
+      throwInvokeError(PUBLISH_SERVICE_UNAVAILABLE_MESSAGE, PUBLISH_SERVICE_UNAVAILABLE_CODE);
+    }
+    throwInvokeError(rawMessage, fromBody.code, fromBody.reasonCodes, fromBody.reasonCode);
   }
   if (!data || typeof data !== "object" || (data as { ok?: unknown }).ok !== true) {
     throw new Error("Unexpected response from publish-offer-version.");

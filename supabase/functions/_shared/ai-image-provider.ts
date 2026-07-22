@@ -1,3 +1,10 @@
+import {
+  aiImageAttemptTimeoutMs,
+  aiImageFetchErrorCode,
+  shouldRetryAiImageAttempt,
+  type AiImageDeadline,
+} from "./ai-image-deadline.ts";
+
 export type AiImageProvider = "gemini" | "openai" | "stock" | "none";
 
 export type AiImageStylePreset = "realistic-local-ad" | "premium-cafe" | "playful-twofer";
@@ -567,6 +574,8 @@ async function attemptGeminiImageGeneration(params: {
   estimatedCostUsd: number;
   referenceImages?: AiImageReference[];
   retry: boolean;
+  deadline?: AiImageDeadline;
+  timeoutLeg?: string;
 }): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: { top: number; bottom: number } | null }> {
   const startedAt = Date.now();
   const useInteractionsApi = shouldUseInteractionsApi(params.model);
@@ -597,6 +606,25 @@ async function attemptGeminiImageGeneration(params: {
         latencyMs: Date.now() - startedAt,
         errorCode: "MISSING_GEMINI_API_KEY",
         errorMessage: "Gemini API key is not configured.",
+      },
+    };
+  }
+
+  const timeout = aiImageAttemptTimeoutMs(
+    params.deadline,
+    params.timeoutLeg ?? (params.retry ? "gemini_retry" : "gemini_primary"),
+    GEMINI_CALL_TIMEOUT_MS,
+  );
+  if (!timeout.ok) {
+    return {
+      bytes: null,
+      mimeType: null,
+      luma: null,
+      attempt: {
+        ...attemptBase,
+        latencyMs: Date.now() - startedAt,
+        errorCode: timeout.errorCode,
+        errorMessage: "Gemini image generation skipped because the request deadline was nearly exhausted.",
       },
     };
   }
@@ -637,7 +665,8 @@ async function attemptGeminiImageGeneration(params: {
         },
       },
     });
-    const geminiFetch = (body: string) =>
+    const timeoutLeg = params.timeoutLeg ?? (params.retry ? "gemini_retry" : "gemini_primary");
+    const geminiFetch = (body: string, timeoutMs: number) =>
       fetch(endpointUrl, {
         method: "POST",
         headers: {
@@ -645,9 +674,9 @@ async function attemptGeminiImageGeneration(params: {
           "Content-Type": "application/json",
         },
         body,
-        signal: AbortSignal.timeout(GEMINI_CALL_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
-    let res = await geminiFetch(useInteractionsApi ? interactionsBody(true) : legacyBody);
+    let res = await geminiFetch(useInteractionsApi ? interactionsBody(true) : legacyBody, timeout.timeoutMs);
     if (useInteractionsApi && res.status === 400) {
       // An earlier structured-output shape drew HTTP 400 from this endpoint
       // (2026-07-14 incident), so a rejected response_format must never kill
@@ -659,7 +688,21 @@ async function attemptGeminiImageGeneration(params: {
           model: params.model,
         }),
       );
-      res = await geminiFetch(interactionsBody(false));
+      const formatRetryTimeout = aiImageAttemptTimeoutMs(params.deadline, `${timeoutLeg}_format_retry`, GEMINI_CALL_TIMEOUT_MS);
+      if (!formatRetryTimeout.ok) {
+        return {
+          bytes: null,
+          mimeType: null,
+          luma: null,
+          attempt: {
+            ...attemptBase,
+            latencyMs: Date.now() - startedAt,
+            errorCode: formatRetryTimeout.errorCode,
+            errorMessage: "Gemini image generation skipped because the request deadline was nearly exhausted.",
+          },
+        };
+      }
+      res = await geminiFetch(interactionsBody(false), formatRetryTimeout.timeoutMs);
     }
 
     if (!res.ok) {
@@ -694,7 +737,8 @@ async function attemptGeminiImageGeneration(params: {
     }
 
     return decodeGeminiImagePart({ imagePart, attemptBase, startedAt });
-  } catch {
+  } catch (error) {
+    const errorCode = aiImageFetchErrorCode(error, params.deadline);
     return {
       bytes: null,
       mimeType: null,
@@ -702,8 +746,10 @@ async function attemptGeminiImageGeneration(params: {
       attempt: {
         ...attemptBase,
         latencyMs: Date.now() - startedAt,
-        errorCode: "FETCH_ERROR",
-        errorMessage: "Gemini image generation failed before a usable response was returned.",
+        errorCode,
+        errorMessage: errorCode === "TIMEOUT" || errorCode === "DEADLINE_EXCEEDED"
+          ? "Gemini image generation timed out before a usable response was returned."
+          : "Gemini image generation failed before a usable response was returned.",
       },
     };
   }
@@ -718,6 +764,10 @@ export async function generateGeminiAdImageWithTelemetry(params: {
   estimatedCostUsd?: number;
   referenceImages?: AiImageReference[];
   retryOnFailure?: boolean;
+  deadline?: AiImageDeadline;
+  firstAttemptLeg?: string;
+  retryAttemptLeg?: string;
+  fastRetryMaxLatencyMs?: number;
 }): Promise<GeminiImageResult> {
   const aspectRatio = params.aspectRatio ?? "1:1";
   const imageSize = params.imageSize ?? "1K";
@@ -733,8 +783,14 @@ export async function generateGeminiAdImageWithTelemetry(params: {
     estimatedCostUsd,
     referenceImages: params.referenceImages,
     retry: false,
+    deadline: params.deadline,
+    timeoutLeg: params.firstAttemptLeg,
   });
-  if (first.bytes || params.retryOnFailure === false) {
+  if (
+    first.bytes ||
+    params.retryOnFailure === false ||
+    !shouldRetryAiImageAttempt(first.attempt, params.deadline, params.fastRetryMaxLatencyMs ?? 20_000)
+  ) {
     return {
       bytes: first.bytes,
       mimeType: first.mimeType,
@@ -759,6 +815,8 @@ export async function generateGeminiAdImageWithTelemetry(params: {
     estimatedCostUsd,
     referenceImages: params.referenceImages,
     retry: true,
+    deadline: params.deadline,
+    timeoutLeg: params.retryAttemptLeg,
   });
 
   return {

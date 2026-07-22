@@ -3,11 +3,16 @@ import {
   type LocalizedOfferTerm,
 } from "../localized-offer-terms.ts";
 import { renderLocalizedOfferBundleFromDefinition } from "../localized-offer-renderer.ts";
-import { SUPPORTED_LOCALES, type SupportedLocale } from "../supported-locales.ts";
+import {
+  SUPPORTED_LOCALES,
+  supportedLocaleOrDefault,
+  type SupportedLocale,
+} from "../supported-locales.ts";
 import type { OfferDefinitionV1 } from "../offer-definition.ts";
 import {
   assertPosterCopyPolicy,
   checkPosterTextFit,
+  isGenericPosterKicker,
   POSTER_TEXT_LIMITS,
   sanitizePosterCopy,
   sanitizePosterText,
@@ -325,7 +330,14 @@ export function checkMerchantPosterHeadline(value: string | null | undefined): P
 }
 
 export function checkMerchantPosterSubline(value: string | null | undefined): PosterTextFitCheck {
-  return checkPosterTextFit(cleanText(value), POSTER_TEXT_LIMITS.subline);
+  const fit = checkPosterTextFit(cleanText(value), POSTER_TEXT_LIMITS.subline);
+  const reasonCodes = [...fit.reasonCodes];
+  if (isGenericPosterKicker(value)) reasonCodes.push("POSTER_SUBLINE_GENERIC_KICKER");
+  return {
+    ...fit,
+    ok: reasonCodes.length === 0,
+    reasonCodes: [...new Set(reasonCodes)],
+  };
 }
 
 export function choosePosterTemplateForOffer(
@@ -540,6 +552,7 @@ function copyForLocale(
   definition: OfferDefinitionV1,
   locale: SupportedLocale,
   base: PosterCopyV1,
+  sourceLocale: SupportedLocale,
 ): PosterCopyV1 {
   const lines = buildPosterOfferLinesFromOfferDefinition(definition, locale);
   return {
@@ -553,26 +566,30 @@ function copyForLocale(
     // `assertPosterCopyPolicy` treats a missing headline as a warning, not a failure.
     // Fill this once the localization bundle can supply a translated headline at
     // poster-build time — today it is generated after the poster spec is built.
-    headline: locale === "en-US" ? base.headline : "",
+    headline: locale === sourceLocale ? base.headline : "",
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
-    subline: undefined,
+    // Merchant-authored creative text belongs only to the deal's source
+    // language. Never leak it into untranslated customer-language variants.
+    subline: locale === sourceLocale ? base.subline : undefined,
   };
 }
 
 export function buildPosterCopyByLanguage(params: {
   definition: OfferDefinitionV1;
   baseCopy: PosterCopyV1;
+  sourceLocale?: SupportedLocale;
 }): Record<SupportedLocale, PosterCopyV1> {
+  const sourceLocale = params.sourceLocale ?? "en-US";
   return Object.fromEntries(
     SUPPORTED_LOCALES.map((locale) => {
-      const copy = copyForLocale(params.definition, locale, params.baseCopy);
+      const copy = copyForLocale(params.definition, locale, params.baseCopy, sourceLocale);
       const sanitized = sanitizePosterCopy(copy, params.baseCopy.business_name).copy;
       // `sanitizePosterCopy` fills an empty headline from `offer_line_1` — a sensible safety
       // net for the English path, but for a non-English locale it would re-create exactly
       // the duplicate `copyForLocale` just removed, this time hero-vs-gold instead of
       // hero-vs-white. Re-assert the empty hero after sanitizing.
-      return [locale, locale === "en-US" ? sanitized : { ...sanitized, headline: "" }];
+      return [locale, locale === sourceLocale ? sanitized : { ...sanitized, headline: "" }];
     }),
   ) as Record<SupportedLocale, PosterCopyV1>;
 }
@@ -585,6 +602,7 @@ export function buildPosterSpecFromOfferDefinition(params: {
   renderedAssetPath?: string | null;
   headline?: string | null;
   subline?: string | null;
+  sourceLocale?: SupportedLocale;
   businessCategory?: string | null;
   compositionPlan?: string | null;
 }): PosterDraftV1 {
@@ -597,6 +615,7 @@ export function buildPosterSpecFromOfferDefinition(params: {
   const byLanguage = buildPosterCopyByLanguage({
     definition: params.definition,
     baseCopy,
+    sourceLocale: params.sourceLocale,
   });
   const policy = assertPosterCopyPolicy(baseCopy);
   return {
@@ -615,12 +634,19 @@ export function buildPosterSpecFromOfferDefinition(params: {
   };
 }
 
-export function normalizePosterSpecForPublish<T extends PosterDraftV1 | PosterSpecV1>(spec: T): T {
-  const enCopy = spec.copy_by_language["en-US"] ?? ("copy" in spec ? spec.copy : null) ?? Object.values(spec.copy_by_language)[0];
-  if (!enCopy) return spec;
+export function normalizePosterSpecForPublish<T extends PosterDraftV1 | PosterSpecV1>(
+  spec: T,
+  sourceLocale: SupportedLocale | string | null | undefined = "en-US",
+): T {
+  const normalizedSourceLocale = supportedLocaleOrDefault(sourceLocale);
+  const sourceCopy =
+    spec.copy_by_language[normalizedSourceLocale] ??
+    ("copy" in spec ? spec.copy : null) ??
+    Object.values(spec.copy_by_language)[0];
+  if (!sourceCopy) return spec;
   return {
     ...spec,
-    ...("copy" in spec ? { copy: enCopy } : {}),
-    copy_by_language: { "en-US": enCopy } as T["copy_by_language"],
+    ...("copy" in spec ? { copy: sourceCopy } : {}),
+    copy_by_language: { [normalizedSourceLocale]: sourceCopy } as T["copy_by_language"],
   };
 }

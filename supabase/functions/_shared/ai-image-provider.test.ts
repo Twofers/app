@@ -10,6 +10,7 @@ import {
   resolveAiImageProviderConfig,
   resolveGeminiImageModel,
 } from "./ai-image-provider.ts";
+import { createAiImageDeadline } from "./ai-image-deadline.ts";
 
 function env(values: Record<string, string | undefined>) {
   return {
@@ -334,6 +335,47 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     const body = JSON.parse(String((init as RequestInit).body));
     expect(body.generationConfig.responseModalities).toEqual(["TEXT", "IMAGE"]);
     expect(body.generationConfig.imageConfig).toEqual({ aspectRatio: "1:1", imageSize: "1K" });
+  });
+
+  it("skips Gemini without fetch when the request deadline is exhausted", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const deadline = createAiImageDeadline({
+      startedAtMs: Date.now() - 75_000,
+      budgetMs: 80_000,
+      reserveMs: 10_000,
+      minAttemptMs: 15_000,
+    });
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      deadline,
+    });
+
+    expect(result.bytes).toBeNull();
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0]?.errorCode).toBe("DEADLINE_SKIPPED");
+    expect(deadline.skippedLegs).toEqual(["gemini_primary"]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not start the simplified retry after a provider timeout", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new DOMException("The operation timed out.", "TimeoutError"));
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      deadline: createAiImageDeadline({ budgetMs: 120_000 }),
+    });
+
+    expect(result.bytes).toBeNull();
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0]?.errorCode).toBe("TIMEOUT");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

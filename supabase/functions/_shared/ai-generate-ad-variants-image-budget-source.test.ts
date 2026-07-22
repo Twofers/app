@@ -17,17 +17,38 @@ const source = readFileSync(
 );
 
 describe("image pipeline wall-clock budget (R4)", () => {
-  it("defines a budget with a floor and an env override", () => {
+  it("defines a request-wide deadline that starts at function entry", () => {
+    expect(source).toMatch(/createAiImageDeadline/);
+    expect(source).toMatch(/startedAtMs:\s*requestStartedAtMs/);
+    expect(source).toMatch(/AI_IMAGE_REQUEST_DEADLINE_MS/);
+    // The old env name stays as a compatibility fallback, but the budget no
+    // longer starts inside produceImage after research/copy have already run.
     expect(source).toMatch(/AI_IMAGE_PIPELINE_BUDGET_MS/);
-    // Floor keeps a misconfigured env from disabling the chain entirely; the
-    // default must stay under the observed ~150s worker kill.
-    expect(source).toMatch(/Math\.max\(30_000,\s*envNumber\("AI_IMAGE_PIPELINE_BUDGET_MS",\s*105_000\)\)/);
+    expect(source).not.toMatch(/const pipelineStartedAt = Date\.now\(\)/);
   });
 
   it("guards every escalating leg that runs after a failure", () => {
-    for (const leg of ["gemini_category_safe", "openai_residual_fallback", "stock_fallback_qa"]) {
+    for (const leg of [
+      "gemini_category_safe",
+      "openai_residual_fallback",
+      "stock_fallback_qa",
+    ]) {
       expect(source).toContain(`pipelineHasBudgetFor("${leg}"`);
     }
+  });
+
+  it("threads the same deadline into provider calls and image retries", () => {
+    for (const leg of [
+      "gemini_primary",
+      "gemini_primary_retry",
+      "gemini_category_safe_retry",
+      "gemini_required_item_retry",
+      "openai_primary",
+      "openai_required_item_retry",
+    ]) {
+      expect(source).toContain(leg);
+    }
+    expect(source).toMatch(/imageDeadline,\s*stageTimingsMs/);
   });
 
   it("keeps the category-safe retry behind the budget check", () => {
@@ -46,14 +67,15 @@ describe("image pipeline wall-clock budget (R4)", () => {
   it("reports the budget through a caller-owned sink, not module state", () => {
     // A Deno isolate can serve concurrent requests, so per-request state must not
     // live at module scope.
-    expect(source).toMatch(/budgetSink\?:\s*\{\s*report\?:/);
-    expect(source).toMatch(/params\.budgetSink\.report =/);
+    expect(source).toMatch(/budgetSink\?:\s*\{\s*report\?: AiImageDeadlineReport/);
+    expect(source).toMatch(/params\.budgetSink\.report = aiImageDeadlineReport/);
     expect(source).not.toMatch(/^let imagePipelineBudgetReport/m);
   });
 
-  it("surfaces the budget report in the response body", () => {
+  it("surfaces the budget and stage report in the response body", () => {
     // Edge logs are not readable via the CLI, so a smoke has to read this from the
     // response to prove which legs were skipped.
     expect(source).toMatch(/image_pipeline_budget: imagePipelineBudget\.report \?\? null/);
+    expect(source).toMatch(/stage_timings_ms: stageTimingsMs/);
   });
 });
