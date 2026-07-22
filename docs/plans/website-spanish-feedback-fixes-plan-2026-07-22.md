@@ -1,25 +1,44 @@
 # Website Spanish-reviewer feedback — verification + fix plan (2026-07-22)
 
-> **PHASE 1 IMPLEMENTED 2026-07-22 — not committed, not deployed.** Dan approved
-> Phase 1 (L1, L3, L4, L5, L6) including the proposed L1/L3 wording. Follow-on to
-> `website-post-launch-improvement-plan-2026-07-22.md` (W-items). Deploy remains
-> hard-gated; commit only when Dan asks.
+> **PHASE 1 SHIPPED 2026-07-22 — committed `1ce22db5`, DEPLOYED to production,
+> NOT pushed.** Dan approved Phase 1 (L1, L3, L4, L5, L6) with the wording below,
+> then approved the commit and deploy. Follow-on to
+> `website-post-launch-improvement-plan-2026-07-22.md` (W-items).
 >
 > | Item | Status |
 > |---|---|
-> | L1 ES hero "hora feliz" | Done |
-> | L2 localized app screenshots | **Phase 2 — not started** (needs S10 capture) |
-> | L3 bait-and-switch ES + KO | Done |
-> | L4 store-badge first-paint locale | Done, verified |
-> | L5 Spanish diacritics (~370 strings) | Done, hand-proofread |
-> | L6 i18n diacritics guard | Done, passing |
+> | L1 ES hero "hora feliz" | Shipped, live |
+> | L2 localized app screenshots | **Phase 2 — NOT started** (needs S10 capture) |
+> | L3 bait-and-switch ES + KO | Shipped, live |
+> | L4 store-badge first-paint locale | Shipped, live |
+> | L5 Spanish diacritics (~370 strings) | Shipped, live (hand-proofread) |
+> | L6 i18n diacritics guard | Shipped, passing |
 >
-> Verification run: `check:website-i18n` passes (375 keys × 3 locales);
-> `check:website-ui` passes (37 routes × 2 viewports); Spanish rendering,
-> badge-locale, legal pages, signup form and 375px overflow checked in-browser.
-> Files touched: `website/localization.js`, `website/store-links.js`,
-> `scripts/check-website-i18n.js`, 22 HTML pages (`?v=` bump only), and this
-> plan + `docs/website-edit-checklist.md`.
+> Commit `1ce22db5` on `qa/poster-ad-quality`, 28 files (+569/-233). **Local
+> only — not pushed.** Vercel deploy `dpl_DkkdMRc6CosK4XoEARfARWZD5HhJ`,
+> `readyState: READY`, `target: production`, aliased to www.twoferapp.com.
+>
+> Pre-deploy: `check:website-i18n` (375 keys × 3 locales) and `check:website-ui`
+> (37 routes × 2 viewports) both pass; Spanish rendering, badge locale, legal
+> pages, signup form and 375px overflow checked locally.
+> Post-deploy on production: new `?v=20260722-es-polish` served for both edited
+> files (styles.css correctly untouched); ES hero, nav, FAQ and badges correct;
+> all 6 store CTAs resolve; `apple-itunes-app` meta present; JSON-LD parses
+> (MobileApplication, FAQPage); ES + KO bait-and-switch gloss live; "campaña"
+> live on /privacy with the /delete-account link intact; console clean; infra
+> sweep four 200s with both `.well-known` files `application/json`; sitemap
+> `lastmod` 2026-07-22.
+>
+> Files: `website/localization.js`, `website/store-links.js`,
+> `website/sitemap.xml`, `scripts/check-website-i18n.js`, 22 HTML pages (`?v=`
+> bump only), this plan, and `docs/website-edit-checklist.md`.
+>
+> **Follow-up not done (deliberately out of scope):** six sitemap entries
+> (`/business/waitlist`, `/business-terms`, `/privacy`, `/terms`, `/support`,
+> `/delete-account`) carry no `<lastmod>` at all. Their Spanish content changed
+> here, so they arguably warrant one — adding the field is an editorial choice
+> about sitemap policy, so it was left for Dan. Note the two that do have it were
+> stale at `2026-07-07`, meaning the W1–W9 post-launch pass missed them too.
 
 A native Spanish speaker reviewed twoferapp.com (homepage, Solicitar acceso
 form, Terms, Privacy) and reported 5 issues. Every claim was verified against
@@ -174,11 +193,11 @@ edit checklist catches any future regression. ~30 lines.
 
 ## Phasing
 
-- **Phase 1 — text + code, one session (L1, L3, L4, L5, L6):** no device or
-  asset dependencies; shippable as a single deploy once Dan approves L1/L3
-  wording.
-- **Phase 2 — screenshots (L2):** needs the S10 (or emulator) and app-language
-  flips; separate capture-and-deploy, or folded into Phase 1 if captured first.
+- **Phase 1 — text + code (L1, L3, L4, L5, L6): DONE, shipped and deployed.**
+- **Phase 2 — screenshots (L2): still open.** Needs the S10 (or emulator) and
+  app-language flips, plus the `data-i18n-src` hook, which does **not** exist
+  yet — `applyLocale()` currently handles only `-html`, `-placeholder`,
+  `-content`, `-alt` and `-aria-label`. Separate capture-and-deploy.
 - **Phase 3 — optional (Dan decides):** ES/KO poster shot for the business
   band.
 
@@ -210,8 +229,10 @@ changes. Website files + `scripts/check-website-i18n.js` only.
 
 ## Decisions Dan needs to make
 
-1. L1 wording: "…en tu hora feliz." — OK?
-2. L3 legal translations (ES + KO strings above) — OK to ship? Keep or drop
-   the "(bait-and-switch)" parenthetical?
-3. Phase 2 capture plan (S10, device-language flips) — approve when ready.
-4. Phase 3 poster shot — do it or skip?
+1. ~~L1 wording~~ — approved and shipped as "…en tu hora feliz."
+2. ~~L3 legal translations~~ — approved and shipped, parenthetical kept in both
+   ES and KO so the translated Terms trace back to the English original.
+3. Phase 2 capture plan (S10, device-language flips) — **still open.**
+4. Phase 3 poster shot — **still open**, do it or skip?
+5. New: add `<lastmod>` to the six sitemap entries that lack it? (see header)
+6. Commit `1ce22db5` is local only. Push it, or leave it on the branch?
