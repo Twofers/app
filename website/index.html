@@ -14,6 +14,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#09271f" />
+    <!-- iOS Safari smart banner: offers the App Store install (or "Open" when
+         already installed) without spending any page real estate. -->
+    <meta name="apple-itunes-app" content="app-id=6765769303" />
     <link rel="canonical" href="https://www.twoferapp.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Twofer" />
@@ -25,7 +28,36 @@
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/styles.css?v=20260717-home-refresh" />
-    <script src="/store-links.js?v=20260707-store3"></script>
+    <script src="/store-links.js?v=20260722-ios-live"></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "MobileApplication",
+      "name": "Twofer",
+      "alternateName": "Twofer: Local deals on demand",
+      "applicationCategory": "ShoppingApplication",
+      "operatingSystem": "iOS 15.1 or later, Android",
+      "url": "https://www.twoferapp.com/",
+      "installUrl": [
+        "https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303",
+        "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"
+      ],
+      "description": "Twofer shows live local specials from approved nearby businesses. Claim an offer from your phone and redeem it in store with a QR code.",
+      "availableOnDevice": "iPhone, Android phone",
+      "inLanguage": ["en", "es", "ko"],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Twofer",
+        "url": "https://www.twoferapp.com/",
+        "email": "support@twoferapp.com"
+      }
+    }
+    </script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",

@@ -11,6 +11,10 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
+    <!-- Shared-offer links are the most common way a new iPhone user meets
+         Twofer. Universal links open the app when it is installed; this banner
+         covers the case where it is not. -->
+    <meta name="apple-itunes-app" content="app-id=6765769303" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Twofer" />
     <meta property="og:title" content="Twofer shared offer" />
@@ -92,7 +96,7 @@
       </div>
     </main>
     <script src="/localization.js?v=20260717-home-refresh"></script>
-    <script src="/store-links.js?v=20260707-store3"></script>
+    <script src="/store-links.js?v=20260722-ios-live"></script>
     <script>
       // State-aware share preview (audit F-009). Mirrors the app's parser
       // (lib/deal-share-link.ts): /s/<7-char code>, alphabet without 0/O/I/L/1.

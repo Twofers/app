@@ -1,7 +1,8 @@
-// Single place to drop in the real store URLs once they exist. Until then,
-// store CTAs stay hidden so the site never shows fake download or notify links.
+// Single place to drop in the real store URLs once they exist. A platform left
+// null keeps its CTAs hidden so the site never shows fake download links.
+// Both stores are live as of 2026-07-22.
 window.TWOFER_STORE_LINKS = {
-  ios: null, // e.g. "https://apps.apple.com/app/id0000000000"
+  ios: "https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303",
   android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone",
 };
 
