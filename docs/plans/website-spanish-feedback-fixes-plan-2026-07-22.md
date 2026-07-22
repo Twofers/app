@@ -1,5 +1,11 @@
 # Website Spanish-reviewer feedback — verification + fix plan (2026-07-22)
 
+> **PHASE 2 (L2) IMPLEMENTED 2026-07-22 — committed locally, NOT yet deployed or
+> pushed.** ES + KO app screenshots captured on the S10, cropped to the existing
+> asset's 740×1334 framing, wired through a new `data-i18n-src` mechanism.
+> Verified locally. Deploy + push await Dan (both hard-gated). See the Phase 2
+> block below the Phase 1 record.
+>
 > **PHASE 1 SHIPPED 2026-07-22 — committed, DEPLOYED to production, and PUSHED.**
 > Dan approved Phase 1 (L1, L3, L4, L5, L6) with the wording below, then approved
 > the commit, the deploy, and the push. Follow-on to
@@ -8,7 +14,7 @@
 > | Item | Status |
 > |---|---|
 > | L1 ES hero "hora feliz" | Shipped, live |
-> | L2 localized app screenshots | **Phase 2 — NOT started** (needs S10 capture) |
+> | L2 localized app screenshots | **Implemented, committed local; deploy+push pending** |
 > | L3 bait-and-switch ES + KO | Shipped, live |
 > | L4 store-badge first-paint locale | Shipped, live |
 > | L5 Spanish diacritics (~370 strings) | Shipped, live (hand-proofread) |
@@ -40,6 +46,54 @@
 > here, so they arguably warrant one — adding the field is an editorial choice
 > about sitemap policy, so it was left for Dan. Note the two that do have it were
 > stale at `2026-07-07`, meaning the W1–W9 post-launch pass missed them too.
+
+---
+
+## Phase 2 (L2) — localized app screenshots: implementation record
+
+**Captured on the S10** (shopper session, in-app EN/ES/KO switcher — no device
+locale change needed): the customer home feed in Spanish and Korean, which is
+exactly the screen the website mockup shows. Confirms the app itself is
+localized, not only the marketing site.
+
+**Processed** with Pillow (`scratchpad/make_feed_assets.py`): cropped each
+1440×3040 capture to the existing asset's framing — status bar and bottom tab
+bar removed — and scaled to **740×1334 WebP** to match `app-home-feed.webp`
+exactly. New files `website/assets/app-home-feed-es.webp` (56 KB) and
+`app-home-feed-ko.webp` (46 KB); the English `app-home-feed.webp` is unchanged.
+
+**Mechanism** — new `data-i18n-src` handler in `applyLocale()`
+(`localization.js`), mirroring the existing `-alt`/`-html` handlers; guarded so
+it never re-fetches when the locale's src already matches. Key
+`home.appFeedShotSrc` added to en/es/ko (en = the base asset, the no-JS/EN
+fallback). The hero `<img>` at `index.html` carries
+`data-i18n-src="home.appFeedShotSrc"`; its static `src` stays the English
+fallback.
+
+**Verified locally:** `check:website-i18n` (376 keys × 3), `check:website-ui`
+(37 × 2) pass; in-browser, the img src swaps en→es→ko and back; ES and KO assets
+serve `200 image/webp` and load at 740×1334; console clean; fixed width/height
+so no layout shift.
+
+**Cache-bust:** `localization.js` bumped to `?v=20260722-l2-feed` on all 22
+pages. `store-links.js` unchanged, left at `20260722-es-polish`. `index.html`
+ships its new attribute directly (HTML isn't query-versioned).
+
+**Known content note (acceptable):** the ES/KO captures include the collapsed
+"Tus favoritos (3)" / "내 즐겨찾기" bar because this shopper account has 3
+favorites; the English asset (a curated earlier capture) has no such bar and a
+different hero photo. All three read as the same app in different moments —
+fine for a marketing mockup. Not worth mutating account favorites to match.
+
+**One incident (see the memory note):** an earlier coordinate tap on the
+business Account screen logged that session out; the device is now on the
+shopper session and **Dan must sign the business account back in**. Nothing was
+deleted. Root cause = pixel taps re-render between screencap and tap on this
+build; the KO/EN switches afterward used a scroll-then-verify-then-tap discipline
+with the delete button kept off-screen.
+
+**Optional Phase 3 (still open):** ES/KO version of the business-band poster
+shot `assets/app-ai-poster.webp` via the same `data-i18n-src` mechanism.
 
 A native Spanish speaker reviewed twoferapp.com (homepage, Solicitar acceso
 form, Terms, Privacy) and reported 5 issues. Every claim was verified against

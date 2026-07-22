@@ -42,6 +42,7 @@
       "home.meta": "Twofer helps local businesses publish timely specials and helps nearby customers find them before they are gone. Now live in Dallas-Fort Worth. Free on iPhone and Android.",
       "home.status": "Now live in Dallas-Fort Worth",
       "home.hero": "Make slow hours feel like <span>happy hour.</span>",
+      "home.appFeedShotSrc": "/assets/app-home-feed.webp",
       "home.lede": "Twofer helps local businesses publish timely specials and helps nearby customers find them before they are gone.",
       "home.signupPlaceholder": "you@email.com",
       "home.signupAria": "Email address",
@@ -220,6 +221,7 @@
       "home.meta": "Twofer ayuda a los negocios locales a publicar ofertas oportunas y a los clientes cercanos a encontrarlas antes de que desaparezcan. Ya disponible en Dallas-Fort Worth. Gratis en iPhone y Android.",
       "home.status": "Ya disponible en Dallas-Fort Worth",
       "home.hero": "Convierte las horas lentas en tu <span>hora feliz.</span>",
+      "home.appFeedShotSrc": "/assets/app-home-feed-es.webp",
       "home.lede": "Twofer ayuda a los negocios locales a publicar ofertas oportunas y a los clientes cercanos a encontrarlas antes de que desaparezcan.",
       "home.signupPlaceholder": "tu@email.com",
       "home.signupAria": "Dirección de email",
@@ -398,6 +400,7 @@
       "home.meta": "Twofer는 지역 비즈니스가 알맞은 시간에 특가를 게시하고, 근처 고객이 사라지기 전에 찾도록 돕습니다. 현재 Dallas-Fort Worth에서 서비스 중. iPhone과 Android에서 무료.",
       "home.status": "현재 Dallas-Fort Worth에서 서비스 중",
       "home.hero": "한가한 시간을 <span>해피아워로 바꾸세요.</span>",
+      "home.appFeedShotSrc": "/assets/app-home-feed-ko.webp",
       "home.lede": "Twofer는 지역 비즈니스가 알맞은 시간에 특가를 게시하고, 근처 고객이 사라지기 전에 찾도록 돕습니다.",
       "home.signupPlaceholder": "이메일 주소",
       "home.signupAria": "이메일 주소",
@@ -1257,6 +1260,14 @@
     document.querySelectorAll("[data-i18n-alt]").forEach((node) => {
       const value = textFor(node.getAttribute("data-i18n-alt") || "", nextLocale);
       if (value) node.setAttribute("alt", value);
+    });
+
+    // Swap localized image sources (e.g. the hero app screenshot, whose UI text
+    // is baked into the pixels). The static src stays as the en/no-JS fallback;
+    // the guard avoids re-fetching when the locale's src already matches.
+    document.querySelectorAll("[data-i18n-src]").forEach((node) => {
+      const value = textFor(node.getAttribute("data-i18n-src") || "", nextLocale);
+      if (value && node.getAttribute("src") !== value) node.setAttribute("src", value);
     });
 
     document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
