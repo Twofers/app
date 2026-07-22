@@ -716,11 +716,66 @@ run with no edits in between. No deal is created: the guard returns before
 `publish-offer-version` is ever invoked, so nothing reached the server and there is
 nothing to clean up.
 
-### Root cause
+### Root cause — CORRECTED
 
-The guard at `app/create/ai.tsx:3994` blocks when
-`approvedComposedPresentationHash !== publishComposedPresentationHash`. Those two hashes
-are built from `buildLiveAdPresentationReviewContext(...)` at two sites that do not agree:
+> **An earlier version of this section (commit `ca91e728`) blamed the hash comparison at
+> `ai.tsx:3994`. That was wrong: that guard never runs, because an earlier one returns
+> first.** The analysis below supersedes it. Kept visible rather than silently rewritten,
+> because the wrong version was already pushed.
+
+The guard that actually fires is `app/create/ai.tsx:3656`:
+
+```js
+if (!editingDealId && generatedAd && composedExactPresentationApprovalEnabled) {
+  if (!adAccepted || !composedPresentationApprovalMatches) { /* blocked */ }
+```
+
+`composedPresentationApprovalMatches` (`ai.tsx:4647`) requires all four of:
+
+1. `approvedComposedPresentationHash === selectedComposedPresentationHash`
+2. `selectedComposedCompositeQa.decision !== "block"`
+3. `selectedComposedCompositeQa.decision !== "unavailable"`
+4. `!selectedComposedScreenshotQaRequired`
+
+Eliminating each against the observed run:
+
+- **`adAccepted`** is true — `acceptAd` sets it at `ai.tsx:3422`, and the UI did transition
+  into the editor, so accept completed.
+- **(4)** must be false — `acceptAd` returns early with
+  "This ad needs visual review before it can be approved" when screenshot QA is required,
+  and that did not happen.
+- **(2)** must be false — `acceptAd` returns early on a `"block"` decision too.
+- **(3)** is a dead branch — `"unavailable"` appears only in the `AdCompositeQaDecision`
+  union; `runDeterministicAdCompositeQa` never produces it.
+
+**Therefore (1) is false: `approvedComposedPresentationHash !== selectedComposedPresentationHash`.**
+Both sides of that comparison are the *preview* hash. `acceptAd` sets the approved one from
+`selectedComposedPresentationHash` at `ai.tsx:3414`, so they are equal by construction at
+that instant. The only way they can differ at publish time is that
+**`selectedComposedPresentationHash` drifts after `acceptAd` runs** — the approval is stale
+the moment it is granted.
+
+`acceptAd` itself flips `setAdAccepted(true)` and `setManualDraftUnlocked(true)` in the same
+update. If either feeds the hash — via `showPosterFormat`, `livePosterPreviewSpec`, or
+`effectivePosterSpec` (`ai.tsx:4470`), which all feed `selectedPresentationReviewContext`
+(`ai.tsx:4588`) — then accepting the ad mutates the very value it just approved. The UI
+visibly changes from review mode to editor mode on accept, which is consistent with that.
+
+**Proven:** the block is at `3656` and reduces to a hash inequality between accept-time and
+publish-time *preview* hashes. **Not proven:** exactly which input drifts; that needs
+runtime instrumentation of `selectedComposedPresentationHash` across the accept transition,
+which means editing a locked file and was not done unattended.
+
+The `COMPOSED_PUBLISH_BLOCKED` telemetry at `ai.tsx:3658` already emits both
+`presentation_hash` and `approved_presentation_hash`. Reading those two values from a real
+device run is the fastest way to finish this diagnosis.
+
+### Earlier (superseded) hypothesis, kept for the record
+
+The preview and publish sites do build their review contexts from different inputs, and
+this is still worth tidying even though it is not what blocked publishing here: the hashes
+at `ai.tsx:4588` and `ai.tsx:3979` come from `buildLiveAdPresentationReviewContext(...)`
+called with:
 
 | input | preview / approve (`ai.tsx:4588`) | publish (`ai.tsx:3979`) |
 | --- | --- | --- |
@@ -744,7 +799,7 @@ they are not the divergence. The two candidates are:
    `toContain("sourceLocale: supportedSourceLocaleForPublish")`), so the asymmetry is
    locked in by a test rather than flagged by one.
 
-### Why it is new
+### Why it is likely new
 
 `lib/ad-presentation-hash.ts` gained `reviewContext` in the prior session's batch (see
 `git diff 32d96d81 b42ae69a -- lib/ad-presentation-hash.ts`). Folding the live editable
@@ -760,11 +815,18 @@ example relaxing the guard) would let unapproved creative publish — exactly wh
 exists to prevent — and it cannot be validated without further device cycles. Dan's
 blanket "approve anything" was not treated as sufficient for this per CLAUDE.md.
 
-Suggested direction for whoever picks it up: make both sides build the review context from
-the *same* inputs — most likely have the preview use the same locally-rebuilt poster spec
-that publish uses, rather than falling back to `generatedAd.poster` — then reconcile the
-two `sourceLocale` variables and update the source-contract test that currently pins them
-apart. Add a test asserting the two hashes are equal for an unmodified accepted draft.
+Suggested direction for whoever picks it up:
+
+1. Read `presentation_hash` vs `approved_presentation_hash` from the
+   `COMPOSED_PUBLISH_BLOCKED` telemetry on a real blocked publish. That names the drift
+   immediately.
+2. Find which input to `selectedPresentationReviewContext` changes across the `acceptAd`
+   transition — `adAccepted` and `manualDraftUnlocked` are the two state flips `acceptAd`
+   makes, so trace whatever they feed into `showPosterFormat` / `livePosterPreviewSpec` /
+   `effectivePosterSpec`.
+3. Fix by making the hash independent of accept-state, **not** by relaxing the guard.
+4. Add a regression test asserting the hash is stable across accept for an otherwise
+   unmodified draft — that is the invariant with no coverage today.
 
 ### Second, lower-severity finding: approval dead end
 
