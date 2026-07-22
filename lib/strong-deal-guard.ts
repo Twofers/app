@@ -56,9 +56,17 @@ const SECOND_ITEM_DISCOUNT_PATTERNS: RegExp[] = [
   /\bsecond\s+(?:item|one|\w+)\s+\d{1,3}\s*%\s*off\b/i,
 ];
 
+// Only basket-scoped wording belongs here. "40% off all drinks" says which items
+// qualify, not how many get discounted, so a merchant writing it has an ordinary
+// single-item promo. Blocking it rejected a valid deal, and because
+// dealQuality.strongGuard.entire_order did not exist the fallback told them their
+// deal type was unsupported when it was the phrasing that tripped the scan.
+// "everything" and "all orders" do describe the whole basket, so they stay.
+// Keep in sync with the SQL twin (public.is_strong_deal_offer, step 1b);
+// scripts/probe-strong-deal.mjs checks the two against production.
 const ENTIRE_ORDER_DISCOUNT_PATTERNS: RegExp[] = [
   /\b\d{1,3}\s*%\s*off\s+(?:your\s+)?(?:entire|whole)\s+order\b/i,
-  /\b\d{1,3}\s*%\s*off\s+(?:everything|all\s+(?:drinks|items|pastries|orders|food))\b/i,
+  /\b\d{1,3}\s*%\s*off\s+(?:everything|all\s+orders)\b/i,
 ];
 
 // ── 4. STRONG LANGUAGE ────────────────────────────────────────────────────────

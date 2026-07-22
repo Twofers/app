@@ -105,12 +105,24 @@ describe("validateStrongDealOnly", () => {
     expect(validateStrongDealOnly({ title: "2-for-1 oat milk lattes" })).toEqual({ ok: true });
   });
 
-  it("rejects broad 40% off entire-category copy", () => {
-    expect(validateStrongDealOnly({ title: "40% off all drinks today" })).toEqual({
-      ok: false,
-      reason: "entire_order",
-      message: STRONG_DEAL_ONLY_MESSAGE,
-    });
+  it("accepts broad category copy, which says what qualifies rather than how much is discounted", () => {
+    // "all drinks" scopes which items the offer covers; it does not promise the
+    // customer's whole basket. Rejecting it blocked ordinary single-item promos,
+    // and the merchant was told their deal type was unsupported when the deal was
+    // a perfectly valid 40% off one item.
+    expect(validateStrongDealOnly({ title: "40% off all drinks today" })).toEqual({ ok: true });
+    expect(validateStrongDealOnly({ title: "40% off all pastries" })).toEqual({ ok: true });
+    expect(validateStrongDealOnly({ title: "50% off all items" })).toEqual({ ok: true });
+  });
+
+  it("still rejects wording that promises the whole basket", () => {
+    for (const title of ["40% off everything", "40% off all orders"]) {
+      expect(validateStrongDealOnly({ title })).toEqual({
+        ok: false,
+        reason: "entire_order",
+        message: STRONG_DEAL_ONLY_MESSAGE,
+      });
+    }
   });
 
   it("rejects 40% off an entire order", () => {

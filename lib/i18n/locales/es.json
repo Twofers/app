@@ -328,6 +328,8 @@
     },
     "strongGuard": {
       "conditional": "Las ofertas compra X + % de descuento en Y no califican. Prueba hacer el segundo artículo gratis!",
+      "entire_order": "Tu texto promete un descuento sobre todo el pedido. Esta oferta descuenta un solo artículo, así que nómbralo — por ejemplo \"40% de descuento en cualquier latte\".",
+      "second_item_discount": "Tu texto promete un descuento en el segundo artículo. En Twofer el segundo artículo va gratis, así que reescríbelo — por ejemplo \"Compra un latte y llévate otro gratis\".",
       "low_percent": "Descuentos menores al 40% no atraen suficientes clientes. Prueba compra uno y llévate otro gratis, o al menos 40% de descuento.",
       "no_strong_language": "Haz la oferta irresistible! Prueba compra uno y llévate otro gratis, un artículo gratis con compra, o 40%+ de descuento."
     }

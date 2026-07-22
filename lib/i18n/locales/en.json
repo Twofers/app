@@ -328,6 +328,8 @@
     },
     "strongGuard": {
       "conditional": "Buy X + % off Y deals don't qualify. Try making the second item free instead!",
+      "entire_order": "Your wording promises a discount on a whole order. This deal discounts one item, so reword it to name the item — for example \"40% off any latte\".",
+      "second_item_discount": "Your wording promises a discount on a second item. Twofer deals give the second item free, so reword it — for example \"Buy one latte, get one free\".",
       "low_percent": "Discounts under 40% won't attract enough foot traffic. Try buy one, get one free, or at least 40% off.",
       "no_strong_language": "Make it irresistible! Try buy one, get one free, a free item with purchase, or 40%+ off."
     }
