@@ -78,6 +78,72 @@ describe("reuse deal prefill params", () => {
     expect(params).not.toHaveProperty("prefillTimezone");
   });
 
+  it("grows a duplicated window that is shorter than its own claim cutoff", () => {
+    // Observed on an S10 on 2026-07-22. The source deal was ended early, so it
+    // recorded a 2-minute run (9:43–9:45) while still carrying the merchant's
+    // 15-minute cutoff. Copying both verbatim produced a draft the create screen
+    // refuses to publish, reported only as a generic "fix the deal details".
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "BOGO latte",
+        start_time: "2026-07-22T14:43:00.000Z",
+        end_time: "2026-07-22T14:45:00.000Z",
+        is_recurring: false,
+        claim_cutoff_buffer_minutes: 15,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T17:00:00.000Z") },
+    );
+
+    // Window grown to 16 minutes so it outlasts the 15-minute cutoff, which is
+    // kept because it is a deliberate setting while the 2 minutes is an artifact.
+    expect(params.prefillStartTime).toBe("2026-07-22T17:05:00.000Z");
+    expect(params.prefillEndTime).toBe("2026-07-22T17:21:00.000Z");
+    expect(params.prefillCutoffMins).toBe("15");
+
+    const durationMinutes =
+      (new Date(params.prefillEndTime).getTime() - new Date(params.prefillStartTime).getTime()) / 60000;
+    expect(Number(params.prefillCutoffMins)).toBeLessThan(durationMinutes);
+  });
+
+  it("clamps a duplicated cutoff that no window length could outlast", () => {
+    // A cutoff at or beyond the 4-hour cap cannot be fixed by growing the window,
+    // so the cutoff itself has to give.
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "BOGO latte",
+        start_time: "2026-07-22T14:00:00.000Z",
+        end_time: "2026-07-22T15:00:00.000Z",
+        is_recurring: false,
+        claim_cutoff_buffer_minutes: 600,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T17:00:00.000Z") },
+    );
+
+    // Window capped at 4 hours, cutoff pulled just under it.
+    expect(params.prefillEndTime).toBe("2026-07-22T21:05:00.000Z");
+    expect(params.prefillCutoffMins).toBe("239");
+  });
+
+  it("shortens a duplicated cutoff that outlasts a recurring daily window", () => {
+    // A recurring window's length is the merchant's own start/end minutes, so it
+    // is not grown; the cutoff is shortened to fit instead.
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "BOGO latte",
+        is_recurring: true,
+        days_of_week: [1, 2],
+        window_start_minutes: 540,
+        window_end_minutes: 570,
+        claim_cutoff_buffer_minutes: 45,
+      },
+      { resetSchedule: true, now: new Date("2026-07-22T17:00:00.000Z") },
+    );
+
+    expect(params.prefillWindowStartMin).toBe("540");
+    expect(params.prefillWindowEndMin).toBe("570");
+    expect(params.prefillCutoffMins).toBe("29");
+  });
+
   it("keeps recurring schedule metadata when duplicated", () => {
     const params = buildReuseDealPrefillParams(
       {

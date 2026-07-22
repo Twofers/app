@@ -7,6 +7,7 @@ import { getDealDisplayTitle } from "./deal-display-copy";
 import {
   createDefaultOneTimeDealSchedule,
   createOneTimeDealScheduleFromStart,
+  DEFAULT_DEAL_DURATION_MINUTES,
   MAX_DEAL_DURATION_MINUTES,
 } from "./deal-schedule-defaults";
 
@@ -135,6 +136,44 @@ function originalOneTimeDurationMinutes(deal: ReusableDeal): number | null {
   return durationMinutes;
 }
 
+function reusableCutoffMinutes(deal: ReusableDeal): number | null {
+  if (deal.claim_cutoff_buffer_minutes == null) return null;
+  const minutes = Number(deal.claim_cutoff_buffer_minutes);
+  if (!Number.isFinite(minutes)) return null;
+  return Math.max(0, Math.floor(minutes));
+}
+
+function recurringWindowDurationMinutes(deal: ReusableDeal): number | null {
+  if (deal.window_start_minutes == null || deal.window_end_minutes == null) return null;
+  const duration = Number(deal.window_end_minutes) - Number(deal.window_start_minutes);
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
+// The create screen rejects a claim cutoff that is not shorter than the deal's
+// own duration, so a reused pair has to satisfy that before it is handed over.
+// A deal ended early records the moment it was stopped as its end time, so the
+// duration derived from the row can be far shorter than the merchant intended,
+// and shorter than the cutoff they chose. Observed 2026-07-22: duplicating a
+// deal that ran 9:43–9:45 produced a 2-minute window still carrying a 15-minute
+// cutoff — a draft that could never publish, reported only as a generic "fix the
+// deal details" message with nothing naming the schedule. The truncated duration
+// is the artifact and the cutoff is a deliberate setting, so grow the window to
+// fit the cutoff rather than reproduce an unpublishable pair.
+function reusableOneTimeDurationMinutes(deal: ReusableDeal, cutoffMinutes: number | null): number {
+  const recorded = originalOneTimeDurationMinutes(deal) ?? DEFAULT_DEAL_DURATION_MINUTES;
+  if (cutoffMinutes == null) return recorded;
+  return Math.min(MAX_DEAL_DURATION_MINUTES, Math.max(recorded, cutoffMinutes + 1));
+}
+
+// Last resort for the cases growing the window cannot cover: a cutoff at or past
+// MAX_DEAL_DURATION_MINUTES, or a recurring window whose length is fixed by the
+// merchant's own start/end minutes.
+function cutoffFittingDuration(cutoffMinutes: number | null, durationMinutes: number | null): number | null {
+  if (cutoffMinutes == null) return null;
+  if (durationMinutes == null) return cutoffMinutes;
+  return Math.min(cutoffMinutes, Math.max(0, durationMinutes - 1));
+}
+
 function applyRecurringScheduleParams(params: Record<string, string>, deal: ReusableDeal) {
   if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
   if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");
@@ -206,22 +245,29 @@ export function buildReuseDealPrefillParams(
     params.prefillPosterUrl = posterUrl;
   }
 
+  const cutoffMinutes = reusableCutoffMinutes(deal);
+  let scheduleDurationMinutes: number | null = null;
+
   if (options.resetSchedule && deal.is_recurring) {
     applyRecurringScheduleParams(params, deal);
+    scheduleDurationMinutes = recurringWindowDurationMinutes(deal);
   } else if (options.resetSchedule) {
     const freshSchedule = createDefaultOneTimeDealSchedule(options.now);
-    const durationMinutes = originalOneTimeDurationMinutes(deal);
-    const schedule = durationMinutes
-      ? createOneTimeDealScheduleFromStart(freshSchedule.startTime, durationMinutes)
-      : freshSchedule;
+    const durationMinutes = reusableOneTimeDurationMinutes(deal, cutoffMinutes);
+    const schedule = createOneTimeDealScheduleFromStart(freshSchedule.startTime, durationMinutes);
     params.prefillIsRecurring = "0";
     params.prefillStartTime = schedule.startTime.toISOString();
     params.prefillEndTime = schedule.endTime.toISOString();
+    scheduleDurationMinutes = durationMinutes;
   } else {
     applyRecurringScheduleParams(params, deal);
+    scheduleDurationMinutes = deal.is_recurring
+      ? recurringWindowDurationMinutes(deal)
+      : originalOneTimeDurationMinutes(deal);
   }
   if (deal.max_claims != null) params.prefillMaxClaims = String(deal.max_claims);
-  if (deal.claim_cutoff_buffer_minutes != null) params.prefillCutoffMins = String(deal.claim_cutoff_buffer_minutes);
+  const prefillCutoff = cutoffFittingDuration(cutoffMinutes, scheduleDurationMinutes);
+  if (prefillCutoff != null) params.prefillCutoffMins = String(prefillCutoff);
 
   return params;
 }
