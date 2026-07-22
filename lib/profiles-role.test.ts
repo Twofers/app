@@ -72,7 +72,9 @@ describe("resolveRoleForUser", () => {
     h.fetchOwnerBusiness.mockResolvedValueOnce({ row: { id: "biz_1" }, error: null });
 
     await expect(resolveRoleForUser(user())).resolves.toBe("business");
-    expect(h.fetchOwnerBusiness).toHaveBeenCalledWith(expect.any(Object), "user_1");
+    // No owner id argument: get_my_business() is already scoped to auth.uid(),
+    // so fetchOwnerBusiness takes only the client.
+    expect(h.fetchOwnerBusiness).toHaveBeenCalledWith(expect.any(Object));
     expect(h.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ id: "user_1", role: "business" }),
       { onConflict: "id" },

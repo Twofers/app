@@ -246,12 +246,13 @@ serve(async (req) => {
     // Look up business for logging/quota (optional body param or fallback to owner lookup)
     let resolvedBusinessId: string | null = typeof bodyBusinessId === "string" ? bodyBusinessId : null;
     if (!resolvedBusinessId) {
-      const { data: biz } = await supabase
-        .from("businesses")
-        .select("id")
-        .eq("owner_id", user.id)
-        .limit(1)
-        .maybeSingle();
+      // Filtering on owner_id needs a SELECT grant on that column, which
+      // anon/authenticated do not have (20260705120000) — and this client runs
+      // as the caller, not service_role. get_my_business() is the SECURITY
+      // DEFINER escape hatch for exactly this, and is already scoped to
+      // auth.uid(), so it returns the caller's own business only.
+      const { data: bizRows } = await supabase.rpc("get_my_business");
+      const biz = Array.isArray(bizRows) ? bizRows[0] : bizRows;
       resolvedBusinessId = biz?.id ?? null;
     }
 

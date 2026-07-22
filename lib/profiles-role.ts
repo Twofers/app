@@ -28,10 +28,10 @@ export async function fetchStoredRoleForUser(userId: string): Promise<TabMode | 
 /** Spec rule for accounts without a stored role: owns a businesses row -> business, else customer. */
 export async function deriveRoleFromData(userId: string): Promise<TabMode> {
   try {
-    // An `owner_id` filter needs column SELECT privilege once the businesses
-    // PII column-grant migration lands; fetchOwnerBusiness routes through the
-    // get_my_business() RPC (with a pre-migration direct-select fallback).
-    const { row, error } = await fetchOwnerBusiness(supabase, userId);
+    // An `owner_id` filter needs column SELECT privilege on that column, which
+    // authenticated does not have (20260705120000); fetchOwnerBusiness routes
+    // through the get_my_business() SECURITY DEFINER RPC instead.
+    const { row, error } = await fetchOwnerBusiness(supabase);
     if (!error && row) return "business";
   } catch {
     /* fall through to customer */

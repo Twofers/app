@@ -117,10 +117,9 @@ export function useBusiness() {
     setSessionEmail(sessionUserEmail);
 
     // PII columns (contact_name, business_email, tone) and owner_id filters are
-    // only readable via the get_my_business() SECURITY DEFINER RPC once the
-    // column-grant migration lands; the helper falls back to a direct select
-    // while the RPC doesn't exist yet.
-    const { row: data, error: bizError } = await fetchOwnerBusiness(supabase, uid);
+    // readable only via the get_my_business() SECURITY DEFINER RPC — they are
+    // ungranted to authenticated by 20260705120000.
+    const { row: data, error: bizError } = await fetchOwnerBusiness(supabase);
 
     if (bizError) {
       setBusiness(null);
