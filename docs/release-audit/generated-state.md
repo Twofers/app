@@ -37,10 +37,10 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `145`
-- Latest: `20260817120000_approved_not_activated_activation_gate.sql`
+- Count: `160`
+- Latest: `20260820190000_entire_order_scan_only_matches_basket_wording.sql`
 
-## Edge Functions (supabase/functions, 77 local)
+## Edge Functions (supabase/functions, 79 local)
 
 - accept-business-terms
 - activate-redemption-mode
@@ -56,6 +56,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - admin-dashboard-summary
 - admin-demand-proof
 - admin-onboarding-review-ai
+- admin-promo-authorization
 - admin-prospect-enrich
 - admin-prospect-import
 - admin-prospect-sales
@@ -102,6 +103,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - request-business-on-twofer
 - send-deal-push
 - send-trial-ending-reminders
+- set-promo-materials-authorization
 - simulate-subscribe
 - staff-redemption
 - stripe-backfill-customers

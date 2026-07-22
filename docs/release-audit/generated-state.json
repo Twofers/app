@@ -36,11 +36,11 @@
     "apk": {}
   },
   "migrations": {
-    "count": 145,
-    "latest": "20260817120000_approved_not_activated_activation_gate.sql"
+    "count": 160,
+    "latest": "20260820190000_entire_order_scan_only_matches_basket_wording.sql"
   },
   "edgeFunctions": {
-    "count": 77,
+    "count": 79,
     "names": [
       "accept-business-terms",
       "activate-redemption-mode",
@@ -56,6 +56,7 @@
       "admin-dashboard-summary",
       "admin-demand-proof",
       "admin-onboarding-review-ai",
+      "admin-promo-authorization",
       "admin-prospect-enrich",
       "admin-prospect-import",
       "admin-prospect-sales",
@@ -102,6 +103,7 @@
       "request-business-on-twofer",
       "send-deal-push",
       "send-trial-ending-reminders",
+      "set-promo-materials-authorization",
       "simulate-subscribe",
       "staff-redemption",
       "stripe-backfill-customers",
