@@ -347,6 +347,7 @@
     "invalidBody": "Finish the required offer rules before choosing schedule and generating an ad."
   },
   "createQuick": {
+    "errCutoffDuration": "Redemption cutoff must be shorter than the deal duration.",
     "titleScreen": "Quick deal",
     "heading": "Create a deal",
     "intro": "Name an item or add a photo — we'll draft the offer.",

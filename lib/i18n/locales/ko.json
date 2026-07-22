@@ -347,6 +347,7 @@
     "invalidBody": "일정을 선택하고 광고를 생성하기 전에 필수 오퍼 규칙을 완료하세요."
   },
   "createQuick": {
+    "errCutoffDuration": "마감 여유 시간은 딜 진행 시간보다 짧아야 합니다.",
     "titleScreen": "빠른 딜",
     "heading": "딜 만들기",
     "intro": "메뉴 이름을 적거나 사진을 추가하면 오퍼를 만들어 드려요.",

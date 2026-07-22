@@ -21,6 +21,29 @@ function readLocale(locale: "en" | "es" | "ko") {
 }
 
 describe("AI create UX source guards", () => {
+  it("tells the owner which detail blocked publishing, not just that one did", () => {
+    // The validation banner renders at the top of the form while Publish sits at
+    // the bottom, so on a filled-in draft the owner who pressed Publish saw only
+    // the generic "fix the deal details above" card with nothing naming the
+    // problem. The publish path must surface the specific reason on that card.
+    expect(createAiSource).toContain("function publishValidationFailure(): string | null");
+    expect(createAiSource).toContain("const validationFailure = publishValidationFailure();");
+    expect(createAiSource).toContain("setPublishStatusMessage(validationFailure);");
+    // The generic body must no longer be what a validation failure reports.
+    expect(createAiSource).not.toContain('setPublishStatusMessage(t("createAi.publishValidationBody"))');
+    // Every rejection still raises the banner too, via the shared helper.
+    expect(createAiSource).toContain("setBanner({ message, tone: \"error\" });");
+  });
+
+  it("localizes the cutoff-versus-duration rejection in every supported locale", () => {
+    // This message was reachable only through its hardcoded English defaultValue
+    // because the key existed in no locale file.
+    for (const locale of ["en", "es", "ko"] as const) {
+      const messages = readLocale(locale);
+      expect(messages.createQuick?.errCutoffDuration ?? "").not.toBe("");
+    }
+  });
+
   it("keeps generation recovery gated by failure type", () => {
     expect(createAiSource).toContain("lastGenerationOutcomeKind");
     expect(createAiSource).toContain("classifyGenerationFailure({");

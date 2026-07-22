@@ -347,6 +347,7 @@
     "invalidBody": "Completa las reglas obligatorias de la oferta antes de elegir el horario y generar un anuncio."
   },
   "createQuick": {
+    "errCutoffDuration": "El cierre de canje debe ser más corto que la duración de la oferta.",
     "titleScreen": "Oferta rápida",
     "heading": "Crea una oferta",
     "intro": "Escribe un producto o agrega una foto: nosotros redactamos la oferta.",

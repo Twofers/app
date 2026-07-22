@@ -2648,65 +2648,54 @@ export default function AiDealScreen() {
     }
   }
 
-  function validateInputs(): boolean {
+  /** Returns null when the form can publish, otherwise the specific reason. */
+  function publishValidationFailure(): string | null {
+    // Raises the banner as before and also returns the reason, so the publish
+    // card beside the button can name the actual problem. The banner renders at
+    // the top of the form, several screens above Publish on a filled-in draft,
+    // so an owner who had just pressed Publish only ever saw the generic "fix
+    // the deal details above" and had nothing telling them which detail.
+    const fail = (message: string): string => {
+      setBanner({ message, tone: "error" });
+      return message;
+    };
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
-    if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) {
-      setBanner({ message: t("createAi.errMaxClaims"), tone: "error" });
-      return false;
-    }
-    if (Number.isNaN(cutoffNum) || cutoffNum < 0) {
-      setBanner({ message: t("createAi.errCutoff"), tone: "error" });
-      return false;
-    }
+    if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) return fail(t("createAi.errMaxClaims"));
+    if (Number.isNaN(cutoffNum) || cutoffNum < 0) return fail(t("createAi.errCutoff"));
     if (validityMode === "one-time") {
-      if (endTime <= startTime) {
-        setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
-        return false;
-      }
+      if (endTime <= startTime) return fail(t("createAi.errEndAfterStart"));
       const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
       if (dealDurationExceedsMax(durationMinutes)) {
-        setBanner({
-          message: t("createAi.errMaxDuration", {
+        return fail(
+          t("createAi.errMaxDuration", {
             hours: MAX_DEAL_DURATION_MINUTES / 60,
             defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
           }),
-          tone: "error",
-        });
-        return false;
+        );
       }
       if (cutoffNum >= durationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
-        return false;
+        return fail(t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }));
       }
     } else {
-      if (daysOfWeek.length === 0) {
-        setBanner({ message: t("createAi.errRecurringDay"), tone: "error" });
-        return false;
-      }
+      if (daysOfWeek.length === 0) return fail(t("createAi.errRecurringDay"));
       const windowStartMinutes = minutesFromDate(windowStart);
       const windowEndMinutes = minutesFromDate(windowEnd);
-      if (windowStartMinutes >= windowEndMinutes) {
-        setBanner({ message: t("createAi.errRecurringWindow"), tone: "error" });
-        return false;
-      }
+      if (windowStartMinutes >= windowEndMinutes) return fail(t("createAi.errRecurringWindow"));
       const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
       if (dealDurationExceedsMax(windowDurationMinutes)) {
-        setBanner({
-          message: t("createAi.errMaxDuration", {
+        return fail(
+          t("createAi.errMaxDuration", {
             hours: MAX_DEAL_DURATION_MINUTES / 60,
             defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
           }),
-          tone: "error",
-        });
-        return false;
+        );
       }
       if (cutoffNum >= windowDurationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
-        return false;
+        return fail(t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }));
       }
     }
-    return true;
+    return null;
   }
 
   async function ensureUploadedPhoto() {
@@ -2987,7 +2976,7 @@ export default function AiDealScreen() {
 
   async function generateAd() {
     if (cooldownActive) return;
-    if (!validateInputs()) return;
+    if (publishValidationFailure()) return;
     if (!businessId) {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
@@ -3575,9 +3564,10 @@ export default function AiDealScreen() {
       setBanner({ message, tone: "error" });
       return;
     }
-    if (!validateInputs()) {
+    const validationFailure = publishValidationFailure();
+    if (validationFailure) {
       setPublishStatus("error");
-      setPublishStatusMessage(t("createAi.publishValidationBody"));
+      setPublishStatusMessage(validationFailure);
       return;
     }
     if (!businessId) {
