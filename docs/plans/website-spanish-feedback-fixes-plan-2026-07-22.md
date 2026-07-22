@@ -1,8 +1,8 @@
 # Website Spanish-reviewer feedback — verification + fix plan (2026-07-22)
 
-> **PHASE 1 SHIPPED 2026-07-22 — committed `1ce22db5`, DEPLOYED to production,
-> NOT pushed.** Dan approved Phase 1 (L1, L3, L4, L5, L6) with the wording below,
-> then approved the commit and deploy. Follow-on to
+> **PHASE 1 SHIPPED 2026-07-22 — committed, DEPLOYED to production, and PUSHED.**
+> Dan approved Phase 1 (L1, L3, L4, L5, L6) with the wording below, then approved
+> the commit, the deploy, and the push. Follow-on to
 > `website-post-launch-improvement-plan-2026-07-22.md` (W-items).
 >
 > | Item | Status |
@@ -14,9 +14,10 @@
 > | L5 Spanish diacritics (~370 strings) | Shipped, live (hand-proofread) |
 > | L6 i18n diacritics guard | Shipped, passing |
 >
-> Commit `1ce22db5` on `qa/poster-ad-quality`, 28 files (+569/-233). **Local
-> only — not pushed.** Vercel deploy `dpl_DkkdMRc6CosK4XoEARfARWZD5HhJ`,
-> `readyState: READY`, `target: production`, aliased to www.twoferapp.com.
+> Commit `1ce22db5` (28 files, +569/-233) plus doc commit `bbd5fab1`, pushed to
+> `origin/qa/poster-ad-quality` (`56c3a70f..bbd5fab1`). Vercel deploy
+> `dpl_DkkdMRc6CosK4XoEARfARWZD5HhJ`, `readyState: READY`,
+> `target: production`, aliased to www.twoferapp.com.
 >
 > Pre-deploy: `check:website-i18n` (375 keys × 3 locales) and `check:website-ui`
 > (37 routes × 2 viewports) both pass; Spanish rendering, badge locale, legal
@@ -235,4 +236,5 @@ changes. Website files + `scripts/check-website-i18n.js` only.
 3. Phase 2 capture plan (S10, device-language flips) — **still open.**
 4. Phase 3 poster shot — **still open**, do it or skip?
 5. New: add `<lastmod>` to the six sitemap entries that lack it? (see header)
-6. Commit `1ce22db5` is local only. Push it, or leave it on the branch?
+6. ~~Push~~ — done. `qa/poster-ad-quality` is pushed; merging to `main` is a
+   separate call and has not been made.
