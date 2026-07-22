@@ -97,6 +97,7 @@ import {
   aiDealDraftStorageKey,
   buildAiDealRecoveryDraft,
   parseAiDealRecoveryDraft,
+  resolveRecoveredDealSchedule,
   type AiDealRecoveryDraft,
 } from "../../lib/ai-deal-draft-recovery";
 import { buildAiDealReviewDraft } from "../../lib/ai-deal-review-draft";
@@ -1948,15 +1949,13 @@ export default function AiDealScreen() {
     // F-006: a recovered one-time draft can carry a start time that has since
     // passed; clamp it up to "now" so the schedule the merchant sees is valid,
     // matching the edit-existing-deal path (publish already clamps as a net).
-    // Recurring deals derive their start at publish, so leave them untouched.
-    const recoveredStart = new Date(draft.startTime);
-    const recoveredNow = new Date();
-    setStartTime(
-      draft.validityMode !== "recurring" && recoveredStart.getTime() < recoveredNow.getTime()
-        ? recoveredNow
-        : recoveredStart,
-    );
-    setEndTime(new Date(draft.endTime));
+    // The end is resolved against that clamped start rather than restored raw:
+    // the clamp alone can invert a window that was coherent at save time, and
+    // the draft-level repair has already run by then. Recurring deals derive
+    // their window at publish, so they pass through untouched.
+    const recoveredSchedule = resolveRecoveredDealSchedule(draft);
+    setStartTime(recoveredSchedule.startTime);
+    setEndTime(recoveredSchedule.endTime);
     setDaysOfWeek(draft.daysOfWeek.length ? draft.daysOfWeek : [1, 2, 3, 4, 5]);
     setWindowStart(dateFromMinutes(draft.windowStartMinutes));
     setWindowEnd(dateFromMinutes(draft.windowEndMinutes));
@@ -2849,6 +2848,7 @@ export default function AiDealScreen() {
       }
       return t("createAi.errPublishInvalidAdSpec");
     }
+    if (code === "INVALID_DEAL_WINDOW") return t("createAi.errEndTimePassed");
     if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
     // The publish endpoint never ran (Edge Runtime bundle/boot/worker failure).
     // Checked by code first, then by message for the publish steps that do not
@@ -3652,7 +3652,7 @@ export default function AiDealScreen() {
 
     const isRecurring = validityMode === "recurring";
     if (!isRecurring && endTime.getTime() <= Date.now()) {
-      showPublishError(t("createAi.errEndAfterStart"));
+      showPublishError(t("createAi.errEndTimePassed"));
       return;
     }
     if (!editingDealId && !offerDefinition) {
@@ -3761,6 +3761,16 @@ export default function AiDealScreen() {
           ? new Date()
           : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
+      // The "end has already passed" guard above ran before the photo upload and
+      // poster signing awaits, while this clamp runs after them. A window that
+      // passed that guard can be overtaken by its own publish, so re-check the
+      // end against the start actually being written. Neither the edge function
+      // nor the deals table rejects an inverted window, so stopping here is what
+      // keeps a dead-on-arrival deal from being published.
+      if (!isRecurring && end.getTime() <= start.getTime()) {
+        showPublishError(t("createAi.errEndTimePassed"));
+        return;
+      }
       const sourceLocaleForPublish = localizedOwnerUiEnabled
         ? dealOutputLang
         : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;

@@ -20,6 +20,17 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/offerDefinition\.merchantId !== businessId/);
   });
 
+  it("rejects a deal row whose end time does not follow its start time", () => {
+    // Nothing downstream catches this: the publish RPC inserts start_time and
+    // end_time verbatim and the deals table has no ordering constraint, so an
+    // inverted window would persist as an already-expired deal.
+    expect(source).toMatch(/function hasInvertedDealWindow/);
+    expect(source).toMatch(/dealRows\.some\(\(row\) => hasInvertedDealWindow\(row\)\)/);
+    expect(source).toMatch(/INVALID_DEAL_WINDOW/);
+    // Judged only when both sides are present and parseable.
+    expect(source).toMatch(/if \(!Number\.isFinite\(start\) \|\| !Number\.isFinite\(end\)\) return false;/);
+  });
+
   it("validates the renderer ad spec before publishing", () => {
     expect(source).toMatch(/function validateAdSpecPayload/);
     expect(source).toMatch(/function validateComposedCardPayload/);

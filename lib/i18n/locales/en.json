@@ -1419,6 +1419,7 @@
     "errMaxClaims": "Max claims must be greater than 0.",
     "errCutoff": "Cutoff buffer must be 0 or more.",
     "errEndAfterStart": "End time must be after start time.",
+    "errEndTimePassed": "This deal's end time has already passed. Pick a new end time, then publish again.",
     "errRecurringDay": "Select at least one day for recurring deals.",
     "errRecurringWindow": "Recurring window start must be before end.",
     "errAddPhoto": "Please add a photo.",

@@ -1968,6 +1968,7 @@
     "errMaxClaims": "El máximo de canjes debe ser mayor que 0.",
     "errCutoff": "El margen de cierre debe ser 0 o más.",
     "errEndAfterStart": "La hora de finalización debe ser posterior al inicio.",
+    "errEndTimePassed": "La hora de finalización de esta oferta ya pasó. Elige una nueva y vuelve a publicar.",
     "errRecurringDay": "Selecciona al menos un día para ofertas recurrentes.",
     "errRecurringWindow": "El inicio del horario recurrente debe ser antes del fin.",
     "errAddPhoto": "Agrega una foto.",

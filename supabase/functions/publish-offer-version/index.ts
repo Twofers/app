@@ -117,6 +117,22 @@ function coerceDealRows(value: unknown): Record<string, unknown>[] {
   });
 }
 
+/**
+ * A deal whose end does not follow its start is dead on arrival — already
+ * expired the moment it is written. Neither the publish RPC nor the deals table
+ * rejects one, so nothing downstream catches it. Clients advance a start that
+ * has slipped into the past up to "now", which can invert a window that was
+ * coherent when it was composed, and builds already in the field have no guard
+ * of their own. Only a pair that is present and parseable is judged here;
+ * missing or malformed values are left to the column types.
+ */
+function hasInvertedDealWindow(row: Record<string, unknown>): boolean {
+  const start = Date.parse(cleanText(row.start_time));
+  const end = Date.parse(cleanText(row.end_time));
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return end <= start;
+}
+
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -413,6 +429,16 @@ serve(async (req) => {
     }
     if (dealRows.some((row) => row.business_id !== businessId)) {
       return jsonResponse(req, { error: "Deal row business_id mismatch" }, 403);
+    }
+    if (dealRows.some((row) => hasInvertedDealWindow(row))) {
+      return jsonResponse(
+        req,
+        {
+          error: "Deal end time must be after its start time.",
+          error_code: "INVALID_DEAL_WINDOW",
+        },
+        400,
+      );
     }
 
     const offerDefinition = body.offer_definition as OfferDefinitionPayload;

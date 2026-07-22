@@ -4,6 +4,7 @@ import {
   aiDealDraftStorageKey,
   buildAiDealRecoveryDraft,
   parseAiDealRecoveryDraft,
+  resolveRecoveredDealSchedule,
 } from "./ai-deal-draft-recovery";
 import { createDefaultDealEligibilityFormState } from "./deal-eligibility-form";
 
@@ -318,6 +319,90 @@ describe("AI deal draft recovery", () => {
     const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
 
     expect(parsed?.endTime).toBe("2026-07-22T06:00:00.000Z");
+  });
+
+  it("keeps an end following the start after the apply-time clamp", () => {
+    // The S10 case the draft-level repair could not reach: the window was
+    // coherent when it was saved (05:00 → 06:00), so nothing was rebuilt at
+    // parse time. Advancing the stale start to "now" is what inverts it.
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T05:00:00.000Z",
+      endTime: "2026-07-22T06:00:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+    // Valid at save time, so parse restores it untouched.
+    expect(parsed?.startTime).toBe("2026-07-22T05:00:00.000Z");
+    expect(parsed?.endTime).toBe("2026-07-22T06:00:00.000Z");
+
+    const schedule = resolveRecoveredDealSchedule(parsed!, new Date("2026-07-22T14:28:00.000Z"));
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T14:28:00.000Z");
+    // Rebuilt from the clamped start (+1h) instead of reopening at 06:00.
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T15:28:00.000Z");
+    expect(schedule.endTime.getTime()).toBeGreaterThan(schedule.startTime.getTime());
+  });
+
+  it("keeps an end the start clamp does not overtake", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T05:00:00.000Z",
+        endTime: "2026-07-22T18:00:00.000Z",
+        validityMode: "one-time",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T14:28:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T18:00:00.000Z");
+  });
+
+  it("leaves a still-future window untouched", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T14:28:00.000Z"));
+
+    const schedule = resolveRecoveredDealSchedule({
+      startTime: "2026-07-22T20:00:00.000Z",
+      endTime: "2026-07-22T21:00:00.000Z",
+      validityMode: "one-time",
+    });
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T20:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T21:00:00.000Z");
+  });
+
+  it("does not clamp a recurring draft, whose window is derived at publish", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T05:00:00.000Z",
+        endTime: "2026-07-22T06:00:00.000Z",
+        validityMode: "recurring",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T05:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T06:00:00.000Z");
+  });
+
+  it("still repairs a window that was already inverted when saved", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T20:00:00.000Z",
+        endTime: "2026-07-22T19:00:00.000Z",
+        validityMode: "one-time",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    // The start is still in the future, so it is not clamped, but the end must
+    // be rebuilt from it rather than reopening behind it.
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T20:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T21:00:00.000Z");
   });
 
   it("rejects malformed, old, and different-business drafts", () => {
