@@ -66,7 +66,11 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
     expect(createAiSource).toContain("checkMerchantPosterSubline(posterSublineText)");
     expect(createAiSource.split("subline: posterSublineText.trim() || null,").length - 1).toBe(2);
-    expect(createAiSource).toContain("sourceLocale: effectiveDraftSourceLocale");
+    // One source locale on both sides of the approve/publish boundary. Pinning the
+    // two old spellings separately is what let them drift apart: publish rebuilt the
+    // presentation from a different locale than the merchant approved, so the exact
+    // presentation hashes could never match and publishing was blocked outright.
+    expect(createAiSource).toContain("sourceLocale: publishSourceLocale");
     expect(createAiSource).toContain("sourceLocale: supportedSourceLocaleForPublish");
 
     for (const locale of ["en", "es", "ko"] as const) {

@@ -705,7 +705,16 @@ Before merging or handing off:
 
 ---
 
-## HIGH — publishing an AI poster ad is blocked on this branch
+## RESOLVED 2026-07-22 (second Claude session) — publishing an AI poster ad
+
+**Fixed, and verified live on the S10: a real AI poster deal published successfully.**
+The root cause below was found by static analysis plus a runnable repro, so the proposed
+instrumentation edit and device-repro cycle were never needed. See
+"Publish unblocked" at the end of this file for the diagnosis, the fix, and the device run.
+Everything from here to that section is the *pre-fix* investigation, kept for the record —
+including two conclusions that turned out to be wrong.
+
+## HIGH (HISTORICAL) — publishing an AI poster ad is blocked on this branch
 
 Found 2026-07-22 during the approved publish QA on the S10. **Reproduced twice.**
 
@@ -984,3 +993,130 @@ remains green: commits `b42ae69a` (code, validated 1879/1879 + all gates) and
 14. Rotate the previously pasted Supabase tokens + business-account password (outside repo).
 15. Dev build intentionally points at production Supabase (Dan 2026-07-22); revisit only if
     the CLAUDE.md separate-dev-project rule is meant to bind again.
+
+---
+
+## Publish unblocked, 2026-07-22 (second Claude session)
+
+### What was actually wrong
+
+The prior session's corrected diagnosis named the wrong guard. `app/create/ai.tsx:3656`
+**passes** — `selectedComposedPresentationHash` never drifts, which is exactly why all ten
+candidate mechanisms came back dead. Execution reaches the *second* guard,
+`app/create/ai.tsx:3994`, which compares the approved **preview** hash against a freshly
+rebuilt **publish** hash. Those two were built with different localization gating:
+
+| | approve/preview | publish |
+| --- | --- | --- |
+| locale-override resolution | `ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled()` — requires the owner-UI flag | `localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()` — bundle only |
+| `localizedPreviewEnabled` | `ownerLanguagePreviewAvailable` | `Boolean(localizationBundleForPublish)` |
+| locale screenshot QA | `ownerLanguagePreviewAvailable && …` | `localizationBundleForPublish && …` |
+| source locale | `effectiveDraftSourceLocale` | `supportedSourceLocaleForPublish` |
+
+`buildAiDealReviewDraft` always synthesizes a deterministic localization bundle, so
+`localizationBundleForPublish` is never null. With `AI_V5_LOCALIZED_OWNER_UI` **off**, the
+publish side therefore resolved `ko-KR` locale overrides that the approved preview never
+had, and `createAdPresentationHash` folds `presentation.localeOverrides` into its payload
+whenever the key is present (`lib/ad-presentation-hash.ts:82`). The two hashes could never
+be equal, so every publish was rejected with zero merchant edits.
+
+Reproduced deterministically against the real library functions before any code changed:
+
+```
+preview localeOverrides: undefined
+publish localeOverrides: {"ko-KR":{...,"HANGUL_FONT_METRICS_GUARD"}}
+previewHash adp_d1afde0fe133db49   publishHash adp_df202b21438e473c
+```
+
+### Corrections to the earlier write-up
+
+1. **Not caused by `reviewContext`.** `localeOverrides` has been in the hash since
+   `0b23fb3d`, and the publish-side gating asymmetry already existed at `32d96d81`. The
+   defect is **pre-existing**; it had simply never been exercised, because AI-poster
+   publishing was believed unreachable on the dev build.
+2. **Production was never affected.** The block needs `LOCALIZED_OWNER_UI` off **and**
+   `LOCALE_PRESENTATION_OVERRIDES` on **and** `EXACT_PRESENTATION_APPROVAL` on. Only
+   `.env.development.local` has that combination — confirmed on-device in the
+   `[twoforone:boot]` log. Every `eas.json` profile is safe: production sets
+   `ownerUI=true` (so both sides agree) and leaves `exactApproval` unset (so the guard does
+   not run). Severity was "publishing is blocked", actually "publishing is blocked on the
+   local dev/Metro config".
+3. The "approval dead end" and the ten-mechanism table remain accurate; they were just
+   auditing the wrong guard.
+
+### Fix (Dan approved each locked file individually)
+
+- `app/create/ai.tsx` (locked) — the three publish gates now carry the missing
+  `localizedOwnerUiEnabled` conjunct, matching their preview twins; a new component-scope
+  `publishSourceLocale` is the single source locale both sides build from
+  (`supportedSourceLocaleForPublish` reads it, and the approve-side poster spec, review
+  draft, owner-language preview and review context read it instead of
+  `effectiveDraftSourceLocale`). The appLanguage round-trip is identity for en-US/es-US/
+  ko-KR, so wherever the owner-UI flag is on — every profile that sets it, production
+  included — all four changes are a strict no-op. **The approval guard itself is unchanged
+  and was deliberately not relaxed.**
+- `lib/ai-publish-presentation-parity.test.ts` (new) — the invariant with no coverage
+  before: approve-time and publish-time hashes are identical for an unedited accepted
+  draft, across all three locales and both flag settings, plus a live demonstration that
+  the pre-fix publish gate diverges, plus source contracts pinning all four gates.
+- `lib/create-ai-ux-source.test.ts` (locked) — line 69 asserted the source still contained
+  `sourceLocale: effectiveDraftSourceLocale`, i.e. it pinned the bug in place. Now pins
+  `publishSourceLocale`.
+- `docs/ai-poster-core-lock.json` (locked) — hashes and approval refs for both locked files.
+
+Validation, all green: `typecheck`, `typecheck:functions`, `lint` (0 errors; the 2
+pre-existing `app/business/[id].tsx` duplicate-import warnings remain),
+`gate:ai-poster-lock` 30/30, `gate:ai-ad`, `copy:evaluate`, `npm test -- --run`
+**1896/1896** (was 1879; +17 new parity tests).
+
+### Device verification (S10 `RF8T20X0Z7P`, working-tree JS over Metro)
+
+Boot log confirmed the diagnosed combination on the device itself:
+`AI_V5_LOCALIZED_OWNER_UI (unset)`, `AI_V5_LOCALE_PRESENTATION_OVERRIDES true`,
+`AI_V4_EXACT_PRESENTATION_APPROVAL true`, `productionSupabaseHost kvodhiqhdqnptqovovia`.
+
+Run: Create hub → AI ads (no "Redirecting…"/login flash) → **Continue draft** on the
+leftover QA draft (so no AI generation was spent) → re-approve → fix the schedule →
+re-approve → **Publish deal**.
+
+- **Publish succeeded.** "We're making your deal live" → Offers dashboard, *"Your next
+  latte stop is now live for customers"*, 1 live deal, `Buy one latte and get one free`,
+  Jul 22 9:43 AM → 1:00 PM. The approval error never appeared.
+- Re-approval behaved correctly at both invalidation points (recovery, then the schedule
+  edit): the "Approve your changes" panel appeared, and publishing was allowed only after
+  approving.
+- Evidence: `artifacts/s10-qa-20260722/publish-success.png`.
+- **Cleanup done** — deal ended early, 0 claims, dashboard back to "No live deals".
+
+### New issue found during this run (NOT fixed)
+
+**Recovered drafts can still carry an inverted window.** The recovered draft opened with
+**start Jul 22 9:28 AM** (advanced to now) and **end Jul 22 1:00 AM** — 8.5 hours before
+the start — and the poster rendered `REDEEM BY JUL 22, 1:00 AM`. Nothing in the UI flagged
+it; publish would have been rejected by the `endTime <= Date.now()` guard
+(`app/create/ai.tsx:3644`) with a message about the end time, not about recovery.
+
+Last session's `buildAiDealRecoveryDraft` fix rebuilds the end when the *restored* end does
+not follow the *restored* start, so this is an ordering gap rather than a regression: the
+start is advanced to "now" independently of the end-vs-start repair, so a pair that was
+valid at save time becomes inverted at restore time. This is the same family as P2 #10
+(the past-start clamp at `:3748` running after the validation at `:2654`). Fixing it means
+re-running the end-follows-start repair *after* the start is clamped, in both the recovery
+path and the publish path.
+
+### Status of the rest of the plan
+
+- **P0 1-5 — done.** Root cause found without the instrumentation edit, fixed, invariant
+  test added, publish device-verified, test deal cleaned up.
+- **P0 6** (recovered draft with `generatedAd && !adAccepted` must always render an accept
+  path) — still open, untouched.
+- **P1 7** (rebuild + install the dev APK) — still open; needs Dan's build approval. Every
+  fix QA'd in these two sessions is still Metro-served.
+- **P1 8** (lock-file R12 narrative) — still open.
+- **P2 10** (window inversion at publish) — reinforced by the new finding above.
+- **P2 11** (preview-vs-publish review-context asymmetry) — **done**, that was the bug.
+- **P2 12**, **P3 13-15** — unchanged.
+
+No commit, no push, no deploy, no migration, no build. Working tree carries
+`app/create/ai.tsx`, `docs/ai-poster-core-lock.json`, `lib/create-ai-ux-source.test.ts`
+and the new `lib/ai-publish-presentation-parity.test.ts`.

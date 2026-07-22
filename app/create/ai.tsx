@@ -1229,6 +1229,16 @@ export default function AiDealScreen() {
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
   const [prefillSourceLocale, setPrefillSourceLocale] = useState<AppLocale | null>(null);
+  // The one source locale the deal publishes with. Preview/approve and publish must
+  // build their presentation from the SAME locale, or the approved presentation hash
+  // can never equal the one publish rebuilds and publishing is blocked outright.
+  // With the localized owner UI on this is exactly `effectiveDraftSourceLocale` (the
+  // appLanguage round-trip is identity for every supported locale); with it off the
+  // deal still publishes in the deal-flow language, so the preview follows publish
+  // rather than the raw UI language.
+  const publishSourceLocale = supportedLocaleOrDefault(
+    localizedOwnerUiEnabled ? dealOutputLang : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang,
+  );
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
@@ -3754,7 +3764,9 @@ export default function AiDealScreen() {
       const sourceLocaleForPublish = localizedOwnerUiEnabled
         ? dealOutputLang
         : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
-      const supportedSourceLocaleForPublish = supportedLocaleOrDefault(sourceLocaleForPublish);
+      // Same expression as `publishSourceLocale`; read the hoisted value so the
+      // approve-time preview and this publish path can never drift apart.
+      const supportedSourceLocaleForPublish = publishSourceLocale;
 
       const aiPosterPath = imageVersionStoragePath(generatedAd);
       const finalStoragePath = resolveCurrentDealPosterStoragePath({
@@ -3931,7 +3943,10 @@ export default function AiDealScreen() {
         offerDefinition,
         sourceLocale: localizationBundleForPublish?.sourceLocale ?? supportedSourceLocaleForPublish,
         previewLocale: supportedSourceLocaleForPublish,
-        localizedPreviewEnabled: Boolean(localizationBundleForPublish),
+        // Must match the preview's gate (`ownerLanguagePreviewAvailable`). Gating on
+        // the bundle alone localized the publish copy while the approved preview was
+        // built unlocalized, so the two hashes could never match.
+        localizedPreviewEnabled: localizedOwnerUiEnabled && Boolean(localizationBundleForPublish),
         fallbackOfferLine: adForPublishSpecWithPoster?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
         fallbackTermsLine: adForPublishSpecWithPoster?.locked_terms_line || offerContract?.canonicalShortTerms || description,
         fallbackCtaLabel: ctaText,
@@ -3967,7 +3982,10 @@ export default function AiDealScreen() {
         ],
       };
       const publishLocalePresentationResolution =
-        localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()
+        // Same gate as the preview's `localePresentationOverridesEnabled`. Without the
+        // owner-UI conjunct the publish spec carried locale overrides the approved
+        // preview never had, and `createAdPresentationHash` folds those into the hash.
+        localizedOwnerUiEnabled && localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()
           ? resolveLocalePresentationOverrides({
               basePresentation: publishBaseComposedPresentation,
               localizationBundle: localizationBundleForPublish,
@@ -4022,6 +4040,8 @@ export default function AiDealScreen() {
         composedScreenshotQaEnabled,
       );
       const publishLocaleScreenshotQaRequired =
+        // Same gate as the preview's `localeScreenshotQaEnabled`.
+        localizedOwnerUiEnabled &&
         localizationBundleForPublish &&
         isAiV5LocaleScreenshotQaEnabled() &&
         (publishLocalePresentationResolution?.screenshotQaTriggerLocales.length ?? 0) > 0;
@@ -4462,7 +4482,7 @@ export default function AiDealScreen() {
           renderedAssetPath: null,
           headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
           subline: posterSublineText.trim() || null,
-          sourceLocale: effectiveDraftSourceLocale,
+          sourceLocale: publishSourceLocale,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
         })
@@ -4474,7 +4494,7 @@ export default function AiDealScreen() {
     promoLine,
     ctaText,
     poster: effectivePosterSpec,
-    sourceLocale: effectiveDraftSourceLocale,
+    sourceLocale: publishSourceLocale,
     offerDefinition,
   });
   const reviewGeneratedAd = liveReviewDraft.ad;
@@ -4503,11 +4523,11 @@ export default function AiDealScreen() {
     ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
   const localeScreenshotQaEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocaleScreenshotQaEnabled();
-  const activeMerchantPreviewLocale = effectiveDraftSourceLocale;
+  const activeMerchantPreviewLocale = publishSourceLocale;
   const ownerLanguagePreview = buildOwnerLanguagePreview({
     generatedAd: reviewGeneratedAd,
     offerDefinition,
-    sourceLocale: reviewGeneratedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale,
+    sourceLocale: reviewGeneratedAd?.localization_bundle?.sourceLocale ?? publishSourceLocale,
     previewLocale: activeMerchantPreviewLocale,
     localizedPreviewEnabled: ownerLanguagePreviewAvailable,
     fallbackOfferLine: reviewGeneratedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
@@ -4587,7 +4607,7 @@ export default function AiDealScreen() {
     selectedLocalePresentationResolution?.presentation ?? selectedBaseComposedPresentation;
   const selectedPresentationReviewContext = buildLiveAdPresentationReviewContext({
     creativeFormat: showPosterFormat ? "poster_v1" : "standard_card",
-    sourceLocale: effectiveDraftSourceLocale,
+    sourceLocale: publishSourceLocale,
     title,
     promoLine,
     ctaText,
