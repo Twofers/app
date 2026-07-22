@@ -35,14 +35,22 @@ Current inventory (re-count with the grep below if in doubt):
 | `store-links.js` | 3 pages (`/`, `/s`, `/business/billing/checkout`) |
 | `launch-signup.js` | 1 page (`/`) |
 
-- [ ] Edited one of these? Bump its `?v=` to `YYYYMMDD-shortslug` on **all**
-      including pages:
+- [ ] Bump the `?v=` to `YYYYMMDD-shortslug` on **all** including pages, for
+      **every** versioned file you edited — not just the obvious one.
+- [ ] Confirm with the inventory below: each file you touched shows a single
+      version, and it is the new one.
 
 ```bash
-grep -rn "store-links.js?v=" website --include=*.html
+grep -rhoE '(href|src)="/[a-z-]+\.(css|js)\?v=[^"]+"' website --include=*.html | sort | uniq -c | sort -rn
 ```
 
-(swap the filename; every hit must show the new version)
+A file appearing twice with different versions means a page was missed.
+
+> This step has failed in practice. On 2026-07-22 `store-links.js` was rewritten
+> to inject store badges, but only `styles.css` and `localization.js` got bumped.
+> The new file was on the server; the unchanged `?v=` kept serving the old one to
+> anyone who had visited earlier that day, and the badge anchors rendered as
+> nothing. It was caught only by step 9. Bump every file you edited.
 
 ## 4. Copy / localization (if any user-visible text changed)
 

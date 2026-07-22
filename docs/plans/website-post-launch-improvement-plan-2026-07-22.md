@@ -3,6 +3,14 @@
 Review of www.twoferapp.com (live site + `website/` source) now that Twofer is on
 both stores. Desktop and mobile (375px) were both checked.
 
+> **DECIDED AND SHIPPED 2026-07-22.** Dan approved W1-W9 and W11; W12 and W13
+> were declined (kept as recommended); W10 stays parked until real ratings
+> exist. W4 shipped as variant (b), platform detect. W14/W15 remain open —
+> they are store-console actions, not website work.
+> Commits `1e7fad06` (the pass) and `160cfd2f` (cache-param fix), deployed to
+> Vercel prod `dpl_F7mwB2W2XS6rXYNDax5Rcfq5rLUg`. This file is now a decision
+> record; the Decision lines below are kept as the audit trail.
+
 **How to use this file:** each item has a Decision line. Mark `[x]` on YES or NO
 (any editor works), save, and hand the file back. Items are independent — approve
 any subset. IDs (W1…) are stable; "yes to W1, W4, W6" in chat works too.
