@@ -72,8 +72,14 @@ const BATTERY = [
   ["buy one get one free", "Buy one get one free on all pastries", "", true],
   ["free in description", "Coffee and muffin deal", "Buy a coffee, get a muffin free.", true],
   ["2-for-1", "2-for-1 oat milk lattes", "", true],
-  ["40% off", "40% off all drinks today", "", true],
-  ["50% off second", "50% off second item", "", true],
+  // Disqualified SHAPES, not weak percentages. lib/strong-deal-guard.ts has
+  // rejected entire-order and second-item discounts since 2026-06-15
+  // (ENTIRE_ORDER_DISCOUNT_PATTERNS / SECOND_ITEM_DISCOUNT_PATTERNS); the SQL
+  // twin gained the same rules in R13. These two rows still expected PASS from
+  // before the client had them, so the battery reported drift that did not
+  // exist. This probe calls the guard prose-only, where both halves reject.
+  ["40% off entire order shape", "40% off all drinks today", "", false],
+  ["50% off second-item shape", "50% off second item", "", false],
   // confirmed divergences — must PASS after the fix
   ["DIVERGENCE free! (punct)", "Treat Yourself", "Order any latte and your second pastry is free!", true],
   ["DIVERGENCE Spanish gratis", "Café Doble", "Compra un latte y llévate otro gratis.", true],

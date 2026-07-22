@@ -1,0 +1,21 @@
+-- Promote deals_end_after_start_check from NOT VALID to fully validated.
+--
+-- 20260820140000 added the constraint NOT VALID so it would enforce every new
+-- insert and update without scanning or failing on rows that predated it. This
+-- validates the backlog too, which is what makes the invariant true of the whole
+-- table rather than only of new writes.
+--
+-- Audit performed first, 2026-07-22: of the 55 deals readable to an
+-- authenticated account, 0 had end_time <= start_time. That is a lower bound
+-- because RLS limits what any one account can see -- VALIDATE CONSTRAINT is the
+-- complete census, since it scans every row and fails if any violates.
+--
+-- If this migration ever fails, it means legacy inverted rows exist: Postgres
+-- names one in the error. Repair or retire those rows, then re-run. The failure
+-- is atomic, so a failed run changes nothing.
+--
+-- Lock note: VALIDATE CONSTRAINT takes SHARE UPDATE EXCLUSIVE, which does not
+-- conflict with the ROW EXCLUSIVE that INSERT and UPDATE take. Ordinary deal
+-- writes continue during the scan.
+
+ALTER TABLE public.deals VALIDATE CONSTRAINT deals_end_after_start_check;
