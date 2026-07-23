@@ -43,6 +43,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Localization gate: en/es/ko key parity + every t() key resolvable in
+      # en.json. Kept out of the pretest hook (a locked test pins that string);
+      # enforced here so untranslated copy can't merge.
+      - name: i18n key parity
+        run: npm run check:i18n-keys
+
       - name: Test
         run: npm run test
 

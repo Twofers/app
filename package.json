@@ -20,7 +20,7 @@
     "website:preview": "python -m http.server 4173 --directory website",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "node scripts/typecheck-functions.cjs",
-    "pretest": "node scripts/check-ai-poster-core-lock.mjs && node scripts/check-i18n-keys.mjs",
+    "pretest": "node scripts/check-ai-poster-core-lock.mjs",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
     "test:watch": "vitest",
