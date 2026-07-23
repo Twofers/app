@@ -3,6 +3,7 @@ import {
   localizedTermSnapshotId,
   resolveLocalizedOfferTerm,
   type LocalizedOfferTerm,
+  type LocalizedTermExpansionDictionary,
 } from "./localized-offer-terms.ts";
 import { getOfferLocaleTemplate } from "./offer-locale-templates.ts";
 import {
@@ -30,6 +31,10 @@ export type RenderLocalizedOfferOptions = {
   locale?: string | null;
   providedTerms?: readonly LocalizedOfferTerm[] | null;
   doNotTranslateTerms?: readonly string[] | null;
+  // Customer-display-only item-name coverage (see localized-offer-terms.ts).
+  // Left undefined by the create/publish bundle path, so it never affects
+  // stored specs or approval hashes.
+  extraDictionary?: LocalizedTermExpansionDictionary | null;
 };
 
 type OfferFacts = {
@@ -209,6 +214,7 @@ function termsForFacts(
     locale,
     providedTerms: options.providedTerms,
     doNotTranslateTerms: options.doNotTranslateTerms,
+    extraDictionary: options.extraDictionary,
   });
   const rewardTerm = resolveLocalizedOfferTerm({
     entityId: facts.offerType === "percent_off_single_item" ? facts.paidItem.catalogItemId : `reward:${facts.rewardItemName}`,
@@ -216,6 +222,7 @@ function termsForFacts(
     locale,
     providedTerms: options.providedTerms,
     doNotTranslateTerms: options.doNotTranslateTerms,
+    extraDictionary: options.extraDictionary,
   });
   return { paidTerm, rewardTerm };
 }

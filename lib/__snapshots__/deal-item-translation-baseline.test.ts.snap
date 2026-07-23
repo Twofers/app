@@ -1,0 +1,56 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`deal item-name translation — T0 frozen baseline > freezes today's deterministic offer line for the full source×viewer matrix 1`] = `
+{
+  "en brand WITH-DNT (Cedar Bean Nitro)": {
+    "en-US": "Get 40% off one Cedar Bean Nitro",
+    "es-US": "Recibe 40% de descuento en 1 Cedar Bean Nitro",
+    "ko-KR": "할인 항목: Cedar Bean Nitro × 1
+혜택: 40% 할인",
+  },
+  "en brand no-DNT (Cedar Bean Nitro)": {
+    "en-US": "Get 40% off one Cedar Bean Nitro",
+    "es-US": "Recibe 40% de descuento en 1 Cedar Bean Nitro",
+    "ko-KR": "할인 항목: Cedar Bean Nitro × 1
+혜택: 40% 할인",
+  },
+  "en cross-item free (croissant -> coffee)": {
+    "en-US": "Buy a croissant and get a free coffee",
+    "es-US": "Al comprar 1 croissant, recibes 1 café gratis",
+    "ko-KR": "크루아상 1개 구매 시 커피 1잔 무료",
+  },
+  "en dict-MISS percent-off (strawberry matcha)": {
+    "en-US": "Get 40% off one strawberry matcha",
+    "es-US": "Recibe 40% de descuento en 1 strawberry matcha",
+    "ko-KR": "할인 항목: strawberry matcha × 1
+혜택: 40% 할인",
+  },
+  "en dict-hit BOGO (cold brew)": {
+    "en-US": "Buy one cold brew and get one free",
+    "es-US": "Al comprar 1 cold brew, recibes 1 cold brew gratis",
+    "ko-KR": "콜드브루 1잔 구매 시 콜드브루 1잔 무료",
+  },
+  "en dict-hit percent-off (iced tea)": {
+    "en-US": "Get 40% off one iced tea",
+    "es-US": "Recibe 40% de descuento en 1 té helado",
+    "ko-KR": "아이스 티 1잔 40% 할인",
+  },
+  "en size-modified BOGO (large latte)": {
+    "en-US": "Buy one large latte and get one free",
+    "es-US": "Al comprar 1 latte grande, recibes 1 latte grande gratis",
+    "ko-KR": "라지 라떼 1잔 구매 시 라지 라떼 1잔 무료",
+  },
+  "es-authored percent-off (café de olla)": {
+    "en-US": "Get 40% off one spiced coffee",
+    "es-US": "Recibe 40% de descuento en 1 café de olla",
+    "ko-KR": "할인 항목: café de olla × 1
+혜택: 40% 할인",
+  },
+  "ko-authored BOGO (아메리카노)": {
+    "en-US": "Buy one 아메리카노 and get one free",
+    "es-US": "Al comprar 1 아메리카노, recibes 1 아메리카노 gratis",
+    "ko-KR": "구매 항목: 아메리카노 × 1
+추가 혜택: 아메리카노 × 1",
+  },
+}
+`;

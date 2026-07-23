@@ -17,6 +17,8 @@ import {
   type SupportedLocale,
 } from "./supported-locales";
 import type { CustomerDealLocalization } from "./customer-deal-localizations";
+import { dealItemTranslationLocales } from "./deal-item-translation-flag";
+import { DEAL_ITEM_TRANSLATION_EXPANSION } from "./localized-offer-terms-expansion";
 
 type LocalizedDealDisplayOfferVersionFields = {
   ad_spec?: unknown;
@@ -409,10 +411,16 @@ export function buildLocalizedDealDisplay(params: {
   fallbackLanguage: string;
 }): LocalizedDealDisplay {
   const localizedCreative = customerLocalizationFromDeal(params.deal, params.locale);
+  // Customer-only, switch-gated per viewer locale. Undefined (switch off, the
+  // default) makes this call byte-identical to before. Never reaches the
+  // create/publish bundle path, so stored specs and approval hashes are unchanged.
+  const extraDictionary = dealItemTranslationLocales().includes(params.locale)
+    ? DEAL_ITEM_TRANSLATION_EXPANSION
+    : undefined;
   if (params.useLocalizedOfferRenderer) {
     const definition = buildOfferDefinitionFromDealDisplay(params.deal);
     if (definition) {
-      const locked = renderLocalizedOfferFromDefinition(definition, { locale: params.locale });
+      const locked = renderLocalizedOfferFromDefinition(definition, { locale: params.locale, extraDictionary });
       if (localizedCreative) {
         return {
           title: localizedCreative.headline,

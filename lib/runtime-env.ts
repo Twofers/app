@@ -331,6 +331,10 @@ export function isPosterLookV2Enabled(): boolean {
   return process.env.POSTER_LOOK_V2_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_LOOK_V2 === "true";
 }
 
+// The item-name translation switch lives in lib/deal-item-translation-flag.ts
+// (dependency-free) so the pure display libs that read it do not pull the RN
+// graph in via this module's expo-constants import.
+
 export function isDebugPanelEnabled(): boolean {
   if (__DEV__) return true;
   return process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL === "true";

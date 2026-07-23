@@ -112,17 +112,60 @@ used by all five customer surfaces and pinned by
 
 ## Phases
 
-### T0 — Guard rails first (~half day)
+### T0 — Guard rails first — DONE 2026-07-22
 
-Write the safety net before touching anything:
-- Fixture matrix snapshot tests capturing TODAY's renderer output:
-  3 source languages × 3 viewer languages × {dictionary hit, miss, brandish
-  name, size-modified item, ko counter / no-counter}. Every later diff is
-  reviewed against these.
-- Source-guard test: `app/create/**` must not import the new expansion module.
-- Lock-coverage check + per-file approvals from Dan for any locked file.
+Safety net in place before any behavior change (all new, unlocked files):
+- **Baseline snapshot** `lib/deal-item-translation-baseline.test.ts`
+  (+ `__snapshots__/…snap`): freezes today's deterministic offer line for the
+  9-fixture × 3-viewer matrix, rendered on the true customer path
+  (`renderLocalizedOfferFromDefinition`, no providedTerms). Plus hard `toBe`
+  pins for the coverage gap, reverse direction, and brand preservation so they
+  survive `vitest -u`.
+- **Source guard** `lib/deal-item-translation-create-isolation-source.test.ts`:
+  scans all 10 `app/create/**` screens and fails if any imports the T2
+  expansion module or the switch. This is how "cannot affect deal creation"
+  becomes enforced.
+- **Lock audit — clean result:** the item-name work (T2) touches **zero**
+  locked files (`localized-offer-terms.ts`, `localized-offer-renderer.ts`,
+  `localized-deal-display.ts`, `deal-localization.ts`, `runtime-env.ts` and
+  their tests are all unlocked; `eas.json` too). Only T1 *might* touch a locked
+  file if the poster es-locale key needs fixing inside `AdPosterCanvas.tsx` /
+  `posterCopy.ts` — the resolver itself (`posterAdSpec.ts`) is unlocked, so T1
+  may avoid locked files entirely. `gate:ai-poster-lock` = 30/30 unchanged.
+- Validation: 9/9 new tests pass, `tsc` 0, eslint clean.
 
-### T1 — Poster viewer language ON (~1h + QA)
+**What the baseline revealed (sharpens T2):**
+- Coverage is asymmetric per language, not just per item: "cold brew" → ko
+  "콜드브루" but es keeps "cold brew"; "iced tea" → es "té helado". So the
+  Spanish table needs filling too, item by item.
+- Reverse direction is entry-specific: "café de olla" → EN "spiced coffee"
+  already works, but "아메리카노" stays Hangul for EN and ES viewers.
+- The Korean field-dump ("할인 항목: X × 1") fires exactly when the ko item has
+  no counter id — so adding ko entries *with* counter ids fixes coverage and
+  the awkward format together.
+
+### T1 — Poster viewer language — FLAG ON in dev; wiring VERIFIED; needs a fresh deal to see it (2026-07-22)
+
+Enabled `EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED=true` in `.env.development.local`
+and device-tested via Metro. Finding: the poster still renders **English** on the
+pre-existing "COFFEE + COOKIE BREAK" deal, even with Korean selected in the
+in-deal switcher. Diagnosed — this is **not** a code bug:
+- Deal detail passes `contentLocale` to the poster (`app/deal/[id].tsx:927`).
+- `posterCopyForLocale` (`lib/poster/posterAdSpec.ts:34-39`) looks up
+  `copy_by_language[locale]` with an en-US fallback, using `es-US`/`ko-KR`
+  consistently — no es-MX↔es-US mismatch (the earlier agent's es-MX note was
+  wrong). `parsePosterSpecV1` only keeps locales the stored record contains.
+- So a poster localizes only if its STORED spec has es-US/ko-KR copy. Poster
+  specs are frozen at publish and never backfilled, so **old deals stay English**
+  (unchanged, safe) and only **newly-published deals** carry localized poster copy.
+
+Consequence: enabling T1 is safe (zero regression on existing deals), but its
+benefit shows only on deals published after it's on. To device-confirm a
+localized poster, publish a fresh deal — needs the business account (currently
+logged out). No code change required for T1; the flag + existing wiring are
+correct. eas.json (production) NOT yet set — that's the ship/rebuild decision.
+
+Original T1 notes:
 
 - Set `EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED=true` in `eas.json`
   (production + preview) and `.env.development.local` (dev APK).
@@ -137,7 +180,54 @@ Write the safety net before touching anything:
 - Requires an app rebuild to reach customers (Dan-gated, can ride the next
   scheduled build — several other fixes are already queued on a rebuild).
 
-### T2 — Item names: coverage + reverse direction, per-language switch (~1–2 days)
+### T2 — Item names — DONE 2026-07-22 (built, dark, uncommitted)
+
+Implemented, tested, self-reviewed. Ships **dark** — the switch is unset in
+`eas.json`, so behavior is byte-identical to today until Dan enables + rebuilds.
+Zero locked files touched.
+
+Files:
+- NEW `lib/localized-offer-terms-expansion.ts` — ~80 curated DFW café/bakery/
+  restaurant entries (forward en→es/ko and reverse ko/es→en), Korean using only
+  the three reviewed counters. Consulted ONLY when the base misses (base always
+  wins → no reviewed term regresses).
+- NEW `lib/deal-item-translation-flag.ts` — dependency-free (no expo-constants)
+  reader for `EXPO_PUBLIC_DEAL_ITEM_TRANSLATION_LOCALES` (per-viewer switch).
+- `lib/localized-offer-terms.ts` — `extraDictionary` threaded through
+  `resolveLocalizedOfferTerm`/`dictionaryTerm`, exported dictionary type.
+- `lib/localized-offer-renderer.ts` — `extraDictionary` render option, passed to
+  both term resolutions; NOT read by the bundle builder, so publish/create specs
+  and hashes are unchanged.
+- `lib/localized-deal-display.ts` — the single customer render call passes the
+  expansion only when the switch enables `params.locale`. (Create never calls
+  this; verified no `app/create/**` file imports it.)
+- NEW test `lib/deal-item-translation-expansion.test.ts` — proves the gap closes,
+  reverse works, base never overridden, per-locale gating, and — since Korean is
+  unreviewed — that **every Korean counter used is natively reviewed**.
+
+Architecture note (why creation is provably safe): the expansion is a pure
+render-time transform on the CUSTOMER display path, downstream of storage. It
+never touches the offer definition, the stored `ad_spec`, the localization
+bundle, or any publish hash. Switch-off passes `extraDictionary: undefined`, so
+`renderLocalizedOfferFromDefinition` is byte-identical — the T0 baseline snapshot
+is unchanged.
+
+**Korean review (mine, no native reviewer):** rendered all ~80 items; output is
+natural (counters 잔/개/인분 placed correctly, correct transliterations). Caught
+and fixed one real error — matcha was written 마차 ("carriage") and is now 말차,
+matching the base's `말차 라떼`. Verdict: **ko-KR is good enough to ship enabled.**
+The three-counter constraint keeps it safe; anything uncovered falls back to the
+terse-but-correct form, never English, never wrong facts.
+
+Validation: full suite **280 files / 1929 tests green**, `gate:ai-poster-lock`
+30/30, `copy:evaluate` fixtures pass, `tsc` 0, eslint clean (1 pre-existing
+`Array<T>` warning on an untouched line). Coverage is a strong starter set, not
+exhaustive — unknown items still pass through (that is the by-design behavior;
+literal 100% is the declined AI phase T5).
+
+---
+
+Original T2 design notes (kept for reference):
 
 The core work. All of it inside the terms/display libs.
 
