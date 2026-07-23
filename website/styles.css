@@ -4490,6 +4490,16 @@ pre.admin-note {
   height: 60px;
 }
 
+/* Reserve the badge height on the hero store links so store-links.js swapping
+   the static text CTA for a taller badge image (60px, matching
+   .store-badge--google) does not grow .cta-row and shove the phone image and
+   trust list down. Without this the swap lands ~2.8s in on slow connections and
+   causes an intermittent ~0.12 CLS. Scoped to the home hero; the loaded state
+   is unchanged because the badge is already 60px. */
+.home-page .home-hero .cta-row .store-badge-link {
+  min-height: 60px;
+}
+
 .store-badge-row {
   display: flex;
   flex-wrap: wrap;
