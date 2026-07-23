@@ -505,8 +505,14 @@ if (failures.length === 0) {
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"list\"", "trial requests script must load applications from the backend");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"decide\"", "trial requests script must submit admin decisions");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_setup", "trial requests script must expose setup-only approval");
-  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must retire limited auto-trial approval");
-  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must retire full auto-trial approval");
+  // Quoted exactly: the retired keys are the old auto-trial decisions, and a
+  // bare "approve_full" substring also matches the deliberate, admin-gated
+  // approve_full_access grant that replaced them.
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_limited"', "trial requests script must retire limited auto-trial approval");
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_full"', "trial requests script must retire full auto-trial approval");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_full_access"', "trial requests script must expose the no-payment full-access grant");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "trialDaysFor", "full-access grant must validate its day count before submitting");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "trial_days", "full-access grant must send the admin's day count");
 
   const quickApprovalPage = read("website/quick-approve-trial/index.html");
   const quickApprovalJs = read("website/quick-approve-trial/quick-approve.js");

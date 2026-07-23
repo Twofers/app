@@ -15,6 +15,11 @@
   const urlParams = new URLSearchParams(window.location.search);
   const highRiskOnly = urlParams.get("risk") === "high";
   const HIGH_RISK_MAX_SCORE = 39; // Mirrors admin-dashboard-summary's high-risk definition.
+  // Mirrors the business_applications.trial_days CHECK and the same bounds in
+  // admin-business-applications; keep all three in step.
+  const MIN_TRIAL_DAYS = 1;
+  const MAX_TRIAL_DAYS = 120;
+  const DEFAULT_TRIAL_DAYS = 30;
 
   function applyRequestedQueue() {
     if (!form) return;
@@ -139,6 +144,18 @@
     if (!form) return "";
     const data = new FormData(form);
     return String(data.get("reason") || "").trim();
+  }
+
+  // Mirrors the server bound (business_applications.trial_days CHECK 1..120) so
+  // a bad number is caught before it costs a round trip.
+  function trialDaysFor(applicationId) {
+    const input = document.querySelector(`[data-trial-days-for="${applicationId}"]`);
+    if (!input) return null;
+    const raw = String(input.value || "").trim();
+    if (!/^\d+$/.test(raw)) return null;
+    const days = Number(raw);
+    if (!Number.isInteger(days) || days < MIN_TRIAL_DAYS || days > MAX_TRIAL_DAYS) return null;
+    return days;
   }
 
   function selectedStatus() {
@@ -294,6 +311,29 @@
         button.textContent = label;
         actions.appendChild(button);
       }
+
+      // Full access without payment: a day count plus its own button, kept next
+      // to each other so the number always belongs to the row being approved.
+      const daysLabel = document.createElement("label");
+      daysLabel.className = "admin-inline-field";
+      daysLabel.textContent = "Trial days";
+      const daysInput = document.createElement("input");
+      daysInput.type = "number";
+      daysInput.min = String(MIN_TRIAL_DAYS);
+      daysInput.max = String(MAX_TRIAL_DAYS);
+      daysInput.step = "1";
+      daysInput.value = String(DEFAULT_TRIAL_DAYS);
+      daysInput.dataset.trialDaysFor = app.id;
+      daysLabel.appendChild(daysInput);
+      actions.appendChild(daysLabel);
+
+      const fullAccessButton = document.createElement("button");
+      fullAccessButton.type = "button";
+      fullAccessButton.className = "button button-small";
+      fullAccessButton.dataset.decision = "approve_full_access";
+      fullAccessButton.dataset.applicationId = app.id;
+      fullAccessButton.textContent = "Approve - full access";
+      actions.appendChild(fullAccessButton);
       actionsTd.appendChild(actions);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -353,6 +393,20 @@
     if (decision === "reject" && !window.confirm("Reject this business request?")) return;
     if (decision === "approve_setup" && !window.confirm("Approve this business for setup access? No trial or credits start yet.")) return;
     if (decision === "suspend" && !window.confirm("Suspend this business and block merchant actions?")) return;
+
+    let trialDays;
+    if (decision === "approve_full_access") {
+      trialDays = trialDaysFor(applicationId);
+      if (trialDays === null) {
+        setTrialStatus(`Enter a whole number of trial days between ${MIN_TRIAL_DAYS} and ${MAX_TRIAL_DAYS}.`, "warning");
+        return;
+      }
+      const confirmed = window.confirm(
+        `Grant ${trialDays} days of full access now, no payment required yet?`,
+      );
+      if (!confirmed) return;
+    }
+
     button.disabled = true;
     setTrialStatus("Saving decision...");
     try {
@@ -361,6 +415,7 @@
         application_id: applicationId,
         decision,
         reason: noteValue(),
+        ...(trialDays === undefined ? {} : { trial_days: trialDays }),
       });
       const savedMessage = payload.business_linked
         ? "Decision saved and linked business setup access updated."

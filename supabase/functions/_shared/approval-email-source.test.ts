@@ -40,7 +40,9 @@ describe("business approval trial-welcome email", () => {
   it("emails only on approval decisions from the trial-request / field-invite path", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     expect(source).toMatch(/import \{[\s\S]*sendApprovalEmail,[\s\S]*\} from "\.\.\/_shared\/approval-email\.ts"/);
-    expect(source).toMatch(/if \(isSetupApprovalDecision\(decision\)\) \{[\s\S]*sendApprovalEmail\(/);
+    // Renamed from isSetupApprovalDecision 2026-07-23: approve_full_access is an
+    // approval that is not setup-only, so the old name no longer described it.
+    expect(source).toMatch(/if \(isApprovalDecision\(decision\)\) \{[\s\S]*sendApprovalEmail\(/);
     expect(source).toMatch(/approval_email_warning: approvalEmailWarning/);
   });
 

@@ -12,7 +12,16 @@
 // never logged, never returned, and never written to audit rows. Only the
 // sha256 of the token is stored (checkout_token_hash).
 
-export type ApprovalEmailDecision = "approve_setup" | "approve_limited" | "approve_full";
+export type ApprovalEmailDecision =
+  | "approve_setup"
+  | "approve_limited"
+  | "approve_setup_verified"
+  | "approve_full_access";
+
+/** approve_full_access grants working access up front; the rest wait for Checkout. */
+function grantsAccessImmediately(decision: ApprovalEmailDecision): boolean {
+  return decision === "approve_full_access";
+}
 
 // Fields are declared as unknown because callers pass raw Supabase rows (a
 // SELECT list or an insert-returning row) whose columns are loosely typed. The
@@ -31,7 +40,8 @@ const FROM_ADDRESS = "Twofer <support@twoferapp.com>";
 const CHECKOUT_TOKEN_TTL_DAYS = 30;
 
 // Standard approved activation is a 30-day Stripe trial. Approval itself does
-// not start the trial, grant credits, or unlock publishing.
+// not start the trial, grant credits, or unlock publishing. approve_full_access
+// overrides this with the admin's day count, carried on application.trial_days.
 function decisionDefaults(_decision: ApprovalEmailDecision): { trialDays: number } {
   return { trialDays: 30 };
 }
@@ -72,8 +82,12 @@ function buildEmail(params: {
   ownerEmail: string;
   trialDays: number;
   checkoutUrl: string;
+  accessLive: boolean;
 }): { subject: string; html: string; text: string } {
-  const { businessName, contactName, ownerEmail, trialDays, checkoutUrl } = params;
+  const { businessName, contactName, ownerEmail, trialDays, checkoutUrl, accessLive } = params;
+  if (accessLive) {
+    return buildFullAccessEmail(params);
+  }
   const greetingName = contactName || "there";
   const named = businessName || "Your business";
   const subject = "You're approved - activate your Twofer trial";
@@ -124,6 +138,73 @@ function buildEmail(params: {
       </p>
       <p style="font-size:13px;line-height:1.5;color:#5f625b;margin:0 0 20px;">
         If you have not set up your app account yet, do that first, then open this link again.
+      </p>
+      <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">Questions? Email <a href="mailto:support@twoferapp.com" style="color:#e8590c;">support@twoferapp.com</a>.</p>
+      <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">- Twofer</p>
+      <p style="font-size:12px;line-height:1.5;color:#8a8d85;margin:24px 0 0;border-top:1px solid #e3e4df;padding-top:16px;">${escapeHtml(bilingualFooter)}</p>
+    </div>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
+ * approve_full_access variant: access is already on, so the copy leads with
+ * that and the countdown. The Checkout link still ships — an admin-granted
+ * trial is meant to convert to paid, it just does not gate access on payment.
+ */
+function buildFullAccessEmail(params: {
+  businessName: string;
+  contactName: string;
+  ownerEmail: string;
+  trialDays: number;
+  checkoutUrl: string;
+}): { subject: string; html: string; text: string } {
+  const { businessName, contactName, ownerEmail, trialDays, checkoutUrl } = params;
+  const greetingName = contactName || "there";
+  const named = businessName || "Your business";
+  const subject = `You're approved - ${trialDays} days of full access`;
+  const bilingualFooter = "Prefieres espanol? / hangugeo doumi piryohaseyo? support@twoferapp.com";
+
+  const text = [
+    `Hi ${greetingName},`,
+    "",
+    `${named} is approved, and your ${trialDays} days of full access are live now. No payment needed to start.`,
+    "",
+    "How to get started:",
+    "1. Download Twofer from the App Store or Google Play.",
+    `2. Sign up as a Business using this email address: ${ownerEmail}. That is how your access attaches to your account.`,
+    "3. Build your first offer and publish it.",
+    "",
+    `To keep going after ${trialDays} days, add payment any time:`,
+    "",
+    checkoutUrl,
+    "",
+    "Questions? Email support@twoferapp.com.",
+    "",
+    "- Twofer",
+    "",
+    bilingualFooter,
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f6f7f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1d1a;">
+    <div style="max-width:520px;margin:0 auto;padding:24px;">
+      <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">Hi ${escapeHtml(greetingName)},</p>
+      <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
+        <strong>${escapeHtml(named)}</strong> is approved, and your ${trialDays} days of full access are live now. No payment needed to start.
+      </p>
+      <p style="font-size:15px;line-height:1.5;margin:0 0 8px;">How to get started:</p>
+      <ol style="font-size:15px;line-height:1.6;margin:0 0 20px;padding-left:20px;">
+        <li>Download Twofer from the App Store or Google Play.</li>
+        <li>Sign up as a Business using this email address: <strong>${escapeHtml(ownerEmail)}</strong>. That is how your access attaches to your account.</li>
+        <li>Build your first offer and publish it.</li>
+      </ol>
+      <p style="font-size:15px;line-height:1.5;margin:0 0 12px;">To keep going after ${trialDays} days, add payment any time:</p>
+      <p style="margin:0 0 20px;">
+        <a href="${escapeHtml(checkoutUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:12px 20px;border-radius:8px;">Add payment</a>
       </p>
       <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">Questions? Email <a href="mailto:support@twoferapp.com" style="color:#e8590c;">support@twoferapp.com</a>.</p>
       <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">- Twofer</p>
@@ -217,6 +298,7 @@ export async function sendApprovalEmail(params: {
       ownerEmail,
       trialDays,
       checkoutUrl,
+      accessLive: grantsAccessImmediately(decision),
     });
 
     const response = await fetch(RESEND_ENDPOINT, {

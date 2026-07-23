@@ -213,7 +213,7 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
 
   const { data: subscription, error: subscriptionError } = await supabase
     .from("business_subscriptions")
-    .select("app_access_status,activated_at,stripe_subscription_id")
+    .select("app_access_status,activated_at,stripe_subscription_id,trial_type")
     .eq("business_id", businessId)
     .maybeSingle();
   if (subscriptionError) throw subscriptionError;
@@ -225,10 +225,25 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
   const alreadyHasProviderSubscription = Boolean(safeGetString(subscription?.stripe_subscription_id));
   const activeAccess = new Set(["trial_limited", "trialing", "active", "past_due_grace", "comped"]);
 
-  if (alreadyActivated || alreadyHasProviderSubscription || (appAccessStatus && activeAccess.has(appAccessStatus))) {
+  // An admin-granted (approve_full_access) trial is access without billing: it
+  // has no Stripe customer or subscription behind it and it runs out on its own.
+  // Those owners are exactly the ones we want converting to paid, so a card-free
+  // admin trial is checkout-eligible rather than "already activated". A trial
+  // that came from Stripe, or any business that has ever activated, still is not.
+  const onCardFreeAdminTrial = appAccessStatus === "trialing" &&
+    safeGetString(subscription?.trial_type) === "admin_comp" &&
+    !alreadyActivated &&
+    !alreadyHasProviderSubscription;
+
+  if (
+    alreadyActivated ||
+    alreadyHasProviderSubscription ||
+    (appAccessStatus && activeAccess.has(appAccessStatus) && !onCardFreeAdminTrial)
+  ) {
     throw new Error("BUSINESS_ALREADY_ACTIVATED");
   }
   if (
+    !onCardFreeAdminTrial &&
     businessStatus !== "approved_not_activated" &&
     accessLevel !== "approved_not_activated" &&
     appAccessStatus !== "approved_not_activated"
@@ -236,11 +251,17 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
     throw new Error("BUSINESS_NOT_APPROVED_FOR_ACTIVATION");
   }
 
+  // Applying an admin grant moves the application to `trial_active` (the billing
+  // mirror in applyBusinessBillingAccessState does it), so restricting this to
+  // approved_not_activated would leave every comped owner unable to convert.
+  const claimableStatuses = onCardFreeAdminTrial
+    ? ["approved_not_activated", "trial_active"]
+    : ["approved_not_activated"];
   const { data: applications, error: applicationError } = await supabase
     .from("business_applications")
     .select("id,claimed_by_user_id")
     .eq("business_id", businessId)
-    .eq("status", "approved_not_activated")
+    .in("status", claimableStatuses)
     .limit(2);
   if (applicationError) throw applicationError;
   if (!Array.isArray(applications) || applications.length !== 1 || !applications[0]?.claimed_by_user_id) {

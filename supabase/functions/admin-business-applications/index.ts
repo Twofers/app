@@ -14,6 +14,7 @@ import {
 } from "../_shared/approval-email.ts";
 import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
+import { grantFullAccessTrial } from "../_shared/admin-full-access-grant.ts";
 
 type AdminRole =
   | "owner"
@@ -43,16 +44,27 @@ type Payload = {
   decision?: unknown;
   reason?: unknown;
   token?: unknown;
+  trial_days?: unknown;
 };
 
+// `approve_setup_verified` was named `approve_full` until 2026-07-23. It never
+// granted full access — only approved_not_activated with manual verification —
+// and the old name kept getting read as "this one turns everything on".
+// `approve_full_access` is the decision that actually does that.
 type DecisionKey =
   | "approve_setup"
   | "approve_limited"
-  | "approve_full"
+  | "approve_setup_verified"
+  | "approve_full_access"
   | "review_required"
   | "waitlist"
   | "reject"
   | "suspend";
+
+// Admin-entered countdown for approve_full_access, matching the
+// business_applications.trial_days check constraint.
+const MIN_FULL_ACCESS_TRIAL_DAYS = 1;
+const MAX_FULL_ACCESS_TRIAL_DAYS = 120;
 
 type VerificationDecision = "verify" | "reject" | "needs_more_info";
 
@@ -69,6 +81,11 @@ type DecisionConfig = {
   businessVerificationStatus: string;
   subscriptionAccessStatus: string;
   auditAction: string;
+  /**
+   * Non-null only for approve_full_access: the countdown length for an
+   * admin-granted trial that is live immediately, with no Checkout step.
+   */
+  fullAccessTrialDays: number | null;
 };
 
 type BusinessDecisionSyncResult = {
@@ -125,7 +142,7 @@ function riskLevel(score: unknown): "low" | "medium" | "high" | "blocked" | null
   return "high";
 }
 
-function decisionConfig(decision: DecisionKey): DecisionConfig {
+function decisionConfig(decision: DecisionKey, fullAccessTrialDays: number | null = null): DecisionConfig {
   if (decision === "approve_setup" || decision === "approve_limited") {
     return {
       status: "approved_not_activated",
@@ -140,9 +157,10 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "basic_verified",
       subscriptionAccessStatus: "approved_not_activated",
       auditAction: "admin_business_application_approved_for_setup",
+      fullAccessTrialDays: null,
     };
   }
-  if (decision === "approve_full") {
+  if (decision === "approve_setup_verified") {
     return {
       status: "approved_not_activated",
       accessTier: "approved_not_activated",
@@ -155,7 +173,36 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessAccessLevel: "approved_not_activated",
       businessVerificationStatus: "manual_verified",
       subscriptionAccessStatus: "approved_not_activated",
+      // Audit action keeps its pre-rename string so log queries and dashboards
+      // spanning the rename still return one continuous series.
       auditAction: "admin_business_application_approved_for_setup_full",
+      fullAccessTrialDays: null,
+    };
+  }
+  if (decision === "approve_full_access") {
+    // Comp / partner / pilot fast-track: access is live the moment the owner
+    // claims, with no Checkout step, and runs out after the admin's day count.
+    //
+    // The APPLICATION deliberately stays approved_not_activated here.
+    // claim_approved_business_application_for_user only matches applications in
+    // that status (migration 20260817120000), so anything else would strand an
+    // unclaimed grant. The grant itself rides on full_access_trial_days, and the
+    // live state lands either immediately (business already exists, via
+    // syncBusinessDecision) or at claim time.
+    return {
+      status: "approved_not_activated",
+      accessTier: "approved_not_activated",
+      verificationStatus: "verified_low_risk",
+      trialDays: fullAccessTrialDays,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      requestStatus: "approved_not_activated",
+      businessStatus: "trialing",
+      businessAccessLevel: "full_trial",
+      businessVerificationStatus: "manual_verified",
+      subscriptionAccessStatus: "trialing",
+      auditAction: "admin_business_application_approved_full_access_comp",
+      fullAccessTrialDays,
     };
   }
   if (decision === "waitlist") {
@@ -172,6 +219,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "needs_more_info",
       subscriptionAccessStatus: "pending",
       auditAction: "admin_business_application_waitlisted",
+      fullAccessTrialDays: null,
     };
   }
   if (decision === "reject") {
@@ -188,6 +236,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "failed",
       subscriptionAccessStatus: "pending",
       auditAction: "admin_business_application_rejected",
+      fullAccessTrialDays: null,
     };
   }
   if (decision === "suspend") {
@@ -204,6 +253,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "needs_more_info",
       subscriptionAccessStatus: "suspended",
       auditAction: "admin_business_application_suspended",
+      fullAccessTrialDays: null,
     };
   }
   return {
@@ -219,13 +269,15 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
     businessVerificationStatus: "needs_more_info",
     subscriptionAccessStatus: "pending",
     auditAction: "admin_business_application_review_required",
+    fullAccessTrialDays: null,
   };
 }
 
 function isDecision(value: unknown): value is DecisionKey {
   return (
     value === "approve_limited" ||
-    value === "approve_full" ||
+    value === "approve_setup_verified" ||
+    value === "approve_full_access" ||
     value === "approve_setup" ||
     value === "review_required" ||
     value === "waitlist" ||
@@ -234,10 +286,36 @@ function isDecision(value: unknown): value is DecisionKey {
   );
 }
 
-function isSetupApprovalDecision(
+/**
+ * Every decision that approves the business — the activation gate, the
+ * protected-access guard, the approved-email stamp, and the welcome email all
+ * key off this, so a new approve_* decision must be added here too.
+ */
+function isApprovalDecision(
   decision: DecisionKey,
 ): decision is ApprovalEmailDecision {
-  return decision === "approve_setup" || decision === "approve_limited" || decision === "approve_full";
+  return (
+    decision === "approve_setup" ||
+    decision === "approve_limited" ||
+    decision === "approve_setup_verified" ||
+    decision === "approve_full_access"
+  );
+}
+
+/**
+ * Handing out working access with no payment is a narrower authority than
+ * ordinary approval, so moderators and developers cannot do it.
+ */
+function canGrantFullAccess(role: AdminRole): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/** Admin-entered countdown; returns null when absent or out of range. */
+function parseFullAccessTrialDays(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null;
+  if (n < MIN_FULL_ACCESS_TRIAL_DAYS || n > MAX_FULL_ACCESS_TRIAL_DAYS) return null;
+  return n;
 }
 
 async function approvedActivationGateEnabled(supabaseAdmin: any): Promise<boolean> {
@@ -604,6 +682,19 @@ async function syncBusinessDecision(
         cancelAtPeriodEnd: false,
       });
     }
+  } else if (config.subscriptionAccessStatus === "trialing" && config.fullAccessTrialDays !== null) {
+    // approve_full_access on a business that already exists: turn access on now
+    // and start the countdown. No Stripe customer, subscription, or Checkout is
+    // involved — expire-billing-access sweeps the row to `expired` once
+    // trial_end passes, exactly as it does for any other card-free admin trial.
+    // When the business does NOT exist yet, this is skipped and the marker
+    // columns carry the grant to get-business-onboarding-context instead.
+    await grantFullAccessTrial({
+      supabase: ctx.supabaseAdmin,
+      businessId,
+      trialDays: config.fullAccessTrialDays,
+      source: "admin_approval_full_access",
+    });
   } else if (config.subscriptionAccessStatus === "suspended") {
     const now = new Date().toISOString();
     const { error: subscriptionError } = await ctx.supabaseAdmin
@@ -639,18 +730,35 @@ async function applyDecision(
   application: Record<string, unknown>,
   decision: DecisionKey,
   rawReason: unknown,
+  rawTrialDays: unknown = null,
 ) {
   const applicationId = String(application.id);
-  if (isSetupApprovalDecision(decision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+  if (isApprovalDecision(decision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
     return json(req, {
       error: "Approved activation rollout is not enabled.",
       error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
     }, 503);
   }
+  let fullAccessTrialDays: number | null = null;
+  if (decision === "approve_full_access") {
+    if (!canGrantFullAccess(ctx.adminUser.role)) {
+      return json(req, {
+        error: "This admin role cannot grant full access without payment.",
+        error_code: "FULL_ACCESS_GRANT_FORBIDDEN",
+      }, 403);
+    }
+    fullAccessTrialDays = parseFullAccessTrialDays(rawTrialDays);
+    if (fullAccessTrialDays === null) {
+      return json(req, {
+        error: `Enter the number of trial days (${MIN_FULL_ACCESS_TRIAL_DAYS}-${MAX_FULL_ACCESS_TRIAL_DAYS}).`,
+        error_code: "INVALID_TRIAL_DAYS",
+      }, 400);
+    }
+  }
   const linkedBusinessId =
     typeof application.business_id === "string" ? application.business_id : null;
   if (
-    isSetupApprovalDecision(decision) &&
+    isApprovalDecision(decision) &&
     linkedBusinessId &&
     await linkedBusinessHasProtectedAccess(ctx.supabaseAdmin, linkedBusinessId)
   ) {
@@ -659,7 +767,7 @@ async function applyDecision(
       error_code: "LINKED_BUSINESS_ACCESS_PROTECTED",
     }, 409);
   }
-  const config = decisionConfig(decision);
+  const config = decisionConfig(decision, fullAccessTrialDays);
   const reason = cleanBusinessString(rawReason, 500) ?? "";
   const adminEmail = ctx.adminUser.email ?? ctx.user.email ?? null;
   const onboardingRequestId = await ensureOnboardingRequestForDecision(ctx, application, config);
@@ -668,9 +776,14 @@ async function applyDecision(
   const applicationPatch = {
     status: config.status,
     access_tier: config.accessTier,
-    ...(isSetupApprovalDecision(decision)
+    ...(isApprovalDecision(decision)
       ? { approved_email_normalized: String(application.email ?? "").trim().toLowerCase() }
       : {}),
+    // Carries the grant to the claim path for an application whose business
+    // does not exist yet; harmless (and cleared) on every other decision.
+    full_access_trial_days: config.fullAccessTrialDays,
+    full_access_granted_at: config.fullAccessTrialDays === null ? null : new Date().toISOString(),
+    full_access_granted_by: config.fullAccessTrialDays === null ? null : ctx.user.id,
     verification_status: config.verificationStatus,
     trial_days: config.trialDays,
     trial_offer_limit: config.trialOfferLimit,
@@ -711,7 +824,7 @@ async function applyDecision(
   // Approval email (best-effort; never blocks the decision). Approval no longer
   // starts access; it hands the owner to account setup and trial activation.
   let approvalEmailWarning: string | null = null;
-  if (isSetupApprovalDecision(decision)) {
+  if (isApprovalDecision(decision)) {
     approvalEmailWarning = await sendApprovalEmail({
       supabaseAdmin: ctx.supabaseAdmin,
       application: updated as Record<string, unknown>,
@@ -1021,7 +1134,14 @@ async function decideApplication(req: Request, ctx: AdminContext, payload: Paylo
   if (applicationError) throw applicationError;
   if (!applicationData) return json(req, { error: "Trial request not found." }, 404);
 
-  return applyDecision(req, ctx, applicationData as Record<string, unknown>, payload.decision, payload.reason);
+  return applyDecision(
+    req,
+    ctx,
+    applicationData as Record<string, unknown>,
+    payload.decision,
+    payload.reason,
+    payload.trial_days,
+  );
 }
 
 function isVerificationDecision(value: unknown): value is VerificationDecision {
@@ -1105,8 +1225,8 @@ async function createApplication(req: Request, ctx: AdminContext, payload: Paylo
   const contactName = cleanString(input.contact_name, 120);
   const email = cleanString(input.email, 200).toLowerCase();
   const decision = (payload as Record<string, unknown>).decision;
-  const accessDecision: DecisionKey = decision === "approve_full"
-    ? "approve_full"
+  const accessDecision: DecisionKey = decision === "approve_setup_verified"
+    ? "approve_setup_verified"
     : decision === "review_required"
     ? "review_required"
     : "approve_limited";
@@ -1114,7 +1234,7 @@ async function createApplication(req: Request, ctx: AdminContext, payload: Paylo
   if (!businessName || !contactName || !EMAIL_RE.test(email)) {
     return json(req, { error: "Business name, contact name, and a valid email are required." }, 400);
   }
-  if (isSetupApprovalDecision(accessDecision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+  if (isApprovalDecision(accessDecision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
     return json(req, {
       error: "Approved activation rollout is not enabled.",
       error_code: "APPROVED_ACTIVATION_GATE_DISABLED",

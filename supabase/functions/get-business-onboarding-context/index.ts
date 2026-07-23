@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { applyPendingFullAccessGrant } from "../_shared/admin-full-access-grant.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -138,6 +139,13 @@ serve(async (req) => {
     }
 
     const businessId = await ensureLinkedBusiness(supabaseAdmin, user.id, email);
+    // An approve_full_access grant approved before this business existed is
+    // applied here, immediately after the claim materialized it. Deliberately
+    // outside ensureLinkedBusiness: the claim RPC owns materialization, this
+    // owns access. No-ops unless an unspent marker is present, and never throws.
+    if (businessId) {
+      await applyPendingFullAccessGrant({ supabase: supabaseAdmin, businessId });
+    }
     if (!businessId) {
       const application = await readApplicationStatus(supabaseAdmin, email);
       return json(req, {

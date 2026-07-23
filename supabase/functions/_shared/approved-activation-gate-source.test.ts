@@ -14,15 +14,81 @@ describe("approved-not-activated lifecycle", () => {
     const admin = read("supabase/functions/admin-business-applications/index.ts");
     const approvalEmail = read("supabase/functions/_shared/approval-email.ts");
     expect(admin).toMatch(/decision === "approve_setup" \|\| decision === "approve_limited"/);
-    expect(admin).toMatch(/decision === "approve_full"[\s\S]*?status: "approved_not_activated"/);
+    expect(admin).toMatch(/decision === "approve_setup_verified"[\s\S]*?status: "approved_not_activated"/);
     expect(admin).toMatch(/trialDays: null/);
     expect(admin).toMatch(/subscriptionAccessStatus: "approved_not_activated"/);
+    // The pre-2026-07-23 name is gone; it read as "grants full access" and never did.
+    expect(admin).not.toMatch(/"approve_full"/);
     expect(admin).toMatch(/APPROVED_ACTIVATION_GATE_DISABLED/);
     expect(admin).toMatch(/linkedBusinessHasProtectedAccess/);
     expect(admin).toMatch(/LINKED_BUSINESS_ACCESS_PROTECTED/);
     expect(admin).toMatch(/PROTECTED_BUSINESS_ACCESS_LEVELS/);
     expect(approvalEmail).toMatch(/trial starts after you activate it through secure Checkout/i);
     expect(approvalEmail).toMatch(/AI image generation, publishing, customer claims, and offer credits unlock only after activation/i);
+  });
+
+  it("grants approve_full_access a live, time-boxed trial instead of approved_not_activated", () => {
+    const admin = read("supabase/functions/admin-business-applications/index.ts");
+    const fullAccess = admin.slice(
+      admin.indexOf('if (decision === "approve_full_access")'),
+      admin.indexOf('if (decision === "waitlist")'),
+    );
+    expect(fullAccess).toBeTruthy();
+    // Access turns on now; Stripe is offered for conversion, never required.
+    expect(fullAccess).toMatch(/businessAccessLevel: "full_trial"/);
+    expect(fullAccess).toMatch(/subscriptionAccessStatus: "trialing"/);
+    expect(fullAccess).toMatch(/businessStatus: "trialing"/);
+    // The APPLICATION must stay approved_not_activated or an unclaimed grant is
+    // stranded: claim_approved_business_application_for_user only matches that.
+    expect(fullAccess).toMatch(/status: "approved_not_activated"/);
+    expect(read(migrationPath)).toMatch(/ba\.status = 'approved_not_activated'/);
+
+    // Bounded countdown, owner/admin only, and a distinct audit trail.
+    expect(admin).toMatch(/MIN_FULL_ACCESS_TRIAL_DAYS = 1/);
+    expect(admin).toMatch(/MAX_FULL_ACCESS_TRIAL_DAYS = 120/);
+    expect(admin).toMatch(/INVALID_TRIAL_DAYS/);
+    expect(admin).toMatch(/FULL_ACCESS_GRANT_FORBIDDEN/);
+    expect(admin).toMatch(/function canGrantFullAccess[\s\S]*?role === "owner" \|\| role === "admin"/);
+    expect(admin).toMatch(/admin_business_application_approved_full_access_comp/);
+
+    // One grant implementation for both moments it can fire: inline when the
+    // business already exists, and post-claim when it did not.
+    const grant = read("supabase/functions/_shared/admin-full-access-grant.ts");
+    expect(admin).toMatch(/grantFullAccessTrial\(/);
+    expect(read("supabase/functions/get-business-onboarding-context/index.ts"))
+      .toMatch(/applyPendingFullAccessGrant\(/);
+    // trial_type must be a value the business_subscriptions CHECK allows, and
+    // must not be stripe_trial or the location entitlement resolves wrong.
+    expect(grant).toMatch(/FULL_ACCESS_TRIAL_TYPE = "admin_comp"/);
+    expect(grant).not.toMatch(/"admin_trial"/);
+    expect(grant).toMatch(/app_access_status: "trialing"/);
+    // A grant must never quietly overwrite paid or Stripe-backed access.
+    expect(grant).toMatch(/stripe_subscription_id/);
+    expect(grant).toMatch(/PROTECTED_APP_ACCESS/);
+  });
+
+  it("lets a card-free admin trial still reach Stripe Checkout to convert", () => {
+    const checkout = read("supabase/functions/stripe-create-checkout-session/index.ts");
+    expect(checkout).toMatch(/onCardFreeAdminTrial/);
+    // Converting is allowed only for an admin grant with nothing billed behind
+    // it; a Stripe-backed trial or an activated business is still refused.
+    expect(checkout).toMatch(/trial_type"\) === "admin_comp"|trial_type\) === "admin_comp"/);
+    expect(checkout).toMatch(/!alreadyActivated &&\s*!alreadyHasProviderSubscription/);
+    expect(checkout).toMatch(/BUSINESS_ALREADY_ACTIVATED/);
+    // The grant moves the application to trial_active, so the eligibility
+    // lookup has to accept that status or comped owners can never convert.
+    expect(checkout).toMatch(/"approved_not_activated", "trial_active"/);
+  });
+
+  it("tells approve_full_access owners access is already live but still links Checkout", () => {
+    const approvalEmail = read("supabase/functions/_shared/approval-email.ts");
+    const variant = approvalEmail.slice(approvalEmail.indexOf("function buildFullAccessEmail"));
+    expect(variant).toMatch(/days of full access are live now/i);
+    expect(variant).toMatch(/No payment needed to start/i);
+    // Dan's decision 2026-07-23: path B still converts to paid, so the checkout
+    // link ships in this variant too.
+    expect(variant).toMatch(/checkoutUrl/);
+    expect(approvalEmail).toMatch(/function grantsAccessImmediately[\s\S]*?decision === "approve_full_access"/);
   });
 
   it("claims one approved application for the confirmed auth email in one transaction", () => {
