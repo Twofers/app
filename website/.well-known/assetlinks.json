@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.unvmex2.twoforone",
       "sha256_cert_fingerprints": [
-        "92:65:79:9A:9D:FB:83:05:E6:B5:12:00:7F:6B:A4:4C:00:98:AB:DC:39:5E:69:47:72:55:5F:60:0B:92:C9:C0"
+        "92:65:79:9A:9D:FB:83:05:E6:B5:12:00:7F:6B:A4:4C:00:98:AB:DC:39:5E:69:47:72:55:5F:60:0B:92:C9:C0",
+        "9E:05:0E:94:E8:F7:A7:9A:BF:A2:3C:AE:08:4C:D5:E3:EC:9B:BF:D6:91:83:A0:71:20:6C:AC:5B:04:83:2C:93"
       ]
     }
   }
