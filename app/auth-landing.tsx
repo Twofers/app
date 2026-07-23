@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -18,6 +18,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
+import { LaunchArguments } from "react-native-launch-arguments";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Trans, useTranslation } from "react-i18next";
@@ -38,8 +39,7 @@ import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-f
 import i18n, { APP_LOCALES, appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
-import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
-import { BUSINESS_INVITE_PENDING_META_KEY, isValidBusinessInviteCode } from "@/lib/business-invite";
+import { getEmailAuthRedirectUrl, PASSWORD_MIN_LENGTH } from "@/lib/auth-password-recovery";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -204,12 +204,22 @@ function firstQueryString(v: string | string[] | undefined): string | undefined 
 
 type AuthScreenMode = "login" | "signup";
 
+type QaLoginLaunchArgs = {
+  qaLogin?: string | number | boolean;
+  qaLoginEmail?: string;
+  qaLoginPassword?: string;
+};
+
 export default function AuthLandingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const params = useLocalSearchParams<{ next?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    next?: string | string[];
+    qaLogin?: string | string[];
+    qaLoginEmail?: string | string[];
+  }>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   // Account-type cards stay side-by-side by default. On narrow phones we tighten
@@ -233,17 +243,16 @@ export default function AuthLandingScreen() {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pwVisible, setPwVisible] = useState(false);
-  const [focusedField, setFocusedField] = useState<null | "email" | "password" | "invite">(null);
+  const [focusedField, setFocusedField] = useState<null | "email" | "password">(null);
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const qaLoginStarted = useRef(false);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -260,11 +269,65 @@ export default function AuthLandingScreen() {
 
   const busy = busyAction !== null;
 
+  useEffect(() => {
+    if (!__DEV__ || qaLoginStarted.current) return;
+    let args: QaLoginLaunchArgs | null = null;
+    try {
+      args = LaunchArguments.value<QaLoginLaunchArgs>();
+    } catch {
+      args = null;
+    }
+    const paramQaLogin = firstQueryString(params.qaLogin);
+    const paramQaEmail = firstQueryString(params.qaLoginEmail);
+    const rawEnabled = paramQaLogin ?? args?.qaLogin;
+    const enabled = rawEnabled === "1" || rawEnabled === 1 || rawEnabled === true;
+    const qaEmail = (paramQaEmail ?? args?.qaLoginEmail ?? "").trim();
+    // The password is accepted ONLY from native launch arguments (adb/instrumentation),
+    // never from a deep-link URL query param — a URL-borne password would leak into
+    // Android logcat / intent history / screen recordings. (__DEV__-only regardless.)
+    const qaPassword = args?.qaLoginPassword ?? "";
+    if (!enabled || !qaEmail || !qaPassword) return;
+
+    qaLoginStarted.current = true;
+    setEmail(qaEmail);
+    setPw(qaPassword);
+    setBusyAction("login");
+    clearFeedback();
+
+    void (async () => {
+      try {
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({
+          email: qaEmail,
+          password: qaPassword,
+        });
+        if (error) {
+          setAuthError(friendlyAuthError(error, t));
+          return;
+        }
+        const user = signInData.session?.user;
+        if (!user) {
+          setAuthError(t("authLanding.errGeneric"));
+          return;
+        }
+        const role = await resolveRoleForUser(user);
+        await adoptRole(role, user.id);
+        const href = await resolvePostAuthReplaceHref({
+          role,
+          nextParam: firstQueryString(params.next),
+        });
+        router.replace(href);
+      } catch (e: unknown) {
+        setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+      } finally {
+        setBusyAction(null);
+      }
+    })();
+  }, [adoptRole, params.next, params.qaLogin, params.qaLoginEmail, router, t]);
+
   function clearFeedback() {
     setAuthError(null);
     setEmailError(null);
     setPwError(null);
-    setInviteError(null);
   }
 
   function switchScreenMode(next: AuthScreenMode) {
@@ -287,6 +350,12 @@ export default function AuthLandingScreen() {
     }
     if (pw.length === 0) {
       setPwError(t("authLanding.passwordRequired", { defaultValue: "Please enter your password" }));
+      ok = false;
+    } else if (screenMode === "signup" && pw.length < PASSWORD_MIN_LENGTH) {
+      // Same rule (and localized copy) as the reset screen, so the client and
+      // server password policies cannot drift apart. Login keeps the
+      // non-empty-only check so legacy shorter passwords can still sign in.
+      setPwError(t("passwordRecovery.errPasswordMin", { min: PASSWORD_MIN_LENGTH }));
       ok = false;
     } else {
       setPwError(null);
@@ -356,26 +425,17 @@ export default function AuthLandingScreen() {
       return;
     }
     if (!validateFields()) return;
-    if (signupRole === "business" && !isValidBusinessInviteCode(inviteCode)) {
-      setInviteError(
-        t("authLanding.errInviteCode", {
-          defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
-        }),
-      );
-      return;
-    }
 
     setBusyAction("signup");
     clearFeedback();
     setSignUpAwaitingVerification(false);
     logAuthPath("signup");
     try {
-      // The role rides in auth metadata so it survives the email-verification
-      // round-trip; the first login persists it to profiles.role.
+      // The role rides in auth metadata only to preserve post-verification
+      // navigation. It never grants a merchant workspace or capabilities:
+      // the confirmed email must still atomically claim one approved
+      // application on first business-context load.
       const signUpData: Record<string, string> = { [SIGNUP_ROLE_META_KEY]: signupRole };
-      if (signupRole === "business") {
-        signUpData[BUSINESS_INVITE_PENDING_META_KEY] = inviteCode.trim().toLowerCase();
-      }
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
@@ -804,47 +864,6 @@ export default function AuthLandingScreen() {
                     </View>
                   );
                 })()
-              ) : null}
-
-              {isSignup && signupRole === "business" ? (
-                <View style={{ marginTop: Spacing.md }}>
-                  <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
-                    {t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
-                  </Text>
-                  <TextInput
-                    value={inviteCode}
-                    onChangeText={(v) => {
-                      setInviteCode(v);
-                      if (inviteError) setInviteError(null);
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!busy}
-                    onFocus={() => setFocusedField("invite")}
-                    onBlur={() => setFocusedField((f) => (f === "invite" ? null : f))}
-                    accessibilityLabel={t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
-                    placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code Twofer gave you" })}
-                    placeholderTextColor={theme.mutedText}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: inviteError ? theme.danger : focusedField === "invite" ? theme.primary : inputBorder,
-                      borderRadius: Radii.md,
-                      padding: authInputPadding,
-                      fontSize: 16,
-                      backgroundColor: inputBg,
-                      color: theme.text,
-                    }}
-                  />
-                  {inviteError ? (
-                    <Text style={{ fontSize: 12, color: theme.danger, marginTop: Spacing.xs }}>{inviteError}</Text>
-                  ) : (
-                    <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: Spacing.xs }}>
-                      {t("authLanding.inviteCodeHint", {
-                        defaultValue: "Required to create a business account.",
-                      })}
-                    </Text>
-                  )}
-                </View>
               ) : null}
 
               {!isSignup ? (

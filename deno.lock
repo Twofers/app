@@ -100,7 +100,11 @@
         "npm:react@19.1.0",
         "npm:typescript@~5.9.2",
         "npm:vitest@^3.2.4"
-      ]
+      ],
+      "overrides": {
+        "react-native": "$react-native",
+        "postcss": ">=8.5.10 <9"
+      }
     }
   }
 }

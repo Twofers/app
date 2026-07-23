@@ -77,8 +77,12 @@ describe("localized offer renderer", () => {
 
     expect(bundle["en-US"].primaryOfferLine).toBe("Buy one latte and get one free");
     expect(bundle["es-US"].primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 latte gratis");
-    expect(bundle["ko-KR"].primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
-    expect(bundle["ko-KR"].compactOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1 \u00B7 \uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
+    // S9: latte resolves the native-reviewed "cup" counter, so Korean now gets the sentence
+    // shape instead of the counter-free field dump. Deliberately updated \u2014 the dump was the
+    // placeholder for terms whose counter has NOT been reviewed, and it is still asserted
+    // for those in "keeps the counter-free field dump when a counter is not native-reviewed".
+    expect(bundle["ko-KR"].primaryOfferLine).toBe("\uB77C\uB5BC 1\uC794 \uAD6C\uB9E4 \uC2DC \uB77C\uB5BC 1\uC794 \uBB34\uB8CC");
+    expect(bundle["ko-KR"].compactOfferLine).toBe("\uB77C\uB5BC 1\uC794 \uAD6C\uB9E4 \uC2DC \uB77C\uB5BC 1\uC794 \uBB34\uB8CC");
     expect(bundle["es-US"].termsLine).toContain("Cedar Bean - Irving");
     expect(bundle["ko-KR"].termsLine).toContain("Cedar Bean - Irving");
   });
@@ -110,6 +114,60 @@ describe("localized offer renderer", () => {
       "reward:coffee:ko-KR:reviewed-term-v1",
     ]);
   });
+  // S9. Korean has two shapes on purpose: a counter-free field dump for terms whose counter
+  // has not been native-reviewed, and a real sentence for terms whose counter HAS been.
+  // Only the dump was ever implemented — `resolveKoreanOfferTemplate` returned
+  // usesCounters:true and both branches emitted the same record anyway — so a Korean shopper
+  // read "구매 항목: X × 1 / 추가 혜택: Y × 1" where a Spanish one read a sentence.
+  it("renders a Korean sentence when both counters are native-reviewed", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "large coffee drink",
+      freeItemDescription: "cookie",
+    });
+    const providedTerms: LocalizedOfferTerm[] = [
+      term({ entityId: "sku_paid", locale: "ko-KR", displayName: "라지 커피 음료", koreanCounterId: "cup" }),
+      term({ entityId: "reward:cookie", locale: "ko-KR", displayName: "쿠키", koreanCounterId: "piece" }),
+    ];
+
+    const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR", providedTerms });
+
+    expect(korean.primaryOfferLine).toBe("라지 커피 음료 1잔 구매 시 쿠키 1개 무료");
+    // The whole point: it must read as an offer, not as a record.
+    expect(korean.primaryOfferLine).not.toContain("구매 항목:");
+    expect(korean.primaryOfferLine).not.toContain("×");
+    expect(korean.primaryOfferLine).not.toContain("\n");
+  });
+
+  it("keeps the counter-free field dump when a counter is not native-reviewed", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "bagel",
+      freeItemDescription: "coffee",
+    });
+    const providedTerms: LocalizedOfferTerm[] = [
+      term({ entityId: "sku_paid", locale: "ko-KR", displayName: "베이글", koreanCounterId: "unknown-counter" }),
+      term({ entityId: "reward:coffee", locale: "ko-KR", displayName: "커피", koreanCounterId: "cup" }),
+    ];
+
+    // Guessing a counter word without native review is the thing this fallback exists to
+    // avoid; the fix must not erode it.
+    expect(renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR", providedTerms }).primaryOfferLine).toBe(
+      "구매 항목: 베이글 × 1\n추가 혜택: 커피 × 1",
+    );
+  });
+
+  it("renders a Korean percent-off sentence when the counter is native-reviewed", () => {
+    const definition = definitionFor({ dealType: "PERCENT_OFF_SINGLE_ITEM", itemDescription: "cold brew", discountPercent: 40 });
+    const providedTerms: LocalizedOfferTerm[] = [
+      term({ entityId: "sku_discount_item", locale: "ko-KR", displayName: "콜드브루", koreanCounterId: "cup" }),
+    ];
+
+    expect(renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR", providedTerms }).primaryOfferLine).toBe(
+      "콜드브루 1잔 40% 할인",
+    );
+  });
+
   it("renders English any-qualified offer facts without awkward articles", () => {
     const coffeeCookie = renderLocalizedOfferFromDefinition(definitionFor({
       dealType: "BUY_ONE_GET_SOMETHING_FREE",
@@ -137,7 +195,8 @@ describe("localized offer renderer", () => {
     const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
 
     expect(spanish.primaryOfferLine).toBe("Al comprar 1 caf\u00E9 grande, recibes 1 caf\u00E9 grande gratis");
-    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1");
+    // S9: reviewed "cup" counter -> sentence shape. See the bundle test above.
+    expect(korean.primaryOfferLine).toBe("\uB77C\uC9C0 \uCEE4\uD53C 1\uC794 \uAD6C\uB9E4 \uC2DC \uB77C\uC9C0 \uCEE4\uD53C 1\uC794 \uBB34\uB8CC");
     expect(korean.primaryOfferLine).not.toContain("Large coffee");
   });
 
@@ -152,7 +211,8 @@ describe("localized offer renderer", () => {
     const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
 
     expect(spanish.primaryOfferLine).toBe("Al comprar 1 latte helado, recibes 1 galleta gratis");
-    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uC544\uC774\uC2A4 \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uCFE0\uD0A4 \u00D7 1");
+    // S9: the two counters correctly differ \u2014 \uC794 for the drink, \uAC1C for the cookie.
+    expect(korean.primaryOfferLine).toBe("\uC544\uC774\uC2A4 \uB77C\uB5BC 1\uC794 \uAD6C\uB9E4 \uC2DC \uCFE0\uD0A4 1\uAC1C \uBB34\uB8CC");
     expect(korean.primaryOfferLine).not.toContain("iced latte");
   });
 

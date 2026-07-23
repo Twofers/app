@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
 import { AD_SPEC_V3_COPY_PROMPT_VERSION, buildAdSpecV1, buildAdSpecV3, validateAdSpecV1, validateAdSpecV3 } from "./ad-spec";
 import { buildOfferDefinitionV1 } from "./offer-definition";
+import { buildPosterSpecFromOfferDefinition } from "./poster/posterCopy";
 import { AD_COPY_PROMPT_VERSION } from "../supabase/functions/ai-generate-ad-variants/prompt";
 
 function buildDefinition() {
@@ -92,6 +94,90 @@ describe("AdSpec V1 deterministic renderer contract", () => {
       valid: false,
       reasonCodes: ["FACT_MISMATCH_FEED"],
     });
+  });
+
+  it("keeps only the selected source-language poster copy when viewer-language posters are off", () => {
+    const definition = buildDefinition();
+    const poster = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      headline: "Pausa para cafÃ©",
+      sourceLocale: "es-US",
+    });
+    const localizationBundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Pausa para cafÃ©",
+        supportingCopy: "Un momento para compartir.",
+        imageAltText: "Dos lattes en una mesa",
+      },
+      offerDefinition: definition,
+    });
+    const previousFlag = process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+    process.env.POSTER_VIEWER_LANGUAGE_ENABLED = "false";
+    try {
+      const spec = buildAdSpecV1({
+        source: "create_ai",
+        offerDefinition: definition,
+        selectedLanguage: "es-US",
+        generatedAd: {
+          headline: "Pausa para cafÃ©",
+          subheadline: "Un momento para compartir.",
+          cta: "Usar oferta",
+          poster,
+          localization_bundle: localizationBundle,
+        },
+      });
+
+      expect(spec.selected_language).toBe("es-US");
+      expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["es-US"]);
+      expect(spec.poster?.copy_by_language["es-US"]).toEqual(poster.copy_by_language["es-US"]);
+      expect(validateAdSpecV1(spec)).toEqual({ valid: true, reasonCodes: [] });
+    } finally {
+      if (previousFlag === undefined) delete process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+      else process.env.POSTER_VIEWER_LANGUAGE_ENABLED = previousFlag;
+    }
+  });
+
+  it("retains all poster locales when viewer-language posters are on", () => {
+    const definition = buildDefinition();
+    const poster = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      headline: "ì»¤í”¼ ë¸Œë ˆì´í¬",
+      sourceLocale: "ko-KR",
+    });
+    const completePoster = {
+      ...poster,
+      copy_by_language: {
+        "en-US": { ...poster.copy_by_language["en-US"], headline: "COFFEE BREAK" },
+        "es-US": { ...poster.copy_by_language["es-US"], headline: "PAUSA PARA CAFÃ‰" },
+        "ko-KR": poster.copy_by_language["ko-KR"],
+      },
+    };
+    const previousFlag = process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+    process.env.POSTER_VIEWER_LANGUAGE_ENABLED = "true";
+    try {
+      const spec = buildAdSpecV1({
+        source: "create_ai",
+        offerDefinition: definition,
+        selectedLanguage: "ko-KR",
+        generatedAd: {
+          headline: "ì»¤í”¼ ë¸Œë ˆì´í¬",
+          subheadline: "í•¨ê»˜ ì¦ê²¨ìš”",
+          cta: "í˜œíƒ ë°›ê¸°",
+          poster: completePoster,
+        },
+      });
+
+      expect(spec.selected_language).toBe("ko-KR");
+      expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["en-US", "es-US", "ko-KR"]);
+    } finally {
+      if (previousFlag === undefined) delete process.env.POSTER_VIEWER_LANGUAGE_ENABLED;
+      else process.env.POSTER_VIEWER_LANGUAGE_ENABLED = previousFlag;
+    }
   });
 });
 

@@ -233,6 +233,13 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+function cleanOfferItemText(value: unknown): string {
+  return cleanText(value)
+    .replace(/^[\s"'`\u2018\u2019\u201C\u201D]+/, "")
+    .replace(/[\s"'`\u2018\u2019\u201C\u201D]+$/, "")
+    .trim();
+}
+
 function normalizeItemKey(value: string): string {
   return value
     .toLowerCase()
@@ -257,7 +264,7 @@ export function canonicalizeOfferItem(
   original: string,
   menuCatalogNames: readonly string[] = [],
 ): CanonicalizedItem {
-  const clean = cleanText(original);
+  const clean = cleanOfferItemText(original);
   if (!clean) {
     return { original: "", canonical: "", confidence: "low", source: "unchanged" };
   }
@@ -297,7 +304,7 @@ export function canonicalizeOfferItem(
 }
 
 function stripRewardPrefix(value: string): string {
-  return cleanText(value).replace(/^(?:a\s+|an\s+|the\s+)?(?:free|complimentary)\s+/i, "").trim();
+  return cleanOfferItemText(value).replace(/^(?:a\s+|an\s+|the\s+)?(?:free|complimentary)\s+/i, "").trim();
 }
 
 function numeric(value: unknown): number | null {
@@ -564,7 +571,18 @@ function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
 }
 
 export function buildDeterministicDealChannelCopy(contract: DealOfferContract): DeterministicDealChannelCopy {
-  const facts = normalizeDealFactsFromContract(contract);
+  const rawFacts = normalizeDealFactsFromContract(contract);
+  // Channel copy uses the core item names (parenthetical descriptions
+  // stripped) so deterministic fallback copy stays within field limits and
+  // never trips banned-word checks on words inside a merchant description.
+  // The locked canonical offer line on the contract is unaffected.
+  const facts: NormalizedDealFacts = {
+    ...rawFacts,
+    buyItem: rawFacts.buyItem ? stripParentheticalSegments(rawFacts.buyItem) || rawFacts.buyItem : rawFacts.buyItem,
+    rewardItem: rawFacts.rewardItem
+      ? stripParentheticalSegments(rawFacts.rewardItem) || rawFacts.rewardItem
+      : rawFacts.rewardItem,
+  };
   const headline = buildCanonicalHeadlineFromFacts(facts);
   const description = compactText(deterministicDescriptionForFacts(facts), DEAL_COPY_LIMITS.description);
   const pushTitle =
@@ -603,8 +621,9 @@ function canonicalFreeItemTerms(
     : "Limited quantity available.";
   const requiredPhrase = formatCountedItem(requiredQuantity, requiredItem);
   const freePhrase = formatCountedItem(freeQuantity, freeItem);
+  const location = stripEndingPunctuation(locationName);
   return sentence(
-    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${locationName}. ${quantity}`,
+    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${location}. ${quantity}`,
   );
 }
 
@@ -617,7 +636,8 @@ function canonicalPercentTerms(
   const quantity = Number.isFinite(quantityLimit ?? NaN) && (quantityLimit ?? 0) > 0
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
-  return sentence(`Get ${discountPercent}% off one ${itemName}. Redeem only at ${locationName}. ${quantity}`);
+  const location = stripEndingPunctuation(locationName);
+  return sentence(`Get ${discountPercent}% off one ${itemName}. Redeem only at ${location}. ${quantity}`);
 }
 
 export function buildDealOfferContract(
@@ -645,9 +665,17 @@ export function buildDealOfferContract(
   if (dealType === "BUY_ONE_GET_ONE_FREE" || dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     const requiredItem = canonicalizeOfferItem(cleanText(params.dealEligibility.requiredItemDescription)).canonical;
     const rawFreeItem = stripRewardPrefix(cleanText(params.dealEligibility.freeItemDescription));
+    // BUY_ONE_GET_ONE_FREE is same-item by definition — the reward IS the item the
+    // customer buys — and the BOGO form exposes no free-item input. Deriving the
+    // reward from freeItemDescription therefore only ever picks up stale state
+    // (a leftover value from the "Free item" / "% off" rules, or a free-text parser
+    // fragment). That contaminated the offer facts: a "drip coffee" BOGO shipped a
+    // contract with free_reward "Bu", which blocked publish and made AI copy
+    // generation fail with COPY_FAILED. A genuinely different reward item is the
+    // separate BUY_ONE_GET_SOMETHING_FREE deal type, which still reads the field.
     const freeItem =
       dealType === "BUY_ONE_GET_ONE_FREE"
-        ? canonicalizeOfferItem(rawFreeItem).canonical || requiredItem
+        ? requiredItem
         : canonicalizeOfferItem(rawFreeItem).canonical;
     if (!requiredItem || !freeItem) return null;
 
@@ -788,14 +816,43 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Merchant item names sometimes embed a parenthetical description, e.g.
+// "recon roast ( roaster fresh coffee with a shot of espresso)". The core name
+// is the part outside the parentheses; copy that names the core item is
+// fact-safe even when it omits the parenthetical description.
+function stripParentheticalSegments(value: string): string {
+  return cleanText(value.replace(/\([^()]*\)/g, " "));
+}
+
+function itemNameSearchVariants(itemName: string): string[] {
+  const full = cleanText(itemName);
+  const core = stripParentheticalSegments(itemName);
+  return [...new Set([full, core])].filter((value) => value.length > 0);
+}
+
 function itemRegex(itemName: string): RegExp {
   const parts = normalizeForSearch(itemName).split(/\s+/).filter(Boolean).map(escapeRegex);
   return new RegExp(`\\b${parts.join("\\s+")}s?\\b`, "i");
 }
 
 function containsItem(text: string, itemName: string): boolean {
-  if (!cleanText(itemName)) return false;
-  return itemRegex(itemName).test(text);
+  return itemNameSearchVariants(itemName).some((variant) => itemRegex(variant).test(text));
+}
+
+// Words inside a merchant-supplied item name (including its parenthetical
+// description) must not count against banned-word checks: valid copy is
+// required to contain the item name, so a name containing e.g. "fresh" would
+// otherwise make every possible copy invalid.
+function maskProtectedItemNames(text: string, itemNames: readonly string[]): string {
+  let masked = text;
+  for (const itemName of itemNames) {
+    for (const variant of itemNameSearchVariants(itemName)) {
+      const parts = normalizeForSearch(variant).split(/\s+/).filter(Boolean).map(escapeRegex);
+      if (parts.length === 0) continue;
+      masked = masked.replace(new RegExp(`\\b${parts.join("[\\s\\W_]*")}s?\\b`, "gi"), " ");
+    }
+  }
+  return masked;
 }
 
 function copyText(copy: Partial<AiDealCopyVariant> & { terms_summary?: string }): string {
@@ -876,7 +933,11 @@ function hasAdLikeHeadlineHook(headline: string): boolean {
   );
 }
 
-function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]): void {
+function validateGeneralCopyQuality(
+  copy: Partial<AiDealCopyVariant>,
+  reasonCodes: string[],
+  protectedItemNames: readonly string[] = [],
+): void {
   const headline = cleanText(copy.headline);
   const description = cleanText(copy.short_description);
   const push = cleanText(copy.push_notification);
@@ -896,7 +957,8 @@ function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCode
   if (containsForbiddenAiPhrase(text)) reasonCodes.push("FORBIDDEN_AI_PHRASE");
   if (containsCopySyntaxLeak(text)) reasonCodes.push("COPY_SYNTAX_LEAK");
   if (containsUnsupportedPrice(text)) reasonCodes.push("UNSUPPORTED_PRICE");
-  if (AD_COPY_HYPE_WORD_PATTERN.test(text) || /\b(?:fresh|artisan|perfect)\b/i.test(text)) {
+  const promoClaimText = maskProtectedItemNames(text, protectedItemNames);
+  if (AD_COPY_HYPE_WORD_PATTERN.test(promoClaimText) || /\b(?:fresh|artisan|perfect)\b/i.test(promoClaimText)) {
     reasonCodes.push("UNSUPPORTED_PROMO_CLAIM");
   }
 
@@ -958,7 +1020,14 @@ function validateBuyOneGetOneFree(
   contract: DealOfferContract,
   reasonCodes: string[],
 ): void {
-  const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "";
+  const requiredItem = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "";
+  // A BOGO contract can carry a reward item that differs from the purchased item:
+  // buildDealOfferContract keeps freeItemDescription whenever it is set. Free-item
+  // mentions must therefore be checked against the reward item, not the purchased
+  // one — otherwise the canonical offer line this module generates for such a
+  // contract ("Buy a drip coffee and get a free cookie") fails its own validation
+  // and publish is blocked, with no free-item field in the BOGO form to correct.
+  const freeItem = contract.freeReward?.itemName || requiredItem;
   const normalized = normalizeForSearch(text);
   if (/\bbuy\s+(?:two|2)\b/.test(normalized)) reasonCodes.push("REQUIRES_TWO_PURCHASES");
   if (/\b(second|2nd)\s+(?:item\s+)?(?:50|[1-9]\d)\s*%\s*off\b|\bhalf\s+off\b/.test(normalized)) {
@@ -974,7 +1043,7 @@ function validateBuyOneGetOneFree(
   ];
   for (const match of [...itemBeforeFreeMatches, ...freeBeforeItemMatches]) {
     const candidate = match[1]?.trim() ?? "";
-    if (candidate && !containsItem(candidate, item)) {
+    if (candidate && !containsItem(candidate, freeItem)) {
       reasonCodes.push("CHANGES_FREE_ITEM");
       break;
     }
@@ -988,12 +1057,12 @@ function validateBuyOneGetOneFree(
       ? rawCandidate.replace(/^.*\b(?:and|with)\s+(?:the|a|an|one)?\s+/, "").trim()
       : rawCandidate;
     if (/^(?:next|second|2nd)(?:\s+(?:one|item))?$/.test(candidate)) continue;
-    if (candidate && !containsItem(candidate, item)) {
+    if (candidate && !containsItem(candidate, freeItem)) {
       reasonCodes.push("CHANGES_FREE_ITEM");
       break;
     }
   }
-  if (!containsItem(normalized, item)) reasonCodes.push("MISSING_BOGO_ITEM");
+  if (!containsItem(normalized, requiredItem)) reasonCodes.push("MISSING_BOGO_ITEM");
 }
 
 function validatePercentOffSingleItem(
@@ -1028,7 +1097,11 @@ export function validateAiCopyAgainstOffer(
 ): AiDealCopyValidationResult {
   const reasonCodes: string[] = [];
   validateShape(copy, reasonCodes);
-  validateGeneralCopyQuality(copy, reasonCodes);
+  validateGeneralCopyQuality(copy, reasonCodes, [
+    contract.requiredPurchase?.itemName,
+    contract.freeReward?.itemName,
+    contract.singleItemDiscount?.itemName,
+  ].filter(isNonEmptyString));
 
   const text = copyText(copy);
   if (containsMetadataLeak(text)) reasonCodes.push("COPY_CONTAINS_METADATA");

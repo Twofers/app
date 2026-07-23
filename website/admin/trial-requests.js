@@ -112,12 +112,12 @@
   function networkFailureMessage(action, error) {
     if (error?.name === "AbortError") {
       if (action === "session") return "The admin session refresh timed out. Sign in again if this continues.";
-      if (action === "decide") return "The trial decision request timed out. Refresh the queue before trying that decision again.";
-      return "The trial request queue timed out. Refresh this page and try again.";
+      if (action === "decide") return "The approval decision request timed out. Refresh the queue before trying that decision again.";
+      return "The business access request queue timed out. Refresh this page and try again.";
     }
     if (action === "session") return "Could not refresh the admin session. Sign in again if this continues.";
-    if (action === "decide") return "Could not reach the trial decision service. Refresh the queue before trying that decision again.";
-    return "Could not reach the trial request service. Refresh this page and try again.";
+    if (action === "decide") return "Could not reach the approval decision service. Refresh the queue before trying that decision again.";
+    return "Could not reach the business access request service. Refresh this page and try again.";
   }
 
   function badgeTone(status) {
@@ -127,6 +127,7 @@
   }
 
   function statusLabel(status) {
+    if (status === "approved_not_activated") return "approved setup";
     return String(status || "unknown").replaceAll("_", " ");
   }
 
@@ -147,7 +148,7 @@
   }
 
   async function postAdmin(body) {
-    if (!applicationsEndpoint) throw new Error("Trial request endpoint is not configured.");
+    if (!applicationsEndpoint) throw new Error("Business access request endpoint is not configured.");
     const token = await getAccessToken();
     if (!token) throw new Error("Admin session not connected.");
     const action = body?.action === "decide" ? "decide" : "list";
@@ -242,7 +243,7 @@
     if (!tbody) return;
     tbody.innerHTML = "";
     if (!applications.length) {
-      renderEmpty("No trial requests found for this queue.");
+      renderEmpty("No business access requests found for this queue.");
       return;
     }
 
@@ -279,14 +280,15 @@
       actions.className = "admin-inline-actions";
       for (const [decision, label] of [
         ["ai_review", "AI Review"],
-        ["approve_limited", "Limited"],
-        ["approve_full", "Full"],
+        ["approve_setup", "Approve for setup"],
+        ["review_required", "Review"],
         ["waitlist", "Waitlist"],
         ["reject", "Reject"],
+        ["suspend", "Suspend"],
       ]) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `button button-small${decision === "reject" ? " button-secondary" : ""}`;
+        button.className = `button button-small${decision === "reject" || decision === "suspend" ? " button-secondary" : ""}`;
         button.dataset.decision = decision;
         button.dataset.applicationId = app.id;
         button.textContent = label;
@@ -316,7 +318,7 @@
   }
 
   async function loadApplications() {
-    setTrialStatus("Loading trial requests...");
+    setTrialStatus("Loading business access requests...");
     const payload = await postAdmin({ action: "list", status: selectedStatus() });
     let applications = payload.applications || [];
     if (highRiskOnly) {
@@ -349,8 +351,8 @@
       return;
     }
     if (decision === "reject" && !window.confirm("Reject this business request?")) return;
-    if (decision === "approve_limited" && !window.confirm("Approve this business for limited trial access?")) return;
-    if (decision === "approve_full" && !window.confirm("Approve this business for full trial access?")) return;
+    if (decision === "approve_setup" && !window.confirm("Approve this business for setup access? No trial or credits start yet.")) return;
+    if (decision === "suspend" && !window.confirm("Suspend this business and block merchant actions?")) return;
     button.disabled = true;
     setTrialStatus("Saving decision...");
     try {
@@ -361,7 +363,7 @@
         reason: noteValue(),
       });
       const savedMessage = payload.business_linked
-        ? "Decision saved and linked business access updated."
+        ? "Decision saved and linked business setup access updated."
         : "Decision saved. Business owner will link when they sign in.";
       const decisionWarnings = [payload.billing_sync_warning, payload.approval_email_warning].filter(Boolean);
       setTrialStatus(
@@ -391,7 +393,7 @@
       event.preventDefault();
       loadApplications().catch((error) => {
         if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
-        setTrialStatus(error instanceof Error ? error.message : "Could not load trial requests.", "danger");
+        setTrialStatus(error instanceof Error ? error.message : "Could not load business access requests.", "danger");
       });
     });
   }
@@ -410,7 +412,7 @@
   applyRequestedQueue();
   loadApplications().catch((error) => {
     if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
-    renderEmpty("Sign in to load trial requests.");
-    setTrialStatus(error instanceof Error ? error.message : "Could not load trial requests.", "danger");
+    renderEmpty("Sign in to load business access requests.");
+    setTrialStatus(error instanceof Error ? error.message : "Could not load business access requests.", "danger");
   });
 })();

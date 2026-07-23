@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAdCopyPrompt } from "./prompt.ts";
+import { AD_COPY_JSON_SCHEMA, buildAdCopyPrompt } from "./prompt.ts";
 import { buildDealOfferContract, type DealOfferContract } from "../../../lib/deal-offer-contract.ts";
 import { validateDealEligibility, type DealEligibilityInput } from "../../../lib/deal-eligibility.ts";
 
@@ -66,6 +66,22 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("amazing deal");
   });
 
+  it("bans weak Try-our openings and poster headlines that repeat the locked offer line", () => {
+    expect(basePrompt.system).toContain(
+      'Never begin a headline, description, push text, or caption with "Try our" or "Try the"',
+    );
+    expect(basePrompt.system).toContain("Poster headlines must not repeat the locked offer line word-for-word");
+  });
+
+  it("bans formulaic value-word headlines and dropped-head-noun fragments", () => {
+    // Paired with the POSTER_HEADLINE_FORMULAIC_VALUE / _DANGLING_CONNECTOR gates:
+    // the prompt steers away up front, the gate rejects anything that slips through.
+    expect(basePrompt.system).toContain('Never end a poster headline with a bare value word');
+    expect(basePrompt.system).toContain("Poster headlines must be a complete phrase");
+    // Guidance must stay pattern-level, not a list of banned item names.
+    expect(basePrompt.system).not.toMatch(/Birria Tacos Savings|Acai Bowl Savings/i);
+  });
+
   it("includes the category playbook, merchant profile, creative brief, and five lane instructions", () => {
     expect(basePrompt.system).toContain("Write one positive creative brief and exactly five");
     expect(basePrompt.system).toContain("CATEGORY PLAYBOOK");
@@ -121,14 +137,18 @@ describe("buildAdCopyPrompt", () => {
 
     expect(prompt.userText).toContain("Requested ad format: poster_v1");
     expect(prompt.userText).toContain("POSTER FORMAT DIRECTION");
-    expect(prompt.userText).toContain("posterKicker and headlineAlternative");
+    // R12: the poster has no kicker slot; headlineAlternative carries the concept alone.
+    expect(prompt.userText).toContain("headlineAlternative is the poster's top creative idea");
     expect(prompt.userText).toContain("bottom offer lines and schedule line");
     expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
-    expect(prompt.userText).toContain("revise headlineAlternative and posterKicker first");
+    expect(prompt.userText).toContain("revise headlineAlternative first");
+    expect(prompt.userText).toContain("they mean the description on cards");
+    expect(prompt.userText).toContain("never return a posterKicker");
     expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
-    expect(prompt.system).toContain("posterKicker is the small top kicker");
-    expect(prompt.system).toContain("Derive it from the specific product, customer moment, merchant context, or deal angle");
-    expect(prompt.system).toContain("Do not use generic defaults such as Try our");
+    expect(prompt.system).toContain("Do not return a posterKicker");
+    expect(prompt.system).toContain("the headline must be at most 28 characters");
+    // The kicker is gone from the request schema entirely, so no tokens are spent on it.
+    expect(JSON.stringify(AD_COPY_JSON_SCHEMA)).not.toContain("posterKicker");
     expect(prompt.system).not.toContain("Coffee + Cookie Break");
     expect(prompt.system).not.toContain("Bad poster headlines are Any large coffee drink");
   });
@@ -159,7 +179,6 @@ describe("buildAdCopyPrompt", () => {
       "strategyId",
       "strategyReason",
       "headlineAlternative",
-      "posterKicker",
       "description",
       "pushTitle",
       "pushBody",
@@ -199,7 +218,7 @@ describe("buildAdCopyPrompt", () => {
     expect(prompt.system).toContain("Never borrow a moment from a different kind of business");
     expect(prompt.system).not.toContain("Good examples: Coffee break");
     // Regression: the percent-off example teaches the wrong-occasion failure directly.
-    expect(prompt.system).toContain("Bad posterKicker: Coffee break");
+    expect(prompt.system).toContain("Bad headlineAlternative: Coffee break");
   });
 
   it("no longer frames every business as a coffee shop", () => {

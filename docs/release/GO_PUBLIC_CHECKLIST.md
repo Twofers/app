@@ -1,9 +1,11 @@
 # Go-Public Checklist (branch: release/apple-app-store-readiness-web-billing)
 
-Last updated: 2026-07-02. **Steps 1-4 below are SHIPPED**: committed (7782b8c6),
-migrations confirmed already applied, edge functions deployed, website live on
-www.twoferapp.com, branch pushed to origin. Steps 5-7 (store links, EAS build,
-store submission) are still open.
+Last updated: 2026-07-22. **All 7 steps below are SHIPPED.** Twofer is live on
+both stores and www.twoferapp.com links to both. This checklist is now history —
+keep it for the record, do not work from it.
+
+Earlier state (2026-07-02): steps 1-4 shipped — committed (7782b8c6), migrations
+confirmed already applied, edge functions deployed, website live, branch pushed.
 
 ## Ready in the working tree (uncommitted)
 
@@ -26,13 +28,15 @@ store submission) are still open.
   site-wide (en/es/ko) — homepage, trial page, business terms, thanks, waitlist
   pages now read as a live product, not a beta. Business CTAs read "Request
   Business Access" (approval-gated is still accurate and stays).
-- **Store link switch**: `website/store-links.js` is the single place to drop in
-  the real App Store / Play Store URLs (`TWOFER_STORE_LINKS.ios` /
-  `.android`, currently `null`). Until you add them, the "Get Twofer for
-  iPhone/Android" buttons stay hidden and a "Notify me when the app is ready"
-  mailto fallback shows instead — the site never links to a store page that
-  doesn't exist yet. Flip the two `null`s to real URLs and redeploy; no other
-  change needed.
+- **Store link switch** (both URLs now filled in — see step 5):
+  `website/store-links.js` is the single place to set the real App Store / Play
+  Store URLs (`TWOFER_STORE_LINKS.ios` / `.android`). A platform left `null`
+  keeps its "Get Twofer for iPhone/Android" buttons hidden and shows a
+  "Notify me when the app is ready" mailto fallback instead, so the site never
+  links to a store page that doesn't exist yet. That hide-while-null behavior
+  is why the iPhone buttons stayed invisible for a stretch after the iOS
+  listing went live — the mechanism is working as designed, but it fails
+  silent, so re-check the live site after any store launch.
 - **Admin directory is fully wired**, not just Overview: Businesses, Offers,
   Billing Events, Audit Log, and Settings (launch areas / feature flags / admin
   users) now read live data from `admin-dashboard-summary` (new per-section
@@ -98,15 +102,28 @@ before an owner starts checkout.
    `X-Robots-Tag: noindex, nofollow`.
    Branch pushed to `origin/release/apple-app-store-readiness-web-billing`
    (was never pushed before — upstream tracking now set).
-5. **Still open — when you have the store URLs**: edit the two `null`s in
-   `website/store-links.js` to the real App Store / Play Store links, bump the
-   `?v=` on the `<script src="/store-links.js?v=...">` tag in `index.html` so
-   browsers don't serve a cached copy, redeploy (`npx vercel deploy --prod --yes`
-   from `website/`).
-6. **Still open — Build the app** (EAS): Android AAB + iOS, versionCode 41 /
-   current build number.
-7. **Still open — Submit**: TestFlight/App Store + Play Console (Dan-only,
-   agent drafts text).
+5. ~~**Store URLs into the website**~~ — DONE 2026-07-22, commit `dc809e80`,
+   Vercel prod `dpl_ECt34Jti8WNEoUYArxBytostoFpJ`. Android had been filled in
+   earlier; `ios` was still `null`, which hid all four "Get Twofer for iPhone"
+   CTAs (2 on `/`, 1 on `/s`, 1 on `/business/billing/checkout`). Set to the
+   real App Store URL and bumped `store-links.js?v=` to `20260722-ios-live` on
+   all three including pages. Also added an `apple-itunes-app` smart banner to
+   `/` and `/s` and `MobileApplication` JSON-LD to `/`. Verified live: all four
+   CTAs render with correct hrefs in en/es/ko, no console errors,
+   `npm run check:website-ui` passes (37 routes, 2 viewports).
+6. ~~**Build the app**~~ — DONE. Both store listings are live, so the builds
+   shipped. NOTE: this step originally said "versionCode 41"; `app.json` now
+   reads **49**, and the shipped Play build was not confirmed against that
+   number during this update — check Play Console before assuming 49 is live.
+7. ~~**Submit**~~ — DONE, both stores approved and public as of 2026-07-22:
+   - iOS: "Twofer: Local deals on demand", app id `6765769303`, Free, 13+,
+     iOS 15.1+, category **Shopping**, seller displayed as **Paul Sanders**.
+   - Android: `com.unvmex2.twoforone`, public with an Install button, updated
+     2026-07-14, category **Food & Drink**, developer displayed as **TWOFER**.
+
+   The two listings disagree on category and on displayed developer name.
+   Neither is a website bug; the seller name is editable in App Store Connect
+   without resubmitting the app.
 
 ## Known-accepted / parked (not blockers)
 

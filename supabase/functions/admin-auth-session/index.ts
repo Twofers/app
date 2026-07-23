@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { decodeJwtAal, verifiedTotpFactor } from "../_shared/admin-mfa.ts";
+import { clientIpFromRequest } from "../_shared/client-ip.ts";
 
 type AdminRole =
   | "owner"
@@ -159,11 +160,6 @@ async function recentFailedLoginCount(supabaseAdmin: any, email: string): Promis
   return count ?? 0;
 }
 
-function firstForwardedIp(header: string | null): string | null {
-  if (!header) return null;
-  const first = header.split(",")[0]?.trim();
-  return first || null;
-}
 
 async function resolveActiveAdmin(
   supabaseAdmin: any,
@@ -223,7 +219,7 @@ Deno.serve(async (req) => {
     const payload = await readJson(req);
     const action = cleanString(payload.action) || "password";
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-    const requestIp = firstForwardedIp(req.headers.get("x-forwarded-for"));
+    const requestIp = clientIpFromRequest(req);
 
     if (action === "mfa_enroll" || action === "mfa_verify") {
       const accessToken = cleanString(payload.access_token);

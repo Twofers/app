@@ -21,6 +21,13 @@ export type PosterPolicyResult = {
   warnings: string[];
 };
 
+export type PosterTextFitCheck = {
+  ok: boolean;
+  reasonCodes: string[];
+  length: number;
+  maxChars: number;
+};
+
 export type PosterSpecV1 = {
   version: 1;
   enabled: boolean;

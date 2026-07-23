@@ -129,6 +129,16 @@ describe("deal eligibility inference", () => {
     expect(inferDealEligibilityFormFromText("Buy one get one free")).toBeNull();
   });
 
+  it("never seeds a bare number/price/percent as an item (F7 regression)", () => {
+    // Offers that lead with the discount ("40 percent off any latte") type through
+    // an intermediate "40" keystroke that looked like a plain item and stuck in the
+    // single-item field; once the offer words followed, inference returned null and
+    // the stale number rode into AI generation. A bare number is never a menu item.
+    expect(inferDealEligibilityFormFromText("40")).toBeNull();
+    expect(inferDealEligibilityFormFromText("$5")).toBeNull();
+    expect(inferDealEligibilityFormFromText("5.99")).toBeNull();
+  });
+
   it("does not split items across 'and the … is on us' garbage (F-002 regression)", () => {
     expect(inferDealEligibilityFormFromText("Buy one vanilla latte and the o is on us.")).toBeNull();
   });
@@ -196,6 +206,22 @@ describe("deal eligibility inference", () => {
         expect(usable(form.freeItemDescription), `free @ "${prefix}"`).toBe(true);
       }
     }
+  });
+
+  it("never seeds a 2-char offer-keyword fragment like 'Bu' (bug #4 regression)", () => {
+    // The length>=2 guard in the test above accepted "Bu" (the start of "Buy"):
+    // it seeded itemDescription "Bu", which passed the non-emptiness eligibility
+    // guard and reached ai-generate-ad-variants as a poisoned offer fact
+    // (COPY_FAILED). A candidate that is a proper prefix of an offer keyword must
+    // never seed.
+    for (const fragment of ["Bu", "Bo", "Ge", "Fr", "Pu", "Di", "Of"]) {
+      expect(inferDealEligibilityFormFromText(fragment), `fragment "${fragment}"`).toBeNull();
+    }
+    // ...but a real 2-char item that is NOT an offer-keyword prefix is kept —
+    // including non-English items (Korean gimbap), which a blanket length>=3 rule
+    // would wrongly discard.
+    expect(inferDealEligibilityFormFromText("김밥")).toMatchObject({ itemDescription: "김밥" });
+    expect(inferDealEligibilityFormFromText("PB")).toMatchObject({ itemDescription: "PB" });
   });
 
   it("uses a plain item description to seed the default single-item discount", () => {

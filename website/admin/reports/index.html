@@ -6,12 +6,14 @@
     <title>Reports | Twofer Admin</title>
     <meta name="robots" content="noindex,nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
   </head>
   <body
     class="admin-shell"
     data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
     data-admin-reports-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-reports"
+    data-admin-name-requests-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-name-requests"
   >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
@@ -20,7 +22,7 @@
           <a href="/admin">Overview</a>
           <a href="/admin/prospects">Prospects</a>
           <a href="/admin/sales-ai">Sales AI</a>
-          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/trial-requests">Business Access</a>
           <a href="/admin/businesses">Businesses</a>
           <a href="/admin/offers">Offers</a>
           <a href="/admin/reports" aria-current="page">Reports</a>
@@ -79,6 +81,33 @@
       </section>
 
       <section class="admin-panel">
+        <h2>Business name change requests</h2>
+        <p class="lede">
+          Verified businesses can't rename themselves — approving a request here applies the new name everywhere
+          (feed, wallet, posters). Confirm the new name matches the same real business before approving.
+        </p>
+        <p class="status" data-name-requests-status></p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Current name</th>
+                <th>Requested name</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Requested</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody data-name-requests-body>
+              <tr><td colspan="7" class="admin-row-detail">Sign in to load requests.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-panel">
         <h2>Reported customers</h2>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
@@ -99,6 +128,6 @@
         </div>
       </section>
     </main>
-    <script src="/admin/reports.js?v=20260710-content-reports"></script>
+    <script src="/admin/reports.js?v=20260717-name-requests"></script>
   </body>
 </html>

@@ -36,6 +36,25 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+/**
+ * True when the locked offer line only repeats the headline and should not be
+ * rendered as its own row.
+ *
+ * Every composed-ad template prints the headline and then the locked offer line.
+ * A deal with no distinct AI creative headline falls back to the locked offer line
+ * as its display title, so both rows carry the same sentence — the consumer feed
+ * showed "Buy one house iced tea and get one free" twice, stacked.
+ */
+export function offerLineDuplicatesHeadline(
+  offerLine: string | null | undefined,
+  headline: string | null | undefined,
+): boolean {
+  const normalize = (value: string | null | undefined) =>
+    (value ?? "").toLowerCase().replace(/\s+/g, " ").replace(/[.!]+$/, "").trim();
+  const line = normalize(offerLine);
+  return line.length > 0 && line === normalize(headline);
+}
+
 export function buildApprovedAdCopy(params: {
   headline?: string | null;
   supportingCopy?: string | null;
@@ -51,7 +70,12 @@ export function buildApprovedAdCopy(params: {
 }
 
 export function imageSourceTypeFromGeneratedAd(ad: GeneratedAd | null | undefined): AdImageSourceType {
-  if (!ad?.poster_storage_path) return "deterministic_fallback";
+  if (!ad) return "deterministic_fallback";
+  const storagePath = ad.poster_storage_path?.trim() || ad.image_selection?.selectedStoragePath?.trim() || "";
+  if (!storagePath) return "deterministic_fallback";
+  if (ad.image_selection?.sourceMode && ad.image_selection.sourceMode !== "deterministic_fallback") {
+    return ad.image_selection.sourceMode;
+  }
   if (ad.photo_source === "uploaded_enhanced") return "merchant_ai_edit";
   if (ad.photo_source === "generated") return "ai_generated";
   if (ad.photo_source === "stock") return "approved_stock";

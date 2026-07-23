@@ -4,16 +4,22 @@ import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-cha
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import { fetchOpenAiWithFallback } from "../_shared/openai-fetch.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import {
+  MAX_MENU_ITEM_DESCRIPTION_CHARS,
+  splitMenuItemDescription,
+} from "../_shared/menu-item-text.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
 const MAX_URL_LEN = 2048;
-const MENU_EXTRACTION_PROMPT_VERSION = "AI_MENU_EXTRACTION_V1";
+const MENU_EXTRACTION_PROMPT_VERSION = "AI_MENU_EXTRACTION_V2";
 
 /**
  * Menu OCR runs on Gemini vision first (cheap, multimodal) with OpenAI as a
@@ -39,6 +45,7 @@ function menuExtractionConfig() {
 
 type MenuItemRow = {
   name: string;
+  description: string;
   category: string;
   price_text: string;
   size_options: string[];
@@ -70,18 +77,30 @@ function normalizeMenuItems(parsed: ExtractionResult) {
   return Array.isArray(parsed.items)
     ? parsed.items
       .filter((r) => r && typeof r.name === "string" && r.name.trim().length > 0 && r.readable === true)
-      .map((r) => ({
-        name: r.name.trim(),
-        category: typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
-        price_text: typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
-        size_options: Array.isArray(r.size_options)
-          ? r.size_options
-            .filter((size) => typeof size === "string" && size.trim().length > 0)
-            .map((size) => size.trim())
-            .slice(0, 12)
-          : [],
-        readable: true,
-      }))
+      .map((r) => {
+        // Defense in depth: even with the prompt asking for a short name, a
+        // model may still emit "Name ( long description )" — split it so the
+        // returned item name stays clean and the blurb lands in description.
+        const split = splitMenuItemDescription(r.name);
+        const modelDescription = typeof r.description === "string" ? r.description.trim() : "";
+        const description = (modelDescription || split.description || "").slice(
+          0,
+          MAX_MENU_ITEM_DESCRIPTION_CHARS,
+        );
+        return {
+          name: split.name,
+          description: description || undefined,
+          category: typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
+          price_text: typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
+          size_options: Array.isArray(r.size_options)
+            ? r.size_options
+              .filter((size) => typeof size === "string" && size.trim().length > 0)
+              .map((size) => size.trim())
+              .slice(0, 12)
+            : [],
+          readable: true,
+        };
+      })
     : [];
 }
 
@@ -236,6 +255,18 @@ serve(async (req) => {
       );
     }
 
+    const capabilities = await getBusinessCapabilities(admin as any, business_id);
+    if (!capabilities.can_extract_initial_menu) {
+      return new Response(
+        JSON.stringify({
+          error: "Menu extraction is not available for this business.",
+          error_code: "BUSINESS_MENU_EXTRACTION_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const imageUrlRaw = typeof body.image_url === "string" ? body.image_url.trim() : "";
     const imageBase64 = typeof body.image_base64 === "string" ? body.image_base64.trim() : "";
     const imageMime =
@@ -333,6 +364,38 @@ serve(async (req) => {
     }
 
     const canUseRouterFallbackWithoutOpenAi = Boolean(imageBase64) && routerCanUseGemini(geminiApiKey);
+    if (!openAiKey && !allowSyntheticWithoutKey && !canUseRouterFallbackWithoutOpenAi) {
+      // Return a clear configuration error so production cannot appear to have
+      // extracted real menu data when AI is not configured.
+      console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
+      return new Response(
+        JSON.stringify({
+          error:
+            "Menu scan is not configured yet. Please ask support to set OPENAI_API_KEY for this project.",
+          error_code: "OPENAI_NOT_CONFIGURED",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Reserve the setup-only allowance only after the request and provider
+    // configuration are known to be usable. The RPC serializes concurrent
+    // attempts, so one approved business cannot race past its one extraction.
+    const { data: allowanceConsumed, error: allowanceError } = await admin.rpc(
+      "consume_setup_menu_extraction_allowance",
+      { p_business_id: business_id },
+    );
+    if (allowanceError) throw allowanceError;
+    if (allowanceConsumed !== true) {
+      return new Response(
+        JSON.stringify({
+          error: "The setup menu-extraction allowance has already been used.",
+          error_code: "SETUP_MENU_EXTRACTION_LIMIT_REACHED",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (!openAiKey && allowSyntheticWithoutKey) {
       // Explicitly opt-in synthetic fallback for preview/dev projects only.
       // Pilot production must never silently label placeholder rows as OCR output.
@@ -351,20 +414,6 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (!openAiKey && !canUseRouterFallbackWithoutOpenAi) {
-      // Return a clear configuration error so production cannot appear to have
-      // extracted real menu data when AI is not configured.
-      console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
-      return new Response(
-        JSON.stringify({
-          error:
-            "Menu scan is not configured yet. Please ask support to set OPENAI_API_KEY for this project.",
-          error_code: "OPENAI_NOT_CONFIGURED",
-        }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const bizCategoryLabel = ((biz as { category?: string }).category ?? "").trim() || "local business";
     const instructionText = [
       `You extract menu line items from the attached menu image for a ${bizCategoryLabel} on a local deals app.`,
@@ -372,7 +421,9 @@ serve(async (req) => {
       "Rules:",
       "- Only include items whose text is clearly readable in the image. Set readable=true only for legible lines.",
       "- Do NOT invent dishes, prices, or items not visible. Prefer an empty items list over guessing.",
-      "- For each legible line: name = the item as printed (concise). category = menu section heading if visible, else empty string.",
+      "- For each legible line: name = the short item name only (e.g. 'Recon Roast'), never a description. If the menu pairs a name with descriptive text (in parentheses, after a dash, or beneath the name), put only the name in name.",
+      "- description = that item's descriptive text as printed (e.g. 'Roaster fresh coffee with a shot of espresso'), or empty string if none. Never repeat the name inside description.",
+      "- category = menu section heading if visible, else empty string.",
       "- price_text = price as printed (e.g. $4.50) or empty if none on that line.",
       "- size_options = the sizes/variants printed for that item (e.g. Small, Medium, Large, 12 oz, 16 oz, Hot, Iced). Keep labels exactly as printed when readable. Use [] when no size/variant is shown.",
       "- If prices vary by size, keep the full visible size/price text in price_text and also list the sizes in size_options.",
@@ -393,6 +444,7 @@ serve(async (req) => {
               type: "object",
               properties: {
                 name: { type: "string" },
+                description: { type: "string" },
                 category: { type: "string" },
                 price_text: { type: "string" },
                 size_options: {
@@ -401,7 +453,7 @@ serve(async (req) => {
                 },
                 readable: { type: "boolean" },
               },
-              required: ["name", "category", "price_text", "size_options", "readable"],
+              required: ["name", "description", "category", "price_text", "size_options", "readable"],
               additionalProperties: false,
             },
           },
@@ -499,13 +551,17 @@ serve(async (req) => {
       },
     };
 
-    const openAiRes = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: openAiRes } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/responses",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(responsesBody),
       },
-      body: JSON.stringify(responsesBody),
+      existingKeyOverride: openAiKey,
+      logTag: "ai_extract_menu",
     });
 
     if (!openAiRes.ok) {

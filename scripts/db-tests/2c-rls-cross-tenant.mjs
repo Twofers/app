@@ -40,8 +40,11 @@ async function main() {
   const bId = await adminCreateUser(ctx, { email: bEmail, password: PW, role: "business" });
   cleanup.users.push(aRealId, bId);
 
-  const bizA = await seed("businesses", { owner_id: aRealId, name: "Tenant A Cafe" });
-  const bizB = await seed("businesses", { owner_id: bId, name: "Tenant B Cafe" });
+  // status "active": the F-002 public predicate (20260814120000) hides
+  // pre-approval rows, and these fixtures assert PUBLIC catalog behavior.
+  // Pre-approval visibility is covered by 2e-public-visibility.mjs.
+  const bizA = await seed("businesses", { owner_id: aRealId, name: "Tenant A Cafe", status: "active" });
+  const bizB = await seed("businesses", { owner_id: bId, name: "Tenant B Cafe", status: "active" });
   if (!bizA || !bizB) { R.check("fixture: both businesses seeded", false); return; }
   R.check("fixture: both businesses seeded", true);
 

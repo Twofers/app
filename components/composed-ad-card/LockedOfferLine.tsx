@@ -9,6 +9,10 @@ type LockedOfferLineProps = {
 };
 
 export function LockedOfferLine({ children, tokens, compact }: LockedOfferLineProps) {
+  // ComposedAdCard blanks the locked line when it merely repeats the headline, so
+  // an empty value here means "already said above" — render nothing rather than an
+  // empty bold row that still consumes the panel's gap spacing.
+  if (!children?.trim()) return null;
   return (
     <Text
       numberOfLines={2}

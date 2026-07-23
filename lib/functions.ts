@@ -136,7 +136,7 @@ export function parseFunctionError(error: unknown): string {
 }
 
 /** Thrown from AI edge invokes when the response body includes `error_code`. */
-export type ErrorWithCode = Error & { code?: string; waitSeconds?: number };
+export type ErrorWithCode = Error & { code?: string; waitSeconds?: number; responseBody?: Record<string, unknown> };
 
 function extractErrorCodeFromInvokeError(error: unknown): string | undefined {
   if (!isSupabaseFunctionInvokeError(error)) return undefined;
@@ -166,6 +166,27 @@ export function getErrorCode(e: unknown): string | undefined {
   return extractErrorCodeFromInvokeError(e);
 }
 
+export function getFunctionErrorBody(e: unknown): Record<string, unknown> | undefined {
+  if (e && typeof e === "object" && e !== null && "responseBody" in e) {
+    const body = (e as ErrorWithCode).responseBody;
+    if (body && typeof body === "object" && !Array.isArray(body)) return body;
+  }
+  if (!isSupabaseFunctionInvokeError(e)) return undefined;
+  const body = e.context?.body;
+  if (body && typeof body === "object" && !Array.isArray(body)) return body as Record<string, unknown>;
+  if (e.message) {
+    try {
+      const parsed = JSON.parse(e.message);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      /* not JSON */
+    }
+  }
+  return undefined;
+}
+
 /**
  * Seconds the caller should wait before retrying, for rate-limited AI edge
  * calls (COOLDOWN_ACTIVE). Prefers the structured `waitSeconds` threaded from
@@ -187,10 +208,16 @@ export function getErrorWaitSeconds(e: unknown): number | undefined {
   return undefined;
 }
 
-export function throwInvokeError(message: string, code?: string, waitSeconds?: number): never {
+export function throwInvokeError(
+  message: string,
+  code?: string,
+  waitSeconds?: number,
+  responseBody?: Record<string, unknown>,
+): never {
   const err = new Error(message) as ErrorWithCode;
   if (code) err.code = code;
   if (typeof waitSeconds === "number" && Number.isFinite(waitSeconds)) err.waitSeconds = waitSeconds;
+  if (responseBody) err.responseBody = responseBody;
   throw err;
 }
 
@@ -460,8 +487,18 @@ export type BusinessOnboardingContext = {
   first_offer_draft?: Record<string, unknown> | null;
   access_state?: {
     can_edit_profile?: boolean;
+    can_use_setup_tools?: boolean;
+    can_use_menu_tools?: boolean;
+    can_extract_initial_menu?: boolean;
+    can_create_text_draft?: boolean;
     can_create_offer_draft?: boolean;
+    can_generate_ai?: boolean;
+    can_consume_offer_credits?: boolean;
     can_publish_offer?: boolean;
+    can_receive_new_claims?: boolean;
+    can_redeem_existing_claims?: boolean;
+    can_manage_billing?: boolean;
+    limits?: unknown;
     reason_code?: string;
     friendly_status_message?: string;
   };
@@ -865,7 +902,7 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
  */
 async function readInvokeErrorBody(
   error: unknown,
-): Promise<{ message?: string; code?: string; waitSeconds?: number }> {
+): Promise<{ message?: string; code?: string; waitSeconds?: number; body?: Record<string, unknown> }> {
   const ctx = (error as { context?: unknown } | null)?.context;
   if (typeof Response !== "undefined" && ctx instanceof Response) {
     try {
@@ -879,6 +916,7 @@ async function readInvokeErrorBody(
             typeof o.wait_seconds === "number" && Number.isFinite(o.wait_seconds)
               ? o.wait_seconds
               : undefined,
+          body: data as Record<string, unknown>,
         };
       }
     } catch {
@@ -897,7 +935,7 @@ async function invokeAdEdge(payload: Record<string, unknown>): Promise<AiGenerat
     const fromBody = await readInvokeErrorBody(error);
     const code = fromBody.code ?? extractErrorCodeFromInvokeError(error);
     const message = fromBody.message ?? parseFunctionError(error);
-    throwInvokeError(message, code, fromBody.waitSeconds);
+    throwInvokeError(message, code, fromBody.waitSeconds, fromBody.body);
   }
   throwIfEdgeResponseError(data);
   const d = data as { ad?: GeneratedAd; ads?: GeneratedAd[]; quota?: AdVariantsQuota };

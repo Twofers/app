@@ -1,4 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const publishMocks = vi.hoisted(() => ({ invoke: vi.fn() }));
+
+vi.mock("./supabase", () => ({
+  supabase: {
+    functions: { invoke: publishMocks.invoke },
+  },
+}));
 
 import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
 import { buildVerifiedAdLocalizationApproval } from "./ad-localization-approval";
@@ -24,6 +32,10 @@ import {
   buildPublishMechanicsValidationCopy,
   checkMerchantDealTitleAgainstOffer,
   createPublishIdempotencyKey,
+  isEdgeRuntimeFailureMessage,
+  publishOfferVersionedDeal,
+  PUBLISH_SERVICE_UNAVAILABLE_CODE,
+  type PublishOfferVersionedDealBody,
 } from "./offer-version-publish";
 import { buildAdImageSelection } from "./merchant-image-selection";
 import { buildPosterSpecFromOfferDefinition } from "./poster/posterCopy";
@@ -282,7 +294,7 @@ describe("offer version publish client helpers", () => {
     expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
   });
 
-  it("normalizes poster copy to English only in publish ad specs", () => {
+  it("normalizes poster copy to the localization source language in publish ad specs", () => {
     const definition = buildOfferDefinitionV1({
       businessId: "11111111-1111-4111-8111-111111111111",
       businessName: "Test Cafe",
@@ -305,22 +317,36 @@ describe("offer version publish client helpers", () => {
       templateId: "premium",
       sourceAssetPath: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
       renderedAssetPath: null,
-      headline: "Large americano",
+      headline: "Pausa para cafÃ©",
+      sourceLocale: "es-US",
       businessCategory: "Cafe",
+    });
+    const localizationBundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Pausa para cafÃ©",
+        supportingCopy: "Americano a mitad de precio.",
+        imageAltText: "Americano en una mesa",
+      },
+      offerDefinition: definition,
     });
 
     const spec = buildOfferVersionPublishAdSpec("create_ai", definition, {
-      headline: "Large americano",
-      subheadline: "50% off today",
-      short_description: "50% off today",
-      cta: "Claim deal",
+      headline: "Pausa para cafÃ©",
+      subheadline: "Americano a mitad de precio.",
+      short_description: "Americano a mitad de precio.",
+      cta: "Usar oferta",
       poster_storage_path: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
       poster,
+      localization_bundle: localizationBundle,
     });
 
     expect(Object.keys(poster.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
-    expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["en-US"]);
-    expect(spec.poster?.copy_by_language["en-US"]?.headline).toBe("LARGE AMERICANO");
+    expect(spec.selected_language).toBe("es-US");
+    expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["es-US"]);
+    expect(spec.poster?.copy_by_language["es-US"]?.headline).toBe(
+      poster.copy_by_language["es-US"].headline,
+    );
     expect(spec.creative_format).toBe("poster_v1");
   });
 
@@ -578,5 +604,116 @@ describe("offer version publish client helpers", () => {
       triggerCodes: ["LOW_SAFE_ZONE_CONFIDENCE", "BORDERLINE_SAFE_ZONE_CONFIDENCE"],
       decision: "not_run",
     });
+  });
+});
+
+describe("publish error surfacing", () => {
+  const body = {
+    business_id: "11111111-1111-4111-8111-111111111111",
+    offer_definition: buildDefinition(),
+    deal_rows: [{ business_id: "11111111-1111-4111-8111-111111111111" }],
+    idempotency_key: "create_ai:test",
+  } as unknown as PublishOfferVersionedDealBody;
+
+  function invokeErrorWithBody(payload: Record<string, unknown>, status = 400): Error {
+    return Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+      context: new Response(JSON.stringify(payload), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    });
+  }
+
+  async function publishRejection(): Promise<Error & { code?: string; reasonCodes?: string[] }> {
+    return publishOfferVersionedDeal(body).then(
+      () => {
+        throw new Error("expected publishOfferVersionedDeal to reject");
+      },
+      (err: Error & { code?: string; reasonCodes?: string[] }) => err,
+    );
+  }
+
+  beforeEach(() => {
+    publishMocks.invoke.mockReset();
+  });
+
+  it("recognizes edge runtime failures without flagging merchant-facing copy", () => {
+    expect(isEdgeRuntimeFailureMessage("Could not load bundle")).toBe(true);
+    expect(isEdgeRuntimeFailureMessage("Failed to load the bundle for publish-offer-version")).toBe(true);
+    expect(isEdgeRuntimeFailureMessage("BOOT_ERROR")).toBe(true);
+    expect(isEdgeRuntimeFailureMessage("worker boot error")).toBe(true);
+    expect(isEdgeRuntimeFailureMessage("WORKER_LIMIT reached")).toBe(true);
+    expect(isEdgeRuntimeFailureMessage("worker terminated")).toBe(true);
+
+    expect(isEdgeRuntimeFailureMessage(null)).toBe(false);
+    expect(isEdgeRuntimeFailureMessage("   ")).toBe(false);
+    expect(isEdgeRuntimeFailureMessage("Invalid offer definition")).toBe(false);
+    expect(isEdgeRuntimeFailureMessage("Business access does not currently allow publishing.")).toBe(false);
+    // A merchant deal about bundles is ordinary copy, not an infrastructure failure.
+    expect(isEdgeRuntimeFailureMessage("Bundle two lattes and save.")).toBe(false);
+  });
+
+  it("converts an edge runtime bundle failure into a retryable outage code", async () => {
+    publishMocks.invoke.mockResolvedValue({ data: null, error: new Error("Could not load bundle") });
+
+    const err = await publishRejection();
+
+    expect(err.code).toBe(PUBLISH_SERVICE_UNAVAILABLE_CODE);
+    // The merchant-visible banner appends this message verbatim, so the
+    // runtime's own wording must not survive.
+    expect(err.message.toLowerCase()).not.toContain("bundle");
+    expect(err.message).toBe("The publish service is temporarily unavailable.");
+  });
+
+  it("keeps structured publish errors from the function body intact", async () => {
+    publishMocks.invoke.mockResolvedValue({
+      data: null,
+      error: invokeErrorWithBody({
+        error: "Invalid ad spec",
+        error_code: "INVALID_AD_SPEC",
+        reason_codes: ["POSTER_HEADLINE_OVER_LIMIT"],
+      }),
+    });
+
+    const err = await publishRejection();
+
+    expect(err.code).toBe("INVALID_AD_SPEC");
+    expect(err.message).toBe("Invalid ad spec");
+    expect(err.reasonCodes).toEqual(["POSTER_HEADLINE_OVER_LIMIT"]);
+  });
+
+  it("never reclassifies a response that the function body produced itself", async () => {
+    publishMocks.invoke.mockResolvedValue({
+      data: null,
+      error: invokeErrorWithBody({
+        error: "Could not load bundle",
+        error_code: "PUBLISH_OFFER_VERSION_FAILED",
+      }),
+    });
+
+    const err = await publishRejection();
+
+    expect(err.code).toBe("PUBLISH_OFFER_VERSION_FAILED");
+  });
+
+  it("returns published deals on success", async () => {
+    publishMocks.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        deals: [
+          {
+            deal_id: "33333333-3333-4333-8333-333333333333",
+            offer_definition_id: "44444444-4444-4444-8444-444444444444",
+            offer_version_id: "55555555-5555-4555-8555-555555555555",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await publishOfferVersionedDeal(body);
+
+    expect(result.ok).toBe(true);
+    expect(result.deals).toHaveLength(1);
   });
 });

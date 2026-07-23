@@ -126,6 +126,27 @@ describe("buildDealOfferContract", () => {
     );
   });
 
+  it("strips stray inferred quotes before validating and building fallback copy", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "\"THE SERGEANT'S STRIPES (Select origins estate grown coffee)",
+      freeItemQuantity: 1,
+      freeItemDescription: "Cookie",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.requiredPurchase?.itemName).toBe("THE SERGEANT'S STRIPES (Select origins estate grown coffee)");
+    expect(contract.canonicalOfferLine).toBe(
+      "Buy THE SERGEANT'S STRIPES (Select origins estate grown coffee) and get a free cookie",
+    );
+
+    const fallback = deterministicFallbackCopy(contract);
+    expect(fallback.headline).not.toContain("\"");
+    expect(validateAiCopyAgainstOffer(fallback, contract).valid).toBe(true);
+  });
+
   it("builds the required golden canonical headlines", () => {
     expect(buildCanonicalHeadlineFromFacts({
       merchantName: "Cafe",
@@ -618,5 +639,84 @@ describe("generateValidatedDealCopy", () => {
     expect(result.copy_source).toBe("DETERMINISTIC_FALLBACK");
     expect(result.headline).toBe("Buy a coffee and get a free bagel");
     expect(result.fallback_reason).toMatch(/MODEL_REQUEST_FAILED/);
+  });
+});
+
+describe("item names with parenthetical descriptions and banned words", () => {
+  // Regression for the 2026-07-18 COPY_FAILED 502s: an item name that embeds a
+  // parenthetical description containing a banned hype word ("fresh") made
+  // every possible copy invalid — copy had to contain the full name (item
+  // check) but any copy containing "fresh" was rejected (promo-claim check) —
+  // and the deterministic fallback headline blew the length limit, so
+  // generateValidatedDealCopy threw DETERMINISTIC_FALLBACK_INVALID.
+  const parentheticalContract = contractFor({
+    dealType: "BUY_ONE_GET_SOMETHING_FREE",
+    appliesTo: "SINGLE_ITEM",
+    requiredPurchaseQuantity: 1,
+    requiredItemDescription: "the recon roast ( Roaster fresh coffee with a shot of espresso)",
+    requiredItemRetailValueCents: 600,
+    freeItemQuantity: 1,
+    freeItemDescription: "the sargents stripes ( select orgin estate grown coffee)",
+    freeItemRetailValueCents: 500,
+    freeItemDiscountPercent: 100,
+  });
+
+  it("accepts copy that names the core items without the parenthetical descriptions", () => {
+    const result = validateAiCopyAgainstOffer(
+      {
+        headline: "Buy the recon roast and get the sargents stripes free",
+        short_description: "Order the recon roast and the sargents stripes is on us.",
+        push_notification: "Buy the recon roast today and claim the sargents stripes free.",
+      },
+      parentheticalContract,
+    );
+
+    expect(result.reasonCodes).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it("does not count banned words inside a merchant item name as promo claims", () => {
+    const result = validateAiCopyAgainstOffer(
+      {
+        headline: "Buy the recon roast and get the sargents stripes free",
+        short_description:
+          "Buy the recon roast ( Roaster fresh coffee with a shot of espresso) and the sargents stripes is on us.",
+        push_notification: "Buy the recon roast today and claim the sargents stripes free.",
+      },
+      parentheticalContract,
+    );
+
+    expect(result.reasonCodes).not.toContain("UNSUPPORTED_PROMO_CLAIM");
+    expect(result.valid).toBe(true);
+  });
+
+  it("still rejects hype words that are not part of an item name", () => {
+    const result = validateAiCopyAgainstOffer(
+      copy({ short_description: "Buy a coffee and a fresh bagel is on us." }),
+      coffeeBagelContract,
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("UNSUPPORTED_PROMO_CLAIM");
+  });
+
+  it("builds a deterministic fallback that validates instead of throwing", () => {
+    const fallback = deterministicFallbackCopy(parentheticalContract);
+    const validation = validateAiCopyAgainstOffer(fallback, parentheticalContract);
+
+    expect(fallback.headline.length).toBeLessThanOrEqual(55);
+    expect(fallback.headline).not.toMatch(/\(/);
+    expect(validation.reasonCodes).toEqual([]);
+    expect(validation.valid).toBe(true);
+  });
+
+  it("returns deterministic fallback copy for the parenthetical contract when the model produces nothing", async () => {
+    const result = await generateValidatedDealCopy({
+      contract: parentheticalContract,
+      requestCopy: vi.fn().mockResolvedValue([]),
+    });
+
+    expect(result.copy_source).toBe("DETERMINISTIC_FALLBACK");
+    expect(result.headline).not.toMatch(/\(/);
   });
 });

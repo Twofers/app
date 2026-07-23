@@ -323,13 +323,16 @@ function posterViewerLanguageEnabled(): boolean {
   return process.env.POSTER_VIEWER_LANGUAGE_ENABLED === "true" || process.env.EXPO_PUBLIC_POSTER_VIEWER_LANGUAGE_ENABLED === "true";
 }
 
-function posterSpecForAd(generatedAd?: GeneratedAd | null): PosterSpecV1 | null {
+function posterSpecForAd(
+  generatedAd: GeneratedAd | null | undefined,
+  sourceLocale: SupportedLocale,
+): PosterSpecV1 | null {
   if (!generatedAd?.poster?.enabled) return null;
   const parsed = parsePosterSpecV1(generatedAd.poster);
   if (!parsed) return null;
   // Flag on: keep every localized copy variant so consumers can see the poster in their own
   // app language. Flag off: preserve the original English-only publish shape unchanged.
-  return posterViewerLanguageEnabled() ? parsed : normalizePosterSpecForPublish(parsed);
+  return posterViewerLanguageEnabled() ? parsed : normalizePosterSpecForPublish(parsed, sourceLocale);
 }
 
 function buildSlot(params: {
@@ -373,7 +376,10 @@ export function buildAdSpecV1(params: {
   selectedLanguage?: SupportedLocale | string | null;
 }): AdSpecV1 {
   const { offerDefinition, generatedAd } = params;
-  const poster = posterSpecForAd(generatedAd);
+  const selectedLanguage = supportedLocaleOrDefault(
+    params.selectedLanguage ?? generatedAd?.localization_bundle?.sourceLocale ?? "en-US",
+  );
+  const poster = posterSpecForAd(generatedAd, selectedLanguage);
   const visual = visualFor(offerDefinition, generatedAd);
   const headline = clip(
     firstText([generatedAd?.headline, offerDefinition.canonicalOfferLine], offerDefinition.canonicalOfferSentence),
@@ -410,7 +416,7 @@ export function buildAdSpecV1(params: {
   return {
     adSpecVersion: 1,
     creative_format: poster ? "poster_v1" : "standard_card",
-    selected_language: supportedLocaleOrDefault(params.selectedLanguage ?? "en-US"),
+    selected_language: selectedLanguage,
     ...(poster ? { poster } : {}),
     rendererVersion: AD_SPEC_RENDERER_VERSION,
     templateVersion: AD_SPEC_TEMPLATE_VERSION,
@@ -494,7 +500,8 @@ export function validateAdSpecV1(value: unknown): AdSpecValidationResult {
 
 export function buildAdSpecV3(params: BuildAdSpecV3Params): AdSpecV3 {
   const { offerDefinition, generatedAd } = params;
-  const poster = posterSpecForAd(generatedAd);
+  const selectedLanguage = supportedLocaleOrDefault(generatedAd?.localization_bundle?.sourceLocale ?? "en-US");
+  const poster = posterSpecForAd(generatedAd, selectedLanguage);
   const baseProvenance = generatedAdCopyProvenance(generatedAd);
   const displayHook = clip(
     firstText([generatedAd?.headline, offerDefinition.canonicalOfferLine], offerDefinition.canonicalOfferLine),
@@ -522,7 +529,7 @@ export function buildAdSpecV3(params: BuildAdSpecV3Params): AdSpecV3 {
   return {
     version: "3",
     creative_format: poster ? "poster_v1" : "standard_card",
-    selected_language: supportedLocaleOrDefault(generatedAd?.localization_bundle?.sourceLocale ?? "en-US"),
+    selected_language: selectedLanguage,
     ...(poster ? { poster } : {}),
     source: params.source,
     offerDefinitionVersion: 1,

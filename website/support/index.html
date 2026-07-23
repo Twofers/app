@@ -10,6 +10,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
+    <!-- Support is a common Google landing page, and its instructions assume the
+         reader already has the app. Offer the install path on iPhone Safari. -->
+    <meta name="apple-itunes-app" content="app-id=6765769303" />
     <link rel="canonical" href="https://www.twoferapp.com/support" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Twofer" />
@@ -20,7 +23,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
   </head>
   <body>
     <header class="site-header">
@@ -72,7 +75,15 @@
         In the app, open the offer detail screen and choose Report this offer. You can also email support with
         the business name, offer title, and what happened.
       </p>
+
+      <h2 data-i18n="support.getAppTitle">Get the Twofer app</h2>
+      <p data-i18n="support.getAppBody">Twofer is free on iPhone and Android.</p>
+      <div class="store-badge-row">
+        <a class="store-badge-link" href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios" data-store-badge>Get Twofer for iPhone</a>
+        <a class="store-badge-link" href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android" data-store-badge>Get Twofer for Android</a>
+      </div>
     </main>
-    <script src="/localization.js?v=20260702-site-i18n"></script>
+    <script src="/localization.js?v=20260722-l2-feed"></script>
+    <script src="/store-links.js?v=20260722-es-polish"></script>
   </body>
 </html>

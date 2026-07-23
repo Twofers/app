@@ -1,0 +1,10 @@
+{
+  "name": "twofer-passkit",
+  "version": "1.0.0",
+  "description": "Twofer's local iOS PassKit bridge and system Add to Apple Wallet button.",
+  "main": "src/index.tsx",
+  "private": true,
+  "author": "Twofer",
+  "license": "UNLICENSED",
+  "homepage": "https://www.twoferapp.com"
+}

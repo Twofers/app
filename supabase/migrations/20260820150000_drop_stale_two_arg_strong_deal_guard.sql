@@ -1,0 +1,31 @@
+-- Remove the stale 2-argument is_strong_deal_offer left behind by R13.
+--
+-- 20260721170000 used CREATE OR REPLACE FUNCTION to add four defaulted
+-- parameters. CREATE OR REPLACE cannot change a function's argument list, so it
+-- did not replace the old function -- it created a second OVERLOAD alongside it.
+-- Production now has both:
+--
+--   public.is_strong_deal_offer(text, text)
+--   public.is_strong_deal_offer(text, text, text, numeric, numeric, numeric)
+--
+-- Confirmed live: a 2-argument PostgREST call returns HTTP 300 PGRST203,
+-- "Could not choose the best candidate function between" the two. That breaks
+-- scripts/probe-strong-deal.mjs, the gate that verifies the SQL guard has not
+-- drifted from lib/strong-deal-guard.ts -- so the parity check that exists to
+-- catch exactly this class of problem was itself disabled by it.
+--
+-- That migration's own closing comment reads: "The quality-tier trigger calls
+-- the 2-arg form, which still resolves via the DEFAULTs and keeps its prose-only
+-- behaviour." That is only true once the old 2-arg function is gone. While both
+-- exist, the call resolves to the surviving old function instead.
+--
+-- Dropping the 2-arg form is behaviour-preserving for its callers. With the
+-- structured parameters defaulted to NULL, structured_offer_is_strong returns
+-- NULL, which falls through to the unchanged prose logic -- the same verdict the
+-- old function produced. The 6-argument call in
+-- enforce_strong_deal_only_guardrail is unaffected (verified: returns 200/true).
+--
+-- Remaining 2-argument caller, which this migration is what makes correct:
+--   public.set_quality_tier_on_deal()  (20260402130000)
+
+DROP FUNCTION IF EXISTS public.is_strong_deal_offer(TEXT, TEXT);

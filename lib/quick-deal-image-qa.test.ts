@@ -295,21 +295,101 @@ describe("quick deal image QA", () => {
     expect(shouldFailClosedForImageQa(result)).toBe(true);
   });
 
-  it("fails closed on generated and stock QA outage but allows merchant-original acknowledgement", () => {
+  it("fails open on QA outage for every source type, keeping the image with a warning", () => {
     const generated = unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" });
     const stock = unavailableSourceAwareImageQaResult({ sourceType: "approved_stock" });
+    const edit = unavailableSourceAwareImageQaResult({ sourceType: "merchant_ai_edit" });
     const original = unavailableSourceAwareImageQaResult({
       sourceType: "merchant_original",
       merchantOverrideAcknowledged: true,
     });
 
-    expect(generated.decision).toBe("block");
-    expect(shouldFailClosedForImageQa(generated)).toBe(true);
-    expect(stock.decision).toBe("block");
-    expect(shouldFailClosedForImageQa(stock)).toBe(true);
-    expect(original.decision).toBe("unavailable");
+    for (const result of [generated, stock, edit, original]) {
+      expect(result.decision).toBe("unavailable");
+      expect(result.hardFailReasons).toEqual([]);
+      expect(result.warningCodes).toEqual(["VISION_QA_UNAVAILABLE"]);
+      expect(result.missingItems).toEqual([]);
+      expect(shouldFailClosedForImageQa(result)).toBe(false);
+    }
+    expect(generated.merchantOverrideAllowed).toBe(false);
     expect(original.merchantOverrideAllowed).toBe(true);
     expect(original.merchantOverrideAcknowledged).toBe(true);
-    expect(shouldFailClosedForImageQa(original)).toBe(false);
+  });
+
+  it("keeps a generated image whose items are present but not prominent, with a warning", () => {
+    const result = normalizeSourceAwareImageQaResult({
+      raw: normalizeQuickDealImageQaResult(
+        {
+          all_required_items_present: false,
+          items: [
+            { item: "bagel", present: true, prominent: true },
+            { item: "coffee", present: true, prominent: false },
+          ],
+          missing_items: [],
+          has_readable_text: false,
+          has_forbidden_logo_or_brand: false,
+          has_qr_code: false,
+          has_unrelated_mascot_or_animal: false,
+          forbidden_elements: [],
+          notes: "Coffee is small in the background.",
+        },
+        ["bagel", "coffee"],
+      ),
+      requiredVisualItems: ["bagel", "coffee"],
+      sourceType: "ai_generated",
+    });
+
+    expect(result.decision).toBe("warn");
+    expect(result.hardFailReasons).toEqual([]);
+    expect(result.missingItems).toEqual([]);
+    expect(result.warningCodes).toEqual(["ITEM_NOT_PROMINENT:COFFEE"]);
+    expect(shouldFailClosedForImageQa(result)).toBe(false);
+  });
+
+  it("still blocks a generated image whose item is truly absent", () => {
+    const result = normalizeSourceAwareImageQaResult({
+      raw: normalizeQuickDealImageQaResult(
+        {
+          all_required_items_present: false,
+          items: [
+            { item: "bagel", present: true, prominent: true },
+            { item: "coffee", present: false, prominent: false },
+          ],
+          missing_items: ["coffee"],
+          has_readable_text: false,
+          has_forbidden_logo_or_brand: false,
+          has_qr_code: false,
+          has_unrelated_mascot_or_animal: false,
+          forbidden_elements: [],
+          notes: "No coffee in frame.",
+        },
+        ["bagel", "coffee"],
+      ),
+      requiredVisualItems: ["bagel", "coffee"],
+      sourceType: "ai_generated",
+    });
+
+    expect(result.decision).toBe("block");
+    expect(result.hardFailReasons).toEqual(["MISSING_REQUIRED_ITEM:COFFEE"]);
+    expect(result.missingItems).toEqual(["coffee"]);
+    expect(shouldFailClosedForImageQa(result)).toBe(true);
+  });
+
+  it("describes the real 4:5 poster frame to the inspector when requested", () => {
+    const posterPrompt = buildAdImageQaPrompt({
+      sourceType: "ai_generated",
+      requiredVisualItems: ["latte"],
+      renderFormat: "poster_4_5",
+    });
+    const squarePrompt = buildAdImageQaPrompt({
+      sourceType: "ai_generated",
+      requiredVisualItems: ["latte"],
+    });
+
+    expect(posterPrompt).toMatch(/vertical 4:5 poster/i);
+    expect(posterPrompt).not.toMatch(/square 1:1/i);
+    expect(posterPrompt).not.toMatch(/square cover crop/i);
+    expect(squarePrompt).toMatch(/square 1:1/i);
+    expect(squarePrompt).not.toMatch(/4:5 poster/i);
   });
 });

@@ -9,6 +9,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 type Suggestion = {
   icon: string;
@@ -179,6 +180,30 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
+      );
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("id", business_id)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+    if (!business) {
+      return new Response(
+        JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const capabilities = await getBusinessCapabilities(supabase as any, business_id);
+    if (!capabilities.can_generate_ai) {
+      return new Response(
+        JSON.stringify({
+          error: "AI insights unlock after trial activation.",
+          error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

@@ -431,4 +431,85 @@ describe("localized deal display", () => {
     expect(structuredDeal.id).toBe("deal_123");
     expect(structuredDeal.max_claims).toBe(25);
   });
+
+  // S13. Observed live on the business page: the description was the AI supporting copy,
+  // the deterministic offer line and the terms line — three paraphrases of one offer, with
+  // sentences 2 and 3 run together because the join added no punctuation.
+  describe("S13 — the description must not state the offer three times", () => {
+    // A paraphrase of this fixture's own deterministic offer line ("Buy a latte and get a
+    // free cookie") — the same relationship the live business page had between the AI
+    // supporting copy and the offer line it restated.
+    const supporting = "Order a latte and your cookie is free.";
+
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        customer_deal_localization: {
+          dealId: "deal_123",
+          offerVersionId: "offer_version_123",
+          locale: "en-US",
+          sourceLocale: "en-US",
+          headline: "Cookie with your coffee",
+          supportingCopy: supporting,
+          localizationHash: "adlocrow_s13",
+          localizationBundleHash: "adloc_s13",
+          translationStatus: "source_creative",
+          qaDecision: "pass",
+          qaReasonCodes: [],
+          deterministicFallback: false,
+        },
+      },
+      locale: "en-US",
+      localeResolutionSource: "app_language",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    it("drops the paraphrased offer line but keeps the terms", () => {
+      // The offer line restates the supporting copy, so it goes.
+      expect(display.description).not.toContain("Buy a latte and get a free cookie");
+      // The terms line carries the location and the claim limit — it must survive.
+      expect(display.description).toContain("Cedar Bean - Irving");
+      expect(display.description).toContain("Limited to 25 available");
+      expect(display.description.startsWith(supporting)).toBe(true);
+    });
+
+    it("never runs two sentences together", () => {
+      expect(display.description).not.toMatch(/[a-z]\s+[A-Z][a-z]+ [a-z]/);
+      for (const sentence of display.description.split(/(?<=[.!?])\s+/)) {
+        expect(sentence.trim()).toMatch(/[.!?]$/);
+      }
+    });
+
+    it("keeps a genuinely different line rather than guessing", () => {
+      // Deliberate asymmetry: the dedup only fires on heavy token overlap, because deleting
+      // the only statement of an offer is far worse than showing it twice.
+      const distinct = buildLocalizedDealDisplay({
+        deal: {
+          ...structuredDeal,
+          customer_deal_localization: {
+            dealId: "deal_123",
+            offerVersionId: "offer_version_123",
+            locale: "en-US",
+            sourceLocale: "en-US",
+            headline: "Afternoon treat",
+            supportingCopy: "Our roastery pulls every shot to order.",
+            localizationHash: "adlocrow_s13b",
+            localizationBundleHash: "adloc_s13b",
+            translationStatus: "source_creative",
+            qaDecision: "pass",
+            qaReasonCodes: [],
+            deterministicFallback: false,
+          },
+        },
+        locale: "en-US",
+        localeResolutionSource: "app_language",
+        useLocalizedOfferRenderer: true,
+        fallbackLanguage: "en",
+      });
+      expect(distinct.description).toContain("Our roastery pulls every shot to order.");
+      expect(distinct.description.length).toBeGreaterThan(supporting.length);
+    });
+
+  });
 });

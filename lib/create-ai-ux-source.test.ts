@@ -21,6 +21,29 @@ function readLocale(locale: "en" | "es" | "ko") {
 }
 
 describe("AI create UX source guards", () => {
+  it("tells the owner which detail blocked publishing, not just that one did", () => {
+    // The validation banner renders at the top of the form while Publish sits at
+    // the bottom, so on a filled-in draft the owner who pressed Publish saw only
+    // the generic "fix the deal details above" card with nothing naming the
+    // problem. The publish path must surface the specific reason on that card.
+    expect(createAiSource).toContain("function publishValidationFailure(): string | null");
+    expect(createAiSource).toContain("const validationFailure = publishValidationFailure();");
+    expect(createAiSource).toContain("setPublishStatusMessage(validationFailure);");
+    // The generic body must no longer be what a validation failure reports.
+    expect(createAiSource).not.toContain('setPublishStatusMessage(t("createAi.publishValidationBody"))');
+    // Every rejection still raises the banner too, via the shared helper.
+    expect(createAiSource).toContain("setBanner({ message, tone: \"error\" });");
+  });
+
+  it("localizes the cutoff-versus-duration rejection in every supported locale", () => {
+    // This message was reachable only through its hardcoded English defaultValue
+    // because the key existed in no locale file.
+    for (const locale of ["en", "es", "ko"] as const) {
+      const messages = readLocale(locale);
+      expect(messages.createQuick?.errCutoffDuration ?? "").not.toBe("");
+    }
+  });
+
   it("keeps generation recovery gated by failure type", () => {
     expect(createAiSource).toContain("lastGenerationOutcomeKind");
     expect(createAiSource).toContain("classifyGenerationFailure({");
@@ -40,6 +63,102 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("<SecondaryButton");
     expect(createAiSource).toContain("title={publishReadiness.buttonLabel}");
     expect(createAiSource).toContain("disabled={savingTemplate || !canPublish}");
+  });
+
+  it("keeps the poster headline live-editable through preview and publish", () => {
+    // Preview and publish build the poster from the SAME live field; the stale
+    // generated spec is only a fallback when no offer definition exists.
+    expect(createAiSource).toContain("const [posterHeadlineText, setPosterHeadlineText] = useState(\"\");");
+    expect(createAiSource).toContain(
+      "const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;",
+    );
+    const previewHeadline = "headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,";
+    expect(createAiSource.split(previewHeadline).length - 1).toBe(2);
+    // Seeded from every generated/revised ad and restored image version.
+    expect(createAiSource).toContain("setPosterHeadlineText(ad.poster?.copy?.headline ?? \"\");");
+    // Visible fit limit on the input plus a publish-time block, never a silent rewrite.
+    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.headline}");
+    expect(createAiSource).toContain("checkMerchantPosterHeadline(posterHeadlineText)");
+    expect(createAiSource).toContain("createAi.errPosterTextTooLong");
+    expect(createAiSource).toContain("createAi.errPosterTextNotAllowed");
+  });
+
+  it("keeps a manual poster subheadline live-editable through preview and publish", () => {
+    expect(createAiSource).toContain("const [posterSublineText, setPosterSublineText] = useState(\"\");");
+    expect(createAiSource).toContain("setPosterSublineText(ad.poster?.copy?.subline ?? \"\");");
+    expect(createAiSource).toContain("maxLength={POSTER_TEXT_LIMITS.subline}");
+    expect(createAiSource).toContain("checkMerchantPosterSubline(posterSublineText)");
+    expect(createAiSource.split("subline: posterSublineText.trim() || null,").length - 1).toBe(2);
+    // One source locale on both sides of the approve/publish boundary. Pinning the
+    // two old spellings separately is what let them drift apart: publish rebuilt the
+    // presentation from a different locale than the merchant approved, so the exact
+    // presentation hashes could never match and publishing was blocked outright.
+    expect(createAiSource).toContain("sourceLocale: publishSourceLocale");
+    expect(createAiSource).toContain("sourceLocale: supportedSourceLocaleForPublish");
+
+    for (const locale of ["en", "es", "ko"] as const) {
+      const createAi = readLocale(locale).createAi;
+      expect(createAi.editPosterHeadline, `${locale} editPosterHeadline`).toBeTruthy();
+      expect(createAi.editPosterSubheadline, `${locale} editPosterSubheadline`).toBeTruthy();
+      expect(createAi.posterHeadlinePlaceholder, `${locale} posterHeadlinePlaceholder`).toBeTruthy();
+      expect(createAi.posterSubheadlinePlaceholder, `${locale} posterSubheadlinePlaceholder`).toBeTruthy();
+      expect(createAi.posterHeadlineNotAllowed, `${locale} posterHeadlineNotAllowed`).toBeTruthy();
+      expect(createAi.posterSubheadlineNotAllowed, `${locale} posterSubheadlineNotAllowed`).toBeTruthy();
+      expect(createAi.approveChangesTitle, `${locale} approveChangesTitle`).toBeTruthy();
+      expect(createAi.approveChangesBody, `${locale} approveChangesBody`).toBeTruthy();
+      expect(createAi.approveChangesButton, `${locale} approveChangesButton`).toBeTruthy();
+      expect(createAi.errPosterTextTooLong, `${locale} errPosterTextTooLong`).toBeTruthy();
+      expect(createAi.errPosterTextNotAllowed, `${locale} errPosterTextNotAllowed`).toBeTruthy();
+    }
+  });
+
+  it("keeps every accepted text editor mounted while invalidating stale approvals", () => {
+    const invalidationStart = createAiSource.indexOf("function invalidateAcceptedAdDraft()");
+    const invalidationEnd = createAiSource.indexOf("function acceptAd()", invalidationStart);
+    const invalidationSource = createAiSource.slice(invalidationStart, invalidationEnd);
+
+    expect(invalidationSource).not.toContain("setAdAccepted(false)");
+    expect(invalidationSource).toContain("setManualDraftUnlocked(true)");
+    expect(invalidationSource).toContain("setApprovedComposedPresentationHash(null)");
+    expect(invalidationSource).toContain("setApprovedLocalizationApprovalHash(null)");
+    expect(invalidationSource).toContain('setPublishStatus("idle")');
+
+    for (const setter of [
+      "setPosterHeadlineText(value)",
+      "setPosterSublineText(value)",
+      "setTitle(value)",
+      "setPromoLine(value)",
+      "setCtaText(value)",
+      "setDescription(value)",
+    ]) {
+      expect(createAiSource).toContain(`${setter}; invalidateAcceptedAdDraft();`);
+    }
+  });
+
+  it("approves and publishes the live edited snapshot without restoring stale AI copy", () => {
+    const acceptStart = createAiSource.indexOf("function acceptAd()");
+    const acceptEnd = createAiSource.indexOf("function useFallbackTemplateAd()", acceptStart);
+    const acceptSource = createAiSource.slice(acceptStart, acceptEnd);
+
+    expect(createAiSource).toContain('import { buildAiDealReviewDraft } from "../../lib/ai-deal-review-draft";');
+    expect(createAiSource).toContain("const reviewGeneratedAd = liveReviewDraft.ad;");
+    expect(createAiSource).toContain("generatedAd: reviewGeneratedAd,");
+    expect(createAiSource).toContain("ad: reviewGeneratedAd,");
+    expect(acceptSource).not.toContain("applyAdToDraft(generatedAd)");
+    expect(acceptSource).toContain("setManualDraftUnlocked(true)");
+    expect(createAiSource).toContain("acceptedDraftRequiresReapproval");
+    expect(createAiSource).toContain('t("createAi.approveChangesButton")');
+    expect(createAiSource.split("reviewContext:").length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("restores generated drafts into an editable, explicitly unapproved state", () => {
+    // Matched by regex, not a literal: git normalizes app/create/ai.tsx to CRLF
+    // on Windows checkouts, so a hardcoded "\n" in the expected string cannot
+    // match. \s+ spans either line ending, like the assertion below.
+    expect(createAiSource).toMatch(/manualDraftUnlocked \|\|\s+\(!generatedAd && hasDraftCopy\)/);
+    expect(createAiSource).toMatch(
+      /setApprovedComposedPresentationHash\(null\);\s+setApprovedLocalizationApprovalHash\(null\);\s+setManualDraftUnlocked\(draft\.manualDraftUnlocked/,
+    );
   });
 
   it("keeps past-template loading errors scoped to the templates area", () => {
@@ -257,6 +376,20 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("Twofer fallback");
   });
 
+  it("blocks poster-format generation from continuing without an image asset", () => {
+    const noImageGateCount =
+      createAiSource.split("if (!imageVersionStoragePath(normalizedAd))").length - 1;
+
+    expect(noImageGateCount).toBeGreaterThanOrEqual(2);
+    expect(createAiSource).toContain("if (!imageVersionStoragePath(generatedAd))");
+    expect(createAiSource).toContain("if (!hasImageSource)");
+    expect(createAiSource).toContain("if (!posterForPublish)");
+    expect(createAiSource).not.toContain("if (!imageVersionStoragePath(normalizedAd) && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!imageVersionStoragePath(generatedAd) && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!hasImageSource && !showPosterFormat)");
+    expect(createAiSource).not.toContain("if (!posterForPublish && !showPosterFormat)");
+  });
+
   it("keeps no-photo manual drafts out of the deterministic fallback visual", () => {
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
@@ -342,7 +475,7 @@ describe("AI create UX source guards", () => {
 
     expect(generatedPreviewSource).toContain("createAi.dealPreview");
     expect(createAiSource).toContain("const showPosterFormat = creativeFormat === \"poster_v1\" || previewFormat === \"poster_v1\";");
-    expect(createAiSource).toContain("const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;");
+    expect(createAiSource).toContain("const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;");
     expect(createAiSource).toContain("const renderPosterPreview = () =>");
     expect(createAiSource).toContain("<AdPosterCanvas");
     expect(createAiSource).toContain("spec={effectivePosterSpec}");

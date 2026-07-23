@@ -54,8 +54,8 @@ describe("explicit business terms acceptance", () => {
 
   it("exposes reason_code terms_required to the app via get-business-onboarding-context", () => {
     const context = read("supabase/functions/get-business-onboarding-context/index.ts");
-    expect(context).toMatch(/can_business_publish/);
-    expect(context).toMatch(/reason_code:\s*publish\.reason/);
+    expect(context).toMatch(/get_business_capabilities/);
+    expect(context).toMatch(/reason_code: typeof capabilities\.reason_code === "string" \? capabilities\.reason_code : publish\.reason \?\? "pending_verification"/);
   });
 
   it("wires an in-app terms gate that the owner must explicitly check and submit", () => {

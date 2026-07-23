@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatValiditySummary, getDealClaimScheduleBlock, shortTimeZoneLabel } from "./deal-time";
+import {
+  formatValiditySummary,
+  getDealClaimDeadline,
+  getDealClaimScheduleBlock,
+  shortTimeZoneLabel,
+} from "./deal-time";
 
 const baseRecurringDeal = {
   is_recurring: true,
@@ -128,5 +133,64 @@ describe("shortTimeZoneLabel", () => {
     expect(shortTimeZoneLabel("America/Chicago", "es")).toBe("CT");
     expect(shortTimeZoneLabel("America/Chicago", "ko")).toBe("CT");
     expect(shortTimeZoneLabel("America/New_York", "es")).toBe("ET");
+  });
+});
+
+// S14. The feed counted down to end_time regardless of the recurring window, so the live
+// Colonel's Brew deal ("Mon-Fri 3:03 PM-11:03 PM", ending on the 30th) advertised
+// "8d 7h left" at 3:12 PM when the real answer was 7h 51m.
+describe("getDealClaimDeadline", () => {
+  const colonelsBrew = {
+    is_recurring: true,
+    days_of_week: [1, 2, 3, 4, 5],
+    window_start_minutes: 15 * 60 + 3,
+    window_end_minutes: 23 * 60 + 3,
+    timezone: "UTC",
+    start_time: "2026-06-30T00:00:00.000Z",
+    end_time: "2026-07-30T03:41:00.000Z",
+  };
+
+  it("counts down to today's window close, not the campaign end date", () => {
+    // Tuesday 15:12 UTC, inside the window. Campaign ends in 8 days; the window closes in
+    // 7h 51m, and that is what a shopper actually has.
+    const deadline = getDealClaimDeadline(colonelsBrew, new Date("2026-07-21T15:12:00.000Z"));
+
+    expect(deadline?.toISOString()).toBe("2026-07-21T23:03:00.000Z");
+    const hoursLeft = (deadline!.getTime() - new Date("2026-07-21T15:12:00.000Z").getTime()) / 3_600_000;
+    expect(hoursLeft).toBeCloseTo(7.85, 1);
+  });
+
+  it("never reports a deadline beyond the campaign end", () => {
+    // Last day: the window would close at 23:03 but the deal ends at 03:41 that morning.
+    const deadline = getDealClaimDeadline(colonelsBrew, new Date("2026-07-30T03:00:00.000Z"));
+
+    expect(deadline?.toISOString()).toBe("2026-07-30T03:41:00.000Z");
+  });
+
+  it("leaves non-recurring deals counting down to end_time", () => {
+    const oneOff = { ...colonelsBrew, is_recurring: false };
+
+    expect(getDealClaimDeadline(oneOff, new Date("2026-07-21T15:12:00.000Z"))?.toISOString()).toBe(
+      "2026-07-30T03:41:00.000Z",
+    );
+  });
+
+  it("falls back to end_time rather than losing the countdown when the schedule is unusable", () => {
+    const now = new Date("2026-07-21T15:12:00.000Z");
+
+    // No days configured.
+    expect(getDealClaimDeadline({ ...colonelsBrew, days_of_week: [] }, now)?.toISOString()).toBe(
+      "2026-07-30T03:41:00.000Z",
+    );
+    // Not running today (Tuesday is 2).
+    expect(getDealClaimDeadline({ ...colonelsBrew, days_of_week: [0, 6] }, now)?.toISOString()).toBe(
+      "2026-07-30T03:41:00.000Z",
+    );
+    // Missing window end.
+    expect(getDealClaimDeadline({ ...colonelsBrew, window_end_minutes: null }, now)?.toISOString()).toBe(
+      "2026-07-30T03:41:00.000Z",
+    );
+    // No end time at all.
+    expect(getDealClaimDeadline({ ...colonelsBrew, end_time: null }, now)).toBeNull();
   });
 });

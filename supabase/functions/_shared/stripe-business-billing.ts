@@ -166,7 +166,9 @@ export async function seedBusinessSubscription(
   const now = new Date();
   const trialDays = typeof args.trialDays === "number" && args.trialDays > 0 ? args.trialDays : null;
   const trialEnd = trialDays ? new Date(now.getTime() + trialDays * 86400000).toISOString() : null;
-  const accessStatus = args.accessStatus === "trial_limited"
+  const accessStatus = args.accessStatus === "approved_not_activated"
+    ? "approved_not_activated"
+    : args.accessStatus === "trial_limited"
     ? "trial_limited"
     : args.accessStatus === "full_trial" || args.accessStatus === "trialing"
       ? "trialing"

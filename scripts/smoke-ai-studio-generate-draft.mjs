@@ -76,6 +76,7 @@ async function invoke(url, anonKey, accessToken, body) {
 loadLocalEnv();
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const functionUrl = process.env.TWOFER_SMOKE_FUNCTION_URL ?? supabaseUrl;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 assert(supabaseUrl, "Missing EXPO_PUBLIC_SUPABASE_URL");
 assert(anonKey, "Missing EXPO_PUBLIC_SUPABASE_ANON_KEY");
@@ -95,7 +96,7 @@ const sampleBody = {
   copy_only: true,
 };
 
-const unauth = await invoke(supabaseUrl, anonKey, null, sampleBody);
+const unauth = await invoke(functionUrl, anonKey, null, sampleBody);
 assert(unauth.response.status === 401, `Expected unauthenticated 401, got ${unauth.response.status}`);
 
 const email = process.env.TWOFER_SMOKE_EMAIL;
@@ -113,7 +114,7 @@ if (!email || !password || !businessId) {
   const { data: auth, error: authError } = await supabase.auth.signInWithPassword({ email, password });
   assert(!authError && auth.session?.access_token, `Smoke sign-in failed: ${authError?.message ?? "missing session"}`);
 
-  const authed = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+  const authed = await invoke(functionUrl, anonKey, auth.session.access_token, {
     ...sampleBody,
     business_id: businessId,
   });
@@ -128,7 +129,7 @@ if (!email || !password || !businessId) {
   assert(imagePromptHasRequiredClauses(draft?.creative?.imagePrompt), "Image prompt is missing required text-free clauses");
   assertLockedOffer(draft, { ...sampleBody, business_id: businessId });
 
-  const wrongBusiness = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+  const wrongBusiness = await invoke(functionUrl, anonKey, auth.session.access_token, {
     ...sampleBody,
     business_id: "00000000-0000-0000-0000-000000000000",
   });
@@ -147,7 +148,7 @@ if (!email || !password || !businessId) {
   };
 
   if (process.env.TWOFER_SMOKE_REAL_AI === "true") {
-    const real = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+    const real = await invoke(functionUrl, anonKey, auth.session.access_token, {
       ...sampleBody,
       business_id: businessId,
       dry_run: false,
@@ -187,7 +188,7 @@ if (!email || !password || !businessId) {
   }
 
   if (process.env.TWOFER_SMOKE_GEMINI_IMAGE === "true") {
-    const image = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+    const image = await invoke(functionUrl, anonKey, auth.session.access_token, {
       ...sampleBody,
       business_id: businessId,
       dry_run: false,
@@ -203,6 +204,11 @@ if (!email || !password || !businessId) {
     assert(imageDraft?.text_provider === "openai", `Expected GPT mini text provider via OpenAI, got ${imageDraft?.text_provider}`);
     assert(imageDraft?.text_model === "gpt-5.4-mini", `Expected OPENAI_MODEL gpt-5.4-mini, got ${imageDraft?.text_model}`);
     assert(imagePromptHasRequiredClauses(imageDraft?.creative?.imagePrompt), "Gemini image prompt is missing required text-free clauses");
+    assert(
+      typeof imageDraft?.image_deadline?.elapsed_ms === "number" &&
+        typeof imageDraft?.image_deadline?.budget_ms === "number",
+      "Gemini image smoke must return image_deadline timing telemetry",
+    );
     assertLockedOffer(imageDraft, { ...sampleBody, business_id: businessId, dry_run: false, copy_only: false });
     assertPrivateAiAsset(imageDraft);
     result.geminiImage = {
@@ -211,6 +217,7 @@ if (!email || !password || !businessId) {
       creativeId: imageDraft.creative_id,
       imageProvider: imageDraft.image_provider,
       imageModel: imageDraft.image_model,
+      imageDeadline: imageDraft.image_deadline,
       privateAssetPath: imageDraft.source_asset_path ?? imageDraft.image_asset_path,
       signedPreviewReturned: true,
       renderedAssetPath: imageDraft.rendered_asset_path,

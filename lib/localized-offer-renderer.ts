@@ -10,6 +10,7 @@ import {
   type OfferDefinitionV1,
   type OfferDefinitionV1Item,
 } from "./offer-definition.ts";
+import { getReviewedKoreanCounter } from "./korean-counter-registry.ts";
 import { resolveKoreanOfferTemplate } from "./korean-offer-template-resolver.ts";
 import { SUPPORTED_LOCALES, supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales.ts";
 import type { DealOfferContract } from "./deal-offer-contract.ts";
@@ -237,23 +238,50 @@ function renderSpanishLine(facts: OfferFacts, paidTerm: LocalizedOfferTerm, rewa
   return `Al comprar ${number("es-US", facts.paidItem.quantity)} ${paidTerm.displayName}, recibes ${number("es-US", facts.rewardQuantity)} ${rewardTerm.displayName} gratis`;
 }
 
+/**
+ * Korean has two shapes on purpose, and until now only one of them existed.
+ *
+ * The counter-free shape below ("구매 항목: X × 1 / 추가 혜택: Y × 1") is a deliberate
+ * placeholder — `KOREAN_COUNTER_FREE_FALLBACK_TEMPLATE_VERSION` literally reads
+ * "pending-native-review". It sidesteps Korean grammar by not forming a sentence at all,
+ * because picking a counter word (잔 / 개 / 인분) without native review risks saying
+ * something wrong. That caution is right and is preserved untouched.
+ *
+ * What was missing is the OTHER branch. `resolveKoreanOfferTemplate` already returns
+ * `usesCounters: true` with templateId "ko-KR.offer.reviewed-counter" whenever both terms
+ * map to counters a native reviewer approved (June, 2026-07-03, in
+ * `korean-counter-registry.ts`) — and then both branches returned the identical field dump,
+ * so the reviewed counters were computed and thrown away. A Korean shopper saw a database
+ * record where a Spanish shopper saw a sentence.
+ *
+ * The sentence frames use only reviewed counters and the "구매 시" idiom already used by the
+ * poster offer lines. NOTE: the counters are native-reviewed; these two frames are not yet,
+ * and should go to the same reviewer.
+ */
 function renderKoreanLine(facts: OfferFacts, paidTerm: LocalizedOfferTerm, rewardTerm: LocalizedOfferTerm): string {
   const resolution = resolveKoreanOfferTemplate({ paidTerm, rewardTerm });
+  const paidCounter = getReviewedKoreanCounter(paidTerm.koreanCounterId);
+  const rewardCounter = getReviewedKoreanCounter(rewardTerm.koreanCounterId);
+  const paidCount = number("ko-KR", facts.paidItem.quantity);
+  const rewardCount = number("ko-KR", facts.rewardQuantity);
+
   if (facts.offerType === "percent_off_single_item") {
+    if (resolution.usesCounters && paidCounter) {
+      return `${paidTerm.displayName} ${paidCount}${paidCounter.display} ${number("ko-KR", facts.discountPercent ?? 0)}% 할인`;
+    }
     return [
-      `할인 항목: ${paidTerm.displayName} × ${number("ko-KR", facts.paidItem.quantity)}`,
+      `할인 항목: ${paidTerm.displayName} × ${paidCount}`,
       `혜택: ${number("ko-KR", facts.discountPercent ?? 0)}% 할인`,
     ].join("\n");
   }
-  if (!resolution.usesCounters) {
-    return [
-      `구매 항목: ${paidTerm.displayName} × ${number("ko-KR", facts.paidItem.quantity)}`,
-      `추가 혜택: ${rewardTerm.displayName} × ${number("ko-KR", facts.rewardQuantity)}`,
-    ].join("\n");
+
+  if (resolution.usesCounters && paidCounter && rewardCounter) {
+    return `${paidTerm.displayName} ${paidCount}${paidCounter.display} 구매 시 ${rewardTerm.displayName} ${rewardCount}${rewardCounter.display} 무료`;
   }
+
   return [
-    `구매 항목: ${paidTerm.displayName} × ${number("ko-KR", facts.paidItem.quantity)}`,
-    `추가 혜택: ${rewardTerm.displayName} × ${number("ko-KR", facts.rewardQuantity)}`,
+    `구매 항목: ${paidTerm.displayName} × ${paidCount}`,
+    `추가 혜택: ${rewardTerm.displayName} × ${rewardCount}`,
   ].join("\n");
 }
 

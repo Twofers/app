@@ -23,6 +23,8 @@ type BusinessInfo = {
   phone: string | null;
   hours_text: string | null;
   current_profile_version: number | null;
+  /** Lifecycle status (get_my_business RPC path only) — drives the name lock UI. */
+  status: string | null;
 };
 
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled";
@@ -64,6 +66,14 @@ export function businessRowToAiContext(b: BusinessInfo | null): BusinessContextP
 
 export function useBusiness() {
   const { session, isInitialLoading: authLoading } = useAuthSession();
+  // Depend on the identity fields rather than the session object. Supabase hands back
+  // a fresh session object on token refresh and on some provider re-renders, which
+  // changed `refresh`'s identity, which re-fired the effect below, which superseded
+  // its own in-flight fetch — a self-sustaining loop that logged
+  // "[useBusiness] refresh completed after unmount/stale" once a second and left
+  // "Create new offer" sitting on "Redirecting…" for ~17s before it settled.
+  const sessionUserId = session?.user?.id ?? null;
+  const sessionUserEmail = session?.user?.email ?? null;
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -81,7 +91,7 @@ export function useBusiness() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const uid = session?.user?.id;
+    const uid = sessionUserId;
     if (!uid) {
       setIsLoggedIn(false);
       setUserId(null);
@@ -104,7 +114,7 @@ export function useBusiness() {
 
     setIsLoggedIn(true);
     setUserId(uid);
-    setSessionEmail(session?.user?.email ?? null);
+    setSessionEmail(sessionUserEmail);
 
     // PII columns (contact_name, business_email, tone) and owner_id filters are
     // readable only via the get_my_business() SECURITY DEFINER RPC — they are
@@ -139,6 +149,7 @@ export function useBusiness() {
             phone: data.phone ?? null,
             hours_text: data.hours_text ?? null,
             current_profile_version: data.current_profile_version ?? null,
+            status: data.status ?? null,
           }
         : null,
     );
@@ -153,7 +164,7 @@ export function useBusiness() {
 
     hasEverFetchedRef.current = true;
     setLoading(false);
-  }, [session, authLoading]);
+  }, [sessionUserId, sessionUserEmail, authLoading]);
 
   useEffect(() => {
     if (authLoading) return;

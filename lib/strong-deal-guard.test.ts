@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   STRONG_DEAL_ONLY_MESSAGE,
+  structuredOfferIsStrong,
   validateMenuOfferCanonicalSummary,
   validateStrongDealOnly,
 } from "./strong-deal-guard";
@@ -104,12 +105,24 @@ describe("validateStrongDealOnly", () => {
     expect(validateStrongDealOnly({ title: "2-for-1 oat milk lattes" })).toEqual({ ok: true });
   });
 
-  it("rejects broad 40% off entire-category copy", () => {
-    expect(validateStrongDealOnly({ title: "40% off all drinks today" })).toEqual({
-      ok: false,
-      reason: "entire_order",
-      message: STRONG_DEAL_ONLY_MESSAGE,
-    });
+  it("accepts broad category copy, which says what qualifies rather than how much is discounted", () => {
+    // "all drinks" scopes which items the offer covers; it does not promise the
+    // customer's whole basket. Rejecting it blocked ordinary single-item promos,
+    // and the merchant was told their deal type was unsupported when the deal was
+    // a perfectly valid 40% off one item.
+    expect(validateStrongDealOnly({ title: "40% off all drinks today" })).toEqual({ ok: true });
+    expect(validateStrongDealOnly({ title: "40% off all pastries" })).toEqual({ ok: true });
+    expect(validateStrongDealOnly({ title: "50% off all items" })).toEqual({ ok: true });
+  });
+
+  it("still rejects wording that promises the whole basket", () => {
+    for (const title of ["40% off everything", "40% off all orders"]) {
+      expect(validateStrongDealOnly({ title })).toEqual({
+        ok: false,
+        reason: "entire_order",
+        message: STRONG_DEAL_ONLY_MESSAGE,
+      });
+    }
   });
 
   it("rejects 40% off an entire order", () => {
@@ -154,5 +167,90 @@ describe("validateStrongDealOnly", () => {
         description: "Grab a latte and we'll throw in a muffin for free.",
       }),
     ).toEqual({ ok: true });
+  });
+
+  // R13. Observed live in the poster-quality harness (session 3, J5): a genuine 40%-off
+  // offer was BLOCKED FROM PUBLISHING because the generated copy said "for 40% less"
+  // instead of the literal "40% off", and the error told the merchant to fix an offer that
+  // was never wrong. Publishing came down to which synonym the model drew.
+  describe("R13 — the structured offer outranks the wording", () => {
+    const synonyms = [
+      "Enjoy your favourite croissant for 40% less this week.",
+      "Save 40% on any croissant.",
+      "Take 40 percent off a croissant.",
+      "Croissants are 40% cheaper today.",
+    ];
+
+    it("accepts a valid 40% deal however the copy phrases it", () => {
+      for (const description of synonyms) {
+        expect(
+          validateStrongDealOnly({
+            title: "Croissant, 40% less",
+            description,
+            structuredOffer: { dealType: "PERCENT_OFF_SINGLE_ITEM", discountPercent: 40 },
+          }),
+          description,
+        ).toEqual({ ok: true });
+      }
+    });
+
+    it("still rejects those same phrasings when the structured offer is absent", () => {
+      // Proves the tests above pass because of the contract, not because the prose rules
+      // were quietly loosened.
+      for (const description of synonyms) {
+        expect(validateStrongDealOnly({ title: "Croissant deal", description }).ok, description).toBe(false);
+      }
+    });
+
+    it("accepts a structured free-item deal with no strong phrase in the copy", () => {
+      expect(
+        validateStrongDealOnly({
+          title: "Afternoon pick-me-up",
+          description: "Grab a large coffee and we'll add a cookie of your choice.",
+          structuredOffer: {
+            dealType: "BUY_ONE_GET_SOMETHING_FREE",
+            freeItemQuantity: 1,
+            freeItemDiscountPercent: 100,
+          },
+        }),
+      ).toEqual({ ok: true });
+    });
+
+    it("does not let the structured offer rescue a weak or disqualified deal", () => {
+      // Below the floor.
+      expect(
+        validateStrongDealOnly({
+          title: "10% off a latte",
+          description: "Ten percent off.",
+          structuredOffer: { dealType: "PERCENT_OFF_SINGLE_ITEM", discountPercent: 10 },
+        }),
+      ).toEqual({ ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE });
+
+      // Shape rejections still fire ahead of the structured accept.
+      expect(
+        validateStrongDealOnly({
+          title: "50% off your entire order",
+          description: "50% off your entire order.",
+          structuredOffer: { dealType: "PERCENT_OFF_SINGLE_ITEM", discountPercent: 50 },
+        }),
+      ).toEqual({ ok: false, reason: "entire_order", message: STRONG_DEAL_ONLY_MESSAGE });
+
+      expect(
+        validateStrongDealOnly({
+          title: "Buy one get one 50% off",
+          description: "Buy one get one 50% off.",
+          structuredOffer: { dealType: "PERCENT_OFF_SINGLE_ITEM", discountPercent: 50 },
+        }),
+      ).toEqual({ ok: false, reason: "second_item_discount", message: STRONG_DEAL_ONLY_MESSAGE });
+    });
+
+    it("falls through to the prose rules when there are no structured facts", () => {
+      expect(structuredOfferIsStrong(null)).toBeNull();
+      expect(structuredOfferIsStrong({})).toBeNull();
+      expect(structuredOfferIsStrong({ dealType: "PERCENT_OFF_SINGLE_ITEM" })).toBeNull();
+      expect(structuredOfferIsStrong({ discountPercent: 40 })).toBe(true);
+      expect(structuredOfferIsStrong({ discountPercent: 39 })).toBe(false);
+      expect(structuredOfferIsStrong({ dealType: "buy_one_get_one_free" })).toBe(true);
+    });
   });
 });

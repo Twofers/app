@@ -43,6 +43,9 @@ import { ReportSheet } from "@/components/report-sheet";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
+import { fetchCustomerDealPosterSpecs, type CustomerDealPosterSpec } from "@/lib/customer-deal-poster-specs";
+import { isAiV4SharedRendererEnabled } from "@/lib/runtime-env";
 import {
   isAiV5CustomerLocaleResolutionEnabled,
   isAiV5LocalizedOfferRendererEnabled,
@@ -115,6 +118,8 @@ export default function BusinessProfileScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const { confirm: brandedConfirm, confirmModal } = useBrandedConfirm();
   const [customerPreferredDealLocale, setCustomerPreferredDealLocale] = useState<string | null>(null);
+  const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
+  const [dealPosterSpecsByDealId, setDealPosterSpecsByDealId] = useState<Map<string, CustomerDealPosterSpec>>(new Map());
   const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
     () => new Map(),
   );
@@ -250,6 +255,24 @@ export default function BusinessProfileScreen() {
       cancelled = true;
     };
   }, [customerLocaleResolutionEnabled, deals, resolvedDealDisplayLocale.locale]);
+
+  // S11: this surface rendered the RAW source photo while the feed and deal detail rendered
+  // the composed poster, so the same deal appeared with its headline and offer lines on two
+  // screens and without them on the third — and on a Korean screen the offer was left to a
+  // deterministic line rather than the poster. Load the same specs the feed loads.
+  useEffect(() => {
+    if (!composedCustomerRendererEnabled || deals.length === 0) {
+      setDealPosterSpecsByDealId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealPosterSpecs(deals.map((deal) => deal.id)).then((specs) => {
+      if (!cancelled) setDealPosterSpecsByDealId(specs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [composedCustomerRendererEnabled, deals]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -698,6 +721,7 @@ export default function BusinessProfileScreen() {
                 const dealTitle = localizedDisplay.title || t("dealDetail.dealFallback");
                 const dealDescription = localizedDisplay.description;
                 const isDemoDeal = deal.is_demo === true || biz.is_demo === true;
+                const dealPosterSpec = dealPosterSpecsByDealId.get(deal.id) ?? null;
                 return (
                   <Pressable
                     key={deal.id}
@@ -711,7 +735,16 @@ export default function BusinessProfileScreen() {
                       ...Shadows.soft,
                     }}
                   >
-                    {uri ? (
+                    {dealPosterSpec ? (
+                      // S11: same renderer, same spec and same live merchant name as the
+                      // feed and deal detail, so one deal cannot look like three products.
+                      <AdPosterCanvas
+                        spec={dealPosterSpec.posterSpec}
+                        imageUri={uri}
+                        contentLocale={resolvedDealDisplayLocale.locale}
+                        merchantName={biz.name}
+                      />
+                    ) : uri ? (
                       <Image source={{ uri }} style={{ width: "100%", aspectRatio: 16 / 9 }} contentFit="cover" />
                     ) : (
                       <View

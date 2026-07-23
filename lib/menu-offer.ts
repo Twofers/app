@@ -16,6 +16,9 @@ export type MenuItemRef = {
   id?: string;
   name: string;
   size_label?: string | null;
+  /** Optional flavor text (e.g. menu blurb). Not an offer fact — used only to
+   * give the AI copywriter context, never to alter the authoritative offer. */
+  description?: string | null;
 };
 
 export type StructuredOffer = {
@@ -57,6 +60,30 @@ export function buildOfferHintText(offer: StructuredOffer): string {
   return offer.human_summary.trim() || displayItemName(offer.main_item);
 }
 
+/**
+ * Hint text handed to the AI ad flow. Starts from the authoritative offer
+ * summary, then appends each item's menu description as flavor so the copy can
+ * be specific ("Roaster fresh coffee with a shot of espresso") without the
+ * blurb ever polluting the offer's item names. Item facts stay authoritative;
+ * these sentences are context only. Falls back to the plain summary when no
+ * item carries a description.
+ */
+export function buildOfferAdHintText(offer: StructuredOffer): string {
+  const base = buildOfferHintText(offer);
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const item of [offer.main_item, offer.paired_item]) {
+    const description = item?.description?.trim();
+    if (!item || !description) continue;
+    const name = displayItemName(item);
+    const key = `${name.toLowerCase()}|${description.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${name}: ${description}`);
+  }
+  return lines.length > 0 ? `${base} ${lines.join(" ")}` : base;
+}
+
 export function buildStructuredOffer(params: {
   main: MenuItemRef;
   paired: MenuItemRef | null;
@@ -68,12 +95,14 @@ export function buildStructuredOffer(params: {
     id: params.main.id,
     name: params.main.name.trim(),
     size_label: params.main.size_label?.trim() || null,
+    description: params.main.description?.trim() || null,
   };
   const paired = params.paired
     ? {
         id: params.paired.id,
         name: params.paired.name.trim(),
         size_label: params.paired.size_label?.trim() || null,
+        description: params.paired.description?.trim() || null,
       }
     : null;
   const mainName = displayItemName(main);

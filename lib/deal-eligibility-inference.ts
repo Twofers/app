@@ -81,9 +81,47 @@ const NON_ITEM_WORDS = new Set([
   "it",
 ]);
 
+// Offer-grammar keywords a mid-typing fragment can be the start of. A candidate
+// that is a PROPER prefix of one of these ("bu"->"buy", "fr"->"free", "ge"->"get",
+// "pu"->"purchase") is an incomplete offer word, not an item. Seeding it let the
+// 2-char fragment "Bu" survive as an offer fact and reach ai-generate-ad-variants
+// (COPY_FAILED); the eligibility guard only checks non-emptiness, so nothing else
+// caught it. Matched as a prefix (not a substring) so real items that merely start
+// like a keyword ("bun", "burrito", "getaway latte") are kept, and non-English
+// items (e.g. Korean "김밥") never match an English keyword prefix.
+const OFFER_GRAMMAR_KEYWORDS = [
+  "bogo",
+  "buy",
+  "purchase",
+  "order",
+  "get",
+  "free",
+  "off",
+  "discount",
+  "percent",
+  "deal",
+  "offer",
+  "sale",
+  "complimentary",
+];
+
+function isOfferGrammarFragment(lower: string): boolean {
+  return OFFER_GRAMMAR_KEYWORDS.some((keyword) => keyword.length > lower.length && keyword.startsWith(lower));
+}
+
 function isUsableItem(cleaned: string): boolean {
   if (cleaned.length < 2) return false;
-  return !NON_ITEM_WORDS.has(cleaned.toLowerCase());
+  const lower = cleaned.toLowerCase();
+  if (NON_ITEM_WORDS.has(lower)) return false;
+  if (isOfferGrammarFragment(lower)) return false;
+  // A bare number, price, or percent ("40", "40%", "$5", "5.99") is never a menu
+  // item. When an owner types an offer that leads with the discount ("40 percent
+  // off any latte"), the intermediate "40" keystroke looks like a plain item and
+  // gets seeded into the item slot; once the offer words follow, inference returns
+  // null and the stale number sticks in the field and reaches AI generation. Every
+  // real item name carries at least one letter, so reject purely numeric tokens.
+  if (/^[\d.,$%\s]+$/.test(cleaned)) return false;
+  return true;
 }
 
 function withItemSeed(item: string): DealEligibilityFormState | null {

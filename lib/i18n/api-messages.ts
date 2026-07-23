@@ -41,6 +41,10 @@ const API_MESSAGE_KEY: Record<string, string> = {
 
   "Unauthorized. Please log in as a business owner.": "apiErrors.redeemUnauthorized",
   "You must be a business owner to redeem tokens.": "apiErrors.redeemNotBusinessOwner",
+  // Redemption Mode session gates (staff-redemption edge fn + preview/confirm RPC):
+  // show a clear "turn on Redemption Mode" message instead of raw server text.
+  "This endpoint is only for Redemption Mode staff sessions.": "apiErrors.redeemRedemptionModeInactive",
+  "Redemption session is not active.": "apiErrors.redeemRedemptionModeInactive",
   "Missing or invalid token": "apiErrors.redeemTokenMissing",
   "Missing or invalid token or claim code": "apiErrors.redeemTokenOrCodeMissing",
   "Invalid token": "apiErrors.redeemTokenInvalid",
@@ -61,6 +65,15 @@ const API_MESSAGE_KEY: Record<string, string> = {
 
   "Invalid QR code format": "businessScan.msgInvalidFormat",
   "Deal redeemed successfully!": "businessScan.msgRedeemSuccess",
+
+  // businesses_require_invite trigger v3 (migration 20260814130000): one
+  // self-created business per owner during the pilot.
+  "business limit reached": "apiErrors.businessLimitReached",
+
+  // Identity lock (migration 20260816120000): stable token raised by the
+  // businesses trigger and returned by update-business-profile-section when a
+  // publicly visible business tries to rename itself directly.
+  "business_name_locked": "apiErrors.businessNameLocked",
 
   "Missing business_id, photo_path, or hint_text.": "apiErrors.aiAdsMissingFields",
   "You do not own this business.": "apiErrors.notBusinessOwner",

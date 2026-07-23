@@ -15,14 +15,25 @@ describe("ai-extract-menu source guards", () => {
     expect(source).toMatch(/OPENAI_NOT_CONFIGURED/);
 
     const syntheticIndex = source.indexOf("if (!openAiKey && allowSyntheticWithoutKey)");
-    const missingKeyIndex = source.indexOf("if (!openAiKey && !canUseRouterFallbackWithoutOpenAi)");
-    const providerCallIndex = source.indexOf("const openAiRes = await fetch", missingKeyIndex);
+    const missingKeyIndex = source.indexOf(
+      "if (!openAiKey && !allowSyntheticWithoutKey && !canUseRouterFallbackWithoutOpenAi)",
+    );
+    const allowanceIndex = source.indexOf(
+      'const { data: allowanceConsumed, error: allowanceError } = await admin.rpc',
+      missingKeyIndex,
+    );
+    const providerCallIndex = source.indexOf(
+      "const { response: openAiRes } = await fetchOpenAiWithFallback",
+      missingKeyIndex,
+    );
 
     expect(syntheticIndex).toBeGreaterThan(-1);
-    expect(missingKeyIndex).toBeGreaterThan(syntheticIndex);
-    expect(providerCallIndex).toBeGreaterThan(missingKeyIndex);
+    expect(missingKeyIndex).toBeGreaterThan(-1);
+    expect(allowanceIndex).toBeGreaterThan(missingKeyIndex);
+    expect(syntheticIndex).toBeGreaterThan(allowanceIndex);
+    expect(providerCallIndex).toBeGreaterThan(syntheticIndex);
 
-    const missingKeyBlock = source.slice(missingKeyIndex, providerCallIndex);
+    const missingKeyBlock = source.slice(missingKeyIndex, allowanceIndex);
     expect(missingKeyBlock).toMatch(/OPENAI_NOT_CONFIGURED/);
     expect(missingKeyBlock).toMatch(/status:\s*503/);
     expect(source).toMatch(/canUseRouterFallbackWithoutOpenAi/);
@@ -33,7 +44,10 @@ describe("ai-extract-menu source guards", () => {
 
   it("routes base64 menu images through the shared provider router", () => {
     const routerIndex = source.indexOf("const imageBytes = decodeBase64Image(imageBase64)");
-    const providerCallIndex = source.indexOf("const openAiRes = await fetch", routerIndex);
+    const providerCallIndex = source.indexOf(
+      "const { response: openAiRes } = await fetchOpenAiWithFallback",
+      routerIndex,
+    );
 
     expect(routerIndex).toBeGreaterThan(-1);
     expect(providerCallIndex).toBeGreaterThan(routerIndex);

@@ -357,7 +357,9 @@ describe("buildSiteMenuPrompt", () => {
         "- Only include items that literally appear in the website text. Never invent dishes, prices, or items.",
         "- Prefer an empty items list over guessing. If the text does not look like a menu, return no items.",
         "- readable = true for every item you emit (website text is legible by definition; the field is kept for schema parity).",
-        "- name = the item as written (concise). category = the menu section heading if present, else empty string.",
+        "- name = the short item name only (e.g. 'Recon Roast'), never a description. If a line pairs a name with descriptive text (in parentheses, after a dash, or on the next line), put only the name in name.",
+        "- description = that item's descriptive text as written (e.g. 'Roaster fresh coffee with a shot of espresso'), or empty string if none. Never repeat the name inside description.",
+        "- category = the menu section heading if present, else empty string.",
         "- price_text = the price exactly as printed (e.g. $4.50) or empty if no price is shown for that item.",
         "- size_options = the sizes/variants printed for that item (e.g. Small, Large, 12 oz, 16 oz). Keep labels exactly as printed. Use [] when none.",
         "- If prices vary by size, keep the full printed size/price text in price_text and also list the sizes in size_options.",
@@ -377,22 +379,90 @@ describe("normalizeMenuItems + menuSchema", () => {
   it("drops unreadable/empty rows and trims fields", () => {
     const out = normalizeMenuItems({
       items: [
-        { name: "  Latte  ", category: " Coffee ", price_text: " $5 ", size_options: [" 12oz ", ""], readable: true },
-        { name: "Ghost", category: "", price_text: "", size_options: [], readable: false },
-        { name: "   ", category: "", price_text: "", size_options: [], readable: true },
+        { name: "  Latte  ", description: "", category: " Coffee ", price_text: " $5 ", size_options: [" 12oz ", ""], readable: true },
+        { name: "Ghost", description: "", category: "", price_text: "", size_options: [], readable: false },
+        { name: "   ", description: "", category: "", price_text: "", size_options: [], readable: true },
       ],
       low_legibility: false,
       menu_notes: "",
     });
     expect(out).toEqual([
-      { name: "Latte", category: "Coffee", price_text: "$5", size_options: ["12oz"], readable: true },
+      { name: "Latte", description: undefined, category: "Coffee", price_text: "$5", size_options: ["12oz"], readable: true },
     ]);
+  });
+
+  it("carries a model-provided description through, trimmed", () => {
+    const out = normalizeMenuItems({
+      items: [
+        {
+          name: "Recon Roast",
+          description: " Roaster fresh coffee with a shot of espresso ",
+          category: "Coffee",
+          price_text: "$5",
+          size_options: [],
+          readable: true,
+        },
+      ],
+      low_legibility: false,
+      menu_notes: "",
+    });
+    expect(out[0].name).toBe("Recon Roast");
+    expect(out[0].description).toBe("Roaster fresh coffee with a shot of espresso");
+  });
+
+  it("splits a trailing parenthetical description out of the name (legacy model output)", () => {
+    const out = normalizeMenuItems({
+      items: [
+        {
+          name: "the recon roast ( Roaster fresh coffee with a shot of espresso)",
+          description: "",
+          category: "",
+          price_text: "",
+          size_options: [],
+          readable: true,
+        },
+        {
+          name: "Wings (12 pc)",
+          description: "",
+          category: "",
+          price_text: "",
+          size_options: [],
+          readable: true,
+        },
+      ],
+      low_legibility: false,
+      menu_notes: "",
+    });
+    expect(out[0].name).toBe("the recon roast");
+    expect(out[0].description).toBe("Roaster fresh coffee with a shot of espresso");
+    // Short qualifiers stay part of the name.
+    expect(out[1].name).toBe("Wings (12 pc)");
+    expect(out[1].description).toBeUndefined();
+  });
+
+  it("prefers the model description over the split remnant when both exist", () => {
+    const out = normalizeMenuItems({
+      items: [
+        {
+          name: "Recon Roast (roaster fresh coffee with a shot of espresso)",
+          description: "Roaster fresh coffee with espresso.",
+          category: "",
+          price_text: "",
+          size_options: [],
+          readable: true,
+        },
+      ],
+      low_legibility: false,
+      menu_notes: "",
+    });
+    expect(out[0].name).toBe("Recon Roast");
+    expect(out[0].description).toBe("Roaster fresh coffee with espresso.");
   });
 
   it("caps size_options at 12", () => {
     const sizes = Array.from({ length: 20 }, (_, i) => `s${i}`);
     const out = normalizeMenuItems({
-      items: [{ name: "X", category: "", price_text: "", size_options: sizes, readable: true }],
+      items: [{ name: "X", description: "", category: "", price_text: "", size_options: sizes, readable: true }],
       low_legibility: false,
       menu_notes: "",
     });
@@ -404,6 +474,7 @@ describe("normalizeMenuItems + menuSchema", () => {
     expect(menuSchema.schema.required).toEqual(["items", "low_legibility", "menu_notes"]);
     expect(menuSchema.schema.properties.items.items.required).toEqual([
       "name",
+      "description",
       "category",
       "price_text",
       "size_options",

@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Create Business Trial | Twofer Admin</title>
+    <title>Create Business Approval | Twofer Admin</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
   </head>
   <body
     class="admin-shell"
@@ -24,7 +25,7 @@
           <a href="/admin">Overview</a>
           <a href="/admin/prospects">Prospects</a>
           <a href="/admin/sales-ai">Sales AI</a>
-          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/trial-requests">Business Access</a>
           <a href="/admin/businesses" aria-current="page">Businesses</a>
           <a href="/admin/offers">Offers</a>
           <a href="/admin/billing/events">Billing</a>
@@ -43,8 +44,8 @@
       <div class="admin-title-row">
         <div>
           <p class="admin-kicker">Founder field invite</p>
-          <h1>Create Business Trial</h1>
-          <p class="lede">For businesses you meet in person. Saving creates the trial through the audited admin function and queues the billing profile for server-side Stripe sync.</p>
+          <h1>Create Business Approval</h1>
+          <p class="lede">For businesses you meet in person. Saving creates an audited setup approval. The owner claims the business in the app, then starts the 30-day trial through secure Checkout.</p>
         </div>
       </div>
       <section class="admin-panel">
@@ -56,18 +57,18 @@
           <label class="full">Business address<input name="address" autocomplete="street-address" /></label>
           <label>Business type<select name="business_type"><option>Coffee shop</option><option>Cafe</option><option>Bakery</option><option>Restaurant</option><option>Other local business</option></select></label>
           <label>Launch area<select name="launch_area"><option value="DFW">DFW</option></select></label>
-          <label>Access level<select name="access_level">
-            <option value="approve_limited">Limited trial (14 days, 1 offer, 25 claims)</option>
-            <option value="approve_full">Full trial (30 days, 3 offers, 50 claims)</option>
+          <label>Approval level<select name="access_level">
+            <option value="approve_limited">Setup approval - basic verification</option>
+            <option value="approve_full">Setup approval - manual verification</option>
             <option value="review_required">Hold for review</option>
           </select></label>
           <label class="full">Admin notes<textarea name="notes"></textarea></label>
           <div class="full">
-            <button class="button" type="submit" data-new-trial-submit>Create trial</button>
+            <button class="button" type="submit" data-new-trial-submit>Create approval</button>
           </div>
           <p class="status full" data-form-status role="status" aria-live="polite"></p>
         </form>
-        <p class="admin-note">The owner signs in to the app with this email to accept terms and finish setup. No invite tokens are generated in the browser.</p>
+        <p class="admin-note">The owner signs in to the app with this email to claim the approved business and finish setup. No trial, credit, claim, or Stripe access is granted until Checkout activation.</p>
       </section>
     </main>
     <script src="/admin/admin-new-trial.js?v=20260702-admin-new"></script>

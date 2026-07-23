@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QR Campaigns | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
+  </head>
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-qr-campaigns-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-qr-campaigns"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-links">
+          <a href="/admin">Overview</a>
+          <a href="/admin/prospects">Prospects</a>
+          <a href="/admin/sales-ai">Sales AI</a>
+          <a href="/admin/trial-requests">Business Access</a>
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/qr-campaigns" aria-current="page">QR Campaigns</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/ai-operating-report">AI Report</a>
+          <a href="/admin/ai-prompts">Prompts</a>
+          <a href="/admin/audit-log">Audit</a>
+          <a href="/admin/settings">Settings</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Physical marketing attribution</p>
+          <h1>QR Campaigns</h1>
+          <p class="lede">Create one tracking QR code for each business material. Every code uses a Twofer redirect URL, never a direct store link.</p>
+        </div>
+      </div>
+
+      <section class="admin-panel">
+        <h2>Create campaign</h2>
+        <form class="admin-form admin-qr-form" data-qr-create-form novalidate>
+          <label>
+            Business
+            <select name="business_id" required data-qr-business-select>
+              <option value="">Loading businesses…</option>
+            </select>
+          </label>
+          <label>
+            Material type
+            <select name="source_type" required>
+              <option value="counter_sign">Counter sign</option>
+              <option value="window_sticker">Window sticker</option>
+              <option value="flyer">Flyer</option>
+              <option value="coaster">Coaster</option>
+              <option value="table_tent">Table tent</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            Display name
+            <input name="display_name" type="text" maxlength="120" required placeholder="Front counter — July 2026" />
+          </label>
+          <label>
+            Destination
+            <select name="destination_type" required>
+              <option value="app_download">App download</option>
+              <option value="website">Twofer website</option>
+            </select>
+          </label>
+          <div class="admin-qr-form-action">
+            <button class="button" type="submit">Create QR campaign</button>
+          </div>
+        </form>
+        <p class="status" data-qr-create-status aria-live="polite"></p>
+      </section>
+
+      <section class="admin-panel">
+        <div class="admin-title-row admin-qr-section-title">
+          <div>
+            <h2>Campaign analytics</h2>
+            <p>Likely automated requests are shown separately so physical scans remain useful.</p>
+          </div>
+          <form data-qr-range-form class="admin-qr-range-form">
+            <label>
+              Range
+              <select name="days">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+            </label>
+            <button class="button button-small button-secondary" type="submit">Refresh</button>
+          </form>
+        </div>
+        <p class="status" data-qr-analytics-status aria-live="polite"></p>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Total requests</span><strong data-qr-total-scans>0</strong></article>
+          <article class="admin-card"><span>Likely physical scans</span><strong data-qr-human-scans>0</strong></article>
+          <article class="admin-card"><span>Likely automated</span><strong data-qr-bot-scans>0</strong></article>
+        </div>
+      </section>
+
+      <section class="admin-panel">
+        <h2>Campaigns</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Business</th><th>Campaign</th><th>Material</th><th>Status</th><th>Scans</th><th>Likely physical</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody data-qr-campaigns-body><tr><td colspan="8" class="admin-row-detail">Loading campaigns…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-grid two">
+        <article class="admin-panel">
+          <h2>Scans by business</h2>
+          <div class="admin-table-wrap">
+            <table class="admin-table" data-mobile-cards>
+              <thead><tr><th>Business</th><th>Scans</th><th>Likely physical</th><th>Automated</th></tr></thead>
+              <tbody data-qr-businesses-body><tr><td colspan="4" class="admin-row-detail">Loading analytics…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="admin-panel">
+          <h2>Scans by material</h2>
+          <div class="admin-table-wrap">
+            <table class="admin-table" data-mobile-cards>
+              <thead><tr><th>Material</th><th>Scans</th><th>Likely physical</th><th>Automated</th></tr></thead>
+              <tbody data-qr-sources-body><tr><td colspan="4" class="admin-row-detail">Loading analytics…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-panel">
+        <h2>Scans by day</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Date</th><th>Total requests</th><th>Likely physical</th><th>Automated</th></tr></thead>
+            <tbody data-qr-daily-body><tr><td colspan="4" class="admin-row-detail">Loading analytics…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="admin-qr-dialog" data-qr-dialog aria-labelledby="qr-dialog-title">
+      <div class="admin-qr-dialog-header">
+        <h2 id="qr-dialog-title" data-qr-dialog-title>Campaign QR code</h2>
+        <button type="button" class="button button-small button-secondary" data-qr-dialog-close>Close</button>
+      </div>
+      <img class="admin-qr-image" data-qr-image src="/assets/twofer-mark.png" alt="QR code for a Twofer tracking URL" />
+      <p class="admin-qr-url" data-qr-url></p>
+      <div class="admin-actions">
+        <button type="button" class="button button-small" data-qr-copy-url>Copy tracking URL</button>
+        <a class="button button-small button-secondary" data-qr-download download="twofer-qr-campaign.svg">Download SVG</a>
+      </div>
+      <p class="status" data-qr-dialog-status aria-live="polite"></p>
+    </dialog>
+    <script src="/admin/qr-campaigns.js?v=20260714-qr-campaigns"></script>
+  </body>
+</html>

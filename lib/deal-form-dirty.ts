@@ -9,6 +9,8 @@ export type DealFormDirtySource = {
   price?: string | number | null;
   title?: string | null;
   promoLine?: string | null;
+  posterHeadlineText?: string | null;
+  posterSublineText?: string | null;
   ctaText?: string | null;
   description?: string | null;
   dealEligibility?: string | null;
@@ -37,6 +39,8 @@ export type DealFormDirtySnapshot = {
   price: string;
   title: string;
   promoLine: string;
+  posterHeadlineText: string;
+  posterSublineText: string;
   ctaText: string;
   description: string;
   dealEligibility: string;
@@ -113,6 +117,8 @@ export function buildDealFormDirtySnapshot(source: DealFormDirtySource): DealFor
     price: normalizeNumber(source.price),
     title: normalizeText(source.title),
     promoLine: normalizeText(source.promoLine),
+    posterHeadlineText: normalizeText(source.posterHeadlineText),
+    posterSublineText: normalizeText(source.posterSublineText),
     ctaText: normalizeText(source.ctaText),
     description: normalizeText(source.description),
     dealEligibility: normalizeText(source.dealEligibility),

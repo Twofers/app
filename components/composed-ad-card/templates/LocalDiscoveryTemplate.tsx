@@ -11,7 +11,7 @@ import { LockedOfferLine } from "../LockedOfferLine";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function LocalDiscoveryTemplate(props: ComposedAdTemplateProps) {
-  const { copy, fallbackVisualLabel, favoriteAction, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, tokens } = props;
+  const { copy, fallbackVisualLabel, favoriteAction, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, surface, tokens } = props;
   const locationLine = merchant.locationName || merchant.addressLine || null;
 
   return (
@@ -31,6 +31,7 @@ export function LocalDiscoveryTemplate(props: ComposedAdTemplateProps) {
           presentation={presentation}
           tokens={tokens}
           fallbackVisualLabel={fallbackVisualLabel}
+          fit={surface === "consumer_feed" ? "contain" : "cover"}
         />
         {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
       </View>
@@ -72,7 +73,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    aspectRatio: 1,
+    aspectRatio: 3 / 2,
+    overflow: "hidden",
   },
   panel: {
     padding: 14,

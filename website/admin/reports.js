@@ -1,6 +1,7 @@
 (() => {
   const authEndpoint = document.body.dataset.adminAuthEndpoint;
   const reportsEndpoint = document.body.dataset.adminReportsEndpoint;
+  const nameRequestsEndpoint = document.body.dataset.adminNameRequestsEndpoint;
   const tokenKey = "twofer_admin_access_token";
   const refreshTokenKey = "twofer_admin_refresh_token";
   const expiresAtKey = "twofer_admin_expires_at";
@@ -10,6 +11,8 @@
   const loginLink = document.querySelector("[data-admin-login-link]");
   const businessBody = document.querySelector("[data-business-reports-body]");
   const userBody = document.querySelector("[data-user-reports-body]");
+  const nameRequestsBody = document.querySelector("[data-name-requests-body]");
+  const nameRequestsStatusEl = document.querySelector("[data-name-requests-status]");
 
   const BUSINESS_REASON_LABELS = {
     not_honored: "Didn't honor the offer",
@@ -95,10 +98,10 @@
     reportsStatusEl.className = `status${tone === "danger" ? " error" : ""}`;
   }
 
-  async function adminPost(body) {
+  async function adminPostTo(endpoint, body) {
     const token = await getToken();
     if (!token) throw new Error("Admin session not connected.");
-    const response = await fetch(reportsEndpoint, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -110,6 +113,10 @@
     }
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
     return payload;
+  }
+
+  function adminPost(body) {
+    return adminPostTo(reportsEndpoint, body);
   }
 
   function formatDateTime(value) {
@@ -205,6 +212,100 @@
     }
   }
 
+  function setNameRequestsStatus(message, tone = "info") {
+    if (!nameRequestsStatusEl) return;
+    nameRequestsStatusEl.textContent = message;
+    nameRequestsStatusEl.className = `status${tone === "danger" ? " error" : ""}`;
+  }
+
+  const NAME_REQUEST_STATUS_LABELS = {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    canceled: "Canceled",
+  };
+
+  function renderNameRequests(requests) {
+    if (!nameRequestsBody) return;
+    nameRequestsBody.innerHTML = "";
+    if (!requests.length) {
+      nameRequestsBody.appendChild(emptyRow(7, "No name change requests."));
+      return;
+    }
+    for (const request of requests) {
+      const tr = document.createElement("tr");
+      addCell(tr, "Business", request.business_name || request.business_id || "");
+      addCell(tr, "Current name", request.current_value || request.business_name || "");
+      addCell(tr, "Requested name", request.proposed_value || "");
+      addCell(tr, "Reason", request.reason || "");
+      addCell(tr, "Status", NAME_REQUEST_STATUS_LABELS[request.status] || request.status || "");
+      addCell(tr, "Requested", formatDateTime(request.created_at));
+      const cell = document.createElement("td");
+      cell.dataset.label = "Actions";
+      if (request.status === "pending") {
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.className = "button button-small";
+        approve.textContent = "Approve";
+        approve.addEventListener("click", () => decideNameRequest(request, "approve"));
+        cell.appendChild(approve);
+        const reject = document.createElement("button");
+        reject.type = "button";
+        reject.className = "button button-small button-secondary";
+        reject.textContent = "Reject";
+        reject.addEventListener("click", () => decideNameRequest(request, "reject"));
+        cell.appendChild(reject);
+      }
+      tr.appendChild(cell);
+      nameRequestsBody.appendChild(tr);
+    }
+  }
+
+  async function decideNameRequest(request, action) {
+    if (action === "approve") {
+      const confirmed = window.confirm(
+        `Rename "${request.business_name || request.current_value || ""}" to "${request.proposed_value}"?\n\n` +
+          "This changes the name everywhere customers see it. Approve only if it's the same real business.",
+      );
+      if (!confirmed) return;
+    }
+    const decisionReason = window.prompt(
+      action === "approve" ? "Optional note for the audit log:" : "Why is this request rejected?",
+      "",
+    );
+    if (decisionReason === null && action === "reject") return;
+    setNameRequestsStatus("Updating…");
+    try {
+      await adminPostTo(nameRequestsEndpoint, {
+        action,
+        request_id: request.id,
+        decision_reason: decisionReason || null,
+      });
+      await loadNameRequests();
+    } catch (error) {
+      setNameRequestsStatus(error instanceof Error ? error.message : "Could not update the request.", "danger");
+    }
+  }
+
+  async function loadNameRequests() {
+    if (!nameRequestsEndpoint || !nameRequestsBody) return;
+    setNameRequestsStatus("Loading name change requests…");
+    try {
+      const payload = await adminPostTo(nameRequestsEndpoint, { action: "list" });
+      const requests = payload.requests || [];
+      renderNameRequests(requests);
+      const pendingCount = requests.filter((r) => r.status === "pending").length;
+      setNameRequestsStatus(
+        pendingCount > 0
+          ? `${pendingCount} pending request${pendingCount === 1 ? "" : "s"}.`
+          : `${requests.length} request${requests.length === 1 ? "" : "s"} loaded, none pending.`,
+      );
+    } catch (error) {
+      // Keep the reports tables usable even if this function isn't deployed yet.
+      setNameRequestsStatus(error instanceof Error ? error.message : "Could not load name change requests.", "danger");
+    }
+  }
+
   async function loadReports() {
     setReportsStatus("Loading reports…");
     const payload = await adminPost({ action: "list" });
@@ -234,6 +335,7 @@
 
   document.querySelector("[data-refresh-reports]")?.addEventListener("click", () => {
     loadReports().catch((error) => setReportsStatus(error instanceof Error ? error.message : "Could not load reports.", "danger"));
+    void loadNameRequests();
   });
 
   if (signOutButton) {
@@ -248,4 +350,5 @@
     setStatus(error instanceof Error ? error.message : "Could not load reports.", "danger");
     setReportsStatus("Sign in to load reports.");
   });
+  void loadNameRequests();
 })();

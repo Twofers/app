@@ -26,6 +26,8 @@ export type AiDealRecoveryDraft = {
   price: string;
   title: string;
   promoLine: string;
+  posterHeadlineText: string;
+  posterSublineText: string;
   ctaText: string;
   description: string;
   eligibilityForm: DealEligibilityFormState;
@@ -46,13 +48,24 @@ export type AiDealRecoveryDraft = {
 
 type DraftCandidate = Omit<
   AiDealRecoveryDraft,
-  "version" | "businessId" | "updatedAt" | "startTime" | "endTime" | "creativeFormat" | "previewFormat"
+  | "version"
+  | "businessId"
+  | "updatedAt"
+  | "startTime"
+  | "endTime"
+  | "creativeFormat"
+  | "previewFormat"
+  | "posterHeadlineText"
+  | "posterSublineText"
 > & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
   endTime: Date | string | number;
   creativeFormat?: AiDealDraftCreativeFormat | null;
   previewFormat?: AiDealDraftCreativeFormat | null;
+  // Optional so drafts saved before poster text editing existed still parse.
+  posterHeadlineText?: string | null;
+  posterSublineText?: string | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -114,6 +127,53 @@ function cleanMinute(value: unknown, fallback: number): number {
   return Math.max(0, Math.min(24 * 60 - 1, Math.floor(numeric)));
 }
 
+// cleanDate only proves a date parses, not that the window is coherent. A
+// recovered draft can pair a refreshed start with a stale end — observed on an
+// S10 on 2026-07-22, where a recovered draft opened with start Jul 21 11:33 PM
+// and end Jul 21 10:56 PM, 37 minutes earlier. That renders a "REDEEM BY" time
+// already in the past and cannot publish, with nothing in the UI flagging it.
+// An end that does not follow its start is not recoverable state, so rebuild it
+// from the start rather than restoring it.
+function endFollowingStart(startTime: Date, restoredEndTime: Date): Date {
+  return restoredEndTime.getTime() > startTime.getTime()
+    ? restoredEndTime
+    : createOneTimeDealScheduleFromStart(startTime).endTime;
+}
+
+export type RecoveredDealSchedule = {
+  startTime: Date;
+  endTime: Date;
+};
+
+/**
+ * Resolve the schedule a recovered draft should reopen with.
+ *
+ * `buildAiDealRecoveryDraft` already repairs an end that does not follow the
+ * *stored* start, but a one-time start that has since passed is separately
+ * advanced to "now" when the draft is applied. That advance can invert a window
+ * which was coherent at save time, after the repair has already run — observed
+ * on an S10 on 2026-07-22, where a draft saved with a 12:00 AM–1:00 AM window
+ * reopened at 9:28 AM as start 9:28 AM, end 1:00 AM. Resolving the two together
+ * keeps the end following the start that is actually applied.
+ *
+ * Recurring drafts derive their window at publish, so they pass through as saved.
+ */
+export function resolveRecoveredDealSchedule(
+  draft: Pick<AiDealRecoveryDraft, "startTime" | "endTime" | "validityMode">,
+  now = new Date(),
+): RecoveredDealSchedule {
+  const storedStartTime = cleanDate(draft.startTime, now);
+  const storedEndTime = cleanDate(
+    draft.endTime,
+    createOneTimeDealScheduleFromStart(storedStartTime).endTime,
+  );
+  if (draft.validityMode === "recurring") {
+    return { startTime: storedStartTime, endTime: storedEndTime };
+  }
+  const startTime = storedStartTime.getTime() < now.getTime() ? now : storedStartTime;
+  return { startTime, endTime: endFollowingStart(startTime, storedEndTime) };
+}
+
 export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
   return Boolean(
     draft.photoPath ||
@@ -123,6 +183,8 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
       draft.price.trim() ||
       draft.title.trim() ||
       draft.promoLine.trim() ||
+      draft.posterHeadlineText.trim() ||
+      draft.posterSublineText.trim() ||
       draft.ctaText.trim() ||
       draft.description.trim() ||
       draft.generatedAd ||
@@ -140,7 +202,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
   const now = new Date();
   const defaultSchedule = createDefaultOneTimeDealSchedule(now);
   const startTime = cleanDate(input.startTime, defaultSchedule.startTime);
-  const endTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
+  const restoredEndTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
+  const endTime = endFollowingStart(startTime, restoredEndTime);
   const draft: AiDealRecoveryDraft = {
     version: AI_DEAL_DRAFT_VERSION,
     businessId,
@@ -160,6 +223,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     price: cleanString(input.price),
     title: cleanDisplayTitle(input.title),
     promoLine: cleanString(input.promoLine),
+    posterHeadlineText: cleanString(input.posterHeadlineText),
+    posterSublineText: cleanString(input.posterSublineText),
     ctaText: cleanString(input.ctaText),
     description: cleanString(input.description),
     eligibilityForm: input.eligibilityForm ?? createDefaultDealEligibilityFormState(),
@@ -175,7 +240,11 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     publishLocationIds: cleanStringArray(input.publishLocationIds),
     generatedAd,
     adAccepted: input.adAccepted === true,
-    manualDraftUnlocked: input.manualDraftUnlocked === true,
+    // Approval hashes are intentionally session-only. Any recovered generated
+    // or formerly accepted ad must reopen in the editor so the owner can review
+    // and approve the exact live snapshot again.
+    manualDraftUnlocked:
+      input.manualDraftUnlocked === true || input.adAccepted === true || generatedAd != null,
   };
   return hasRecoverableAiDealDraft(draft) ? draft : null;
 }
@@ -201,6 +270,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       price: parsed.price ?? "",
       title: parsed.title ?? "",
       promoLine: parsed.promoLine ?? "",
+      posterHeadlineText: parsed.posterHeadlineText ?? "",
+      posterSublineText: parsed.posterSublineText ?? "",
       ctaText: parsed.ctaText ?? "",
       description: parsed.description ?? "",
       eligibilityForm: parsed.eligibilityForm as DealEligibilityFormState,

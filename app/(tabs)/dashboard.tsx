@@ -68,6 +68,16 @@ function friendlyDashboardError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * The deals RLS policies (migration 20260814120000, audit F-001) deny flipping
+ * a deal live when the business is no longer publish-eligible (billing lapsed,
+ * terms missing, under review). Surface that as guidance, not a generic error.
+ */
+function isPublishEligibilityDenial(err: unknown): boolean {
+  const e = err as { code?: string | null; message?: string | null } | null;
+  return e?.code === "42501" || /row-level security/i.test(e?.message ?? "");
+}
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function DealListSeparator() {
@@ -606,6 +616,7 @@ export default function BusinessDashboard() {
     access: billingGateAccess,
   } = usePrimaryLocationBillingGate({
     businessId,
+    businessStatus: businessProfile?.status ?? null,
     subscriptionTier,
     isLoggedIn,
   });
@@ -922,7 +933,9 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = friendlyDashboardError(err, t("offersDashboard.errResumeDeal", "Could not resume deal."));
+      const msg = isPublishEligibilityDenial(err)
+        ? t("offersDashboard.errResumeNotEligible", "Your business can't publish right now. Check your billing and verification status in Account.")
+        : friendlyDashboardError(err, t("offersDashboard.errResumeDeal", "Could not resume deal."));
       setBanner(msg);
     } finally {
       setPausingDealId(null);
@@ -986,7 +999,9 @@ export default function BusinessDashboard() {
       await loadMetrics();
       exitBulkMode();
     } catch (err: unknown) {
-      const msg = friendlyDashboardError(err, t("offersDashboard.errBulkResume", "Could not resume some deals."));
+      const msg = isPublishEligibilityDenial(err)
+        ? t("offersDashboard.errResumeNotEligible", "Your business can't publish right now. Check your billing and verification status in Account.")
+        : friendlyDashboardError(err, t("offersDashboard.errBulkResume", "Could not resume some deals."));
       setBanner(msg);
     } finally {
       setBulkBusy(false);
@@ -1248,7 +1263,10 @@ export default function BusinessDashboard() {
       if (billingBlocked) {
         return (
           <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
-            <MerchantAccessBlockedCard status={billingGateAccess.status} />
+            <MerchantAccessBlockedCard
+              status={billingGateAccess.status}
+              reason={billingGateAccess.reason}
+            />
           </View>
         );
       }
@@ -1465,6 +1483,7 @@ export default function BusinessDashboard() {
     [
       t,
       billingBlocked,
+      billingGateAccess.reason,
       billingGateAccess.status,
       deals.length,
       dealFilter,

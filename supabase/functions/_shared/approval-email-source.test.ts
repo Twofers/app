@@ -39,8 +39,8 @@ describe("business approval trial-welcome email", () => {
 
   it("emails only on approval decisions from the trial-request / field-invite path", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/import \{ sendApprovalEmail \} from "\.\.\/_shared\/approval-email\.ts"/);
-    expect(source).toMatch(/if \(decision === "approve_limited" \|\| decision === "approve_full"\) \{[\s\S]*sendApprovalEmail\(/);
+    expect(source).toMatch(/import \{[\s\S]*sendApprovalEmail,[\s\S]*\} from "\.\.\/_shared\/approval-email\.ts"/);
+    expect(source).toMatch(/if \(isSetupApprovalDecision\(decision\)\) \{[\s\S]*sendApprovalEmail\(/);
     expect(source).toMatch(/approval_email_warning: approvalEmailWarning/);
   });
 

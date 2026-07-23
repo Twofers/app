@@ -1,4 +1,41 @@
-import type { PosterCopyV1, PosterPolicyResult, PosterSanitizeOptions } from "./posterTypes.ts";
+import type {
+  PosterCopyV1,
+  PosterPolicyResult,
+  PosterSanitizeOptions,
+  PosterTextFitCheck,
+} from "./posterTypes.ts";
+
+/**
+ * Single source of truth for how many characters each poster text slot can hold.
+ * The AI prompt, the server candidate gate, the client edit fields, and the
+ * sanitize clamps must all use these numbers; drift between them is what caused
+ * silently cut-off poster copy.
+ */
+export const POSTER_TEXT_LIMITS = {
+  businessName: 34,
+  headline: 28,
+  subline: 32,
+} as const;
+
+const GENERIC_POSTER_KICKERS = new Set([
+  "TRY OUR",
+  "OUR DEAL",
+  "SPECIAL OFFER",
+  "MENU PICK",
+  "PRUEBA NUESTRO",
+  "NUESTRA OFERTA",
+  "OFERTA ESPECIAL",
+  "RECOMENDACIÓN DEL MENÚ",
+  "추천 메뉴",
+  "특별 혜택",
+  "오늘의 메뉴",
+]);
+
+export function isGenericPosterKicker(value: string | null | undefined): boolean {
+  return GENERIC_POSTER_KICKERS.has(
+    typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLocaleUpperCase() : "",
+  );
+}
 
 type PatternRule = {
   code: string;
@@ -67,6 +104,24 @@ export function sanitizePosterText(input: string, options: PosterSanitizeOptions
   return options.uppercase === false ? clamped : clamped.toUpperCase();
 }
 
+/**
+ * Non-destructive fit check for merchant-provided poster text. Unlike
+ * sanitizePosterText this never rewrites the input; callers block or warn so
+ * the merchant fixes the wording instead of publishing silently altered copy.
+ */
+export function checkPosterTextFit(input: string, maxChars: number): PosterTextFitCheck {
+  const clean = cleanText(input);
+  const scan = scanPosterTextPolicy(clean);
+  const reasonCodes = [...scan.reasonCodes];
+  if (clean.length > maxChars) reasonCodes.push("POSTER_TEXT_OVER_LIMIT");
+  return {
+    ok: reasonCodes.length === 0,
+    reasonCodes: [...new Set(reasonCodes)],
+    length: clean.length,
+    maxChars,
+  };
+}
+
 export function scanPosterTextPolicy(input: string): PosterPolicyResult {
   const clean = cleanText(input);
   const reasonCodes: string[] = [];
@@ -113,23 +168,40 @@ export function assertPosterCopyPolicy(copy: PosterCopyV1): PosterPolicyResult {
   };
 }
 
+function clampWarning(field: string, before: string, after: string, uppercase: boolean): string | null {
+  const expected = uppercase ? cleanText(before).toUpperCase() : cleanText(before);
+  if (!expected || expected === after) return null;
+  return `${field.toUpperCase()}_TEXT_ADJUSTED`;
+}
+
 export function sanitizePosterCopy(copy: PosterCopyV1, fallbackBusinessName: string): {
   copy: PosterCopyV1;
   policy: PosterPolicyResult;
 } {
   const subline = cleanText(copy.subline)
-    ? sanitizePosterText(copy.subline ?? "", { fallback: "", maxChars: 32 })
+    ? sanitizePosterText(copy.subline ?? "", { fallback: "", maxChars: POSTER_TEXT_LIMITS.subline })
     : "";
   const sanitized: PosterCopyV1 = {
     business_name: sanitizePosterText(copy.business_name, {
       fallback: fallbackBusinessName,
-      maxChars: 34,
+      maxChars: POSTER_TEXT_LIMITS.businessName,
       uppercase: false,
     }),
-    headline: sanitizePosterText(copy.headline, { fallback: copy.offer_line_1, maxChars: 28 }),
+    headline: sanitizePosterText(copy.headline, { fallback: copy.offer_line_1, maxChars: POSTER_TEXT_LIMITS.headline }),
     offer_line_1: sanitizePosterText(copy.offer_line_1, { fallback: "LOCAL DEAL", maxChars: 28 }),
     offer_line_2: sanitizePosterText(copy.offer_line_2, { fallback: "LOCAL FAVORITE", maxChars: 28 }),
     ...(subline ? { subline } : {}),
   };
-  return { copy: sanitized, policy: assertPosterCopyPolicy(sanitized) };
+  const policy = assertPosterCopyPolicy(sanitized);
+  // Record every slot where sanitizing changed the requested text (clamped,
+  // forbidden term removed, or fallback substituted) so no shortening is silent.
+  const adjustments = [
+    clampWarning("headline", copy.headline, sanitized.headline, true),
+    clampWarning("subline", copy.subline ?? "", sanitized.subline ?? "", true),
+    clampWarning("business_name", copy.business_name, sanitized.business_name, false),
+  ].filter((warning): warning is string => warning != null);
+  return {
+    copy: sanitized,
+    policy: { ...policy, warnings: [...new Set([...policy.warnings, ...adjustments])] },
+  };
 }

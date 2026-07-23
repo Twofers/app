@@ -22,7 +22,16 @@ export function PosterOfferTemplate(props: ComposedAdTemplateProps) {
       style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}
     >
       <View style={styles.posterWrap}>
-        <AdPosterCanvas spec={posterSpec} imageUri={imageUri} contentLocale={contentLocale} style={styles.poster} />
+        <AdPosterCanvas
+          spec={posterSpec}
+          imageUri={imageUri}
+          contentLocale={contentLocale}
+          // S4: the feed hides the merchant line (below), so on a poster card the poster's
+          // own business name is the ONLY merchant identity a shopper sees — which made a
+          // stale frozen name worse here than anywhere else.
+          merchantName={merchant.name}
+          style={styles.poster}
+        />
         {favoriteAction ? <AdFavoriteButton action={favoriteAction} /> : null}
       </View>
       <View style={[styles.panel, { backgroundColor: tokens.panelBackground }]}>

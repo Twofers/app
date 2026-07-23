@@ -4,6 +4,7 @@ import {
   aiDealDraftStorageKey,
   buildAiDealRecoveryDraft,
   parseAiDealRecoveryDraft,
+  resolveRecoveredDealSchedule,
 } from "./ai-deal-draft-recovery";
 import { createDefaultDealEligibilityFormState } from "./deal-eligibility-form";
 
@@ -100,6 +101,87 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.adAccepted).toBe(true);
     expect(parsed?.creativeFormat).toBe("poster_v1");
     expect(parsed?.previewFormat).toBe("poster_v1");
+    expect(parsed?.adAccepted).toBe(true);
+    expect(parsed?.manualDraftUnlocked).toBe(true);
+  });
+
+  it("round-trips edited poster text and treats it as recoverable on its own", () => {
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      photoPath: null,
+      posterUrl: null,
+      photoTreatment: "studiopolish",
+      customImageEditInstruction: "",
+      usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: false,
+      hintText: "",
+      price: "",
+      title: "",
+      promoLine: "",
+      posterHeadlineText: "AFTERNOON PICK ME UP",
+      posterSublineText: "BAKED FRESH DAILY",
+      ctaText: "",
+      description: "",
+      eligibilityForm,
+      maxClaims: "50",
+      cutoffMins: "15",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      daysOfWeek: [1, 2, 3, 4, 5],
+      windowStartMinutes: 540,
+      windowEndMinutes: 1020,
+      timezone: "America/Chicago",
+      publishLocationIds: [],
+      generatedAd: null,
+      adAccepted: false,
+      manualDraftUnlocked: false,
+    });
+
+    expect(draft).not.toBeNull();
+    const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
+    expect(parsed?.posterHeadlineText).toBe("AFTERNOON PICK ME UP");
+    expect(parsed?.posterSublineText).toBe("BAKED FRESH DAILY");
+  });
+
+  it("defaults missing poster text fields on older stored drafts", () => {
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      photoPath: "biz-1/reference.jpg",
+      posterUrl: null,
+      photoTreatment: "studiopolish",
+      customImageEditInstruction: "",
+      usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: false,
+      hintText: "BOGO latte",
+      price: "",
+      title: "",
+      promoLine: "",
+      ctaText: "",
+      description: "",
+      eligibilityForm,
+      maxClaims: "50",
+      cutoffMins: "15",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      daysOfWeek: [1, 2, 3, 4, 5],
+      windowStartMinutes: 540,
+      windowEndMinutes: 1020,
+      timezone: "America/Chicago",
+      publishLocationIds: [],
+      generatedAd: null,
+      adAccepted: false,
+      manualDraftUnlocked: false,
+    });
+    expect(draft).not.toBeNull();
+    const legacy = { ...draft } as Record<string, unknown>;
+    delete legacy.posterHeadlineText;
+    delete legacy.posterSublineText;
+
+    const parsed = parseAiDealRecoveryDraft(JSON.stringify(legacy), "biz-1");
+    expect(parsed?.posterHeadlineText).toBe("");
+    expect(parsed?.posterSublineText).toBe("");
   });
 
   it("preserves an explicit standard-card draft choice", () => {
@@ -182,6 +264,145 @@ describe("AI deal draft recovery", () => {
 
     expect(parsed?.startTime).toBe("2026-06-30T17:25:00.000Z");
     expect(parsed?.endTime).toBe("2026-06-30T18:25:00.000Z");
+  });
+
+  it("rebuilds an end time that does not follow its start time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    // Observed on an S10: a recovered draft opened with its start refreshed to
+    // 11:33 PM but its end still on the previous session's 10:56 PM, so the
+    // poster rendered a "REDEEM BY" time already in the past.
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T03:56:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.startTime).toBe("2026-07-22T04:33:00.000Z");
+    // Rebuilt from the start (+1h), not restored from the stale value.
+    expect(parsed?.endTime).toBe("2026-07-22T05:33:00.000Z");
+    expect(new Date(parsed!.endTime).getTime()).toBeGreaterThan(new Date(parsed!.startTime).getTime());
+  });
+
+  it("keeps an end time equal to the start from surviving recovery", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T04:33:00.000Z",
+    } as Parameters<typeof buildAiDealRecoveryDraft>[0]);
+
+    // A zero-length window is just as unpublishable as an inverted one.
+    expect(draft?.endTime).toBe("2026-07-22T05:33:00.000Z");
+  });
+
+  it("preserves a valid restored end time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T04:33:00.000Z"));
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T04:33:00.000Z",
+      endTime: "2026-07-22T06:00:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.endTime).toBe("2026-07-22T06:00:00.000Z");
+  });
+
+  it("keeps an end following the start after the apply-time clamp", () => {
+    // The S10 case the draft-level repair could not reach: the window was
+    // coherent when it was saved (05:00 → 06:00), so nothing was rebuilt at
+    // parse time. Advancing the stale start to "now" is what inverts it.
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy one latte get one latte free",
+      eligibilityForm,
+      startTime: "2026-07-22T05:00:00.000Z",
+      endTime: "2026-07-22T06:00:00.000Z",
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+    // Valid at save time, so parse restores it untouched.
+    expect(parsed?.startTime).toBe("2026-07-22T05:00:00.000Z");
+    expect(parsed?.endTime).toBe("2026-07-22T06:00:00.000Z");
+
+    const schedule = resolveRecoveredDealSchedule(parsed!, new Date("2026-07-22T14:28:00.000Z"));
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T14:28:00.000Z");
+    // Rebuilt from the clamped start (+1h) instead of reopening at 06:00.
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T15:28:00.000Z");
+    expect(schedule.endTime.getTime()).toBeGreaterThan(schedule.startTime.getTime());
+  });
+
+  it("keeps an end the start clamp does not overtake", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T05:00:00.000Z",
+        endTime: "2026-07-22T18:00:00.000Z",
+        validityMode: "one-time",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T14:28:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T18:00:00.000Z");
+  });
+
+  it("leaves a still-future window untouched", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-22T14:28:00.000Z"));
+
+    const schedule = resolveRecoveredDealSchedule({
+      startTime: "2026-07-22T20:00:00.000Z",
+      endTime: "2026-07-22T21:00:00.000Z",
+      validityMode: "one-time",
+    });
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T20:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T21:00:00.000Z");
+  });
+
+  it("does not clamp a recurring draft, whose window is derived at publish", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T05:00:00.000Z",
+        endTime: "2026-07-22T06:00:00.000Z",
+        validityMode: "recurring",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T05:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T06:00:00.000Z");
+  });
+
+  it("still repairs a window that was already inverted when saved", () => {
+    const schedule = resolveRecoveredDealSchedule(
+      {
+        startTime: "2026-07-22T20:00:00.000Z",
+        endTime: "2026-07-22T19:00:00.000Z",
+        validityMode: "one-time",
+      },
+      new Date("2026-07-22T14:28:00.000Z"),
+    );
+
+    // The start is still in the future, so it is not clamped, but the end must
+    // be rebuilt from it rather than reopening behind it.
+    expect(schedule.startTime.toISOString()).toBe("2026-07-22T20:00:00.000Z");
+    expect(schedule.endTime.toISOString()).toBe("2026-07-22T21:00:00.000Z");
   });
 
   it("rejects malformed, old, and different-business drafts", () => {

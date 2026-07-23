@@ -69,8 +69,9 @@ describe("website-to-app business onboarding sync", () => {
     expect(config).toMatch(/\[functions\.update-business-profile-section\][\s\S]*entrypoint\s*=\s*"\.\/functions\/update-business-profile-section\/index\.ts"/);
 
     const context = read("supabase/functions/get-business-onboarding-context/index.ts");
-    expect(context).toMatch(/materializeBusinessForUser/);
-    expect(context).toMatch(/can_business_publish/);
+    expect(context).toMatch(/claim_approved_business_application_for_user/);
+    expect(context).not.toMatch(/materializeBusinessForUser/);
+    expect(context).toMatch(/get_business_capabilities/);
     expect(context).not.toMatch(/stripe-create-checkout|customer-portal|STRIPE_SECRET_KEY/i);
 
     const update = read("supabase/functions/update-business-profile-section/index.ts");

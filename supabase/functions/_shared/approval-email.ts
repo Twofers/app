@@ -1,4 +1,4 @@
-// Trial-welcome email sent after an admin approves a business trial.
+// Approval email sent after an admin approves a business for setup.
 //
 // Best-effort by contract: this NEVER throws and NEVER blocks the approval
 // write. It returns a human-readable warning string on failure (surfaced on the
@@ -12,7 +12,7 @@
 // never logged, never returned, and never written to audit rows. Only the
 // sha256 of the token is stored (checkout_token_hash).
 
-export type ApprovalEmailDecision = "approve_limited" | "approve_full";
+export type ApprovalEmailDecision = "approve_setup" | "approve_limited" | "approve_full";
 
 // Fields are declared as unknown because callers pass raw Supabase rows (a
 // SELECT list or an insert-returning row) whose columns are loosely typed. The
@@ -23,8 +23,6 @@ export type ApprovalEmailApplication = {
   contact_name?: unknown;
   email?: unknown;
   trial_days?: unknown;
-  trial_offer_limit?: unknown;
-  trial_claim_limit?: unknown;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -32,16 +30,10 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const FROM_ADDRESS = "Twofer <support@twoferapp.com>";
 const CHECKOUT_TOKEN_TTL_DAYS = 30;
 
-// Kept as a fallback only; the live values come from the approved application
-// row (trial_days / trial_offer_limit / trial_claim_limit).
-function decisionDefaults(decision: ApprovalEmailDecision): {
-  trialDays: number;
-  offerLimit: number;
-  claimLimit: number;
-} {
-  return decision === "approve_full"
-    ? { trialDays: 30, offerLimit: 3, claimLimit: 50 }
-    : { trialDays: 14, offerLimit: 1, claimLimit: 25 };
+// Standard approved activation is a 30-day Stripe trial. Approval itself does
+// not start the trial, grant credits, or unlock publishing.
+function decisionDefaults(_decision: ApprovalEmailDecision): { trialDays: number } {
+  return { trialDays: 30 };
 }
 
 function positiveIntOr(value: unknown, fallback: number): number {
@@ -74,48 +66,39 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function plural(count: number, singular: string): string {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
-
 function buildEmail(params: {
   businessName: string;
   contactName: string;
   ownerEmail: string;
   trialDays: number;
-  offerLimit: number;
-  claimLimit: number;
   checkoutUrl: string;
 }): { subject: string; html: string; text: string } {
-  const { businessName, contactName, ownerEmail, trialDays, offerLimit, claimLimit, checkoutUrl } = params;
+  const { businessName, contactName, ownerEmail, trialDays, checkoutUrl } = params;
   const greetingName = contactName || "there";
   const named = businessName || "Your business";
-  const subject = "You're approved — your Twofer trial is live";
-  const bilingualFooter = "¿Prefieres español? / 한국어로 도움이 필요하세요? support@twoferapp.com";
+  const subject = "You're approved - activate your Twofer trial";
+  const bilingualFooter = "Prefieres espanol? / hangugeo doumi piryohaseyo? support@twoferapp.com";
 
   const text = [
     `Hi ${greetingName},`,
-    ``,
-    `${named} is approved for Twofer. Your ${trialDays}-day business trial is ready.`,
-    ``,
-    `During the trial you can:`,
-    `- Publish up to ${plural(offerLimit, "live offer")}`,
-    `- Serve up to ${plural(claimLimit, "customer claim")}`,
-    `- Redeem in store by QR code`,
-    ``,
-    `How to get started:`,
-    `1. Download Twofer from the App Store or Google Play.`,
-    `2. Sign up as a Business using this email address: ${ownerEmail}. That is how your trial attaches to your account.`,
-    `3. Create and publish your first offer.`,
-    ``,
-    `Keep full access after your trial:`,
+    "",
+    `${named} is approved for Twofer setup. Your ${trialDays}-day business trial starts after you activate it through secure Checkout.`,
+    "",
+    "Before activation you can sign in, finish your business profile, prepare menu details, and draft your first offer.",
+    "AI image generation, publishing, customer claims, and offer credits unlock only after activation is confirmed.",
+    "",
+    "How to get started:",
+    "1. Download Twofer from the App Store or Google Play.",
+    `2. Sign up as a Business using this email address: ${ownerEmail}. That is how your approved setup attaches to your account.`,
+    `3. Finish setup, then activate your ${trialDays}-day trial:`,
+    "",
     checkoutUrl,
-    `(If you have not set up your app account yet, do that first, then open this link again.)`,
-    ``,
-    `Questions? Email support@twoferapp.com.`,
-    ``,
-    `— Twofer`,
-    ``,
+    "(If you have not set up your app account yet, do that first, then open this link again.)",
+    "",
+    "Questions? Email support@twoferapp.com.",
+    "",
+    "- Twofer",
+    "",
     bilingualFooter,
   ].join("\n");
 
@@ -125,28 +108,25 @@ function buildEmail(params: {
     <div style="max-width:520px;margin:0 auto;padding:24px;">
       <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">Hi ${escapeHtml(greetingName)},</p>
       <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
-        <strong>${escapeHtml(named)}</strong> is approved for Twofer. Your ${trialDays}-day business trial is ready.
+        <strong>${escapeHtml(named)}</strong> is approved for Twofer setup. Your ${trialDays}-day business trial starts after you activate it through secure Checkout.
       </p>
-      <p style="font-size:15px;line-height:1.5;margin:0 0 8px;">During the trial you can:</p>
-      <ul style="font-size:15px;line-height:1.6;margin:0 0 16px;padding-left:20px;">
-        <li>Publish up to ${escapeHtml(plural(offerLimit, "live offer"))}</li>
-        <li>Serve up to ${escapeHtml(plural(claimLimit, "customer claim"))}</li>
-        <li>Redeem in store by QR code</li>
-      </ul>
+      <p style="font-size:15px;line-height:1.5;margin:0 0 16px;">
+        Before activation you can sign in, finish your business profile, prepare menu details, and draft your first offer. AI image generation, publishing, customer claims, and offer credits unlock only after activation is confirmed.
+      </p>
       <p style="font-size:15px;line-height:1.5;margin:0 0 8px;">How to get started:</p>
       <ol style="font-size:15px;line-height:1.6;margin:0 0 20px;padding-left:20px;">
         <li>Download Twofer from the App Store or Google Play.</li>
-        <li>Sign up as a Business using this email address: <strong>${escapeHtml(ownerEmail)}</strong>. That is how your trial attaches to your account.</li>
-        <li>Create and publish your first offer.</li>
+        <li>Sign up as a Business using this email address: <strong>${escapeHtml(ownerEmail)}</strong>. That is how your approved setup attaches to your account.</li>
+        <li>Finish setup, then activate your ${trialDays}-day trial.</li>
       </ol>
       <p style="margin:0 0 20px;">
-        <a href="${escapeHtml(checkoutUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:12px 20px;border-radius:8px;">Keep full access after your trial</a>
+        <a href="${escapeHtml(checkoutUrl)}" style="display:inline-block;background:#e8590c;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:12px 20px;border-radius:8px;">Activate your ${trialDays}-day trial</a>
       </p>
       <p style="font-size:13px;line-height:1.5;color:#5f625b;margin:0 0 20px;">
         If you have not set up your app account yet, do that first, then open this link again.
       </p>
       <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">Questions? Email <a href="mailto:support@twoferapp.com" style="color:#e8590c;">support@twoferapp.com</a>.</p>
-      <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">— Twofer</p>
+      <p style="font-size:14px;line-height:1.5;margin:0 0 16px;">- Twofer</p>
       <p style="font-size:12px;line-height:1.5;color:#8a8d85;margin:24px 0 0;border-top:1px solid #e3e4df;padding-top:16px;">${escapeHtml(bilingualFooter)}</p>
     </div>
   </body>
@@ -176,7 +156,7 @@ async function insertAudit(
 }
 
 /**
- * Send the trial-welcome email. Returns null on success or when skipped
+ * Send the setup-approved email. Returns null on success or when skipped
  * (already sent / not an approval); returns a short warning string on any
  * recoverable failure. Never throws.
  */
@@ -187,7 +167,7 @@ export async function sendApprovalEmail(params: {
   requestId: string;
 }): Promise<string | null> {
   const { supabaseAdmin, application, decision, requestId } = params;
-  const WARN = "Trial approved, but the welcome email could not be sent. Resend it or check the owner's address.";
+  const WARN = "Application approved, but the setup email could not be sent. Resend it or check the owner's address.";
 
   try {
     const applicationId = typeof application.id === "string" ? application.id : "";
@@ -206,7 +186,7 @@ export async function sendApprovalEmail(params: {
     const ownerEmail = typeof application.email === "string" ? application.email.trim().toLowerCase() : "";
     if (!EMAIL_RE.test(ownerEmail)) {
       await insertAudit(supabaseAdmin, "admin_business_application_approval_email_failed", applicationId, requestId, "missing_or_invalid_owner_email");
-      return "Trial approved, but no valid owner email was on file to send the welcome email.";
+      return "Application approved, but no valid owner email was on file to send the setup email.";
     }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
@@ -218,8 +198,6 @@ export async function sendApprovalEmail(params: {
 
     const defaults = decisionDefaults(decision);
     const trialDays = positiveIntOr(application.trial_days, defaults.trialDays);
-    const offerLimit = positiveIntOr(application.trial_offer_limit, defaults.offerLimit);
-    const claimLimit = positiveIntOr(application.trial_claim_limit, defaults.claimLimit);
 
     // Persist the checkout token (hash only) BEFORE sending; the raw token lives
     // only in the email body and is resolved by the business-checkout-link fn.
@@ -238,8 +216,6 @@ export async function sendApprovalEmail(params: {
       contactName: typeof application.contact_name === "string" ? application.contact_name : "",
       ownerEmail,
       trialDays,
-      offerLimit,
-      claimLimit,
       checkoutUrl,
     });
 

@@ -2,6 +2,7 @@ export const PURCHASE_SURFACES = ["disabled", "in_app_link", "web_only"] as cons
 export type PurchaseSurface = (typeof PURCHASE_SURFACES)[number];
 
 export const BILLING_STATUSES = [
+  "approved_not_activated",
   "trial_eligible",
   "trial_checkout_pending",
   "trial_active",

@@ -1,10 +1,29 @@
 import type { AdPresentationSpec } from "./ad-presentation-spec";
 import type { ApprovedAdCopy, ImmutableOfferFacts } from "./ad-render-content";
+import type { AdCreativeFormat, PosterTemplateId } from "./poster/posterTypes";
+import type { SupportedLocale } from "./supported-locales";
+
+export type AdPresentationReviewContext = {
+  creativeFormat: AdCreativeFormat;
+  sourceLocale: SupportedLocale;
+  headline: string;
+  supportingCopy: string;
+  ctaLabel: string;
+  details: string;
+  poster: {
+    templateId: PosterTemplateId;
+    headline: string;
+    subline: string | null;
+    offerLine1: string;
+    offerLine2: string;
+  } | null;
+};
 
 export type AdPresentationHashInput = {
   presentation: AdPresentationSpec;
   copy: ApprovedAdCopy;
   offerFacts: ImmutableOfferFacts;
+  reviewContext?: AdPresentationReviewContext;
 };
 
 function stableValue(value: unknown): unknown {
@@ -62,6 +81,9 @@ export function createAdPresentationHash(input: AdPresentationHashInput): string
   };
   if (input.presentation.localeOverrides) {
     Object.assign(payload, { localeOverrides: input.presentation.localeOverrides });
+  }
+  if (input.reviewContext) {
+    Object.assign(payload, { reviewContext: input.reviewContext });
   }
   return `adp_${hashString(stablePresentationJson(payload))}`;
 }

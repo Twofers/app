@@ -3,17 +3,6 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import {
-  materializeBusinessForUser,
-  type NormalizedBusinessOnboarding,
-} from "../_shared/business-onboarding-sync.ts";
-import {
-  billingProfileFromOnboarding,
-  enqueueStripeCustomerSync,
-  seedBusinessSubscription,
-  upsertBusinessBillingProfile,
-} from "../_shared/stripe-business-billing.ts";
-import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -37,240 +26,34 @@ function friendlyStatus(status: string | null | undefined, accessLevel: string |
   if (status === "trialing" || accessLevel === "full_trial") {
     return "Your business trial is active. You can create and publish eligible offers.";
   }
+  if (status === "approved_not_activated" || accessLevel === "approved_not_activated") {
+    return "You're approved. Finish setup now; AI tools and publishing unlock after you activate your 30-day trial.";
+  }
   return "Your business profile is being reviewed. You can finish setup and preview an offer now. Publishing will unlock after verification.";
 }
 
-function normalizeFromRequest(row: Record<string, unknown>): NormalizedBusinessOnboarding {
-  const normalized = row.normalized_payload;
-  if (normalized && typeof normalized === "object") {
-    return normalized as NormalizedBusinessOnboarding;
-  }
-  return {
-    businessName: String(row.business_name ?? ""),
-    contactName: String(row.owner_name ?? ""),
-    email: String(row.owner_email ?? "").toLowerCase(),
-    phone: typeof row.phone === "string" ? row.phone : null,
-    address: typeof row.business_address === "string" ? row.business_address : null,
-    businessType: typeof row.business_type === "string" ? row.business_type : null,
-    websiteOrInstagram: typeof row.website_or_instagram === "string" ? row.website_or_instagram : null,
-    slowHours: typeof row.best_slow_hours === "string" ? row.best_slow_hours : null,
-    offerInterests: typeof row.promote_text === "string" ? row.promote_text : null,
-    launchArea: null,
-    termsAccepted: row.accepted_business_terms === true,
-    privacyAcknowledged: row.accepted_privacy_policy === true,
-  };
-}
-
-// Subscription states that grant app access and therefore must be mirrored
-// into location_entitlements for the merchant gate to open. Terminal states
-// (expired/canceled/suspended) are owned by the Stripe webhook and the expiry
-// sweeps; re-stamping them here would only churn suspended_at.
-const ACCESS_GRANTING_STATUSES = new Set(["trial_limited", "trialing", "active", "past_due_grace"]);
-
 /**
- * Owners who create or link their business BEFORE the admin approves their
- * trial request take the early-return paths in ensureLinkedBusiness, so the
- * approval recorded in business_applications never reaches
- * business_subscriptions / location_entitlements — the tables the app's
- * merchant gate actually reads — and the owner is stuck on "Business account
- * not active". (admin-business-applications deliberately never scans Auth by
- * email, so it cannot link such a business at decision time.) Reconcile on
- * every context load for an already-linked business. Failures must not block
- * the context response; the next load retries.
+ * Claims the one approved application for this confirmed auth identity and
+ * returns its inert or activated business. The database RPC owns all
+ * idempotency, locking, matching, and materialization.
  */
-async function reconcileBillingAccessForLinkedBusiness(
-  supabase: DbClient,
-  businessId: string,
-  email: string,
-): Promise<void> {
-  try {
-    const { data: subscription, error: subscriptionError } = await supabase
-      .from("business_subscriptions")
-      .select("app_access_status,trial_type,trial_start,trial_end,current_period_start,current_period_end,cancel_at_period_end")
-      .eq("business_id", businessId)
-      .maybeSingle();
-    if (subscriptionError) throw subscriptionError;
-
-    const subscriptionRow = subscription as Record<string, unknown> | null;
-    const appAccessStatus = typeof subscriptionRow?.app_access_status === "string"
-      ? subscriptionRow.app_access_status
-      : null;
-
-    if (appAccessStatus && ACCESS_GRANTING_STATUSES.has(appAccessStatus)) {
-      // Billing was already decided; re-mirror the subscription row so an
-      // earlier failed or skipped sync heals itself (idempotent).
-      const trialType = typeof subscriptionRow?.trial_type === "string" ? subscriptionRow.trial_type : null;
-      await applyBusinessBillingAccessState({
-        supabase,
-        businessId,
-        provider: trialType === "stripe_trial" || appAccessStatus === "active" || appAccessStatus === "past_due_grace"
-          ? "stripe"
-          : "admin",
-        appAccessStatus,
-        trialType,
-        trialStart: typeof subscriptionRow?.trial_start === "string" ? subscriptionRow.trial_start : null,
-        trialEnd: typeof subscriptionRow?.trial_end === "string" ? subscriptionRow.trial_end : null,
-        currentPeriodStart: typeof subscriptionRow?.current_period_start === "string" ? subscriptionRow.current_period_start : null,
-        currentPeriodEnd: typeof subscriptionRow?.current_period_end === "string" ? subscriptionRow.current_period_end : null,
-        cancelAtPeriodEnd: subscriptionRow?.cancel_at_period_end === true,
-      });
-      return;
-    }
-    if (appAccessStatus && appAccessStatus !== "pending") return;
-
-    // No decided subscription yet: pick up a trial the admin approved against
-    // this owner's email after the business was already linked.
-    const { data: application, error: applicationError } = await supabase
-      .from("business_applications")
-      .select("id,status,access_tier,trial_days,business_id")
-      .eq("email", email)
-      .in("status", ["trial_limited", "trial_active"])
-      .order("reviewed_at", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-    if (applicationError) throw applicationError;
-    const applicationRow = application as Record<string, unknown> | null;
-    if (!applicationRow) return;
-
-    await seedBusinessSubscription(supabase, {
-      businessId,
-      source: "app_login_reconcile",
-      trialDays: typeof applicationRow.trial_days === "number" ? applicationRow.trial_days : null,
-      accessStatus: applicationRow.access_tier === "trialing" || applicationRow.status === "trial_active"
-        ? "trialing"
-        : "trial_limited",
-    });
-    // Backlink so the admin dashboard and future decisions see this business.
-    if (!applicationRow.business_id) {
-      await supabase
-        .from("business_applications")
-        .update({ business_id: businessId })
-        .eq("id", applicationRow.id as string);
-    }
-  } catch (error) {
-    console.error("[get-business-onboarding-context] billing reconcile failed:", error);
-  }
-}
-
 async function ensureLinkedBusiness(
   supabase: DbClient,
   userId: string,
   email: string,
 ): Promise<string | null> {
-  const { data: directBusiness, error: directError } = await supabase
-    .from("businesses")
-    .select("id")
-    .eq("owner_id", userId)
-    .maybeSingle();
-  if (directError) throw directError;
-  const direct = directBusiness as { id?: string } | null;
-  if (direct?.id) {
-    await reconcileBillingAccessForLinkedBusiness(supabase, direct.id, email);
-    return direct.id;
-  }
-
-  const { data: member, error: memberError } = await supabase
-    .from("business_members")
-    .select("business_id,id")
-    .or(`user_id.eq.${userId},invited_email.eq.${email}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (memberError) throw memberError;
-  const memberRow = member as { id: string; business_id: string } | null;
-  if (memberRow?.business_id) {
-    await supabase
-      .from("business_members")
-      .update({ user_id: userId, status: "active", role: "owner", linked_at: new Date().toISOString() })
-      .eq("id", memberRow.id);
-    await supabase.from("businesses").update({ owner_id: userId }).eq("id", memberRow.business_id);
-    await reconcileBillingAccessForLinkedBusiness(supabase, memberRow.business_id, email);
-    return memberRow.business_id;
-  }
-
-  const { data: request, error: requestError } = await supabase
-    .from("business_onboarding_requests")
-    .select("*")
-    .eq("owner_email", email)
-    .neq("status", "rejected")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (requestError) throw requestError;
-  const requestRow = request as Record<string, unknown> | null;
-  if (!requestRow) return null;
-
-  let decision: {
-    status?: string | null;
-    access_tier?: string | null;
-    verification_status?: string | null;
-    risk_score?: number | null;
-    trial_days?: number | null;
-  } = {
-    status: requestRow.status as string | null,
-    risk_score: requestRow.risk_score as number | null,
-  };
-  if (requestRow.application_id) {
-    const { data: application, error: applicationError } = await supabase
-      .from("business_applications")
-      .select("status,access_tier,verification_status,risk_score,trial_days")
-      .eq("id", requestRow.application_id as string)
-      .maybeSingle();
-    if (applicationError) throw applicationError;
-    if (application) {
-      decision = {
-        status: (application as Record<string, unknown>).status as string | null,
-        access_tier: (application as Record<string, unknown>).access_tier as string | null,
-        verification_status: (application as Record<string, unknown>).verification_status as string | null,
-        risk_score: (application as Record<string, unknown>).risk_score as number | null,
-        trial_days: (application as Record<string, unknown>).trial_days as number | null,
-      };
-    }
-  }
-
-  const materialized = await materializeBusinessForUser(supabase, {
-    userId,
-    requestId: requestRow.id as string,
-    applicationId: (requestRow.application_id as string | null) ?? null,
-    normalized: normalizeFromRequest(requestRow),
-    decision,
-    source: "app_login",
-  });
-  const normalized = normalizeFromRequest(requestRow);
-  await upsertBusinessBillingProfile(
-    supabase,
-    billingProfileFromOnboarding({
-      businessId: materialized.businessId,
-      ownerUserId: userId,
-      normalized,
-      source: "app_login",
-      sourceRecordId: requestRow.id as string,
-    }),
+  // The database RPC owns the complete claim/materialization transaction.
+  // Never accept a pre-existing owner/member row before the confirmed auth
+  // email has claimed exactly one approved application.
+  const { data: atomicClaimData, error: atomicClaimError } = await supabase.rpc(
+    "claim_approved_business_application_for_user",
+    { p_user_id: userId, p_email: email },
   );
-  await seedBusinessSubscription(supabase, {
-    businessId: materialized.businessId,
-    source: "app_login",
-    // Trial length was decided at admin approval time (business_applications.trial_days);
-    // read it here so the trial clock actually has an end date once the owner
-    // finishes onboarding, instead of an eternal trial with no expiration.
-    trialDays: typeof decision.trial_days === "number" ? decision.trial_days : null,
-    accessStatus: decision.access_tier === "trialing" || decision.status === "trial_active"
-      ? "trialing"
-      : decision.access_tier === "trial_limited" || decision.status === "trial_limited"
-        ? "trial_limited"
-        : "pending",
-  });
-  await enqueueStripeCustomerSync(supabase, {
-    businessId: materialized.businessId,
-    onboardingRequestId: requestRow.id as string,
-    businessApplicationId: (requestRow.application_id as string | null) ?? null,
-    reason: "materialized_from_app_login",
-    payload: {
-      owner_email: normalized.email,
-      source: "app_login",
-    },
-  });
-  return materialized.businessId;
+  if (atomicClaimError) throw atomicClaimError;
+  const atomicClaim = (
+    Array.isArray(atomicClaimData) ? atomicClaimData[0] : atomicClaimData
+  ) as Record<string, unknown> | null;
+  return typeof atomicClaim?.business_id === "string" ? atomicClaim.business_id : null;
 }
 
 serve(async (req) => {
@@ -305,6 +88,11 @@ serve(async (req) => {
 
     const email = user.email?.trim().toLowerCase();
     if (!email) return json(req, { error: "Email is required." }, 400);
+    const confirmedAt = (user as { email_confirmed_at?: unknown; confirmed_at?: unknown }).email_confirmed_at ??
+      (user as { confirmed_at?: unknown }).confirmed_at;
+    if (typeof confirmedAt !== "string" || !confirmedAt) {
+      return json(req, { error: "Please confirm your email before setting up a business." }, 403);
+    }
 
     const businessId = await ensureLinkedBusiness(supabaseAdmin, user.id, email);
     if (!businessId) {
@@ -320,30 +108,45 @@ serve(async (req) => {
         terms_acceptances: [],
         first_offer_draft: null,
         access_state: {
-          can_edit_profile: true,
+          can_edit_profile: false,
+          can_use_setup_tools: false,
+          can_use_menu_tools: false,
+          can_extract_initial_menu: false,
+          can_create_text_draft: false,
           can_create_offer_draft: false,
+          can_generate_ai: false,
+          can_consume_offer_credits: false,
           can_publish_offer: false,
-          reason_code: "no_business",
-          friendly_status_message: "Set up your business profile to create offers.",
+          can_receive_new_claims: false,
+          can_redeem_existing_claims: false,
+          can_manage_billing: false,
+          reason_code: "approval_required",
+          friendly_status_message: "Business setup opens after your application is approved.",
         },
       });
     }
 
     const [
       businessResult,
+      locationsResult,
       contactsResult,
       slowHoursResult,
       promotableItemsResult,
       checklistResult,
       fieldSourcesResult,
       termsResult,
-      publishResult,
+      capabilitiesResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("businesses")
         .select("id,name,contact_name,business_email,public_email,phone,address,location,category,hours_text,short_description,latitude,longitude,logo_url,status,access_level,verification_status,current_profile_version,profile_completion_score,website_url,instagram_url")
         .eq("id", businessId)
         .single(),
+      supabaseAdmin
+        .from("business_locations")
+        .select("id,business_id,name,address,phone,lat,lng,created_at,updated_at")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("business_contact_channels")
         .select("id,type,label,value,normalized_value,is_public,is_primary,verification_status,source,updated_at")
@@ -374,19 +177,22 @@ serve(async (req) => {
         .select("document_type,document_version,accepted_at,source")
         .eq("business_id", businessId)
         .order("accepted_at", { ascending: false }),
-      supabaseUser.rpc("can_business_publish", { p_business_id: businessId }),
+      supabaseUser.rpc("get_business_capabilities", { p_business_id: businessId }),
     ]);
 
     if (businessResult.error) throw businessResult.error;
+    if (locationsResult.error) throw locationsResult.error;
     if (contactsResult.error) throw contactsResult.error;
     if (slowHoursResult.error) throw slowHoursResult.error;
     if (promotableItemsResult.error) throw promotableItemsResult.error;
     if (checklistResult.error) throw checklistResult.error;
     if (fieldSourcesResult.error) throw fieldSourcesResult.error;
     if (termsResult.error) throw termsResult.error;
+    if (capabilitiesResult.error) throw capabilitiesResult.error;
 
     const business = businessResult.data as Record<string, unknown>;
-    const publish = (publishResult.data ?? {}) as { canPublish?: boolean; reason?: string; limits?: unknown };
+    const capabilities = (capabilitiesResult.data ?? {}) as Record<string, unknown>;
+    const publish = (capabilities.publish ?? {}) as { canPublish?: boolean; reason?: string; limits?: unknown };
     const firstItem = Array.isArray(promotableItemsResult.data) ? promotableItemsResult.data[0] : null;
     const firstSlowHours = Array.isArray(slowHoursResult.data) ? slowHoursResult.data[0] : null;
 
@@ -400,7 +206,7 @@ serve(async (req) => {
     return json(req, {
       ok: true,
       business,
-      locations: [],
+      locations: locationsResult.data ?? [],
       contact_channels: contactsResult.data ?? [],
       slow_hours: slowHoursResult.data ?? [],
       promotable_items: promotableItemsResult.data ?? [],
@@ -417,10 +223,19 @@ serve(async (req) => {
           }
         : null,
       access_state: {
-        can_edit_profile: true,
-        can_create_offer_draft: true,
-        can_publish_offer: publish.canPublish === true,
-        reason_code: publish.reason ?? "pending_verification",
+        can_edit_profile: capabilities.can_edit_business_information === true,
+        can_use_setup_tools: capabilities.can_use_setup_tools === true,
+        can_use_menu_tools: capabilities.can_use_menu_tools === true,
+        can_extract_initial_menu: capabilities.can_extract_initial_menu === true,
+        can_create_text_draft: capabilities.can_create_text_draft === true,
+        can_create_offer_draft: capabilities.can_create_text_draft === true,
+        can_generate_ai: capabilities.can_generate_ai === true,
+        can_consume_offer_credits: capabilities.can_consume_offer_credits === true,
+        can_publish_offer: capabilities.can_publish_offer === true,
+        can_receive_new_claims: capabilities.can_receive_new_claims === true,
+        can_redeem_existing_claims: capabilities.can_redeem_existing_claims === true,
+        can_manage_billing: capabilities.can_manage_billing === true,
+        reason_code: typeof capabilities.reason_code === "string" ? capabilities.reason_code : publish.reason ?? "pending_verification",
         limits: publish.limits ?? null,
         friendly_status_message: friendlyStatus(String(business.status ?? ""), String(business.access_level ?? "")),
       },

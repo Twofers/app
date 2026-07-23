@@ -5,7 +5,21 @@
  * - ai-compose-offer: single poster with baked-in text.
  * - ai-generate-ad-variants: photographic single ad — no baked-in text; the app UI renders
  *   the headline above the image.
+ *
+ * OpenAI runs only as the fallback image provider (Gemini is primary). When an OpenAI
+ * image request is made, key selection (prepaid -> existing) and the auth fallback are
+ * handled centrally by ./openai-fetch.ts. Models, prompts, payloads, the image-model
+ * ladder, timeouts, and telemetry are unchanged.
  */
+
+import {
+  aiImageAttemptTimeoutMs,
+  aiImageFetchErrorCode,
+  canSpendAiImageDeadline,
+  shouldRetryAiImageAttempt,
+  type AiImageDeadline,
+} from "./ai-image-deadline.ts";
+import { fetchOpenAiWithFallback } from "./openai-fetch.ts";
 
 /**
  * Allowlisted image model ids only — never accept model names from clients.
@@ -51,6 +65,7 @@ export type OpenAiImageAttempt = {
   success: boolean;
   errorCode: string | null;
   errorMessage: string | null;
+  latencyMs: number;
   size: string;
   quality: string | null;
   outputFormat: string | null;
@@ -173,7 +188,7 @@ export function buildPhotoAdImagePrompt(params: {
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
   const framing =
     params.aspectRatio === "4:5"
-      ? "Vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      ? "Vertical 4:5 poster-ready framing that fills the whole frame edge to edge (no borders, letterboxing, or flat color bands), with the product centered and calmer photographic zones top and bottom for native text."
       : "Square 1:1 framing.";
   return [
     visualItems.length > 1
@@ -219,7 +234,16 @@ async function attemptImageGeneration(
   logTag: string,
   /** Poster flow historically used vivid + standard on DALL·E 3 only; ignored for GPT image models. */
   posterStyleDalle3?: boolean,
+  deadline?: AiImageDeadline,
+  timeoutLeg = "openai_image_generation",
 ): Promise<OpenAiImageResult> {
+  const startedAt = Date.now();
+  // Ad images are rendered inside a 4:5 poster (cover-cropped). gpt-image-1 has no
+  // 4:5 option, so request its closest portrait (1024x1536, 2:3) rather than a
+  // square 1024x1024 — a square loses far more when cropped to 4:5 and is the
+  // reason F4-fallback posters came back visibly cropped. DALL·E stays square
+  // (legacy path; not the resolved generation model).
+  const size = usesGptImageGenerationShape(model) ? "1024x1536" : "1024x1024";
   const attemptBase: OpenAiImageAttempt = {
     model,
     endpoint: "images.generations",
@@ -229,16 +253,32 @@ async function attemptImageGeneration(
     success: false,
     errorCode: null,
     errorMessage: null,
-    size: "1024x1024",
+    latencyMs: 0,
+    size,
     quality: null,
     outputFormat: null,
   };
+  const attemptWithLatency = (patch: Partial<OpenAiImageAttempt>): OpenAiImageAttempt => ({
+    ...attemptBase,
+    ...patch,
+    latencyMs: Date.now() - startedAt,
+  });
+  const timeout = aiImageAttemptTimeoutMs(deadline, timeoutLeg, IMAGE_CALL_TIMEOUT_MS);
+  if (!timeout.ok) {
+    return {
+      bytes: null,
+      attempts: [attemptWithLatency({
+        errorCode: timeout.errorCode,
+        errorMessage: "OpenAI image generation skipped because the request deadline was nearly exhausted.",
+      })],
+    };
+  }
   try {
     const payload: Record<string, unknown> = {
       model,
       prompt,
       n: 1,
-      size: "1024x1024",
+      size,
     };
     if (isDalle3(model)) {
       payload.quality = posterStyleDalle3 ? "standard" : "hd";
@@ -254,14 +294,18 @@ async function attemptImageGeneration(
       attemptBase.quality = "high";
       attemptBase.outputFormat = "png";
     }
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/images/generations",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(timeout.timeoutMs),
       },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
+      existingKeyOverride: openAiKey,
+      logTag,
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
@@ -278,7 +322,7 @@ async function attemptImageGeneration(
       return {
         bytes: null,
         attempts: [{
-          ...attemptBase,
+          ...attemptWithLatency({}),
           errorCode,
           errorMessage: `OpenAI image generation failed with ${errorCode}.`,
         }],
@@ -288,7 +332,7 @@ async function attemptImageGeneration(
     return {
       bytes: decoded.bytes,
       attempts: [{
-        ...attemptBase,
+        ...attemptWithLatency({}),
         usage: decoded.usage,
         responseId: decoded.responseId,
         success: decoded.bytes !== null,
@@ -296,14 +340,17 @@ async function attemptImageGeneration(
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch {
-    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, errorCode: "FETCH_ERROR" }));
+  } catch (error) {
+    const errorCode = aiImageFetchErrorCode(error, deadline);
+    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, errorCode }));
     return {
       bytes: null,
       attempts: [{
-        ...attemptBase,
-        errorCode: "FETCH_ERROR",
-        errorMessage: "OpenAI image generation failed before a usable response was returned.",
+        ...attemptWithLatency({}),
+        errorCode,
+        errorMessage: errorCode === "TIMEOUT" || errorCode === "DEADLINE_EXCEEDED"
+          ? "OpenAI image generation timed out before a usable response was returned."
+          : "OpenAI image generation failed before a usable response was returned.",
       }],
     };
   }
@@ -330,10 +377,20 @@ async function requestImageGenerationJson(
   prompt: string,
   logTag: string,
   posterStyleDalle3?: boolean,
+  deadline?: AiImageDeadline,
+  timeoutLeg = "openai_image_generation",
 ): Promise<OpenAiImageResult> {
-  const first = await attemptImageGeneration(openAiKey, model, prompt, logTag, posterStyleDalle3);
+  const first = await attemptImageGeneration(openAiKey, model, prompt, logTag, posterStyleDalle3, deadline, timeoutLeg);
   if (first.bytes) return first;
   if (model === OPENAI_IMAGE_MODEL_FALLBACK) return first; // already tried the safe model
+  const firstAttempt = first.attempts[0];
+  if (
+    !firstAttempt ||
+    !shouldRetryAiImageAttempt(firstAttempt, deadline, 20_000) ||
+    !canSpendAiImageDeadline(deadline, "openai_model_fallback", 35_000)
+  ) {
+    return first;
+  }
 
   console.log(
     JSON.stringify({
@@ -343,7 +400,15 @@ async function requestImageGenerationJson(
       to: OPENAI_IMAGE_MODEL_FALLBACK,
     }),
   );
-  const fallback = await attemptImageGeneration(openAiKey, OPENAI_IMAGE_MODEL_FALLBACK, prompt, logTag, posterStyleDalle3);
+  const fallback = await attemptImageGeneration(
+    openAiKey,
+    OPENAI_IMAGE_MODEL_FALLBACK,
+    prompt,
+    logTag,
+    posterStyleDalle3,
+    deadline,
+    "openai_model_fallback",
+  );
   return { bytes: fallback.bytes, attempts: [...first.attempts, ...fallback.attempts] };
 }
 
@@ -364,6 +429,8 @@ export async function generatePhotoAdImageWithTelemetry(
   openAiKey: string,
   prompt: string,
   logTag = "ai_ads_v2",
+  deadline?: AiImageDeadline,
+  timeoutLeg = "openai_image_generation",
 ): Promise<OpenAiImageResult> {
   return await requestImageGenerationJson(
     openAiKey,
@@ -371,6 +438,8 @@ export async function generatePhotoAdImageWithTelemetry(
     prompt,
     logTag,
     false,
+    deadline,
+    timeoutLeg,
   );
 }
 
@@ -474,7 +543,10 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
   treatment: PhotoTreatment;
   customEditInstruction?: string;
   logTag?: string;
+  deadline?: AiImageDeadline;
+  timeoutLeg?: string;
 }): Promise<OpenAiImageResult> {
+  const startedAt = Date.now();
   const { openAiKey, imageBytes, imageMime, treatment, logTag = "ai_ads_v2_enhance" } = params;
   const attemptBase: OpenAiImageAttempt = {
     model: RESOLVED_IMAGE_EDIT_MODEL,
@@ -485,40 +557,65 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     success: false,
     errorCode: null,
     errorMessage: null,
+    latencyMs: 0,
     size: "1024x1024",
     quality: "high",
     outputFormat: "png",
   };
+  const attemptWithLatency = (patch: Partial<OpenAiImageAttempt>): OpenAiImageAttempt => ({
+    ...attemptBase,
+    ...patch,
+    latencyMs: Date.now() - startedAt,
+  });
   if (!validateEditInput(imageBytes, imageMime)) {
     return {
       bytes: null,
       attempts: [{
-        ...attemptBase,
+        ...attemptWithLatency({}),
         errorCode: "INVALID_INPUT_IMAGE",
         errorMessage: "Image edit input validation failed.",
       }],
     };
   }
+  const timeout = aiImageAttemptTimeoutMs(params.deadline, params.timeoutLeg ?? "openai_image_edit", IMAGE_CALL_TIMEOUT_MS);
+  if (!timeout.ok) {
+    return {
+      bytes: null,
+      attempts: [attemptWithLatency({
+        errorCode: timeout.errorCode,
+        errorMessage: "OpenAI image edit skipped because the request deadline was nearly exhausted.",
+      })],
+    };
+  }
   try {
     const model = RESOLVED_IMAGE_EDIT_MODEL;
-    const form = new FormData();
-    form.append("model", model);
-    form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
-    form.append("size", "1024x1024");
-    form.append("quality", "high");
-    form.append("output_format", "png");
-    form.append("n", "1");
-    if (!isDalle2(model)) {
-      form.append("input_fidelity", "high");
-    }
-    const blob = new Blob([imageBytes as BlobPart], { type: normalizeEditMime(imageMime) || "image/png" });
-    form.append("image", blob, editFilenameForMime(imageMime));
+    // Rebuild the multipart body per attempt so the prepaid -> existing key retry
+    // sends a fresh, unconsumed form (a FormData request body is single-use).
+    const buildEditForm = (): FormData => {
+      const form = new FormData();
+      form.append("model", model);
+      form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
+      form.append("size", "1024x1024");
+      form.append("quality", "high");
+      form.append("output_format", "png");
+      form.append("n", "1");
+      if (!isDalle2(model)) {
+        form.append("input_fidelity", "high");
+      }
+      const blob = new Blob([imageBytes as BlobPart], { type: normalizeEditMime(imageMime) || "image/png" });
+      form.append("image", blob, editFilenameForMime(imageMime));
+      return form;
+    };
 
-    const res = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/images/edits",
+      init: {
+        method: "POST",
+        signal: AbortSignal.timeout(timeout.timeoutMs),
+      },
+      buildBody: buildEditForm,
+      existingKeyOverride: openAiKey,
+      logTag,
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
@@ -535,7 +632,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
       return {
         bytes: null,
         attempts: [{
-          ...attemptBase,
+          ...attemptWithLatency({}),
           errorCode,
           errorMessage: `OpenAI image edit failed with ${errorCode}.`,
         }],
@@ -545,7 +642,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     return {
       bytes: decoded.bytes,
       attempts: [{
-        ...attemptBase,
+        ...attemptWithLatency({}),
         usage: decoded.usage,
         responseId: decoded.responseId,
         success: decoded.bytes !== null,
@@ -553,16 +650,19 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch {
+  } catch (error) {
+    const errorCode = aiImageFetchErrorCode(error, params.deadline);
     console.log(
-      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, errorCode: "FETCH_ERROR" }),
+      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, errorCode }),
     );
     return {
       bytes: null,
       attempts: [{
-        ...attemptBase,
-        errorCode: "FETCH_ERROR",
-        errorMessage: "OpenAI image edit failed before a usable response was returned.",
+        ...attemptWithLatency({}),
+        errorCode,
+        errorMessage: errorCode === "TIMEOUT" || errorCode === "DEADLINE_EXCEEDED"
+          ? "OpenAI image edit timed out before a usable response was returned."
+          : "OpenAI image edit failed before a usable response was returned.",
       }],
     };
   }

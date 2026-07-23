@@ -52,6 +52,7 @@ import {
   translateDeal,
   translateDealCopy,
   getErrorCode,
+  getFunctionErrorBody,
   getErrorWaitSeconds,
   fetchAdGenerationQuota,
 } from "../../lib/functions";
@@ -96,8 +97,10 @@ import {
   aiDealDraftStorageKey,
   buildAiDealRecoveryDraft,
   parseAiDealRecoveryDraft,
+  resolveRecoveredDealSchedule,
   type AiDealRecoveryDraft,
 } from "../../lib/ai-deal-draft-recovery";
+import { buildAiDealReviewDraft } from "../../lib/ai-deal-review-draft";
 import { uploadDealPhoto } from "../../lib/upload-deal-photo";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { validateDealEligibility } from "../../lib/deal-eligibility";
@@ -106,14 +109,23 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract, type OfferDefinitionV1 } from "../../lib/offer-definition";
-import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
+import {
+  buildPosterSpecFromOfferDefinition,
+  checkMerchantPosterHeadline,
+  checkMerchantPosterSubline,
+} from "@/lib/poster/posterCopy";
+import { POSTER_TEXT_LIMITS } from "@/lib/poster/posterPolicy";
 import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
 import type {
   AdCreativeFormat,
+  PosterDraftV1,
   PosterTemplateId,
 } from "@/lib/poster/posterTypes";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
-import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
+import {
+  createAdPresentationHash,
+  type AdPresentationReviewContext,
+} from "@/lib/ad-presentation-hash";
 import { buildVerifiedAdLocalizationApproval } from "@/lib/ad-localization-approval";
 import {
   buildMerchantIdentity,
@@ -185,7 +197,9 @@ import {
   buildPublishMechanicsValidationCopy,
   checkMerchantDealTitleAgainstOffer,
   createPublishIdempotencyKey,
+  isEdgeRuntimeFailureMessage,
   publishOfferVersionedDeal,
+  PUBLISH_SERVICE_UNAVAILABLE_CODE,
   type PublishOfferVersionedDealResult,
 } from "../../lib/offer-version-publish";
 import {
@@ -235,6 +249,12 @@ const SCHEDULE_PRESETS = [
   { key: "daily", days: [1, 2, 3, 4, 5, 6, 7], startMin: 840, endMin: 1020 },
   { key: "weekends", days: [6, 7], startMin: 600, endMin: 840 },
 ] as const;
+
+/** Eligibility fields arrive as numbers or numeric strings; the strong-deal guard wants numbers. */
+function toGuardNumber(value: unknown): number | null {
+  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  return Number.isFinite(n) ? n : null;
+}
 
 function dateFromMinutes(minutes: number): Date {
   const d = new Date();
@@ -761,6 +781,37 @@ function generatedAdForPublishSpec(params: {
   };
 }
 
+function buildLiveAdPresentationReviewContext(params: {
+  creativeFormat: AdCreativeFormat;
+  sourceLocale: SupportedLocale;
+  title: string;
+  promoLine: string;
+  ctaText: string;
+  description: string;
+  poster: PosterDraftV1 | null;
+}): AdPresentationReviewContext {
+  const posterCopy = params.poster
+    ? params.poster.copy_by_language[params.sourceLocale] ?? params.poster.copy
+    : null;
+  return {
+    creativeFormat: params.creativeFormat,
+    sourceLocale: params.sourceLocale,
+    headline: params.title.trim(),
+    supportingCopy: params.promoLine.trim(),
+    ctaLabel: params.ctaText.trim(),
+    details: params.description.trim(),
+    poster: params.poster && posterCopy
+      ? {
+          templateId: params.poster.template_id,
+          headline: posterCopy.headline.trim(),
+          subline: posterCopy.subline?.trim() || null,
+          offerLine1: posterCopy.offer_line_1.trim(),
+          offerLine2: posterCopy.offer_line_2.trim(),
+        }
+      : null,
+  };
+}
+
 function manualDraftGeneratedAdForPublishSpec(params: {
   offerDefinition: OfferDefinitionV1;
   finalStoragePath: string | null;
@@ -960,6 +1011,7 @@ export default function AiDealScreen() {
     businessPreferredLocale,
     businessName,
     businessProfile,
+    loading: businessLoading,
   } = useBusiness();
   const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
   const automaticLocalizationApprovalEnabled = isAiV5AutomaticVerifiedBundleApprovalEnabled();
@@ -1059,6 +1111,11 @@ export default function AiDealScreen() {
   const eligibilityTouchedRef = useRef<Set<keyof DealEligibilityFormState>>(new Set());
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
+  // The text actually rendered on the poster (large headline + small top
+  // subheadline/kicker). Seeded from the generated poster copy and editable
+  // until publish; title/promoLine stay the card-format copy.
+  const [posterHeadlineText, setPosterHeadlineText] = useState("");
+  const [posterSublineText, setPosterSublineText] = useState("");
   const [ctaText, setCtaText] = useState("");
   const [description, setDescription] = useState("");
   const [maxClaims, setMaxClaims] = useState("10");
@@ -1173,6 +1230,16 @@ export default function AiDealScreen() {
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
   const [prefillSourceLocale, setPrefillSourceLocale] = useState<AppLocale | null>(null);
+  // The one source locale the deal publishes with. Preview/approve and publish must
+  // build their presentation from the SAME locale, or the approved presentation hash
+  // can never equal the one publish rebuilds and publishing is blocked outright.
+  // With the localized owner UI on this is exactly `effectiveDraftSourceLocale` (the
+  // appLanguage round-trip is identity for every supported locale); with it off the
+  // deal still publishes in the deal-flow language, so the preview follows publish
+  // rather than the raw UI language.
+  const publishSourceLocale = supportedLocaleOrDefault(
+    localizedOwnerUiEnabled ? dealOutputLang : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang,
+  );
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
@@ -1503,7 +1570,8 @@ export default function AiDealScreen() {
     templateLoaded ||
     editingDealId != null ||
     adAccepted ||
-    (!generatedAd && (hasDraftCopy || manualDraftUnlocked));
+    manualDraftUnlocked ||
+    (!generatedAd && hasDraftCopy);
 
   const scrollToFormY = useCallback((y: number | null, fallback: "none" | "end" = "none", topOffset: number = Spacing.md) => {
     setTimeout(() => {
@@ -1541,10 +1609,7 @@ export default function AiDealScreen() {
   }
 
   function hasFallbackTemplateSource() {
-    // Poster-style deals can always fall back: the deterministic poster/composed
-    // card renders the offer natively with no image (Phase 5), so "fallback
-    // available" no longer requires a saved image in that format.
-    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl || showPosterFormat);
+    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl);
   }
 
   function clearGenerationErrorState() {
@@ -1644,6 +1709,10 @@ export default function AiDealScreen() {
       setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(restoredPath));
     }
     lastSentPhotoTreatmentRef.current = restored.photo_treatment ?? null;
+    if (restored.poster?.copy) {
+      setPosterHeadlineText(restored.poster.copy.headline ?? "");
+      setPosterSublineText(restored.poster.copy.subline ?? "");
+    }
     setAdAccepted(false);
     setManualDraftUnlocked(true);
     setPublishStatus("idle");
@@ -1651,6 +1720,7 @@ export default function AiDealScreen() {
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
     aiDraftBaselineRef.current = null;
     setBanner({
       message: t("createAi.imageRestoredBanner", {
@@ -1671,6 +1741,8 @@ export default function AiDealScreen() {
         price,
         title,
         promoLine,
+        posterHeadlineText,
+        posterSublineText,
         ctaText,
         description,
         dealEligibility: JSON.stringify(eligibilityForm),
@@ -1696,6 +1768,8 @@ export default function AiDealScreen() {
       price,
       title,
       promoLine,
+      posterHeadlineText,
+      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -1743,6 +1817,8 @@ export default function AiDealScreen() {
   }, [
     title,
     promoLine,
+    posterHeadlineText,
+    posterSublineText,
     ctaText,
     description,
     price,
@@ -1862,6 +1938,8 @@ export default function AiDealScreen() {
     setPrice(draft.price);
     setTitle(draft.title);
     setPromoLine(draft.promoLine);
+    setPosterHeadlineText(draft.posterHeadlineText);
+    setPosterSublineText(draft.posterSublineText);
     setCtaText(draft.ctaText);
     setDescription(draft.description);
     setEligibilityForm(draft.eligibilityForm);
@@ -1871,15 +1949,13 @@ export default function AiDealScreen() {
     // F-006: a recovered one-time draft can carry a start time that has since
     // passed; clamp it up to "now" so the schedule the merchant sees is valid,
     // matching the edit-existing-deal path (publish already clamps as a net).
-    // Recurring deals derive their start at publish, so leave them untouched.
-    const recoveredStart = new Date(draft.startTime);
-    const recoveredNow = new Date();
-    setStartTime(
-      draft.validityMode !== "recurring" && recoveredStart.getTime() < recoveredNow.getTime()
-        ? recoveredNow
-        : recoveredStart,
-    );
-    setEndTime(new Date(draft.endTime));
+    // The end is resolved against that clamped start rather than restored raw:
+    // the clamp alone can invert a window that was coherent at save time, and
+    // the draft-level repair has already run by then. Recurring deals derive
+    // their window at publish, so they pass through untouched.
+    const recoveredSchedule = resolveRecoveredDealSchedule(draft);
+    setStartTime(recoveredSchedule.startTime);
+    setEndTime(recoveredSchedule.endTime);
     setDaysOfWeek(draft.daysOfWeek.length ? draft.daysOfWeek : [1, 2, 3, 4, 5]);
     setWindowStart(dateFromMinutes(draft.windowStartMinutes));
     setWindowEnd(dateFromMinutes(draft.windowEndMinutes));
@@ -1895,6 +1971,7 @@ export default function AiDealScreen() {
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
     setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
     clearGenerationErrorState();
     setTemplateLoaded(false);
@@ -1953,6 +2030,8 @@ export default function AiDealScreen() {
       price,
       title,
       promoLine,
+      posterHeadlineText,
+      posterSublineText,
       ctaText,
       description,
       eligibilityForm,
@@ -2002,6 +2081,8 @@ export default function AiDealScreen() {
     price,
     title,
     promoLine,
+    posterHeadlineText,
+    posterSublineText,
     ctaText,
     description,
     eligibilityForm,
@@ -2100,6 +2181,8 @@ export default function AiDealScreen() {
         setTitle(loadedTitle);
         setDescription(loadedDescription);
         setPromoLine("");
+        setPosterHeadlineText("");
+        setPosterSublineText("");
         setCtaText("");
         setPrice(loadedPrice);
         setPhotoUri(null);
@@ -2126,6 +2209,7 @@ export default function AiDealScreen() {
         setImageVersions([]);
         setAdAccepted(false);
         setApprovedComposedPresentationHash(null);
+        setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
         clearGenerationErrorState();
         setTemplateLoaded(false);
@@ -2139,6 +2223,8 @@ export default function AiDealScreen() {
             price: loadedPrice,
             title: loadedTitle,
             promoLine: "",
+            posterHeadlineText: "",
+            posterSublineText: "",
             ctaText: "",
             description: loadedDescription,
             dealEligibility: JSON.stringify(loadedEligibilityForm),
@@ -2186,6 +2272,8 @@ export default function AiDealScreen() {
         setTitle(getDealDisplayTitle({ title: row.title }, row.title));
         setDescription(row.description ?? "");
         setPromoLine("");
+        setPosterHeadlineText("");
+        setPosterSublineText("");
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
         setEligibilityForm(createDefaultDealEligibilityFormState());
@@ -2221,6 +2309,7 @@ export default function AiDealScreen() {
         setImageVersions([]);
         setAdAccepted(false);
         setApprovedComposedPresentationHash(null);
+        setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
         clearGenerationErrorState();
@@ -2395,12 +2484,15 @@ export default function AiDealScreen() {
   function resetGenerationState() {
     setGeneratedAd(null);
     setImageVersions([]);
+    setPosterHeadlineText("");
+    setPosterSublineText("");
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
     aiDraftBaselineRef.current = null;
     lastSentPhotoTreatmentRef.current = null;
     adGenerationStartedAtRef.current = null;
@@ -2556,65 +2648,54 @@ export default function AiDealScreen() {
     }
   }
 
-  function validateInputs(): boolean {
+  /** Returns null when the form can publish, otherwise the specific reason. */
+  function publishValidationFailure(): string | null {
+    // Raises the banner as before and also returns the reason, so the publish
+    // card beside the button can name the actual problem. The banner renders at
+    // the top of the form, several screens above Publish on a filled-in draft,
+    // so an owner who had just pressed Publish only ever saw the generic "fix
+    // the deal details above" and had nothing telling them which detail.
+    const fail = (message: string): string => {
+      setBanner({ message, tone: "error" });
+      return message;
+    };
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
-    if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) {
-      setBanner({ message: t("createAi.errMaxClaims"), tone: "error" });
-      return false;
-    }
-    if (Number.isNaN(cutoffNum) || cutoffNum < 0) {
-      setBanner({ message: t("createAi.errCutoff"), tone: "error" });
-      return false;
-    }
+    if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) return fail(t("createAi.errMaxClaims"));
+    if (Number.isNaN(cutoffNum) || cutoffNum < 0) return fail(t("createAi.errCutoff"));
     if (validityMode === "one-time") {
-      if (endTime <= startTime) {
-        setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
-        return false;
-      }
+      if (endTime <= startTime) return fail(t("createAi.errEndAfterStart"));
       const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
       if (dealDurationExceedsMax(durationMinutes)) {
-        setBanner({
-          message: t("createAi.errMaxDuration", {
+        return fail(
+          t("createAi.errMaxDuration", {
             hours: MAX_DEAL_DURATION_MINUTES / 60,
             defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
           }),
-          tone: "error",
-        });
-        return false;
+        );
       }
       if (cutoffNum >= durationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
-        return false;
+        return fail(t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }));
       }
     } else {
-      if (daysOfWeek.length === 0) {
-        setBanner({ message: t("createAi.errRecurringDay"), tone: "error" });
-        return false;
-      }
+      if (daysOfWeek.length === 0) return fail(t("createAi.errRecurringDay"));
       const windowStartMinutes = minutesFromDate(windowStart);
       const windowEndMinutes = minutesFromDate(windowEnd);
-      if (windowStartMinutes >= windowEndMinutes) {
-        setBanner({ message: t("createAi.errRecurringWindow"), tone: "error" });
-        return false;
-      }
+      if (windowStartMinutes >= windowEndMinutes) return fail(t("createAi.errRecurringWindow"));
       const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
       if (dealDurationExceedsMax(windowDurationMinutes)) {
-        setBanner({
-          message: t("createAi.errMaxDuration", {
+        return fail(
+          t("createAi.errMaxDuration", {
             hours: MAX_DEAL_DURATION_MINUTES / 60,
             defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
           }),
-          tone: "error",
-        });
-        return false;
+        );
       }
       if (cutoffNum >= windowDurationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
-        return false;
+        return fail(t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }));
       }
     }
-    return true;
+    return null;
   }
 
   async function ensureUploadedPhoto() {
@@ -2648,6 +2729,8 @@ export default function AiDealScreen() {
     const draft = adToDealDraft(ad, hintText);
     setTitle(draft.title);
     setPromoLine(draft.promo_line);
+    setPosterHeadlineText(ad.poster?.copy?.headline ?? "");
+    setPosterSublineText(ad.poster?.copy?.subline ?? "");
     setCtaText(draft.cta_text);
     setDescription(draft.offer_details);
     aiDraftBaselineRef.current = {
@@ -2655,6 +2738,43 @@ export default function AiDealScreen() {
       promo_line: draft.promo_line,
       cta_text: draft.cta_text,
       description: draft.offer_details,
+    };
+  }
+
+  function imageFailureTelemetry(err: unknown) {
+    const body = getFunctionErrorBody(err);
+    const imageFailure = body?.image_failure;
+    if (!imageFailure || typeof imageFailure !== "object" || Array.isArray(imageFailure)) return {};
+    const failure = imageFailure as Record<string, unknown>;
+    const attempts = Array.isArray(failure.attempts) ? failure.attempts : [];
+    const attemptCodes = attempts
+      .slice(-6)
+      .map((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+        const attempt = value as Record<string, unknown>;
+        const provider = typeof attempt.provider === "string" ? attempt.provider : "unknown";
+        const endpoint = typeof attempt.endpoint === "string" ? attempt.endpoint : "unknown";
+        const errorCode =
+          typeof attempt.error_code === "string" && attempt.error_code.length > 0
+            ? attempt.error_code
+            : attempt.success === true
+            ? "success"
+            : "unknown";
+        return `${provider}:${endpoint}:${errorCode}`;
+      })
+      .filter(Boolean)
+      .join("|")
+      .slice(0, 220);
+    const qa = failure.qa && typeof failure.qa === "object" && !Array.isArray(failure.qa)
+      ? (failure.qa as Record<string, unknown>)
+      : {};
+    return {
+      image_failure_source: typeof failure.source === "string" ? failure.source : null,
+      image_failure_provider: typeof failure.provider === "string" ? failure.provider : null,
+      image_failure_model: typeof failure.model === "string" ? failure.model : null,
+      image_failure_attempts: attemptCodes || null,
+      image_failure_qa_decision: typeof qa.decision === "string" ? qa.decision : null,
+      image_failure_qa_unavailable: typeof qa.unavailable === "boolean" ? qa.unavailable : null,
     };
   }
 
@@ -2717,9 +2837,28 @@ export default function AiDealScreen() {
       }
       return t("createAi.errPublishInvalidAdSpec");
     }
+    if (code === "INVALID_DEAL_WINDOW") return t("createAi.errEndTimePassed");
     if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
+    // The publish endpoint never ran (Edge Runtime bundle/boot/worker failure).
+    // Checked by code first, then by message for the publish steps that do not
+    // route through publishOfferVersionedDeal.
+    if (code === PUBLISH_SERVICE_UNAVAILABLE_CODE || isEdgeRuntimeFailureMessage(raw)) {
+      return t("createAi.errPublishServiceUnavailable", {
+        defaultValue: "Publishing is temporarily unavailable. Wait a moment and try again.",
+      });
+    }
     if (code === "LOCATION_BILLING_SUSPENDED") return t("createAi.errPublishBillingSuspended");
     if (code === "BUSINESS_LOCATION_VERIFICATION_REQUIRED") return t("createAi.errPublishVerificationRequired");
+    // A profile-review hold is NOT an access/billing problem — a sensitive field
+    // (address or phone) was changed and is pending review. Point the owner at the
+    // fields instead of the generic "access does not allow publishing" copy. Other
+    // capability reasons keep today's message (fall through).
+    if (code === "BUSINESS_PUBLISH_CAPABILITY_REQUIRED" && publishCapabilityReasonCode(err) === "profile_review_required") {
+      return t("createAi.errPublishProfileReviewRequired", {
+        defaultValue:
+          "Your business address or phone number was changed and needs a quick review before you can publish. Open Business Setup, confirm those details, and save.",
+      });
+    }
 
     if (
       lower.includes("must be at least 40") ||
@@ -2734,6 +2873,7 @@ export default function AiDealScreen() {
       lower.includes("policy") ||
       lower.includes("permission denied") ||
       lower.includes("access denied") ||
+      lower.includes("unauthorized") ||
       lower.includes("do not own") ||
       lower.includes("not found for owner")
     ) {
@@ -2759,6 +2899,13 @@ export default function AiDealScreen() {
     if (lower.includes("billing") || lower.includes("suspended")) return t("createAi.errPublishBillingSuspended");
     if (lower.includes("verified") || lower.includes("verification")) return t("createAi.errPublishVerificationRequired");
 
+    // Nothing above recognized this error. Only echo the server's own wording
+    // when it carried a structured error_code, which means our edge function
+    // body produced it deliberately. Anything else is platform/runtime detail
+    // (bundle-load failures, stack traces, driver errors) that a merchant can
+    // neither read nor act on, so it falls back to the generic banner.
+    if (!code) return null;
+
     const cleaned = raw
       .replace(/^error:\s*/i, "")
       .replace(/\s+/g, " ")
@@ -2781,6 +2928,13 @@ export default function AiDealScreen() {
           (reason): reason is string => typeof reason === "string" && reason.trim().length > 0,
         )
       : [];
+  }
+
+  // Singular capability reason (e.g. "profile_review_required") threaded from the
+  // publish edge function's response body via lib/offer-version-publish.ts.
+  function publishCapabilityReasonCode(err: unknown): string | undefined {
+    const reason = (err as { reasonCode?: unknown } | null)?.reasonCode;
+    return typeof reason === "string" && reason.trim().length > 0 ? reason : undefined;
   }
 
   function isPosterPublishSpecError(err: unknown): boolean {
@@ -2822,7 +2976,7 @@ export default function AiDealScreen() {
 
   async function generateAd() {
     if (cooldownActive) return;
-    if (!validateInputs()) return;
+    if (publishValidationFailure()) return;
     if (!businessId) {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
@@ -2911,9 +3065,6 @@ export default function AiDealScreen() {
         const friendly = t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
         });
-        // Not hardcoded to "no fallback" anymore: with a photo saved — or in
-        // poster format, where the deterministic poster needs no image (Phase 5)
-        // — the recovery card must offer the "Use fallback template" action.
         setGenerationFailureState(
           friendly,
           hasFallbackTemplateSource() ? "ai_failed_fallback_available" : "ai_failed_no_fallback",
@@ -2937,6 +3088,10 @@ export default function AiDealScreen() {
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
         regeneration_attempt: 0,
+        image_provider: normalizedAd.image_selection?.provider ?? null,
+        image_model: normalizedAd.image_selection?.model ?? null,
+        image_source_mode: normalizedAd.image_selection?.sourceMode ?? null,
+        image_photo_source: normalizedAd.photo_source ?? null,
       });
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;
@@ -2962,10 +3117,13 @@ export default function AiDealScreen() {
         }),
       );
       setBanner({ message: friendly, tone: "error" });
+      const imageFailure = imageFailureTelemetry(err);
       trackEvent(AiAdsEvents.GENERATION_FAILED, {
         screen: "create_ai",
         regeneration_attempt: 0,
+        error_code: code ?? null,
         message_snippet: raw.slice(0, 80),
+        ...imageFailure,
       });
     } finally {
       // Only flip the spinner off if our request is still the active one. If the user
@@ -3140,6 +3298,7 @@ export default function AiDealScreen() {
       setComposedStyleIndex(0);
       setComposedEditIntent(null);
       setApprovedComposedPresentationHash(null);
+      setApprovedLocalizationApprovalHash(null);
       setAdAccepted(false);
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;
@@ -3176,8 +3335,10 @@ export default function AiDealScreen() {
   }
 
   function invalidateAcceptedAdDraft() {
-    if (!adAccepted && !approvedComposedPresentationHash && !approvedLocalizationApprovalHash) return;
-    setAdAccepted(false);
+    // The merchant is editing the already-accepted final draft while looking at the
+    // same live preview that publish uses. Keep the editor mounted, but invalidate
+    // both approval bindings so publish cannot use an approval for stale copy.
+    setManualDraftUnlocked(true);
     setApprovedComposedPresentationHash(null);
     setApprovedLocalizationApprovalHash(null);
     setPublishStatus("idle");
@@ -3186,12 +3347,7 @@ export default function AiDealScreen() {
 
   function acceptAd() {
     if (!generatedAd) return;
-    // Poster-style ads may be accepted with no image (Phase 5): the deterministic
-    // poster/composed card renders the offer natively, the composite QA treats
-    // deterministic_fallback as having a visual, and publish stores a null poster.
-    // Standard-card ads still require one. acceptAd is also the exact-preview
-    // approval path, so blocking here would dead-end the no-image poster flow.
-    if (!imageVersionStoragePath(generatedAd) && !showPosterFormat) {
+    if (!imageVersionStoragePath(generatedAd)) {
       setBanner({
         message: t("createAi.errImageGenerationNoImage", {
           defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
@@ -3254,7 +3410,6 @@ export default function AiDealScreen() {
         return;
       }
     }
-    applyAdToDraft(generatedAd);
     setApprovedComposedPresentationHash(
       shouldBindComposedPresentationApproval ? selectedComposedPresentationHash : null,
     );
@@ -3264,6 +3419,7 @@ export default function AiDealScreen() {
         : null,
     );
     setAdAccepted(true);
+    setManualDraftUnlocked(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
     if (composedAdPreviewEnabled) {
@@ -3303,11 +3459,7 @@ export default function AiDealScreen() {
     const generatedPosterPath = imageVersionStoragePath(generatedAd);
     const fallbackPosterPath = generatedPosterPath ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
-    // Poster-style deals render the offer natively in the consumer feed
-    // (ComposedAdCard, deterministic_fallback) — no baked-in image — so a poster
-    // deal may ship with no photo when image generation is down. Standard cards
-    // still need one.
-    if (!hasImageSource && !showPosterFormat) {
+    if (!hasImageSource) {
       setBanner({
         message: t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
@@ -3352,6 +3504,7 @@ export default function AiDealScreen() {
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
     rememberImageVersion(fallbackAd, "fallback");
     applyAdToDraft(fallbackAd);
     setAdAccepted(!composedExactPresentationApprovalEnabled);
@@ -3411,9 +3564,10 @@ export default function AiDealScreen() {
       setBanner({ message, tone: "error" });
       return;
     }
-    if (!validateInputs()) {
+    const validationFailure = publishValidationFailure();
+    if (validationFailure) {
       setPublishStatus("error");
-      setPublishStatusMessage(t("createAi.publishValidationBody"));
+      setPublishStatusMessage(validationFailure);
       return;
     }
     if (!businessId) {
@@ -3470,6 +3624,15 @@ export default function AiDealScreen() {
     const strongGuard = validateStrongDealOnly({
       title: title.trim(),
       description: composedDescription,
+      // R13: this is the publish path where a genuine 40%-off deal was blocked because the
+      // AI wrote "for 40% less" instead of "40% off". The merchant's own structured offer
+      // has been validated by this point — consult it rather than the model's word choice.
+      structuredOffer: {
+        dealType: eligibilityInput.dealType ?? null,
+        discountPercent: toGuardNumber(eligibilityInput.discountPercent),
+        freeItemQuantity: toGuardNumber(eligibilityInput.freeItemQuantity),
+        freeItemDiscountPercent: toGuardNumber(eligibilityInput.freeItemDiscountPercent),
+      },
     });
     if (!strongGuard.ok) {
       const key = `dealQuality.strongGuard.${strongGuard.reason}`;
@@ -3479,7 +3642,7 @@ export default function AiDealScreen() {
 
     const isRecurring = validityMode === "recurring";
     if (!isRecurring && endTime.getTime() <= Date.now()) {
-      showPublishError(t("createAi.errEndAfterStart"));
+      showPublishError(t("createAi.errEndTimePassed"));
       return;
     }
     if (!editingDealId && !offerDefinition) {
@@ -3588,10 +3751,22 @@ export default function AiDealScreen() {
           ? new Date()
           : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
+      // The "end has already passed" guard above ran before the photo upload and
+      // poster signing awaits, while this clamp runs after them. A window that
+      // passed that guard can be overtaken by its own publish, so re-check the
+      // end against the start actually being written. Neither the edge function
+      // nor the deals table rejects an inverted window, so stopping here is what
+      // keeps a dead-on-arrival deal from being published.
+      if (!isRecurring && end.getTime() <= start.getTime()) {
+        showPublishError(t("createAi.errEndTimePassed"));
+        return;
+      }
       const sourceLocaleForPublish = localizedOwnerUiEnabled
         ? dealOutputLang
         : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
-      const supportedSourceLocaleForPublish = supportedLocaleOrDefault(sourceLocaleForPublish);
+      // Same expression as `publishSourceLocale`; read the hoisted value so the
+      // approve-time preview and this publish path can never drift apart.
+      const supportedSourceLocaleForPublish = publishSourceLocale;
 
       const aiPosterPath = imageVersionStoragePath(generatedAd);
       const finalStoragePath = resolveCurrentDealPosterStoragePath({
@@ -3640,7 +3815,7 @@ export default function AiDealScreen() {
         return;
       }
       const baseAdForPublishSpec = generatedAdForPublishSpec({
-        ad: generatedAd,
+        ad: reviewGeneratedAd,
         finalStoragePath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         usePhotoAsFinal,
@@ -3697,6 +3872,49 @@ export default function AiDealScreen() {
           }
         : null;
       const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
+      if (shouldPublishPosterSpec) {
+        // Merchant-typed poster text must publish exactly as previewed: block on
+        // fit/policy problems instead of letting the sanitizer silently rewrite it.
+        const posterHeadlineCheck = checkMerchantPosterHeadline(posterHeadlineText);
+        const posterSublineCheck = checkMerchantPosterSubline(posterSublineText);
+        if (!posterHeadlineCheck.ok || !posterSublineCheck.ok) {
+          const overLimit =
+            posterHeadlineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT") ||
+            posterSublineCheck.reasonCodes.includes("POSTER_TEXT_OVER_LIMIT");
+          showPublishError(
+            overLimit
+              ? t("createAi.errPosterTextTooLong", {
+                  defaultValue:
+                    "The poster headline or subheadline is too long to fit the poster. Shorten it, then publish again.",
+                  headlineMax: POSTER_TEXT_LIMITS.headline,
+                  sublineMax: POSTER_TEXT_LIMITS.subline,
+                })
+              : t("createAi.errPosterTextNotAllowed", {
+                  defaultValue:
+                    "The poster headline or subheadline uses wording that can't go on the poster (like claim/scan instructions or restating the offer mechanics). Reword it, then publish again.",
+                }),
+            "warning",
+          );
+          return;
+        }
+        const posterFactsCheck = checkMerchantDealTitleAgainstOffer(
+          {
+            title: posterHeadlineText.trim() || null,
+            supportingLine: posterSublineText.trim() || null,
+          },
+          offerContract,
+        );
+        if (!posterFactsCheck.ok) {
+          showPublishError(
+            t("createAi.errHeadlineContradictsOffer", {
+              defaultValue:
+                "Your headline or subheadline doesn't match this deal's locked offer facts. Update the wording so it fits the offer, then publish again.",
+            }),
+            "warning",
+          );
+          return;
+        }
+      }
       const posterForPublishSpec =
         shouldPublishPosterSpec && offerDefinition
           ? buildPosterSpecFromOfferDefinition({
@@ -3705,7 +3923,9 @@ export default function AiDealScreen() {
               templateId: selectedPosterTemplateId,
               sourceAssetPath: finalStoragePath,
               renderedAssetPath: null,
-              headline: title,
+              headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
+              subline: posterSublineText.trim() || null,
+              sourceLocale: supportedSourceLocaleForPublish,
               businessCategory: businessContextForAi.category,
               compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
             })
@@ -3723,7 +3943,10 @@ export default function AiDealScreen() {
         offerDefinition,
         sourceLocale: localizationBundleForPublish?.sourceLocale ?? supportedSourceLocaleForPublish,
         previewLocale: supportedSourceLocaleForPublish,
-        localizedPreviewEnabled: Boolean(localizationBundleForPublish),
+        // Must match the preview's gate (`ownerLanguagePreviewAvailable`). Gating on
+        // the bundle alone localized the publish copy while the approved preview was
+        // built unlocalized, so the two hashes could never match.
+        localizedPreviewEnabled: localizedOwnerUiEnabled && Boolean(localizationBundleForPublish),
         fallbackOfferLine: adForPublishSpecWithPoster?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
         fallbackTermsLine: adForPublishSpecWithPoster?.locked_terms_line || offerContract?.canonicalShortTerms || description,
         fallbackCtaLabel: ctaText,
@@ -3759,7 +3982,10 @@ export default function AiDealScreen() {
         ],
       };
       const publishLocalePresentationResolution =
-        localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()
+        // Same gate as the preview's `localePresentationOverridesEnabled`. Without the
+        // owner-UI conjunct the publish spec carried locale overrides the approved
+        // preview never had, and `createAdPresentationHash` folds those into the hash.
+        localizedOwnerUiEnabled && localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()
           ? resolveLocalePresentationOverrides({
               basePresentation: publishBaseComposedPresentation,
               localizationBundle: localizationBundleForPublish,
@@ -3768,11 +3994,36 @@ export default function AiDealScreen() {
           : null;
       const publishComposedPresentation =
         publishLocalePresentationResolution?.presentation ?? publishBaseComposedPresentation;
+      const publishPresentationReviewContext = buildLiveAdPresentationReviewContext({
+        creativeFormat: shouldPublishPosterSpec ? "poster_v1" : "standard_card",
+        sourceLocale: supportedSourceLocaleForPublish,
+        title,
+        promoLine,
+        ctaText,
+        description,
+        poster: posterForPublishSpec,
+      });
       const publishComposedPresentationHash = createAdPresentationHash({
         presentation: publishComposedPresentation,
         offerFacts: publishOwnerLanguagePreview.offerFacts,
         copy: publishOwnerLanguagePreview.copy,
+        reviewContext: publishPresentationReviewContext,
       });
+      if (
+        !editingDealId &&
+        reviewGeneratedAd &&
+        (composedExactPresentationApprovalEnabled ||
+          (automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable)) &&
+        approvedComposedPresentationHash !== publishComposedPresentationHash
+      ) {
+        showPublishError(
+          t("createAi.errPresentationApprovalRequired", {
+            defaultValue: "Approve the exact ad preview again before publishing.",
+          }),
+          "warning",
+        );
+        return;
+      }
       const publishComposedCompositeQa = runDeterministicAdCompositeQa({
         offerFacts: publishOwnerLanguagePreview.offerFacts,
         merchant: composedMerchant,
@@ -3789,6 +4040,8 @@ export default function AiDealScreen() {
         composedScreenshotQaEnabled,
       );
       const publishLocaleScreenshotQaRequired =
+        // Same gate as the preview's `localeScreenshotQaEnabled`.
+        localizedOwnerUiEnabled &&
         localizationBundleForPublish &&
         isAiV5LocaleScreenshotQaEnabled() &&
         (publishLocalePresentationResolution?.screenshotQaTriggerLocales.length ?? 0) > 0;
@@ -3872,12 +4125,7 @@ export default function AiDealScreen() {
             screenshotQa: composedScreenshotQaSnapshotForPublish,
           }
         : null;
-      // Poster-style deals render the offer natively for consumers (ComposedAdCard
-      // deterministic_fallback), and the deal row stores a null poster fine, so a
-      // poster deal may publish with no image. Standard cards still require one.
-      // Fail-safe: if the server rejects the imageless poster spec, the poster-spec
-      // fallback below retries as a Standard card.
-      if (!posterForPublish && !showPosterFormat) {
+      if (!posterForPublish) {
         showPublishError(t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
         }));
@@ -4067,6 +4315,7 @@ export default function AiDealScreen() {
         setImageVersions([]);
         setAdAccepted(false);
         setApprovedComposedPresentationHash(null);
+        setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
@@ -4078,6 +4327,8 @@ export default function AiDealScreen() {
             price,
             title,
             promoLine,
+            posterHeadlineText,
+            posterSublineText,
             ctaText,
             description,
             dealEligibility: JSON.stringify(eligibilityForm),
@@ -4171,6 +4422,17 @@ export default function AiDealScreen() {
     }
   }
 
+  // `isLoggedIn`/`businessId` both start falsy while useBusiness() resolves, so
+  // without this gate a signed-in merchant sees "Please log in to create deals."
+  // for the length of the business fetch every time this screen mounts.
+  if (businessLoading) {
+    return (
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -4207,7 +4469,10 @@ export default function AiDealScreen() {
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
-  const fallbackPosterPreviewSpec =
+  // Built with the same inputs the publish path uses so the poster preview
+  // always shows exactly what will publish — including live headline/subheadline
+  // edits. The stale generated spec is only a fallback when no offer exists.
+  const livePosterPreviewSpec =
     showPosterFormat && offerDefinition
       ? buildPosterSpecFromOfferDefinition({
           definition: offerDefinition,
@@ -4215,12 +4480,26 @@ export default function AiDealScreen() {
           templateId: selectedPosterTemplateId,
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath ?? null,
           renderedAssetPath: null,
-          headline: title.trim() || generatedAd?.headline || null,
+          headline: posterHeadlineText.trim() || title.trim() || generatedAd?.headline || null,
+          subline: posterSublineText.trim() || null,
+          sourceLocale: publishSourceLocale,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
         })
       : null;
-  const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;
+  const effectivePosterSpec = showPosterFormat ? livePosterPreviewSpec ?? generatedAd?.poster ?? null : null;
+  const liveReviewDraft = buildAiDealReviewDraft({
+    generatedAd,
+    title,
+    promoLine,
+    ctaText,
+    poster: effectivePosterSpec,
+    sourceLocale: publishSourceLocale,
+    offerDefinition,
+  });
+  const reviewGeneratedAd = liveReviewDraft.ad;
+  const posterHeadlineEditCheck = checkMerchantPosterHeadline(posterHeadlineText);
+  const posterSublineEditCheck = checkMerchantPosterSubline(posterSublineText);
   const showPosterPreview = Boolean(effectivePosterSpec);
   const posterPreviewImageUri = adImageUri ?? selectedPhotoUri;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
@@ -4238,21 +4517,21 @@ export default function AiDealScreen() {
   const ownerLanguagePreviewAvailable = Boolean(
     localizedOwnerUiEnabled &&
       offerDefinition &&
-      generatedAd?.localization_bundle,
+      reviewGeneratedAd?.localization_bundle,
   );
   const localePresentationOverridesEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
   const localeScreenshotQaEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocaleScreenshotQaEnabled();
-  const activeMerchantPreviewLocale = effectiveDraftSourceLocale;
+  const activeMerchantPreviewLocale = publishSourceLocale;
   const ownerLanguagePreview = buildOwnerLanguagePreview({
-    generatedAd,
+    generatedAd: reviewGeneratedAd,
     offerDefinition,
-    sourceLocale: generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale,
+    sourceLocale: reviewGeneratedAd?.localization_bundle?.sourceLocale ?? publishSourceLocale,
     previewLocale: activeMerchantPreviewLocale,
     localizedPreviewEnabled: ownerLanguagePreviewAvailable,
-    fallbackOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
-    fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
+    fallbackOfferLine: reviewGeneratedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
+    fallbackTermsLine: reviewGeneratedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
     fallbackCtaLabel: ctaText,
   });
   const composedOfferFacts = ownerLanguagePreview.offerFacts;
@@ -4299,7 +4578,7 @@ export default function AiDealScreen() {
         merchantIdentity: composedMerchant,
         imageQa: composedImageQa,
         imageSafeZones: composedImageSafeZones,
-        creativeStrategy: generatedAd?.item_research?.description ?? generatedAd?.headline ?? hintText,
+        creativeStrategy: reviewGeneratedAd?.item_research?.description ?? reviewGeneratedAd?.headline ?? hintText,
         liveStateCapabilities: {
           supportsQuantityRemaining: true,
           supportsTimeRemaining: true,
@@ -4317,19 +4596,29 @@ export default function AiDealScreen() {
     composedPresentationOptions[Math.min(composedStyleIndex, Math.max(0, composedPresentationOptions.length - 1))] ??
     composedBasePresentation;
   const selectedLocalePresentationResolution =
-    localePresentationOverridesEnabled && generatedAd?.localization_bundle
+    localePresentationOverridesEnabled && reviewGeneratedAd?.localization_bundle
       ? resolveLocalePresentationOverrides({
           basePresentation: selectedBaseComposedPresentation,
-          localizationBundle: generatedAd.localization_bundle,
+          localizationBundle: reviewGeneratedAd.localization_bundle,
           merchantIdentity: composedMerchant,
         })
       : null;
   const selectedComposedPresentation =
     selectedLocalePresentationResolution?.presentation ?? selectedBaseComposedPresentation;
+  const selectedPresentationReviewContext = buildLiveAdPresentationReviewContext({
+    creativeFormat: showPosterFormat ? "poster_v1" : "standard_card",
+    sourceLocale: publishSourceLocale,
+    title,
+    promoLine,
+    ctaText,
+    description,
+    poster: effectivePosterSpec,
+  });
   const selectedComposedPresentationHash = createAdPresentationHash({
     presentation: selectedComposedPresentation,
     offerFacts: composedOfferFacts,
     copy: composedCopy,
+    reviewContext: selectedPresentationReviewContext,
   });
   const selectedComposedCompositeQa = runDeterministicAdCompositeQa({
     offerFacts: composedOfferFacts,
@@ -4351,16 +4640,23 @@ export default function AiDealScreen() {
   const selectedLocaleScreenshotQaRequired = selectedLocaleScreenshotQaTriggerLocales.length > 0;
   const selectedComposedScreenshotQaRequired =
     selectedComposedScreenshotQaSnapshot.required || selectedLocaleScreenshotQaRequired;
-  const selectedLocalizationApproval =
+  // Distinguish a provider-supplied bundle from the deterministic bundle the
+  // live review snapshot creates when generation returned none. Both follow
+  // the same approval path; this flag preserves the provenance distinction.
+  const generatedAdLocalizationBundleAvailable =
     ownerLanguagePreviewAvailable &&
     offerDefinition &&
-    generatedAd?.localization_bundle
+    generatedAd?.localization_bundle;
+  const selectedReviewLocalizationBundle = reviewGeneratedAd?.localization_bundle ?? null;
+  const selectedLocalizationApproval =
+    (generatedAdLocalizationBundleAvailable ||
+      (ownerLanguagePreviewAvailable && offerDefinition && selectedReviewLocalizationBundle))
       ? buildVerifiedAdLocalizationApproval({
-          bundle: generatedAd.localization_bundle,
+          bundle: selectedReviewLocalizationBundle,
           offerDefinition,
           presentationHash: selectedComposedPresentationHash,
           selectedImageAssetId: selectedComposedPresentation.imageAssetId,
-          providerStatus: generatedAd.localization_status ?? null,
+          providerStatus: reviewGeneratedAd?.localization_status ?? null,
           localePresentationOverrides: selectedComposedPresentation.localeOverrides ?? null,
           screenshotQaRequired: selectedComposedScreenshotQaRequired,
         })
@@ -4373,6 +4669,20 @@ export default function AiDealScreen() {
     selectedComposedCompositeQa.decision !== "block" &&
     selectedComposedCompositeQa.decision !== "unavailable" &&
     !selectedComposedScreenshotQaRequired;
+  const selectedLocalizationApprovalMatches =
+    selectedLocalizationApproval?.approved === true &&
+    approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash;
+  const liveReviewApprovalRequired =
+    composedExactPresentationApprovalEnabled ||
+    Boolean(automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable);
+  const acceptedDraftRequiresReapproval = Boolean(
+    generatedAd &&
+      adAccepted &&
+      ((liveReviewApprovalRequired && !composedPresentationApprovalMatches) ||
+        (automaticLocalizationApprovalEnabled &&
+          ownerLanguagePreviewAvailable &&
+          !selectedLocalizationApprovalMatches)),
+  );
   const canTryComposedStyle = composedInstantStyleAlternatesEnabled && composedPresentationOptions.length > 1;
   // Single-variant flow (Dan 2026-07-08): the multi-variant copy picker is gone,
   // so the "Ask AI for changes" refine panel is always visible under the preview
@@ -4429,6 +4739,9 @@ export default function AiDealScreen() {
           liveScheduleLabel={posterLiveScheduleLabel}
           eyebrowLabel={posterEyebrowLabel}
           contentLocale={supportedLocaleOrDefault(i18n.language)}
+          // S4: the merchant must preview the same name the shopper will see, or preview
+          // and publish disagree — a §7 hard fail.
+          merchantName={businessName}
         />
       </View>
     );
@@ -5475,6 +5788,7 @@ export default function AiDealScreen() {
                               presentation: nextPresentation,
                               offerFacts: composedOfferFacts,
                               copy: composedCopy,
+                              reviewContext: selectedPresentationReviewContext,
                             });
                             trackEvent(AiAdsEvents.COMPOSED_STYLE_CHANGED, {
                               screen: "create_ai",
@@ -5489,6 +5803,7 @@ export default function AiDealScreen() {
                             setComposedEditIntent(null);
                             setAdAccepted(false);
                             setApprovedComposedPresentationHash(null);
+                            setApprovedLocalizationApprovalHash(null);
                             setPublishStatus("idle");
                             setPublishStatusMessage(null);
                             aiDraftBaselineRef.current = null;
@@ -5771,6 +6086,28 @@ export default function AiDealScreen() {
                   </View>
                 )}
 
+                {showPosterFormat ? (
+                  <>
+                    <Text style={{ marginTop: 16, color: theme.text }}>
+                      {t("createAi.editPosterHeadline")} ({posterHeadlineText.trim().length}/{POSTER_TEXT_LIMITS.headline})
+                    </Text>
+                    <TextInput value={posterHeadlineText} maxLength={POSTER_TEXT_LIMITS.headline} onChangeText={(value) => { setPosterHeadlineText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.posterHeadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                    {!posterHeadlineEditCheck.ok ? (
+                      <Text style={{ marginTop: 4, fontSize: 13, color: theme.danger }}>
+                        {t("createAi.posterHeadlineNotAllowed")}
+                      </Text>
+                    ) : null}
+                    <Text style={{ marginTop: 12, color: theme.text }}>
+                      {t("createAi.editPosterSubheadline")} ({posterSublineText.trim().length}/{POSTER_TEXT_LIMITS.subline})
+                    </Text>
+                    <TextInput value={posterSublineText} maxLength={POSTER_TEXT_LIMITS.subline} onChangeText={(value) => { setPosterSublineText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.posterSubheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                    {!posterSublineEditCheck.ok ? (
+                      <Text style={{ marginTop: 4, fontSize: 13, color: theme.danger }}>
+                        {t("createAi.posterSubheadlineNotAllowed")}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editSubheadline")}</Text>
@@ -5779,6 +6116,28 @@ export default function AiDealScreen() {
                 <TextInput value={ctaText} onChangeText={(value) => { setCtaText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editDetails")}</Text>
                 <TextInput value={description} onChangeText={(value) => { setDescription(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
+
+                {acceptedDraftRequiresReapproval ? (
+                  <View
+                    style={{
+                      marginTop: 16,
+                      padding: 14,
+                      borderRadius: 12,
+                      backgroundColor: theme.surfaceMuted,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.approveChangesTitle")}
+                    </Text>
+                    <Text style={{ color: theme.mutedText, lineHeight: 19 }}>
+                      {t("createAi.approveChangesBody")}
+                    </Text>
+                    <PrimaryButton title={t("createAi.approveChangesButton")} onPress={acceptAd} />
+                  </View>
+                ) : null}
 
                 <View style={{ marginTop: 16, gap: 8 }}>
                   {displayedPublishStatus !== "ready" ? (

@@ -111,6 +111,39 @@ function isWeakTryOurPhrase(text: string): boolean {
   return /^try\s+(?:our|the)\b/i.test(text.trim());
 }
 
+/**
+ * A headline opening with a coordinating conjunction is a fragment — the head noun
+ * was dropped. Observed live: the item "Haircut and fade" produced the headline
+ * "AND FADE SAVINGS", which is not a length clamp (24 chars fits the 28-char poster
+ * limit) but a broken sentence on a paid ad.
+ *
+ * Articles and prepositions ("the ...", "a ...", "with ...") are legitimate headline
+ * openers and are deliberately NOT matched — only conjunctions, which never validly
+ * begin a headline.
+ *
+ * Expects text normalized to lowercase words; callers that hold raw copy should pass
+ * it through their own normalizer first (the regex is case-insensitive regardless).
+ */
+export function startsWithDanglingConnector(text: string): boolean {
+  return /^\s*(?:and|or|but|plus)\b/i.test(text ?? "");
+}
+
+/**
+ * "<item> savings|deal|special|offer" is the model's default template. It carries no
+ * hook and merely restates the mechanic the offer block already shows. One generation
+ * batch produced it three times in a row ("Loaded Nachos Savings", "Acai Bowl
+ * Savings", "Birria Tacos Savings").
+ *
+ * Deliberately pattern-level: the repo forbids fixing copy quality by special-casing
+ * individual item names. Requires at least one word before the value noun so a
+ * headline that merely *contains* "deal" is not caught.
+ */
+export function isFormulaicValueHeadline(text: string): boolean {
+  const collapsed = (text ?? "").trim().replace(/\s+/g, " ");
+  if (!collapsed) return false;
+  return /^[\p{L}\p{N}%+][\p{L}\p{N}%+\s'’-]{0,44}\s(?:savings|deals?|specials?|offers?)$/iu.test(collapsed);
+}
+
 function hasAwkwardArticleQuantifier(text: string): boolean {
   return /\b(?:a|an|the|our|your)\s+any\b/i.test(text);
 }

@@ -4,82 +4,67 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title data-i18n="thanks.title">Business request received | Twofer</title>
-    <meta name="description" content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code." />
+    <meta name="description" content="Your Twofer business access request has been received and is ready for review." data-i18n-content="thanks.meta" />
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
-    <meta name="theme-color" content="#f6f7f4" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Twofer" />
-    <meta property="og:title" content="Business request received | Twofer" />
-    <meta property="og:description" content="Twofer helps local businesses create limited-time local offers, publish nearby, and redeem in store by QR code." />
-    <meta property="og:url" content="https://www.twoferapp.com/business/thanks" />
-    <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260706-signup-refresh" />
+    <meta name="theme-color" content="#09271f" />
+    <!-- Approved merchants land here at the exact moment step 2 tells them to
+         install the app, so iPhone Safari should offer the App Store directly. -->
+    <meta name="apple-itunes-app" content="app-id=6765769303" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
   </head>
-  <body>
-    <header class="site-header">
-      <nav class="nav" aria-label="Main navigation">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
+  <body class="trial-page business-confirmation-page">
+    <header class="site-header business-access-header">
+      <nav class="nav business-access-nav" data-i18n-aria-label="a11y.mainNavigation">
+        <a class="brand" href="/" data-i18n-aria-label="a11y.twoferHome"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
         <div class="nav-links" id="site-nav-links">
           <a href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
           <a href="/support" data-i18n="nav.support">Support</a>
         </div>
         <div class="nav-actions">
-          <div class="language-set" aria-label="Language options">
+          <div class="language-set" data-i18n-aria-label="a11y.languageOptions">
             <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
             <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
             <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
           </div>
-          <button
-            class="nav-menu-button"
-            type="button"
-            aria-controls="site-nav-links"
-            aria-expanded="false"
-            data-site-menu-toggle
-            data-i18n="nav.menu"
-          >
-            Menu
-          </button>
+          <button class="nav-menu-button" type="button" aria-controls="site-nav-links" aria-expanded="false" data-site-menu-toggle data-i18n="nav.menu">Menu</button>
         </div>
       </nav>
     </header>
-    <main class="content-page">
-      <p class="eyebrow" data-i18n="common.businessAccess">Business access</p>
-      <h1 data-i18n="thanks.heading">Request received</h1>
-      <p data-i18n="thanks.body">
-        Thanks — your Twofer business account request is in. Here is what happens next.
-      </p>
-      <div class="confirm-steps">
-        <article>
-          <span class="signup-step-num" aria-hidden="true">1</span>
-          <h3 data-i18n="thanks.step1Title">We review your request</h3>
-          <p data-i18n="thanks.step1Body">Most requests are reviewed within 1-2 business days.</p>
-        </article>
-        <article>
-          <span class="signup-step-num" aria-hidden="true">2</span>
-          <h3 data-i18n="thanks.step2Title">Get the Twofer app</h3>
-          <p data-i18n="thanks.step2Body">Download Twofer for iPhone or Android while you wait, if you have not already.</p>
-        </article>
-        <article>
-          <span class="signup-step-num" aria-hidden="true">3</span>
-          <h3 data-i18n="thanks.step3Title">Sign in with the same email</h3>
-          <p data-i18n="thanks.step3Body">Use the email from your request when you sign in, so your submitted details connect to your business account.</p>
-        </article>
-      </div>
-      <p class="confirm-note" data-i18n-html="thanks.note">
-        Need to change something, or have a question? Email <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>.
-      </p>
-      <div class="inline-cta">
-        <a class="button" href="/" data-i18n="common.backHome">Back to Twofer</a>
+
+    <main class="business-confirmation-main">
+      <section class="business-confirmation-card">
+        <div class="confirmation-check" aria-hidden="true">✓</div>
+        <p class="access-kicker" data-i18n="thanks.kicker">Business access</p>
+        <h1 data-i18n="thanks.heading">Request received</h1>
+        <p class="confirmation-lede" data-i18n="thanks.body">Thanks — your request is in. We will review it, then email you the next step.</p>
+        <div class="confirmation-status" data-i18n="thanks.status">No payment information was collected.</div>
+      </section>
+
+      <section class="confirmation-journey" data-i18n-aria-label="a11y.businessAccessJourney">
+        <p class="eyebrow" data-i18n="thanks.journeyEyebrow">Here is what happens next</p>
+        <ol>
+          <li><span aria-hidden="true">1</span><div><h2 data-i18n="thanks.step1Title">We review your request</h2><p data-i18n="thanks.step1Body">Most requests are reviewed within 1-2 business days.</p></div></li>
+          <li><span aria-hidden="true">2</span><div><h2 data-i18n="thanks.step2Title">Get the Twofer app</h2><p data-i18n="thanks.step2Body">Download Twofer for iPhone or Android while you wait, if you have not already.</p>
+            <div class="store-badge-row">
+              <a class="store-badge-link" href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios" data-store-badge>Get Twofer for iPhone</a>
+              <a class="store-badge-link" href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android" data-store-badge>Get Twofer for Android</a>
+            </div>
+          </div></li>
+          <li><span aria-hidden="true">3</span><div><h2 data-i18n="thanks.step3Title">Sign in with the same email</h2><p data-i18n="thanks.step3Body">Use the email from your request when you sign in, so your submitted details connect to your business account.</p></div></li>
+        </ol>
+      </section>
+
+      <p class="confirmation-note" data-i18n-html="thanks.note">Need to change something, or have a question? Email <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>.</p>
+      <div class="inline-cta confirmation-actions">
+        <a class="button button-coral" href="/" data-i18n="common.backHome">Back to Twofer</a>
         <a class="button button-secondary" href="/support" data-i18n="trial.contactSupport">Contact support</a>
       </div>
     </main>
-    <script src="/localization.js?v=20260706-signup-refresh"></script>
+    <script src="/localization.js?v=20260722-l2-feed"></script>
+    <script src="/store-links.js?v=20260722-es-polish"></script>
   </body>
 </html>

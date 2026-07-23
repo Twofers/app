@@ -82,13 +82,13 @@ function fallbackConversion(prospect: Record<string, unknown>, application: Reco
   ].filter(([, value]) => !String(value ?? "").trim()).map(([label]) => String(label));
   const window = slowWindow(prospect.category ?? application?.business_type);
   return {
-    recommended_trial_type: missing.length > 2 ? "limited trial after missing info is collected" : "limited trial",
+    recommended_trial_type: missing.length > 2 ? "setup approval after missing info is collected" : "setup approval",
     setup_checklist: [
       "Confirm owner or manager authority",
       "Confirm public business facts",
       "Confirm first slow-hour window",
       "Confirm staff can recognize the redemption flow",
-      "Create trial only after admin review",
+      "Create setup approval only after admin review",
     ],
     missing_information: missing,
     suggested_first_three_offer_ideas: [
@@ -97,9 +97,9 @@ function fallbackConversion(prospect: Record<string, unknown>, application: Reco
       "Paired offer for a slower daypart",
     ],
     suggested_first_slow_hour_window: window,
-    suggested_owner_onboarding_email: "Your Twofer trial is ready for review. Please verify your business facts and first offer preferences before anything goes live.",
+    suggested_owner_onboarding_email: "Your Twofer setup is ready for review. Please verify your business facts and first offer preferences before anything goes live.",
     suggested_staff_instruction_card: "Check the customer's active Twofer wallet pass or QR fallback, then mark the redemption complete using the business tools.",
-    risk_notes: ["AI recommends setup only. Admin must explicitly create the trial. No Stripe action or live offer is created here."],
+    risk_notes: ["AI recommends setup only. Admin must explicitly approve access. No Stripe action, trial, or live offer is created here."],
     confidence: missing.length ? 0.55 : 0.7,
     sources: [],
     warnings: ["No trial, Stripe customer, subscription, or live offer was created."],

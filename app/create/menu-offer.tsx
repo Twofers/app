@@ -22,6 +22,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
@@ -30,12 +31,14 @@ import {
   saveLastMenuOfferPairingType,
 } from "@/lib/menu-offer-persist";
 import {
+  buildOfferAdHintText,
   buildOfferHintText,
   buildStructuredOffer,
   resolveMenuOfferLocationFlow,
   structuredOfferToEligibilityFormState,
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
 import { formatMenuPriceLabel } from "@/lib/display-format";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -49,6 +52,7 @@ type DbMenuItem = {
   name: string;
   category: string | null;
   price_text: string | null;
+  description?: string | null;
   size_options?: string[] | null;
   archived_at?: string | null;
 };
@@ -91,9 +95,18 @@ export default function MenuOfferScreen() {
   const theme = Colors[colorScheme];
   const {
     businessId,
+    businessProfile,
+    isLoggedIn,
+    userId,
     loading: bizLoading,
     subscriptionTier,
   } = useBusiness();
+  const { access, loading: accessLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    businessStatus: businessProfile?.status ?? null,
+    subscriptionTier,
+    isLoggedIn,
+  });
   const { visibleLocations, loading: locLoading, error: locErr } = useBusinessLocations(
     businessId,
     subscriptionTier,
@@ -123,6 +136,7 @@ export default function MenuOfferScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
   );
+  const [savingDraft, setSavingDraft] = useState(false);
   const pairingPersistReady = useRef(false);
   const locationFlow = useMemo(
     () => resolveMenuOfferLocationFlow(visibleLocations.map((loc) => loc.id)),
@@ -147,7 +161,7 @@ export default function MenuOfferScreen() {
     void (async () => {
       const { data, error } = await supabase
         .from("business_menu_items")
-        .select("id,name,category,price_text,size_options,archived_at")
+        .select("id,name,category,price_text,description,size_options,archived_at")
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -163,7 +177,21 @@ export default function MenuOfferScreen() {
         return;
       }
       const rows = (data ?? []) as DbMenuItem[];
-      setItems(rows.filter((r) => !r.archived_at));
+      // Legacy rows may still be stored as "Name ( long description )" — split
+      // here so offer item names (and the deal title built from them) stay
+      // short, with the blurb carried as the description instead.
+      setItems(
+        rows
+          .filter((r) => !r.archived_at)
+          .map((r) => {
+            const split = splitMenuItemDescription(r.name);
+            return {
+              ...r,
+              name: split.name,
+              description: r.description?.trim() || split.description,
+            };
+          }),
+      );
     })();
     return () => {
       cancelled = true;
@@ -211,7 +239,10 @@ export default function MenuOfferScreen() {
       setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
-    const hint = buildOfferHintText(structuredOffer);
+    // Enriched hint carries each item's menu description as flavor for the AI
+    // copywriter; the authoritative offer facts still come from the eligibility
+    // prefill below, so item names stay clean.
+    const hint = buildOfferAdHintText(structuredOffer);
     const prefillDealEligibility = JSON.stringify(structuredOfferToEligibilityFormState(structuredOffer));
     const locPrimary = dealLocationIds[0] ?? "";
     const extras = dealLocationIds.slice(1).join(",");
@@ -227,6 +258,55 @@ export default function MenuOfferScreen() {
       },
     } as Href);
   }, [structuredOffer, dealLocationIds, clearWizard, router, t]);
+
+  const saveTextDraft = useCallback(async () => {
+    if (!structuredOffer || !businessId || !userId || savingDraft) return;
+    setSavingDraft(true);
+    setBanner(null);
+    try {
+      const payload = {
+        structured_offer: structuredOffer,
+        offer_hint: buildOfferHintText(structuredOffer),
+        location_ids: dealLocationIds,
+        saved_at: new Date().toISOString(),
+      };
+      const { data: existing, error: readError } = await supabase
+        .from("business_deal_drafts")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("source", "menu_offer")
+        .eq("status", "draft")
+        .maybeSingle();
+      if (readError) throw readError;
+      const write = existing?.id
+        ? supabase
+            .from("business_deal_drafts")
+            .update({ payload, updated_at: new Date().toISOString() })
+            .eq("id", existing.id)
+        : supabase.from("business_deal_drafts").insert({
+            business_id: businessId,
+            owner_user_id: userId,
+            draft_type: "text_only",
+            source: "menu_offer",
+            payload,
+            status: "draft",
+          });
+      const { error: writeError } = await write;
+      if (writeError) throw writeError;
+      clearWizard();
+      setBanner({ message: t("menuOffer.textDraftSaved"), tone: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setBanner({
+        message: message
+          ? translateKnownApiMessage(message, t)
+          : t("menuOffer.textDraftSaveFailed"),
+        tone: "error",
+      });
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [businessId, clearWizard, dealLocationIds, savingDraft, structuredOffer, t, userId]);
 
   const onLocationNext = useCallback(() => {
     if (!primaryLocationId) {
@@ -267,8 +347,10 @@ export default function MenuOfferScreen() {
     }
     setBanner(null);
     const offer = buildStructuredOffer({
-      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize },
-      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize } : null,
+      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize, description: mainItem.description },
+      paired: pairedItem
+        ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize, description: pairedItem.description }
+        : null,
       pairing_type: pairingType,
       discount_percent: pairingType === "percent_off" ? discountPercent : undefined,
       fixed_price_amount:
@@ -297,7 +379,7 @@ export default function MenuOfferScreen() {
     t,
   ]);
 
-  if (bizLoading || locLoading) {
+  if (bizLoading || locLoading || accessLoading) {
     return (
       <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator color={theme.primary} />
@@ -500,6 +582,11 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
+                {item.description ? (
+                  <Text style={[mutedTextStyle, { marginTop: 4, fontSize: 13 }]} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 {item.price_text ? (
                   <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}
@@ -558,6 +645,11 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={cardTitleTextStyle}>{item.name}</Text>
+                {item.description ? (
+                  <Text style={[mutedTextStyle, { marginTop: 4, fontSize: 13 }]} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 {item.price_text ? (
                   <Text style={[mutedTextStyle, { marginTop: 4 }]}>{formatMenuPriceLabel(item.price_text)}</Text>
                 ) : null}
@@ -664,8 +756,9 @@ export default function MenuOfferScreen() {
             </Text>
             <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
             <PrimaryButton
-              title={t("menuOffer.generateStrongVariants")}
-              onPress={goToAdCreation}
+              title={t(access.canGenerateAi ? "menuOffer.generateStrongVariants" : "menuOffer.saveTextDraft")}
+              onPress={access.canGenerateAi ? goToAdCreation : saveTextDraft}
+              disabled={savingDraft}
               style={{ minHeight: 64 }}
             />
           </View>

@@ -6,7 +6,8 @@
     <title>Prospect Detail | Twofer Admin</title>
     <meta name="robots" content="noindex,nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="stylesheet" href="/styles.css?v=20260705-admin-health" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
   </head>
   <body
     class="admin-shell"
@@ -30,7 +31,7 @@
           <a href="/admin">Overview</a>
           <a href="/admin/prospects" aria-current="page">Prospects</a>
           <a href="/admin/sales-ai">Sales AI</a>
-          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/trial-requests">Business Access</a>
           <a href="/admin/businesses">Businesses</a>
           <a href="/admin/offers">Offers</a>
           <a href="/admin/billing/events">Billing</a>
@@ -62,7 +63,7 @@
 
       <section class="admin-grid three">
         <article class="admin-card"><span>Linked business</span><strong data-prospect-linked>Not linked</strong></article>
-        <article class="admin-card"><span>Billing/trial status</span><strong data-prospect-billing>No billing record</strong></article>
+        <article class="admin-card"><span>Billing/activation status</span><strong data-prospect-billing>No billing record</strong></article>
         <article class="admin-card"><span>Public state</span><strong>Never show as a partner until claimed</strong></article>
       </section>
 
@@ -110,7 +111,7 @@
                 <option value="demo_scheduled">Demo scheduled</option>
                 <option value="claim_link_sent">Claim link sent</option>
                 <option value="claimed">Claimed</option>
-                <option value="trial_created">Trial created</option>
+                <option value="trial_created">Approval created</option>
                 <option value="active">Active</option>
                 <option value="not_interested">Not interested</option>
                 <option value="duplicate">Duplicate</option>
@@ -191,9 +192,9 @@
         </article>
 
         <article class="admin-panel">
-          <h2>Create Trial</h2>
+          <h2>Create Setup Approval</h2>
           <div class="admin-inline-actions">
-            <button type="button" class="button button-small button-secondary" data-trial-conversion-assistant-button>Trial conversion assistant</button>
+            <button type="button" class="button button-small button-secondary" data-trial-conversion-assistant-button>Setup approval assistant</button>
           </div>
           <pre class="admin-note" data-trial-conversion-output></pre>
           <form class="admin-form" data-trial-from-prospect-form novalidate>
@@ -210,17 +211,17 @@
               <input name="phone" autocomplete="tel" maxlength="40" />
             </label>
             <label>
-              Trial type
+              Approval type
               <select name="decision">
-                <option value="approve_limited">90-day limited trial</option>
-                <option value="approve_full">90-day full trial</option>
+                <option value="approve_limited">Setup approval - basic verification</option>
+                <option value="approve_full">Setup approval - manual verification</option>
               </select>
             </label>
             <label class="full">
               Reason
               <input name="reason" autocomplete="off" maxlength="500" />
             </label>
-            <button type="submit" class="button button-small">Create Trial Application</button>
+            <button type="submit" class="button button-small">Create Setup Approval</button>
             <p class="status full" data-trial-status role="status" aria-live="polite"></p>
           </form>
         </article>

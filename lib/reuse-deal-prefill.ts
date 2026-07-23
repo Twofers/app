@@ -7,6 +7,7 @@ import { getDealDisplayTitle } from "./deal-display-copy";
 import {
   createDefaultOneTimeDealSchedule,
   createOneTimeDealScheduleFromStart,
+  DEFAULT_DEAL_DURATION_MINUTES,
   MAX_DEAL_DURATION_MINUTES,
 } from "./deal-schedule-defaults";
 
@@ -108,12 +109,56 @@ function inferReusableEligibility(title: string, description: string, price: str
   return null;
 }
 
+const EXPLICIT_DEAL_TYPES = new Set([
+  "BUY_ONE_GET_ONE_FREE",
+  "BUY_ONE_GET_SOMETHING_FREE",
+  "PERCENT_OFF_SINGLE_ITEM",
+]);
+
+// dealEligibilityFormFromDealRow falls back to PERCENT_OFF_SINGLE_ITEM when a row
+// carries no usable deal_type, so the form alone cannot tell "the row says percent
+// off" from "the row said nothing". Read the column to know which it was.
+function hasExplicitStoredDealType(deal: ReusableDeal): boolean {
+  const raw = typeof deal.deal_type === "string" ? deal.deal_type.trim().toUpperCase() : "";
+  return EXPLICIT_DEAL_TYPES.has(raw);
+}
+
+function fillBlanksFrom(
+  stored: DealEligibilityFormState,
+  inferred: DealEligibilityFormState,
+): DealEligibilityFormState {
+  return {
+    dealType: stored.dealType,
+    discountPercent: stored.discountPercent.trim() || inferred.discountPercent,
+    itemDescription: stored.itemDescription.trim() || inferred.itemDescription,
+    itemRetailValue: stored.itemRetailValue.trim() || inferred.itemRetailValue,
+    requiredItemDescription: stored.requiredItemDescription.trim() || inferred.requiredItemDescription,
+    requiredItemRetailValue: stored.requiredItemRetailValue.trim() || inferred.requiredItemRetailValue,
+    freeItemDescription: stored.freeItemDescription.trim() || inferred.freeItemDescription,
+    freeItemRetailValue: stored.freeItemRetailValue.trim() || inferred.freeItemRetailValue,
+  };
+}
+
 function buildEligibilityParam(deal: ReusableDeal, title: string, description: string, price: string): string {
   const fromStoredColumns = dealEligibilityFormFromDealRow(deal as Record<string, unknown>);
-  const form = hasCompleteEligibility(fromStoredColumns)
-    ? fromStoredColumns
-    : inferReusableEligibility(title, description, price);
-  return form ? JSON.stringify(form) : "";
+  if (hasCompleteEligibility(fromStoredColumns)) return JSON.stringify(fromStoredColumns);
+
+  const inferred = inferReusableEligibility(title, description, price);
+
+  // The row's own deal_type is authoritative and must not be dropped just because
+  // other columns are blank. hasCompleteEligibility demands the item retail values,
+  // and inference needs a price — but the create form labels all three "(optional)",
+  // so an ordinary BOGO fails the completeness check and then infers to null when no
+  // price was entered. With no param emitted the create screen fell back to its own
+  // default, PERCENT_OFF_SINGLE_ITEM with an empty item, and the owner was shown the
+  // WRONG offer rule sitting on "Not eligible yet" — observed reusing a BOGO deal on
+  // an S10 on 2026-07-22. Keep the stored type and let inference fill the gaps.
+  if (hasExplicitStoredDealType(deal)) {
+    const usableInference = inferred && inferred.dealType === fromStoredColumns.dealType ? inferred : null;
+    return JSON.stringify(usableInference ? fillBlanksFrom(fromStoredColumns, usableInference) : fromStoredColumns);
+  }
+
+  return inferred ? JSON.stringify(inferred) : "";
 }
 
 function splitStoredDescription(description: string): { promoLine: string; details: string } {
@@ -133,6 +178,44 @@ function originalOneTimeDurationMinutes(deal: ReusableDeal): number | null {
   const durationMinutes = Math.round((endMs - startMs) / (60 * 1000));
   if (durationMinutes <= 0 || durationMinutes > MAX_DEAL_DURATION_MINUTES) return null;
   return durationMinutes;
+}
+
+function reusableCutoffMinutes(deal: ReusableDeal): number | null {
+  if (deal.claim_cutoff_buffer_minutes == null) return null;
+  const minutes = Number(deal.claim_cutoff_buffer_minutes);
+  if (!Number.isFinite(minutes)) return null;
+  return Math.max(0, Math.floor(minutes));
+}
+
+function recurringWindowDurationMinutes(deal: ReusableDeal): number | null {
+  if (deal.window_start_minutes == null || deal.window_end_minutes == null) return null;
+  const duration = Number(deal.window_end_minutes) - Number(deal.window_start_minutes);
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
+// The create screen rejects a claim cutoff that is not shorter than the deal's
+// own duration, so a reused pair has to satisfy that before it is handed over.
+// A deal ended early records the moment it was stopped as its end time, so the
+// duration derived from the row can be far shorter than the merchant intended,
+// and shorter than the cutoff they chose. Observed 2026-07-22: duplicating a
+// deal that ran 9:43–9:45 produced a 2-minute window still carrying a 15-minute
+// cutoff — a draft that could never publish, reported only as a generic "fix the
+// deal details" message with nothing naming the schedule. The truncated duration
+// is the artifact and the cutoff is a deliberate setting, so grow the window to
+// fit the cutoff rather than reproduce an unpublishable pair.
+function reusableOneTimeDurationMinutes(deal: ReusableDeal, cutoffMinutes: number | null): number {
+  const recorded = originalOneTimeDurationMinutes(deal) ?? DEFAULT_DEAL_DURATION_MINUTES;
+  if (cutoffMinutes == null) return recorded;
+  return Math.min(MAX_DEAL_DURATION_MINUTES, Math.max(recorded, cutoffMinutes + 1));
+}
+
+// Last resort for the cases growing the window cannot cover: a cutoff at or past
+// MAX_DEAL_DURATION_MINUTES, or a recurring window whose length is fixed by the
+// merchant's own start/end minutes.
+function cutoffFittingDuration(cutoffMinutes: number | null, durationMinutes: number | null): number | null {
+  if (cutoffMinutes == null) return null;
+  if (durationMinutes == null) return cutoffMinutes;
+  return Math.min(cutoffMinutes, Math.max(0, durationMinutes - 1));
 }
 
 function applyRecurringScheduleParams(params: Record<string, string>, deal: ReusableDeal) {
@@ -206,22 +289,29 @@ export function buildReuseDealPrefillParams(
     params.prefillPosterUrl = posterUrl;
   }
 
+  const cutoffMinutes = reusableCutoffMinutes(deal);
+  let scheduleDurationMinutes: number | null = null;
+
   if (options.resetSchedule && deal.is_recurring) {
     applyRecurringScheduleParams(params, deal);
+    scheduleDurationMinutes = recurringWindowDurationMinutes(deal);
   } else if (options.resetSchedule) {
     const freshSchedule = createDefaultOneTimeDealSchedule(options.now);
-    const durationMinutes = originalOneTimeDurationMinutes(deal);
-    const schedule = durationMinutes
-      ? createOneTimeDealScheduleFromStart(freshSchedule.startTime, durationMinutes)
-      : freshSchedule;
+    const durationMinutes = reusableOneTimeDurationMinutes(deal, cutoffMinutes);
+    const schedule = createOneTimeDealScheduleFromStart(freshSchedule.startTime, durationMinutes);
     params.prefillIsRecurring = "0";
     params.prefillStartTime = schedule.startTime.toISOString();
     params.prefillEndTime = schedule.endTime.toISOString();
+    scheduleDurationMinutes = durationMinutes;
   } else {
     applyRecurringScheduleParams(params, deal);
+    scheduleDurationMinutes = deal.is_recurring
+      ? recurringWindowDurationMinutes(deal)
+      : originalOneTimeDurationMinutes(deal);
   }
   if (deal.max_claims != null) params.prefillMaxClaims = String(deal.max_claims);
-  if (deal.claim_cutoff_buffer_minutes != null) params.prefillCutoffMins = String(deal.claim_cutoff_buffer_minutes);
+  const prefillCutoff = cutoffFittingDuration(cutoffMinutes, scheduleDurationMinutes);
+  if (prefillCutoff != null) params.prefillCutoffMins = String(prefillCutoff);
 
   return params;
 }

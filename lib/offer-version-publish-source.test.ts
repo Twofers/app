@@ -28,6 +28,22 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).not.toMatch(/insertDealsWithCompatibility/);
   });
 
+  it("never echoes an unrecognized publish error to the merchant", () => {
+    const detail = fullCreateSource.indexOf("function publishErrorDetail");
+    expect(detail).toBeGreaterThan(-1);
+    const body = fullCreateSource.slice(detail, fullCreateSource.indexOf("function publishReasonCodes"));
+
+    // A merchant once saw "Couldn't publish this deal. Could not load bundle"
+    // because the tail of publishErrorDetail echoed any unmatched message. The
+    // raw passthrough must stay behind a structured error_code check, and the
+    // check must come before the text is cleaned and returned.
+    expect(body).toMatch(/if \(!code\) return null;/);
+    expect(body.indexOf("if (!code) return null;")).toBeLessThan(body.indexOf("const cleaned = raw"));
+    expect(body).toMatch(/PUBLISH_SERVICE_UNAVAILABLE_CODE/);
+    expect(body).toMatch(/isEdgeRuntimeFailureMessage\(raw\)/);
+    expect(body).toMatch(/errPublishServiceUnavailable/);
+  });
+
   it("keeps quick create as a redirect into the unified AI builder", () => {
     expect(quickCreateSource).toMatch(/pathname: "\/create\/ai"/);
     expect(quickCreateSource).toMatch(/fromCreateHub = "1"/);

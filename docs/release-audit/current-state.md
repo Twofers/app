@@ -4,11 +4,17 @@ This document reflects the repository after the launch-hardening pass. Routes an
 
 ## Current build / runtime flags
 
-- App version: `1.0.0`.
-- Local Android `versionCode`: `31` in `app.json`; production EAS builds use remote app versioning / auto-increment, so the store build number may differ.
+> Versions, counts, and flag values are **generated** — see
+> `docs/release-audit/generated-state.md` (`npm run release:state`; CI drift
+> gate `npm run gate:release-state`). Audit F-012 found hand-maintained values
+> here that had drifted (versionCode "31" vs the real 49; the pilot billing
+> bypass described as still on after it was flipped off). Do not restate
+> generated facts in this file.
+
+- Production EAS builds use remote app versioning / auto-increment, so the store build number may differ from `app.json`.
 - Production package and bundle id: `com.unvmex2.twoforone`.
 - Share Deal: enabled in production/apk/preview EAS profiles with `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`, read through `lib/runtime-env.ts`.
-- Billing: `PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true`; billing UI exists, while pilot publish enforcement is bypassed.
+- Billing: see generated state for `PAID_BILLING_ENABLED` / `PILOT_DISABLE_BILLING_GATE`; as of 2026-07-12 billing is enabled AND enforced (the pilot bypass is off).
 - AI Deal Studio dev variant: separate app name/package (`Twofer Dev`, `com.unvmex2.twoforone.dev`) behind `TWOFER_APP_VARIANT=ai-studio-dev` / `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`, with publishing disabled by `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`.
 - Localization: English, U.S. Spanish, and Korean code paths exist; Juan signed off Spanish and June signed off Korean on 2026-07-03. Production deployment, hosted flags, migrations, and store submissions remain hard-gated.
 
@@ -52,8 +58,8 @@ This document reflects the repository after the launch-hardening pass. Routes an
 2. **Logged-in customer** (`ConsumerOnboardingGate`): If `consumer_profiles` incomplete (**ZIP + (`birthdate` valid OR legacy `age_range`)**), redirect to `consumer-profile-setup`.
 3. If local prefs `onboardingComplete` is false, redirect to `onboarding` (location permission or ZIP fallback, radius, notifications).
 4. **Claim**: `claimDeal` sets **`expires_at` to a concrete instance end** (one-time → `deal.end_time`; recurring → today’s window end in deal TZ, capped by campaign `end_time`). **Redeem** (visual, QR, UI) is allowed until **`expires_at` + `grace_period_minutes` (default 10)**. Optional telemetry on insert; returns **`claim_id`** where supported.
-5. **Wallet** (`(tabs)/wallet`): Loads `deal_claims` incl. `grace_period_minutes`. Calls **`finalize-stale-redeems`** on refresh/focus. Sections **Active** vs **Ended**. Active = not redeemed and **before redeem-by deadline** (`expires_at` + grace). Live clock via `useSecondTick`.
-   - **Primary path:** **Use Deal** → slide-to-confirm (`WalletUseDealSlideModal`) → `beginVisualRedeem` → full-screen **live pass** (`WalletVisualPassModal`, ~15s window, motion) → `completeVisualRedeem` → claim moves to Ended as redeemed.
+5. **Wallet** (`(tabs)/wallet`): Loads `deal_claims` incl. `grace_period_minutes`. Sections **Active** vs **Ended**. Active = not redeemed and **before redeem-by deadline** (`expires_at` + grace). Live clock via `useSecondTick`.
+   - **Primary path:** **Use Deal** → slide-to-confirm (`WalletUseDealSlideModal`) → full-screen **30s QR/code pass** (`WalletVisualPassModal`, motion). If the window times out, the customer can show it again. The claim moves to Ended as redeemed only after staff scans the QR or enters the code.
    - **Fallback:** **QR & verify** opens `WalletRedeemModal` (staff-oriented display; QR encodes claim **token**).
 6. **Favorites / map**: `favorites` and browse UX.
 
@@ -84,8 +90,8 @@ This document reflects the repository after the launch-hardening pass. Routes an
 
 - **Active**: not `redeemed_at`, redeem-by not passed, not terminal status. Countdown / copy use **redeem-by** (`expires_at` + grace).
 - **Ended**: redeemed, expired (past redeem-by or `expired` status), or **canceled**.
-- **Visual redeem**: `active → redeeming → redeemed`; **~30s** after `redeem_started_at`, server auto-finalizes **`redeemed`** (visual). `cancel-visual-redeem` returns **400** (no rollback to active).
-- **QR redeem**: `redeem-token` (after ownership check, runs same stale-finalize). Invalid after redeem or past redeem-by.
+- **Use Deal pass**: customer-facing 30s QR/code display only. Timer expiry hides the visible QR but does **not** redeem the claim; the customer can show the QR again.
+- **QR / code redeem**: `redeem-token` after ownership check. Invalid after redeem or past redeem-by. This is the path that marks the claim redeemed.
 
 ## Notification flow
 
@@ -122,10 +128,10 @@ This document reflects the repository after the launch-hardening pass. Routes an
 |----------|----------------|
 | `claim-deal` | `lib/functions.ts` |
 | `redeem-token` | `lib/functions.ts` (business redeem) |
-| `begin-visual-redeem` | `lib/functions.ts` |
-| `complete-visual-redeem` | `lib/functions.ts` / `wallet-visual-pass.tsx` |
+| `begin-visual-redeem` | `lib/functions.ts` legacy wrapper; not used by current wallet Use Deal pass |
+| `complete-visual-redeem` | `lib/functions.ts` legacy wrapper; not used by current wallet Use Deal pass |
 | `cancel-visual-redeem` | (deprecated; returns 400 — not used from pass UI) |
-| `finalize-stale-redeems` | `lib/functions.ts` / wallet load |
+| `finalize-stale-redeems` | `lib/functions.ts` legacy wrapper; not used by current wallet load |
 | `delete-user-account` | `lib/functions.ts` / account screen |
 | `ingest-analytics-event` | `lib/app-analytics.ts` |
 | `ai-generate-deal-copy`, `ai-generate-ad-variants`, `ai-compose-offer` | create / compose flows |

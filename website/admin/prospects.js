@@ -503,7 +503,7 @@
         event.preventDefault();
         const data = new FormData(trialForm);
         try {
-          setOutput("[data-trial-status]", "Creating trial application...");
+          setOutput("[data-trial-status]", "Creating setup approval...");
           const payload = await post(endpoints.trial, {
             prospect_id: prospectId,
             contact_name: data.get("contact_name"),
@@ -512,10 +512,10 @@
             decision: data.get("decision"),
             reason: data.get("reason"),
           });
-          setOutput("[data-trial-status]", `Trial application ${payload.application?.id || ""} created.`);
+          setOutput("[data-trial-status]", `Setup approval ${payload.application?.id || ""} created.`);
           await loadDetail();
         } catch (error) {
-          setOutput("[data-trial-status]", error instanceof Error ? error.message : "Could not create trial application.", "danger");
+          setOutput("[data-trial-status]", error instanceof Error ? error.message : "Could not create setup approval.", "danger");
         }
       });
       }

@@ -26,7 +26,9 @@ export type ProspectPermission =
   | "report.generate"
   | "prompt.manage"
   | "moderation.read"
-  | "moderation.write";
+  | "moderation.write"
+  | "qr.read"
+  | "qr.manage";
 
 export type AdminContext = {
   user: { id: string; email?: string | null };
@@ -124,6 +126,12 @@ export function roleCan(role: AdminRole, permission: ProspectPermission): boolea
   }
   if (permission === "moderation.write") {
     return ["admin", "moderator", "developer"].includes(role);
+  }
+  if (permission === "qr.read") {
+    return ["admin", "support", "sales", "finance", "moderator", "developer", "read_only"].includes(role);
+  }
+  if (permission === "qr.manage") {
+    return ["admin", "sales", "developer"].includes(role);
   }
   return ["admin", "sales", "moderator", "developer"].includes(role);
 }
@@ -247,10 +255,4 @@ export function randomUrlToken(bytes = 32): string {
   let binary = "";
   for (const byte of buffer) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-export function firstForwardedIp(header: string | null): string | null {
-  if (!header) return null;
-  const first = header.split(",")[0]?.trim();
-  return first || null;
 }

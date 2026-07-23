@@ -8,6 +8,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
@@ -119,11 +120,10 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
-    // 🔍 Verify user owns a business.
-    // Filtering on owner_id needs a SELECT grant on that column, which
-    // anon/authenticated do not have (20260705120000), so this runs on the
-    // service-role client. Still scoped to the authenticated user.id, so the
-    // gate is unchanged.
+    // 🔍 Verify user owns a business. Read as service role: `authenticated` lost
+    // SELECT on businesses.owner_id in the 2026-07-19 column-grant repair, so
+    // filtering by owner_id under the merchant JWT now returns 42501 and bricks
+    // every redemption here. Scoping to this user's owner_id keeps it safe.
     const { data: businesses, error: businessError } = await supabaseAdmin
       .from("businesses")
       .select("id")
@@ -289,14 +289,19 @@ serve(async (req) => {
     let claim: Record<string, unknown> | null = null;
     let claimError: { code?: string; message?: string } | null = null;
 
+    // Claim lookup runs as service role: the embedded businesses(owner_id) column
+    // is not granted to `authenticated` after the 2026-07-19 column-grant repair,
+    // so the merchant JWT gets 42501 for this whole join. Reading as service role
+    // is safe — ownership is enforced explicitly below (deal.business.owner_id ===
+    // user.id AND businessIds.includes(deal.business_id)).
     if (shortCodeNorm.length >= 4) {
-      let r = await supabase
+      let r = await supabaseAdmin
         .from("deal_claims")
         .select(selectClaimNew)
         .eq("short_code", shortCodeNorm)
         .maybeSingle();
       if (isMissingNewRedeemColumn(r.error)) {
-        r = await supabase
+        r = await supabaseAdmin
           .from("deal_claims")
           .select(selectClaimLegacy)
           .eq("short_code", shortCodeNorm)
@@ -306,27 +311,27 @@ serve(async (req) => {
       claimError = r.error;
     } else if (tokenNorm.length > 0) {
       const tokenHash = await sha256Base64Url(tokenNorm);
-      let r = await supabase
+      let r = await supabaseAdmin
         .from("deal_claims")
         .select(selectClaimNew)
         .eq("qr_token_hash", tokenHash)
         .maybeSingle();
       if (isMissingNewRedeemColumn(r.error) || !r.data) {
-        r = await supabase
+        r = await supabaseAdmin
           .from("deal_claims")
           .select(isMissingNewRedeemColumn(r.error) ? selectClaimLegacy : selectClaimNew)
           .eq("token", tokenNorm)
           .maybeSingle();
       }
       if (!r.data && tokenInput && tokenInput !== tokenNorm) {
-        r = await supabase
+        r = await supabaseAdmin
           .from("deal_claims")
           .select(selectClaimLegacy)
           .eq("token", tokenInput)
           .maybeSingle();
       }
       if (isMissingNewRedeemColumn(r.error)) {
-        r = await supabase
+        r = await supabaseAdmin
           .from("deal_claims")
           .select(selectClaimLegacy)
           .eq("token", tokenInput || tokenNorm)
@@ -389,6 +394,22 @@ serve(async (req) => {
         JSON.stringify({
           error: "This deal belongs to another business and cannot be redeemed here.",
           error_code: "WRONG_BUSINESS_REDEMPTION",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    const redeemBusinessId = deal.business_id ?? "";
+    const capabilities = await getBusinessCapabilities(supabaseAdmin as any, redeemBusinessId);
+    if (!capabilities.can_redeem_existing_claims) {
+      await recordFailedAttempt("business_capability");
+      return new Response(
+        JSON.stringify({
+          error: "Redemption is unavailable for this business. Contact Twofer support.",
+          error_code: "BUSINESS_REDEMPTION_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
         }),
         {
           status: 403,

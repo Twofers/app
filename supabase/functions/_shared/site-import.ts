@@ -10,6 +10,11 @@
  * the byte-capped streaming fetch live in the edge function's `safeFetch`.
  */
 
+import {
+  MAX_MENU_ITEM_DESCRIPTION_CHARS,
+  splitMenuItemDescription,
+} from "./menu-item-text.ts";
+
 // ---------------------------------------------------------------------------
 // Shared caps / constants
 // ---------------------------------------------------------------------------
@@ -25,7 +30,7 @@ export const MAX_MENU_TEXT_CHARS = 20_000;
 export const MAX_MENU_PROMPT_CHARS = 12_000;
 export const MAX_IMPORT_URL_LENGTH = 2048;
 
-export const AI_SITE_MENU_IMPORT_PROMPT_VERSION = "AI_SITE_MENU_IMPORT_V1";
+export const AI_SITE_MENU_IMPORT_PROMPT_VERSION = "AI_SITE_MENU_IMPORT_V2";
 
 // ---------------------------------------------------------------------------
 // URL validation (syntax level; DNS/IP re-check happens in the fetch wrapper)
@@ -602,7 +607,9 @@ export function buildSiteMenuPrompt(businessCategory: string): string {
     "- Only include items that literally appear in the website text. Never invent dishes, prices, or items.",
     "- Prefer an empty items list over guessing. If the text does not look like a menu, return no items.",
     "- readable = true for every item you emit (website text is legible by definition; the field is kept for schema parity).",
-    "- name = the item as written (concise). category = the menu section heading if present, else empty string.",
+    "- name = the short item name only (e.g. 'Recon Roast'), never a description. If a line pairs a name with descriptive text (in parentheses, after a dash, or on the next line), put only the name in name.",
+    "- description = that item's descriptive text as written (e.g. 'Roaster fresh coffee with a shot of espresso'), or empty string if none. Never repeat the name inside description.",
+    "- category = the menu section heading if present, else empty string.",
     "- price_text = the price exactly as printed (e.g. $4.50) or empty if no price is shown for that item.",
     "- size_options = the sizes/variants printed for that item (e.g. Small, Large, 12 oz, 16 oz). Keep labels exactly as printed. Use [] when none.",
     "- If prices vary by size, keep the full printed size/price text in price_text and also list the sizes in size_options.",
@@ -618,6 +625,7 @@ export function buildSiteMenuPrompt(businessCategory: string): string {
 
 export type MenuItemRow = {
   name: string;
+  description: string;
   category: string;
   price_text: string;
   size_options: string[];
@@ -632,6 +640,7 @@ export type MenuExtractionResult = {
 
 export type NormalizedMenuItem = {
   name: string;
+  description?: string;
   category?: string;
   price_text?: string;
   size_options: string[];
@@ -650,6 +659,7 @@ export const menuSchema = {
           type: "object",
           properties: {
             name: { type: "string" },
+            description: { type: "string" },
             category: { type: "string" },
             price_text: { type: "string" },
             size_options: {
@@ -658,7 +668,7 @@ export const menuSchema = {
             },
             readable: { type: "boolean" },
           },
-          required: ["name", "category", "price_text", "size_options", "readable"],
+          required: ["name", "description", "category", "price_text", "size_options", "readable"],
           additionalProperties: false,
         },
       },
@@ -676,19 +686,31 @@ export function normalizeMenuItems(parsed: MenuExtractionResult): NormalizedMenu
         .filter(
           (r) => r && typeof r.name === "string" && r.name.trim().length > 0 && r.readable === true,
         )
-        .map((r) => ({
-          name: r.name.trim(),
-          category:
-            typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
-          price_text:
-            typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
-          size_options: Array.isArray(r.size_options)
-            ? r.size_options
-                .filter((size) => typeof size === "string" && size.trim().length > 0)
-                .map((size) => size.trim())
-                .slice(0, 12)
-            : [],
-          readable: true as const,
-        }))
+        .map((r) => {
+          // Defense in depth: even with the prompt asking for a short name, a
+          // model may still emit "Name ( long description )" — split it so the
+          // stored item name stays clean and the blurb lands in description.
+          const split = splitMenuItemDescription(r.name);
+          const modelDescription = typeof r.description === "string" ? r.description.trim() : "";
+          const description = (modelDescription || split.description || "").slice(
+            0,
+            MAX_MENU_ITEM_DESCRIPTION_CHARS,
+          );
+          return {
+            name: split.name,
+            description: description || undefined,
+            category:
+              typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
+            price_text:
+              typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
+            size_options: Array.isArray(r.size_options)
+              ? r.size_options
+                  .filter((size) => typeof size === "string" && size.trim().length > 0)
+                  .map((size) => size.trim())
+                  .slice(0, 12)
+              : [],
+            readable: true as const,
+          };
+        })
     : [];
 }

@@ -80,7 +80,7 @@ function fallbackReview(application: Record<string, unknown>, onboardingRequest:
     ? "needs manual review"
     : missing.length > 2
     ? "needs manual review"
-    : "approve limited trial";
+    : "approve setup access";
   return {
     application_summary: `${application.business_name ?? "This business"} requested website onboarding in ${application.launch_area ?? "an unspecified launch area"}.`,
     missing_fields: missing,
@@ -89,7 +89,7 @@ function fallbackReview(application: Record<string, unknown>, onboardingRequest:
     recommended_approval_path: recommended,
     suggested_admin_note: `AI recommends ${recommended}. Admin must make the final decision.`,
     suggested_next_email: "Thanks for your interest in Twofer. We are reviewing your request and will follow up with next steps.",
-    suggested_follow_up: missing.length ? `Ask for: ${missing.join(", ")}.` : "Review for limited trial approval.",
+    suggested_follow_up: missing.length ? `Ask for: ${missing.join(", ")}.` : "Review for setup approval.",
     confidence: missing.length ? 0.55 : 0.68,
     sources: [],
     warnings: [

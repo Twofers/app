@@ -17,7 +17,9 @@ describe("ai-generate-ad-variants research source guard", () => {
 
     const researchBlock = source.slice(researchIndex, copyStageIndex);
     const routedIndex = researchBlock.indexOf("if (!isWebSearch)");
-    const webSearchFetchIndex = researchBlock.indexOf('fetch("https://api.openai.com/v1/chat/completions"');
+    // The live web-search branch now issues its OpenAI request through the shared
+    // prepaid/fallback wrapper instead of a raw fetch.
+    const webSearchFetchIndex = researchBlock.indexOf("fetchOpenAiWithFallback(");
 
     expect(routedIndex).toBeGreaterThan(-1);
     expect(webSearchFetchIndex).toBeGreaterThan(routedIndex);
@@ -30,17 +32,20 @@ describe("ai-generate-ad-variants research source guard", () => {
     expect(routedBlock).toMatch(/config:\s*resolveAiTextProviderConfig\(\)/);
     expect(routedBlock).toMatch(/logTextProviderAttempts\(costContext, "ad_research", result\.attempts\)/);
     expect(routedBlock).toMatch(/logTextProviderAttempts\(costContext, "ad_research", attempts\)/);
-    expect(routedBlock).not.toMatch(/fetch\("https:\/\/api\.openai\.com\/v1\/chat\/completions"/);
+    // The routed (non-web) branch must never call the OpenAI chat endpoint directly.
+    expect(routedBlock).not.toMatch(/api\.openai\.com\/v1\/chat\/completions/);
   });
 
   it("keeps live web-search research explicit and separately logged", () => {
     const researchIndex = source.indexOf("async function callResearchModel(");
     const copyStageIndex = source.indexOf("async function generateCopy(");
     const researchBlock = source.slice(researchIndex, copyStageIndex);
-    const webSearchFetchIndex = researchBlock.indexOf('fetch("https://api.openai.com/v1/chat/completions"');
+    const webSearchFetchIndex = researchBlock.indexOf("fetchOpenAiWithFallback(");
     const webSearchBlock = researchBlock.slice(webSearchFetchIndex);
 
     expect(source).toMatch(/model:\s*RESEARCH_MODEL/);
+    // Still an explicit OpenAI chat/completions call, now via the shared wrapper.
+    expect(webSearchBlock).toMatch(/url:\s*"https:\/\/api\.openai\.com\/v1\/chat\/completions"/);
     expect(webSearchBlock).toMatch(/webSearchCalls:\s*isWebSearch \? 1 : 0/);
     expect(webSearchBlock).toMatch(/endpoint:\s*"chat\.completions"/);
     expect(webSearchBlock).toMatch(/AbortSignal\.timeout\(25_000\)/);

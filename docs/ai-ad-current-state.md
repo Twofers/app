@@ -70,6 +70,7 @@ Flow:
 4. Edge Function authenticates the user, rejects redeemer-only sessions, verifies business ownership, validates eligibility, and builds a transient `DealOfferContract`.
 5. Edge Function optionally researches the item, generates structured copy, validates against the contract, optionally repairs once, and falls back to deterministic copy when needed.
 6. Edge Function either uses the uploaded original, enhances it, generates one image, or returns copy-only mode depending on request state.
+   Image generation now runs under a request-wide deadline that starts at function entry, not when `produceImage` begins. Provider calls inherit the remaining budget, slow timeouts do not start fresh full-length retries, and the response/log payload includes sanitized `stage_timings_ms` plus `image_pipeline_budget` telemetry.
 7. Edge Function logs generation and cost metadata, then returns one `SingleAd`.
 8. Owner must accept/review the ad. New publishes build an `OfferDefinitionV1` and native-renderer `AdSpecV1`, then call the `publish-offer-version` Edge Function. Existing-deal edit/update compatibility still writes the update directly to `deals`.
 9. Client calls `send-deal-push` after publish/update best-effort.
@@ -212,6 +213,16 @@ Stages:
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
 - Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, Gemini primary by default (`AI_VISION_PRIMARY_PROVIDER`, cheap/multimodal), and OpenAI fallback when `AI_VISION_FALLBACK_ENABLED=true` (default true).
+- Localization: runs **concurrently with the image chain**, not after it. It is started
+  immediately after the copy stage and awaited once the image completes. Localization
+  consumes offer facts and `copy` only — it never reads the generated image — so
+  serializing it added a measured ~8s to a ~44.6s generation (research 2.2s, copy 7.7s,
+  image 24.3s, localization 8.0s) for nothing. `offerDefinition.sourceAssetIds` is the
+  single image-derived field and is a pure passthrough, so the post-image definition is
+  a spread of the same facts localization was verified against. Note that
+  `stage_timings_ms.localization` therefore overlaps `stage_timings_ms.image` by design;
+  it is the localization stage's own duration, not added wall clock. Ordering is pinned
+  by a contract test in `ai-generate-ad-variants-telemetry-source.test.ts`.
 
 Validation/fallback:
 

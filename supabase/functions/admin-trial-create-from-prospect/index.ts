@@ -14,43 +14,102 @@ import {
   normalizePhone,
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
-import {
-  billingProfileFromOnboarding,
-  ensureStripeCustomerForBusiness,
-} from "../_shared/stripe-business-billing.ts";
 import { sendApprovalEmail } from "../_shared/approval-email.ts";
 
-// Trial length matches admin-business-applications' approve_full (30 days)
-// and approve_limited (14 days) decisions. This path previously used a
-// separate 90-day value, which drifted from the rest of the codebase.
+// Reviewed prospects become approved setup applications. The 30-day trial
+// starts only after the owner activates through Stripe Checkout.
 function decisionConfig(value: unknown) {
   const decision = cleanString(value, 40);
   if (decision === "approve_full") {
     return {
-      applicationStatus: "trial_active",
-      accessTier: "trialing",
+      applicationStatus: "approved_not_activated",
+      accessTier: "approved_not_activated",
       verificationStatus: "verified_low_risk",
-      trialDays: 30,
-      trialOfferLimit: 3,
-      trialClaimLimit: 50,
-      businessStatus: "trialing",
-      businessAccessLevel: "full_trial",
+      trialDays: null,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      businessStatus: "approved_not_activated",
+      businessAccessLevel: "approved_not_activated",
       businessVerificationStatus: "manual_verified",
-      subscriptionAccessStatus: "trialing",
+      subscriptionAccessStatus: "approved_not_activated",
     };
   }
   return {
-    applicationStatus: "trial_limited",
-    accessTier: "trial_limited",
+    applicationStatus: "approved_not_activated",
+    accessTier: "approved_not_activated",
     verificationStatus: "verified_low_risk",
-    trialDays: 14,
-    trialOfferLimit: 1,
-    trialClaimLimit: 25,
-    businessStatus: "limited_trial",
-    businessAccessLevel: "limited_trial",
+    trialDays: null,
+    trialOfferLimit: null,
+    trialClaimLimit: null,
+    businessStatus: "approved_not_activated",
+    businessAccessLevel: "approved_not_activated",
     businessVerificationStatus: "basic_verified",
-    subscriptionAccessStatus: "trial_limited",
+    subscriptionAccessStatus: "approved_not_activated",
   };
+}
+
+async function approvedActivationGateEnabled(supabase: any): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("feature_flags")
+    .select("enabled")
+    .eq("key", "approved_activation_gate")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.enabled === true;
+}
+
+const PROTECTED_BUSINESS_ACCESS_LEVELS = new Set([
+  "limited_trial",
+  "full_trial",
+  "paid",
+  "admin_comped",
+  "partner_comped",
+  "internal_test",
+]);
+
+const PROTECTED_SUBSCRIPTION_ACCESS_STATUSES = new Set([
+  "trial_limited",
+  "trialing",
+  "active",
+  "past_due_grace",
+  "comped",
+]);
+
+async function linkedBusinessHasProtectedAccess(
+  supabase: any,
+  businessId: string,
+): Promise<boolean> {
+  const [
+    { data: business, error: businessError },
+    { data: subscription, error: subscriptionError },
+  ] = await Promise.all([
+    supabase
+      .from("businesses")
+      .select("id,access_level")
+      .eq("id", businessId)
+      .maybeSingle(),
+    supabase
+      .from("business_subscriptions")
+      .select("app_access_status,activated_at,stripe_subscription_id")
+      .eq("business_id", businessId)
+      .maybeSingle(),
+  ]);
+
+  if (businessError) throw businessError;
+  if (subscriptionError) throw subscriptionError;
+  if (!business) {
+    throw new Error("Linked business was not found.");
+  }
+
+  const protectedAccess =
+    PROTECTED_BUSINESS_ACCESS_LEVELS.has(String(business.access_level ?? "")) ||
+    PROTECTED_SUBSCRIPTION_ACCESS_STATUSES.has(
+      String(subscription?.app_access_status ?? ""),
+    ) ||
+    Boolean(subscription?.activated_at) ||
+    Boolean(subscription?.stripe_subscription_id);
+
+  return protectedAccess;
 }
 
 function normalizedFromProspect(prospect: Record<string, unknown>, payload: Record<string, unknown>): NormalizedBusinessOnboarding {
@@ -86,6 +145,13 @@ Deno.serve(async (req) => {
   try {
     const ctx = await requireAdmin(req, requestId, "trial.create");
     if (ctx instanceof Response) return ctx;
+    if (!(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+      return json(req, {
+        error: "Approved activation rollout is not enabled.",
+        error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
+        request_id: requestId,
+      }, 503);
+    }
     const payload = await readPayload(req);
     const prospectId = cleanString(payload.prospect_id, 80);
     if (!UUID_RE.test(prospectId)) {
@@ -102,6 +168,19 @@ Deno.serve(async (req) => {
     if (!["approved", "verified"].includes(String(prospect.review_status))) {
       return json(req, { error: "Review and approve the prospect before creating a trial.", request_id: requestId }, 409);
     }
+    if (prospect.linked_business_id) {
+      const protectedAccess = await linkedBusinessHasProtectedAccess(
+        ctx.supabaseAdmin,
+        String(prospect.linked_business_id),
+      );
+      if (protectedAccess) {
+        return json(req, {
+          error: "Linked business already has protected access; use billing management instead.",
+          error_code: "LINKED_BUSINESS_ACCESS_PROTECTED",
+          request_id: requestId,
+        }, 409);
+      }
+    }
 
     const normalized = normalizedFromProspect(prospect as Record<string, unknown>, payload);
     if (!normalized.email) {
@@ -114,6 +193,7 @@ Deno.serve(async (req) => {
         business_name: normalized.businessName,
         contact_name: normalized.contactName,
         email: normalized.email,
+        approved_email_normalized: normalized.email.toLowerCase(),
         phone: normalized.phone,
         address: normalized.address,
         business_type: normalized.businessType,
@@ -129,7 +209,7 @@ Deno.serve(async (req) => {
         verification_status: config.verificationStatus,
         risk_score: 80,
         risk_reasons: ["reviewed_prospect_admin_trial"],
-        trial_days: config.trialDays,
+        trial_days: null,
         trial_offer_limit: config.trialOfferLimit,
         trial_claim_limit: config.trialClaimLimit,
         reviewed_at: new Date().toISOString(),
@@ -165,32 +245,9 @@ Deno.serve(async (req) => {
         approved_by: ctx.user.id,
       }).eq("id", prospect.linked_business_id);
 
-      // Business already exists (re-approval / already materialized) — seed
-      // business_subscriptions (and its location_entitlements mirror) now
-      // instead of waiting on a login that may never re-trigger materialization.
-      const { data: existingBusiness, error: existingBusinessError } = await ctx.supabaseAdmin
-        .from("businesses")
-        .select("owner_id")
-        .eq("id", prospect.linked_business_id)
-        .maybeSingle();
-      if (existingBusinessError) throw existingBusinessError;
-      const ownerUserId = existingBusiness?.owner_id ? String(existingBusiness.owner_id) : null;
-      if (ownerUserId) {
-        await ensureStripeCustomerForBusiness({
-          supabase: ctx.supabaseAdmin,
-          stripe: null,
-          input: billingProfileFromOnboarding({
-            businessId: prospect.linked_business_id,
-            ownerUserId,
-            normalized,
-            source: "prospect_admin_trial",
-            sourceRecordId: String(application.id),
-          }),
-          source: "prospect_admin_trial",
-          trialDays: config.trialDays,
-          accessStatus: config.subscriptionAccessStatus,
-        });
-      }
+      // Approval is setup-only. Billing profile, Stripe customer,
+      // subscription, trial dates, credits, and access wait for the owner claim
+      // and verified Checkout activation flow.
     }
 
     await ctx.supabaseAdmin.from("prospect_to_business_links").insert({
@@ -225,14 +282,13 @@ Deno.serve(async (req) => {
         business_application_id: application.id,
         business_onboarding_request_id: onboardingRequestId,
         business_id: prospect.linked_business_id ?? null,
-        trial_days: config.trialDays,
+        trial_days: null,
       },
       reason: nullableString(payload.reason, 500) || "trial_created_from_prospect",
     });
 
-    // Trial-welcome email (best-effort; never blocks the decision). Both tiers
-    // here are approvals, so always notify. Content fields come from the owner
-    // details we normalized plus the trial limits just written to the row.
+    // Approval email (best-effort; never blocks the decision). Both tiers here
+    // are setup approvals; the 30-day trial starts only after Checkout.
     const emailDecision = cleanString(payload.decision, 40) === "approve_full" ? "approve_full" : "approve_limited";
     const approvalEmailWarning = await sendApprovalEmail({
       supabaseAdmin: ctx.supabaseAdmin,
@@ -242,8 +298,6 @@ Deno.serve(async (req) => {
         contact_name: normalized.contactName,
         email: normalized.email,
         trial_days: application.trial_days,
-        trial_offer_limit: application.trial_offer_limit,
-        trial_claim_limit: application.trial_claim_limit,
       },
       decision: emailDecision,
       requestId,

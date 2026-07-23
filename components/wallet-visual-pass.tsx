@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Text,
   View,
@@ -18,10 +17,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
-import { completeVisualRedeem } from "@/lib/functions";
 import { Spacing } from "@/lib/screen-layout";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+
+const PASS_VISIBLE_MS = 30_000;
 
 type WalletVisualPassModalProps = {
   visible: boolean;
@@ -33,11 +33,8 @@ type WalletVisualPassModalProps = {
   claimedAt: string | null;
   /** Last moment the claim can be redeemed (instance end + grace), for display. */
   redeemByIso: string | null;
-  minCompleteAtIso: string;
   nowMs: number;
   onClose: () => void;
-  onRedeemed: () => void;
-  onError: (message: string) => void;
 };
 
 function formatClock(ms: number, lang: string) {
@@ -49,10 +46,6 @@ function formatClock(ms: number, lang: string) {
   }).format(new Date(ms));
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export function WalletVisualPassModal({
   visible,
   claimId,
@@ -62,34 +55,31 @@ export function WalletVisualPassModal({
   token,
   claimedAt,
   redeemByIso,
-  minCompleteAtIso,
   nowMs,
   onClose,
-  onRedeemed,
-  onError,
 }: WalletVisualPassModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { confirm, confirmModal } = useBrandedConfirm();
   const pulseScale = useSharedValue(1);
-  const [completing, setCompleting] = useState(false);
-  const completingRef = useRef(false);
-  const completeOnce = useRef(false);
+  const [windowStartedAtMs, setWindowStartedAtMs] = useState(() => Date.now());
+  const previousClaimIdRef = useRef(claimId);
 
   useEffect(() => {
-    if (!visible) {
-      completeOnce.current = false;
-      completingRef.current = false;
-      setCompleting(false);
+    if (visible && previousClaimIdRef.current !== claimId) {
+      previousClaimIdRef.current = claimId;
+      setWindowStartedAtMs(Date.now());
     }
-  }, [visible]);
+    if (visible) setWindowStartedAtMs(Date.now());
+  }, [claimId, visible]);
 
-  const minCompleteMs = useMemo(() => new Date(minCompleteAtIso).getTime(), [minCompleteAtIso]);
+  const windowEndsAtMs = useMemo(() => windowStartedAtMs + PASS_VISIBLE_MS, [windowStartedAtMs]);
 
   const remainingSec = useMemo(() => {
-    if (!visible) return 15;
-    return Math.max(0, Math.ceil((minCompleteMs - nowMs) / 1000));
-  }, [visible, minCompleteMs, nowMs]);
+    if (!visible) return 30;
+    return Math.max(0, Math.ceil((windowEndsAtMs - nowMs) / 1000));
+  }, [visible, windowEndsAtMs, nowMs]);
+  const qrWindowActive = remainingSec > 0;
 
   const pulseAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
@@ -111,55 +101,12 @@ export function WalletVisualPassModal({
     return () => cancelAnimation(pulseScale);
   }, [visible, pulseScale]);
 
-  const runComplete = useCallback(async () => {
-    if (completingRef.current) return;
-    completingRef.current = true;
-    setCompleting(true);
-    try {
-      // Calculate how long to wait based on actual minCompleteMs rather than
-      // using fixed 600ms intervals that may exhaust before the window opens.
-      const waitMs = Math.max(0, minCompleteMs - Date.now());
-      if (waitMs > 0) await sleep(waitMs + 500); // +500ms buffer for clock skew
-      for (let i = 0; i < 10; i++) {
-        try {
-          await completeVisualRedeem(claimId);
-          completingRef.current = false;
-          setCompleting(false);
-          onRedeemed();
-          return;
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : "";
-          if (msg.includes("not finished yet") || msg.includes("Redemption window")) {
-            await sleep(1000);
-            continue;
-          }
-          throw e;
-        }
-      }
-      throw new Error(t("consumerWallet.passCompleteError"));
-    } catch (e: unknown) {
-      completingRef.current = false;
-      completeOnce.current = false; // Allow retry on failure
-      setCompleting(false);
-      onError(e instanceof Error ? e.message : t("consumerWallet.passCompleteError"));
-    }
-  }, [claimId, minCompleteMs, onRedeemed, onError, t]);
-
-  useEffect(() => {
-    if (!visible || completeOnce.current || completingRef.current) return;
-    if (nowMs >= minCompleteMs) {
-      completeOnce.current = true;
-      void runComplete();
-    }
-  }, [visible, minCompleteMs, nowMs, runComplete]);
-
   const codeDisplay = shortCode
     ? `${shortCode.slice(0, 3)} ${shortCode.slice(3)}`
     : t("consumerWallet.codeLegacyQrOnly");
 
   function confirmClose() {
-    if (completing || completingRef.current) return;
-    if (remainingSec > 0) {
+    if (qrWindowActive) {
       confirm({
         iconName: "schedule",
         title: t("consumerWallet.passCloseEarlyTitle"),
@@ -172,6 +119,10 @@ export function WalletVisualPassModal({
     }
     onClose();
   }
+
+  const redeployPass = useCallback(() => {
+    setWindowStartedAtMs(Date.now());
+  }, []);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={confirmClose} accessibilityViewIsModal>
@@ -201,7 +152,7 @@ export function WalletVisualPassModal({
               minimumFontScale={0.78}
               maxFontSizeMultiplier={1.15}
             >
-              {t("consumerWallet.passRedeemingBadge")}
+            {t("consumerWallet.passRedeemingBadge")}
             </Text>
           </View>
           <Text style={{ color: "#86efac", fontSize: 13, fontWeight: "600", flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
@@ -250,28 +201,27 @@ export function WalletVisualPassModal({
             minimumFontScale={0.76}
             maxFontSizeMultiplier={1.15}
           >
-            {t("consumerWallet.passStaffCountdown")}
+            {qrWindowActive ? t("consumerWallet.passStaffCountdown") : t("consumerWallet.passTimedOutTitle")}
           </Text>
-          {completing ? (
-            <View style={{ marginTop: 16, alignItems: "center", gap: 12 }}>
-              <ActivityIndicator color="#fff" size="large" />
-              <Text style={{ color: "#fff", fontWeight: "700", textAlign: "center" }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
-                {t("consumerWallet.passCompleting")}
-              </Text>
-            </View>
-          ) : (
+          {qrWindowActive ? (
             <Text style={{ color: "#fff", fontSize: 56, fontWeight: "900", marginTop: 8 }}>
               {remainingSec}
               <Text style={{ fontSize: 22 }}> {t("consumerWallet.passSecondsUnit")}</Text>
             </Text>
+          ) : (
+            <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 12, lineHeight: 25 }}>
+              {t("consumerWallet.passTimedOutBody")}
+            </Text>
           )}
         </View>
 
-        <Animated.View style={[{ alignSelf: "center", marginBottom: 16 }, pulseAnimatedStyle]}>
-          {token ? <QRCode value={token} size={140} backgroundColor="#fff" /> : null}
-        </Animated.View>
+        {qrWindowActive ? (
+          <Animated.View style={[{ alignSelf: "center", marginBottom: 16 }, pulseAnimatedStyle]}>
+            {token ? <QRCode value={token} size={140} backgroundColor="#fff" /> : null}
+          </Animated.View>
+        ) : null}
 
-        <View style={{ alignItems: "center", marginBottom: 24 }}>
+        <View style={{ alignItems: "center", marginBottom: 24, opacity: qrWindowActive ? 1 : 0.48 }}>
           <Text
             style={{ color: "#86efac", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, textAlign: "center" }}
             numberOfLines={1}
@@ -291,20 +241,39 @@ export function WalletVisualPassModal({
             {codeDisplay}
           </Text>
           <Text style={{ color: "#86efac", fontSize: 12, marginTop: 12, textAlign: "center", opacity: 0.9 }} maxFontSizeMultiplier={1.15}>
-            {t("consumerWallet.passStaffHint")}
+            {qrWindowActive ? t("consumerWallet.passStaffHint") : t("consumerWallet.passTimedOutHint")}
           </Text>
         </View>
 
         <View style={{ flex: 1 }} />
 
+        {!qrWindowActive ? (
+          <HapticScalePressable
+            onPress={redeployPass}
+            style={{
+              paddingVertical: Spacing.md,
+              borderRadius: 14,
+              backgroundColor: "#22c55e",
+              marginBottom: Spacing.sm,
+            }}
+          >
+            <Text
+              style={{ color: "#052e16", fontWeight: "900", textAlign: "center" }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={1.15}
+            >
+              {t("consumerWallet.passShowAgain")}
+            </Text>
+          </HapticScalePressable>
+        ) : null}
         <HapticScalePressable
           onPress={confirmClose}
-          disabled={completing}
           style={{
             paddingVertical: Spacing.md,
             borderRadius: 14,
             backgroundColor: "#166534",
-            opacity: completing ? 0.5 : 1,
           }}
         >
           <Text
@@ -314,7 +283,7 @@ export function WalletVisualPassModal({
             minimumFontScale={0.8}
             maxFontSizeMultiplier={1.15}
           >
-            {remainingSec > 0 ? t("consumerWallet.passCloseEarly") : t("consumerWallet.passDone")}
+            {qrWindowActive ? t("consumerWallet.passCloseEarly") : t("consumerWallet.passDone")}
           </Text>
         </HapticScalePressable>
       </View>

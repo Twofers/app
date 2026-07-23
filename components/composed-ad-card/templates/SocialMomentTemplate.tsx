@@ -11,7 +11,7 @@ import { LockedOfferLine } from "../LockedOfferLine";
 import type { ComposedAdTemplateProps } from "../types";
 
 export function SocialMomentTemplate(props: ComposedAdTemplateProps) {
-  const { copy, fallbackVisualLabel, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, tokens } = props;
+  const { copy, fallbackVisualLabel, imageUri, liveState, merchant, offerFacts, onCardPress, onPrimaryAction, presentation, secondaryAction, surface, tokens } = props;
 
   return (
     <Pressable
@@ -30,6 +30,7 @@ export function SocialMomentTemplate(props: ComposedAdTemplateProps) {
           presentation={presentation}
           tokens={tokens}
           fallbackVisualLabel={fallbackVisualLabel}
+          fit={surface === "consumer_feed" ? "contain" : "cover"}
         />
         <LinearGradient
           colors={["rgba(0,0,0,0.04)", "rgba(0,0,0,0.62)"]}
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    aspectRatio: 1,
+    aspectRatio: 3 / 2,
     overflow: "hidden",
   },
   status: {

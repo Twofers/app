@@ -30,7 +30,7 @@ describe("Stripe business billing reconnection sources", () => {
     expect(source).toMatch(/GRANT SELECT, INSERT, UPDATE ON TABLE public\.business_billing_profiles TO service_role/i);
   });
 
-  it("syncs onboarding into Stripe customer jobs without exposing Stripe to app context", () => {
+  it("keeps Stripe billing helpers server-side without exposing Stripe to app context", () => {
     const helper = readRepoFile("supabase/functions/_shared/stripe-business-billing.ts");
     expect(helper).toMatch(/upsertBusinessBillingProfile/);
     expect(helper).toMatch(/seedBusinessSubscription/);
@@ -42,8 +42,15 @@ describe("Stripe business billing reconnection sources", () => {
     expect(helper).toMatch(/billing_events/);
 
     const context = readRepoFile("supabase/functions/get-business-onboarding-context/index.ts");
-    expect(context).toMatch(/enqueueStripeCustomerSync/);
-    expect(context).toMatch(/seedBusinessSubscription/);
+    const activationMigration = readRepoFile(
+      "supabase/migrations/20260817120000_approved_not_activated_activation_gate.sql",
+    );
+    expect(context).toMatch(/claim_approved_business_application_for_user/);
+    expect(context).not.toMatch(/seedBusinessSubscription/);
+    expect(activationMigration).toMatch(/INSERT INTO public\.business_billing_profiles/);
+    expect(activationMigration).toMatch(/INSERT INTO public\.business_subscriptions/);
+    expect(activationMigration).toMatch(/'approved_not_activated'/);
+    expect(context).not.toMatch(/enqueueStripeCustomerSync/);
     expect(context).not.toMatch(/STRIPE_SECRET_KEY/);
     expect(context).not.toMatch(/new Stripe/);
   });

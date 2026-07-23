@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { cleanEmail, cleanString } from "../_shared/business-onboarding-sync.ts";
+import { clientIpFromRequest } from "../_shared/client-ip.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 60;
 const RATE_LIMIT_MAX_PER_IP = 6;
@@ -18,12 +19,6 @@ type Payload = {
 };
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
-
-function firstForwardedIp(header: string | null): string | null {
-  if (!header) return null;
-  const first = header.split(",")[0]?.trim();
-  return first || null;
-}
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -86,7 +81,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const requestIp = firstForwardedIp(req.headers.get("x-forwarded-for"));
+    const requestIp = clientIpFromRequest(req);
     if (await isRateLimited(supabase, requestIp)) {
       return json(req, { error: "Too many requests. Please try again later." }, 429);
     }

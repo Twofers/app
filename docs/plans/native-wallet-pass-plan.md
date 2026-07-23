@@ -1,6 +1,6 @@
 # Native Wallet Pass — "Your Twofer Card" (Apple Wallet + Google Wallet)
 
-**Status: Phase 1 + Phase 2 CODE BUILT locally (2026-07-11, Dan approved the short-code barcode decision). NOTHING deployed or applied — migration apply, function deploys, secrets, class-setup run, and rebuilds remain Dan-gated.**
+**Status (updated 2026-07-12): backend migration, secrets, Google class, and all 73 current Edge Functions are deployed to production. Google and Apple pass issuance were live-verified. The remaining release gates are Google Wallet publishing approval plus Android device QA, and an iOS EAS/TestFlight build plus real-iPhone QA of the native PassKit presentation.**
 
 Date: 2026-07-11
 Owner: Dan (approvals, accounts) + agent (code)
@@ -11,7 +11,7 @@ What exists in the working tree (all local, gates green — typecheck, lint, typ
 
 - `supabase/migrations/20260811120000_wallet_passes.sql` — **APPLIED to prod 2026-07-11** (`supabase db push`; RLS smoke green; verified anon REST read → HTTP 401, so default-deny confirmed). Registrations are keyed by `user_id` (simpler FK than the serial-number keying sketched below).
 - **Official Google badge downloaded 2026-07-11**: canonical unmodified SVG+PNG originals in `assets/google-wallet/` (enUS + esUS primary variant); `lib/google-wallet-badges.ts` embeds the exact SVG markup (machine-escaped, byte-identical) and `components/add-to-wallet-button.tsx` renders it via `react-native-svg` `SvgXml` (crisp vector, no distortion). Korean has no official Google button → falls back to the English badge per Google's own guidance.
-- **Card logo uploaded 2026-07-11**: the production launcher icon (`twofer-icon-1024.png`, penguin) resized to 660×660 and uploaded to the public `business-logos` bucket. Public URL (verified HTTP 200 image/png, SHA-256 round-trip match, 660×660): `https://kvodhiqhdqnptqovovia.supabase.co/storage/v1/object/public/business-logos/app/twofer-card-logo.png` — set this as the `WALLET_PASS_LOGO_URL` secret at deploy. NOTE: `business-logos` INSERT/UPDATE policies are `auth.uid() IS NOT NULL` with no path-ownership check (pre-existing), so any signed-in user can overwrite this object — tracked as a separate hardening task (bucket-scoped RLS migration, Dan-gated).
+- **Card logo uploaded 2026-07-11**: the production launcher icon (`twofer-icon-1024.png`, penguin) resized to 660×660 and uploaded to the public `business-logos` bucket. Public URL (verified HTTP 200 image/png, SHA-256 round-trip match, 660×660): `https://kvodhiqhdqnptqovovia.supabase.co/storage/v1/object/public/business-logos/app/twofer-card-logo.png`, configured through `WALLET_PASS_LOGO_URL`. The later owner-scoped logo policy migration is applied in production, so the earlier broad authenticated-write warning is resolved.
 
 ### Apple part 1 BUILT + LOCALLY VERIFIED 2026-07-11
 
@@ -20,13 +20,13 @@ Pass Type ID `pass.com.unvmex2.twoforone` (Team L9DT756YSN) registered by Dan; c
 - `wallet-pass-issue` Apple branch now returns `application/vnd.apple.pkpass` (was 501).
 - **Signing proven** (spike) + **full .pkpass verified**: ran the REAL `apple-pkpass.ts` under Deno → 36 KB pass; openssl `smime -verify` succeeds, manifest SHA-1 matches every file, pass.json is valid UTF-8 with correct identity/brand colors/QR (`twofer://redeem/sc/…`)/expiry/location. All gates green (typecheck, lint, 1522+ incl. new Apple tests, typecheck:functions).
 - **DEPLOYED + LIVE-VERIFIED on prod 2026-07-11**: `wallet-pass-issue` (Apple branch) called as the smoke shopper → HTTP 200 `application/vnd.apple.pkpass` (35.9 KB, valid zip); openssl confirms signature verifies against manifest, **signer cert = our `pass.com.unvmex2.twoforone` / Team L9DT756YSN issued by WWDR G4**, manifest SHA-1 matches files, pass.json identity + brand colors correct, serial minted+persisted (df25fff0-…), "No active deal"/no barcode (correct for the claimless test user).
-### Apple part 3 (iOS button) BUILT 2026-07-11 — needs an iOS build to test
+### Apple part 3 (iOS button) BUILT 2026-07-12 — needs an iOS build to test
 
-- `lib/wallet-pass-functions.ts` `fetchAppleWalletPassBase64(locale)`: fetches `wallet-pass-issue` **directly** (NOT via `supabase.functions.invoke`, which decodes unknown content-types as text and would corrupt the binary) → reads the Blob → base64.
-- `components/add-to-wallet-button.tsx` now branches by platform: **iOS** → fetch .pkpass → write to cache via `new ExpoFsFile(Paths.cache,…).write(b64,{encoding:"base64"})` → `Sharing.shareAsync(uri,{UTI:"com.apple.pkpass",mimeType:"application/vnd.apple.pkpass"})` (share sheet offers "Add to Apple Wallet" — **no native module / build-config change**); **Android** → existing Google flow. Already surfaced in the QR modal + wallet active card, so iOS gets it in the same spots.
-- i18n `walletPass.addToAppleWallet` in en/es/ko. All gates green.
-- **INTERIM BADGE**: the Apple button uses a plain black pill, TODO-marked. The official "Add to Apple Wallet" artwork download is gated behind **Apple's Wallet Marketing Agreement** (a legal click-through) — agent will not accept terms on Dan's behalf. Dan either downloads it + points the agent at the file, or explicitly authorizes accepting the agreement. **Do NOT ship to the App Store with the interim badge.**
-- **To test on Dan's iPhone**: an iOS build with `EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS=true` (do NOT flip the `production` profile until the official badge is in + on-device QA passes). For auto-updates during the test, the 6 lifecycle functions still need redeploy (deferred; can do on Dan's OK).
+- `lib/wallet-pass-functions.ts` `fetchAppleWalletPassBase64(locale)` fetches `wallet-pass-issue` directly and returns the signed binary as base64 without routing it through Supabase's JSON-oriented invoke helper.
+- `modules/twofer-passkit/` is a local Expo Apple module. It renders Apple's system `PKAddPassButton`, validates the signed bytes as a `PKPass`, and presents `PKAddPassesViewController`. This follows Apple's in-app guidance and removes the interim custom badge/share-sheet path.
+- `components/add-to-wallet-button.tsx` now branches by platform: **iOS** uses the native PassKit button/controller; **Android** keeps the official Google Wallet SVG and signed save link. Both remain surfaced in the QR modal and active Wallet card.
+- The module is discovered by Expo autolinking, TypeScript passes, and focused wallet tests cover the system button/controller contract. Windows cannot compile or run the Swift path.
+- **To test on Dan's iPhone**: explicitly approve an iOS EAS/TestFlight build with `EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS=true`, then verify add/cancel, the installed card, claim/redeem/release/expiry updates, and actual APNs delivery. Store submission remains a separate approval.
 
 ### Apple part 2 (auto-update) BUILT + VERIFIED 2026-07-11
 
@@ -34,7 +34,7 @@ Pass Type ID `pass.com.unvmex2.twoforone` (Team L9DT756YSN) registered by Dan; c
 - New `wallet-pass-webservice` fn (registered in config.toml, verify_jwt=false) implements the full PassKit REST protocol: register / unregister / list-updated / get-latest-pass / log. Auth = `ApplePass <token>` where token = HMAC-SHA256(SERVICE_ROLE_KEY, "wallet-pass:<userId>") — stable across re-issues, no stored secret (`_shared/apple-pass-auth.ts`, vitest-covered). Apple env moved to `_shared/apple-pass-env.ts`; `buildAppleWalletPassBytes` serves the latest pass without bumping updated_at.
 - Issued passes now carry `webServiceURL` (SUPABASE_URL/functions/v1/wallet-pass-webservice) + the auth token. `syncWalletPassForUser` now bumps the Apple pass version + pushes every registered device (Google + Apple both handled, independently).
 - **DEPLOYED + LIVE-VERIFIED on prod**: simulated Apple's calls end-to-end — register→201, get-pass(wrong token)→401, get-pass→200 vnd.apple.pkpass, list→200 (serial present), unregister→200. Only the real APNs push DELIVERY is unproven until a device registers (part 3); the push code + cert auth are proven.
-- **NOT redeployed**: the 6 lifecycle functions (claim-deal etc.) bundle the updated `wallet-pass-sync.ts` (Apple push) but a redeploy has no effect until a device registers, so it's deferred to part 3. All gates green (typecheck, lint, tests, typecheck:functions).
+- **DEPLOYED 2026-07-12**: all current Edge Functions, including every claim/redeem lifecycle function that bundles `wallet-pass-sync.ts`, were redeployed to production. Hosted inventory now exactly matches the 73 local functions.
 
 ### DEPLOYED + LIVE-VERIFIED 2026-07-11 (Google)
 
@@ -44,7 +44,7 @@ Google issuer `3388000000023157747` (demo mode — passes work but can't be publ
 - All 7 functions deployed to prod (`kvodhiqhdqnptqovovia`): wallet-pass-issue + claim-deal, redeem-token, complete-visual-redeem, release-claim, finalize-stale-redeems, staff-redemption.
 - **Live end-to-end verified**: signed in as smoke shopper → `wallet-pass-issue` returned HTTP 200 + real `https://pay.google.com/gp/v/save/…` link; the Google object was fetched back via SA (HTTP 200) with correct id/classId, `state: active`, `hexBackgroundColor #11181c`, `cardTitle "Twofer"`, logo set, and `header: "No active deal"` / no barcode (correct — that test user had no active claim). Test artifact: a `wallet_passes` row + Google object exist for smoke user `cd5863d6-…` (harmless).
 
-**Only remaining step: rebuild the dev APK with `EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS=true` so the button appears on the S10.** Do NOT flip the `production` eas.json profile flag on until full device QA + Google publishing approval (issuer still in demo mode).
+**Remaining Google steps:** complete the Google Wallet Business Profile and request publishing access for the existing issuer/class, then run full Android device QA. Until Google approves publishing access, only issuer admins/developers and configured test accounts can add passes and passes remain marked `[TEST ONLY]`.
 
 ### Pre-deploy verification done 2026-07-11 (no prod credentials needed)
 

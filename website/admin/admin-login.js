@@ -18,6 +18,26 @@
   const mfaStatusEl = document.querySelector("[data-mfa-status]");
   let pendingMfa = null;
 
+  function adminDestination() {
+    const requested = new URLSearchParams(window.location.search).get("next") || "";
+    if (!(requested === "/admin" || requested.startsWith("/admin/")) || requested.startsWith("/admin/login") || requested.startsWith("//")) {
+      return "/admin";
+    }
+    try {
+      const destination = new URL(requested, window.location.origin);
+      const isAdminPath = destination.pathname === "/admin" || destination.pathname.startsWith("/admin/");
+      return destination.origin === window.location.origin && isAdminPath
+        ? `${destination.pathname}${destination.search}${destination.hash}`
+        : "/admin";
+    } catch {
+      return "/admin";
+    }
+  }
+
+  function openAdmin() {
+    window.location.assign(adminDestination());
+  }
+
   function setStatus(message, tone = "info") {
     if (!statusEl) return;
     statusEl.textContent = message;
@@ -150,7 +170,7 @@
         await verifyAdmin(verified.session.access_token);
         storeSession(verified.session, pendingMfa.remember);
         setMfaStatus("Admin access verified. Opening dashboard...");
-        window.location.assign("/admin");
+        openAdmin();
       } catch (error) {
         setMfaStatus(error instanceof Error ? error.message : "Incorrect code. Try again.", "danger");
       } finally {
@@ -212,7 +232,7 @@
           }
           await verifyAdmin(accessToken);
           setStatus("Saved admin session verified. Opening dashboard...");
-          window.location.assign("/admin");
+          openAdmin();
         })
         .catch(() => {
           clearSession();
@@ -258,7 +278,7 @@
       await verifyAdmin(result.session.access_token);
       storeSession(result.session, remember);
       setStatus("Admin access verified. Opening dashboard...");
-      window.location.assign("/admin");
+      openAdmin();
     } catch (error) {
       clearSession();
       setStatus(error instanceof Error ? error.message : "Could not sign in.", "danger");

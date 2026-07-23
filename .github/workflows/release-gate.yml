@@ -7,7 +7,12 @@ name: Release security gate
 #
 # Required repo secrets to activate:
 #   SUPABASE_URL, SUPABASE_ANON_KEY        -> edge + anon-exposure probes
-#   TWOFER_SMOKE_EMAIL, TWOFER_SMOKE_PASSWORD -> authenticated RLS smoke (throwaway shopper)
+#   TWOFER_QA_SHOPPER_EMAIL, TWOFER_QA_SHOPPER_PASSWORD -> authenticated RLS smoke
+#       (a throwaway SHOPPER that must NOT own a business — an owner reaches the
+#       same rows via owner-scoped policies, so the check passes vacuously. Set
+#       this so the gate is meaningful; probe-rls-smoke warns if it is an owner.)
+#   TWOFER_SMOKE_EMAIL, TWOFER_SMOKE_PASSWORD -> legacy fallback for the RLS smoke
+#       when the shopper secret is unset (keeps pre-existing setups running)
 #   SUPABASE_DB_URL                        -> catalog RLS gate (psql)
 
 on:
@@ -21,6 +26,8 @@ jobs:
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TWOFER_QA_SHOPPER_EMAIL: ${{ secrets.TWOFER_QA_SHOPPER_EMAIL }}
+      TWOFER_QA_SHOPPER_PASSWORD: ${{ secrets.TWOFER_QA_SHOPPER_PASSWORD }}
       TWOFER_SMOKE_EMAIL: ${{ secrets.TWOFER_SMOKE_EMAIL }}
       TWOFER_SMOKE_PASSWORD: ${{ secrets.TWOFER_SMOKE_PASSWORD }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -45,6 +52,8 @@ jobs:
           {
             echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL"
             echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+            echo "TWOFER_QA_SHOPPER_EMAIL=$TWOFER_QA_SHOPPER_EMAIL"
+            echo "TWOFER_QA_SHOPPER_PASSWORD=$TWOFER_QA_SHOPPER_PASSWORD"
             echo "TWOFER_SMOKE_EMAIL=$TWOFER_SMOKE_EMAIL"
             echo "TWOFER_SMOKE_PASSWORD=$TWOFER_SMOKE_PASSWORD"
           } > .env
@@ -57,7 +66,7 @@ jobs:
         run: node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event
 
       - name: RLS smoke (authenticated user can read its own rows)
-        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' && env.TWOFER_SMOKE_EMAIL != '' }}
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' && (env.TWOFER_QA_SHOPPER_EMAIL != '' || env.TWOFER_SMOKE_EMAIL != '') }}
         run: node scripts/probe-rls-smoke.mjs
 
       - name: RLS anon-exposure (no sensitive table leaks to anon)

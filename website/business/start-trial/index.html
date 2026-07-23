@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title data-i18n="trial.title">Start Your Twofer Business Account | Twofer</title>
+    <title data-i18n="trial.title">Bring in customers during your slow hours | Twofer</title>
     <meta
       name="description"
-      content="Start your Twofer business account. Fill slow hours with controlled, limited-time offers. Built for local cafes, bakeries, and coffee shops in DFW."
+      content="Request business access to Twofer and turn slow hours into timely local specials. Built for local businesses in Dallas-Fort Worth."
       data-i18n-content="trial.meta"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -17,240 +17,236 @@
     <link rel="canonical" href="https://www.twoferapp.com/business/start-trial" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Twofer" />
-    <meta property="og:title" content="Start Your Twofer Business Account | Twofer" />
-    <meta property="og:description" content="Fill slow hours with controlled, limited-time offers. Built for local cafes, bakeries, and coffee shops in DFW." />
+    <meta property="og:title" content="Bring in customers during your slow hours | Twofer" />
+    <meta property="og:description" content="Request business access to Twofer and turn slow hours into timely local specials." />
     <meta property="og:url" content="https://www.twoferapp.com/business/start-trial" />
     <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260706-signup-refresh" />
+    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
   </head>
-  <body class="trial-page" data-application-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/submit-business-application">
-    <header class="site-header">
-      <nav class="nav" aria-label="Main navigation">
-        <a class="brand" href="/" aria-label="Twofer home">
+  <body class="trial-page business-access-page" data-application-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/submit-business-application">
+    <header class="site-header business-access-header">
+      <nav class="nav business-access-nav" data-i18n-aria-label="a11y.mainNavigation">
+        <a class="brand" href="/" data-i18n-aria-label="a11y.twoferHome">
           <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
           <span>Twofer</span>
         </a>
         <div class="nav-links" id="site-nav-links">
-          <a href="/#for-customers" data-i18n="nav.customers">For Customers</a>
           <a href="/#for-businesses" data-i18n="nav.businesses">For Businesses</a>
           <a href="/#how-it-works" data-i18n="nav.how">How It Works</a>
           <a href="/support" data-i18n="nav.support">Support</a>
         </div>
         <div class="nav-actions">
-          <div class="language-set" aria-label="Language options">
+          <div class="language-set" data-i18n-aria-label="a11y.languageOptions">
             <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
             <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
             <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
           </div>
-          <button
-            class="nav-menu-button"
-            type="button"
-            aria-controls="site-nav-links"
-            aria-expanded="false"
-            data-site-menu-toggle
-            data-i18n="nav.menu"
-          >
-            Menu
-          </button>
+          <button class="nav-menu-button" type="button" aria-controls="site-nav-links" aria-expanded="false" data-site-menu-toggle data-i18n="nav.menu">Menu</button>
         </div>
       </nav>
     </header>
 
-    <section class="signup-hero">
-      <div class="signup-hero-inner">
-        <p class="trial-kicker" data-i18n="trial.kicker">For local businesses</p>
-        <h1 class="trial-heading" data-i18n="trial.heading">Start your Twofer business account</h1>
-        <p class="trial-lede" data-i18n="trial.lede">
-          Twofer helps local coffee shops, cafes, and bakeries fill slow hours with controlled,
-          limited-time offers. Tell us about your business and we will review your access request.
-        </p>
-        <div class="signup-chips">
-          <span class="signup-chip" data-i18n="trial.chip1">No payment details needed to apply</span>
-          <span class="signup-chip" data-i18n="trial.chip2">Reviewed within 1-2 business days</span>
-          <span class="signup-chip" data-i18n="trial.chip3">Launching in Dallas-Fort Worth</span>
-        </div>
-        <p class="cta-row">
-          <a class="button" href="#business-application" data-i18n="trial.jump">Request access</a>
-        </p>
-      </div>
-    </section>
+    <main>
+      <section class="business-access-hero">
+        <div class="business-access-hero-inner">
+          <div class="business-access-copy">
+            <p class="access-kicker" data-i18n="trial.kicker">For local businesses</p>
+            <h1 data-i18n="trial.heading">Bring in customers during your slow hours</h1>
+            <p class="access-lede" data-i18n="trial.lede">Publish limited-time specials during the hours you choose, and let nearby customers find you. Tell us about your business and we will review your access request.</p>
+            <ul class="access-proof" data-i18n-aria-label="a11y.businessAccessHighlights">
+              <li data-i18n="trial.chip1">No payment details needed to apply</li>
+              <li data-i18n="trial.chip2">Reviewed within 1-2 business days</li>
+              <li data-i18n="trial.chip3">Live in Dallas-Fort Worth</li>
+            </ul>
+            <a class="button trial-jump" href="#business-application" data-i18n="trial.jump">Request business access</a>
+          </div>
 
-    <main class="trial-main">
-      <section class="section-copy" aria-label="Why Twofer">
-        <p class="eyebrow" data-i18n="trial.valueEyebrow">Why Twofer</p>
-        <h2 data-i18n="trial.valueTitle">Built for slow hours, not all-day discounts</h2>
-        <p data-i18n="trial.valueBody">
-          You decide when offers appear, how many are available, and how long they run.
-          Nothing goes live without your approval.
-        </p>
-      </section>
-      <div class="signup-value-grid">
-        <article class="feature-card">
-          <span class="icon-chip" aria-hidden="true">1</span>
-          <h3 data-i18n="trial.value1Title">Fill slow hours</h3>
-          <p data-i18n="trial.value1Body">Run limited-time offers only during the windows you choose.</p>
-        </article>
-        <article class="feature-card">
-          <span class="icon-chip" aria-hidden="true">2</span>
-          <h3 data-i18n="trial.value2Title">Keep control</h3>
-          <p data-i18n="trial.value2Body">Set quantity, timing, and terms. Pause or end an offer anytime.</p>
-        </article>
-        <article class="feature-card">
-          <span class="icon-chip" aria-hidden="true">3</span>
-          <h3 data-i18n="trial.value3Title">Create offers in minutes</h3>
-          <p data-i18n="trial.value3Body">AI drafts your offer copy. You review and approve before anything publishes.</p>
-        </article>
-        <article class="feature-card">
-          <span class="icon-chip" aria-hidden="true">4</span>
-          <h3 data-i18n="trial.value4Title">Simple redemption</h3>
-          <p data-i18n="trial.value4Body">Customers claim in the app and redeem in store with a QR code.</p>
-        </article>
-      </div>
+          <form class="business-access-form" id="business-application" novalidate>
+            <div class="business-form-intro">
+              <p data-i18n="trial.formEyebrow">Request business access</p>
+              <h2 id="business-application-heading" tabindex="-1" data-i18n="trial.formTitle">Start with a few basics</h2>
+              <span data-i18n="trial.formHint">Takes about 2 minutes. Fields marked * are required.</span>
+            </div>
 
-      <div class="trial-shell">
-        <form class="trial-form" id="business-application" novalidate>
-          <h2 class="trial-form-title" data-i18n="trial.formTitle">Request your business account</h2>
-          <p class="form-hint" data-i18n="trial.formHint">Takes about 2 minutes. Fields marked * are required.</p>
-          <div class="form-grid">
-            <label>
-              <span class="req" data-i18n="trial.name">Business name</span>
-              <input name="business_name" autocomplete="organization" required maxlength="120" />
-            </label>
-            <label>
-              <span class="req" data-i18n="trial.contact">Owner or manager name</span>
-              <input name="contact_name" autocomplete="name" required maxlength="120" />
-            </label>
-            <label>
-              <span class="req" data-i18n="trial.email">Business email</span>
-              <input name="email" type="email" autocomplete="email" required maxlength="254" />
-            </label>
-            <label>
-              <span data-i18n="trial.phone">Phone number (optional)</span>
-              <input name="phone" autocomplete="tel" maxlength="40" />
-            </label>
-            <label class="full">
-              <span data-i18n="trial.address">Business address</span>
-              <input name="address" autocomplete="street-address" maxlength="240" />
-            </label>
-            <label>
-              <span data-i18n="trial.type">Business type</span>
-              <select name="business_type">
-                <option value="" data-i18n="trial.typeEmpty">Select one</option>
-                <option value="coffee_shop" data-i18n="trial.coffee">Coffee shop</option>
-                <option value="cafe" data-i18n="trial.cafe">Cafe</option>
-                <option value="bakery" data-i18n="trial.bakery">Bakery</option>
-                <option value="restaurant" data-i18n="trial.restaurant">Restaurant</option>
-                <option value="other_local_business" data-i18n="trial.other">Other local business</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n="trial.web">Website or Instagram (optional)</span>
-              <input name="website_or_instagram" maxlength="180" />
-            </label>
-            <label class="full">
-              <span data-i18n="trial.slow">Your slowest hours (optional)</span>
-              <textarea
-                name="slow_hours"
-                maxlength="500"
-                placeholder="Example: Weekdays 2:00 - 5:00 PM"
-                data-i18n-placeholder="trial.slowPlaceholder"
-              ></textarea>
-            </label>
-            <label class="full">
-              <span data-i18n="trial.promote">What would you like to promote? (optional)</span>
-              <textarea name="offer_interests" maxlength="500"></textarea>
-            </label>
-            <label class="full">
-              <span data-i18n="trial.launch">City or neighborhood</span>
-              <input
-                name="launch_area"
-                maxlength="120"
-                placeholder="Example: Dallas, Oak Cliff, Bishop Arts"
-                data-i18n-placeholder="trial.launchPlaceholder"
-              />
-            </label>
+            <fieldset class="business-form-section">
+              <legend data-i18n="trial.essentialsTitle">The essentials</legend>
+              <p data-i18n="trial.essentialsBody">We use these details to review your request and connect your approved account.</p>
+              <div class="form-grid">
+                <label class="full">
+                  <span class="req" data-i18n="trial.name">Business name</span>
+                  <input name="business_name" autocomplete="organization" required maxlength="120" />
+                </label>
+                <label>
+                  <span class="req" data-i18n="trial.contact">Owner or manager name</span>
+                  <input name="contact_name" autocomplete="name" required maxlength="120" />
+                </label>
+                <label>
+                  <span class="req" data-i18n="trial.email">Business email</span>
+                  <input name="email" type="email" autocomplete="email" required maxlength="254" />
+                </label>
+              </div>
+            </fieldset>
+
+            <details class="business-details">
+              <summary>
+                <span data-i18n="trial.optionalTitle">Add business details</span>
+                <small data-i18n="trial.optionalTag">Optional</small>
+              </summary>
+              <p data-i18n="trial.optionalBody">These details help us understand where and how Twofer can support your business.</p>
+              <div class="form-grid">
+                <label>
+                  <span data-i18n="trial.phone">Phone number (optional)</span>
+                  <input name="phone" autocomplete="tel" maxlength="40" />
+                </label>
+                <label>
+                  <span data-i18n="trial.type">Business type</span>
+                  <select name="business_type">
+                    <option value="" data-i18n="trial.typeEmpty">Select one</option>
+                    <option value="coffee_shop" data-i18n="trial.coffee">Coffee shop</option>
+                    <option value="cafe" data-i18n="trial.cafe">Cafe</option>
+                    <option value="bakery" data-i18n="trial.bakery">Bakery</option>
+                    <option value="restaurant" data-i18n="trial.restaurant">Restaurant</option>
+                    <option value="other_local_business" data-i18n="trial.other">Other local business</option>
+                  </select>
+                </label>
+                <label class="full">
+                  <span data-i18n="trial.address">Business address</span>
+                  <input name="address" autocomplete="street-address" maxlength="240" />
+                </label>
+                <label>
+                  <span data-i18n="trial.web">Website or Instagram (optional)</span>
+                  <input name="website_or_instagram" maxlength="180" />
+                </label>
+                <label>
+                  <span data-i18n="trial.launch">City or neighborhood</span>
+                  <input name="launch_area" maxlength="120" placeholder="Example: Dallas, Oak Cliff, Bishop Arts" data-i18n-placeholder="trial.launchPlaceholder" />
+                </label>
+                <label class="full">
+                  <span data-i18n="trial.slow">Your slowest hours (optional)</span>
+                  <textarea name="slow_hours" maxlength="500" placeholder="Example: Weekdays 2:00 - 5:00 PM" data-i18n-placeholder="trial.slowPlaceholder"></textarea>
+                </label>
+                <label class="full">
+                  <span data-i18n="trial.promote">What would you like to promote? (optional)</span>
+                  <textarea name="offer_interests" maxlength="500"></textarea>
+                </label>
+                <!--
+                  Optional promotional-materials consent. Deliberately lives here,
+                  inside the optional details block, and NOT beside the two required
+                  consent checkboxes below: accepting the Business Terms must never
+                  imply permission to place materials. Never pre-checked.
+                -->
+                <label class="check full">
+                  <input name="promo_materials_authorized" type="checkbox" />
+                  <span>
+                    <small data-i18n="trial.promoMaterialsTag">Optional</small>
+                    <span data-i18n="trial.promoMaterialsCheckbox">Yes, I authorize Twofer to provide and place removable promotional materials at this location. I understand that I may move or remove them at any time.</span>
+                  </span>
+                </label>
+              </div>
+            </details>
+
             <label class="visually-hidden" aria-hidden="true">
               <span data-i18n="trial.honeypot">Company website</span>
               <input name="company_website" tabindex="-1" autocomplete="off" />
             </label>
-            <label class="check full">
-              <input name="terms_accepted" type="checkbox" required />
-              <span>
-                <span data-i18n="trial.terms">I accept the</span>
-                <a href="/business-terms" target="_blank" rel="noreferrer" data-i18n="trial.businessTerms">Business Terms</a>.
-              </span>
-            </label>
-            <label class="check full">
-              <input name="privacy_acknowledged" type="checkbox" required />
-              <span>
-                <span data-i18n="trial.privacyLead">I acknowledge the</span>
-                <a href="/privacy" target="_blank" rel="noreferrer" data-i18n="trial.privacyPolicy">Privacy Policy</a>.
-              </span>
-            </label>
-          </div>
-          <div class="trial-actions">
-            <button type="submit" data-submit-button data-i18n="trial.submit">Submit access request</button>
-            <a class="button button-secondary" href="/support" data-i18n="trial.contactSupport">Contact support</a>
-          </div>
-          <p id="form-status" class="status" role="status" aria-live="polite"></p>
-        </form>
+            <div class="business-consents">
+              <label class="check">
+                <input name="terms_accepted" type="checkbox" required />
+                <span><span data-i18n="trial.terms">I accept the</span> <a href="/business-terms" target="_blank" rel="noreferrer" data-i18n="trial.businessTerms">Business Terms</a>.</span>
+              </label>
+              <label class="check">
+                <input name="privacy_acknowledged" type="checkbox" required />
+                <span><span data-i18n="trial.privacyLead">I acknowledge the</span> <a href="/privacy" target="_blank" rel="noreferrer" data-i18n="trial.privacyPolicy">Privacy Policy</a>.</span>
+              </label>
+            </div>
+            <div class="trial-actions">
+              <button class="button-coral" type="submit" data-submit-button data-i18n="trial.submit">Submit access request</button>
+              <a class="button button-secondary" href="/support" data-i18n="trial.contactSupport">Contact support</a>
+            </div>
+            <p class="business-form-note" data-i18n="trial.formNote">Requesting access never charges you anything.</p>
+            <p id="form-status" class="status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
 
-        <section class="trial-panel" aria-label="What happens next">
-          <h2 data-i18n="trial.stepsTitle">What happens next</h2>
-          <ol class="signup-steps">
+      <section class="business-access-main">
+        <div class="business-value-intro">
+          <p class="eyebrow" data-i18n="trial.valueEyebrow">Why Twofer</p>
+          <h2 data-i18n="trial.valueTitle">Built for slow hours, not all-day discounts</h2>
+          <p data-i18n="trial.valueBody">Nothing goes live without your approval.</p>
+        </div>
+        <div class="business-value-grid" data-i18n-aria-label="a11y.businessBenefits">
+          <article>
+            <span class="value-number" aria-hidden="true">01</span>
+            <h3 data-i18n="trial.value1Title">You pick the hours</h3>
+            <p data-i18n="trial.value1Body">Run limited-time offers only during the windows you choose.</p>
+          </article>
+          <article>
+            <span class="value-number" aria-hidden="true">02</span>
+            <h3 data-i18n="trial.value2Title">Keep control</h3>
+            <p data-i18n="trial.value2Body">Set quantity, timing, and terms. Pause or end an offer anytime.</p>
+          </article>
+          <article>
+            <span class="value-number" aria-hidden="true">03</span>
+            <h3 data-i18n="trial.value3Title">Create offers in minutes</h3>
+            <p data-i18n="trial.value3Body">AI drafts your offer copy. You review and approve before anything publishes.</p>
+          </article>
+        </div>
+
+        <section class="business-journey" data-i18n-aria-label="a11y.businessAccessJourney">
+          <div>
+            <p class="eyebrow" data-i18n="trial.progressEyebrow">A simple start</p>
+            <h2 data-i18n="trial.progressTitle">Apply, review, launch</h2>
+          </div>
+          <ol>
             <li>
-              <span class="signup-step-num" aria-hidden="true">1</span>
-              <div>
-                <strong data-i18n="trial.stepA1Title">Submit your request</strong>
-                <p data-i18n="trial.stepA1Body">Share a few details about your business. No payment information is needed.</p>
-              </div>
+              <span aria-hidden="true">1</span>
+              <div><strong data-i18n="trial.stepA1Title">Submit your request</strong><p data-i18n="trial.stepA1Body">Share a few details about your business.</p></div>
             </li>
             <li>
-              <span class="signup-step-num" aria-hidden="true">2</span>
-              <div>
-                <strong data-i18n="trial.stepA2Title">We review it</strong>
-                <p data-i18n="trial.stepA2Body">Most requests are reviewed within 1-2 business days.</p>
-              </div>
+              <span aria-hidden="true">2</span>
+              <div><strong data-i18n="trial.stepA2Title">We review it</strong><p data-i18n="trial.stepA2Body">Most requests are reviewed within 1-2 business days.</p></div>
             </li>
             <li>
-              <span class="signup-step-num" aria-hidden="true">3</span>
-              <div>
-                <strong data-i18n="trial.stepA3Title">Sign in and set up</strong>
-                <p data-i18n="trial.stepA3Body">Once approved, sign in to the Twofer app with this same email to finish your business profile and create your first offer.</p>
-              </div>
+              <span aria-hidden="true">3</span>
+              <div><strong data-i18n="trial.stepA3Title">Sign in and set up</strong><p data-i18n="trial.stepA3Body">Once approved, sign in to the Twofer app with this same email to finish your business profile and menu. Your 30-day trial starts after secure Checkout.</p></div>
             </li>
           </ol>
-          <p class="trial-panel-note" data-i18n="trial.panelNote">
-            Review and approval come before any payment. Requesting access never charges you anything.
-          </p>
         </section>
-      </div>
+      </section>
     </main>
 
-    <footer class="trial-footer">
+    <footer class="trial-footer business-access-footer">
       <div class="trial-footer-inner">
-        <a class="brand footer-brand" href="/" aria-label="Twofer home">
-          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
-          <span>Twofer</span>
+        <a class="brand footer-brand" href="/" data-i18n-aria-label="a11y.twoferHome">
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span>
         </a>
-        <p data-i18n="trial.footer">
-          Business access is reviewed before activation. Checkout and subscription changes are handled only
-          through approved web/admin billing flows.
-        </p>
+        <p data-i18n="trial.footer">Business access is reviewed before activation. Subscriptions and billing are handled through a secure web checkout.</p>
       </div>
     </footer>
 
-    <script src="/localization.js?v=20260707-launch-copy"></script>
+    <script src="/localization.js?v=20260722-l2-feed"></script>
     <script>
       const form = document.querySelector("#business-application");
       const statusEl = document.querySelector("#form-status");
       const submitButton = form.querySelector("[data-submit-button]");
+      const applicationHeading = document.querySelector("#business-application-heading");
+
+      document.querySelector(".trial-jump")?.addEventListener("click", () => {
+        window.setTimeout(() => applicationHeading?.focus(), 0);
+      });
 
       function msg(key) {
         return window.TwoferI18n?.t(key) || "";
+      }
+
+      function setStatus(text, isError = false) {
+        statusEl.className = isError ? "status error" : "status";
+        statusEl.setAttribute("role", isError ? "alert" : "status");
+        statusEl.textContent = text;
       }
 
       function clearInvalid() {
@@ -269,22 +265,12 @@
       }
 
       function validationMessage(data) {
-        if (!String(data.get("business_name") || "").trim()) {
-          return { field: markInvalid("business_name"), text: msg("trial.validationName") || "Enter your business name." };
-        }
-        if (!String(data.get("contact_name") || "").trim()) {
-          return { field: markInvalid("contact_name"), text: msg("trial.validationContact") || "Enter the owner or manager name." };
-        }
+        if (!String(data.get("business_name") || "").trim()) return { field: markInvalid("business_name"), text: msg("trial.validationName") || "Enter your business name." };
+        if (!String(data.get("contact_name") || "").trim()) return { field: markInvalid("contact_name"), text: msg("trial.validationContact") || "Enter the owner or manager name." };
         const email = String(data.get("email") || "").trim();
-        if (!email || !email.includes("@")) {
-          return { field: markInvalid("email"), text: msg("trial.validationEmail") || "Enter a valid business email." };
-        }
-        if (data.get("terms_accepted") !== "on") {
-          return { field: markInvalid("terms_accepted"), text: msg("trial.validationTerms") || "Please accept the Business Terms." };
-        }
-        if (data.get("privacy_acknowledged") !== "on") {
-          return { field: markInvalid("privacy_acknowledged"), text: msg("trial.validationPrivacy") || "Please acknowledge the Privacy Policy." };
-        }
+        if (!email || !email.includes("@")) return { field: markInvalid("email"), text: msg("trial.validationEmail") || "Enter a valid business email." };
+        if (data.get("terms_accepted") !== "on") return { field: markInvalid("terms_accepted"), text: msg("trial.validationTerms") || "Please accept the Business Terms." };
+        if (data.get("privacy_acknowledged") !== "on") return { field: markInvalid("privacy_acknowledged"), text: msg("trial.validationPrivacy") || "Please acknowledge the Privacy Policy." };
         return null;
       }
 
@@ -294,33 +280,28 @@
         const data = new FormData(form);
         const invalid = validationMessage(data);
         if (invalid) {
-          statusEl.className = "status error";
-          statusEl.textContent = invalid.text;
+          setStatus(invalid.text, true);
           invalid.field?.focus();
           return;
         }
-        statusEl.className = "status";
-        statusEl.textContent = msg("trial.submitting") || "Submitting...";
+        setStatus(msg("trial.submitting") || "Submitting...");
         submitButton.disabled = true;
         const payload = Object.fromEntries(data.entries());
         payload.terms_accepted = data.get("terms_accepted") === "on";
         payload.privacy_acknowledged = data.get("privacy_acknowledged") === "on";
+        // Optional: an unchecked box is absent from FormData, so this is false
+        // unless the business explicitly opted in.
+        payload.promo_materials_authorized = data.get("promo_materials_authorized") === "on";
         try {
-          const response = await fetch(document.body.dataset.applicationEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const response = await fetch(document.body.dataset.applicationEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (response.status === 429) {
-            statusEl.className = "status error";
-            statusEl.textContent = msg("trial.rateLimited") || "You have reached the request limit for now. Please try again in about 30 minutes.";
+            setStatus(msg("trial.rateLimited") || "You have reached the request limit for now. Please try again in about 30 minutes.", true);
             return;
           }
           if (!response.ok) throw new Error("Request failed");
           window.location.assign("/business/thanks/");
         } catch {
-          statusEl.className = "status error";
-          statusEl.textContent = msg("trial.failure") || "We could not submit the request. Please try again, or email support@twoferapp.com.";
+          setStatus(msg("trial.failure") || "We could not submit the request. Please try again, or email support@twoferapp.com.", true);
         } finally {
           submitButton.disabled = false;
         }

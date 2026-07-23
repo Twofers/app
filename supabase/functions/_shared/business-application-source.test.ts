@@ -37,6 +37,15 @@ describe("business application intake", () => {
     expect(source).not.toMatch(/OPENAI_API_KEY/);
   });
 
+  it("keeps even low-risk public applications pending until an explicit approval", () => {
+    const source = read("supabase/functions/submit-business-application/index.ts");
+    const lowRiskBranch = source.slice(source.indexOf("if (score >= 70)"), source.indexOf("if (score >= 40)"));
+    expect(lowRiskBranch).toMatch(/status:\s*"pending_review"/);
+    expect(lowRiskBranch).toMatch(/access_tier:\s*"pending_verification"/);
+    expect(lowRiskBranch).toMatch(/verification_status:\s*"verified_low_risk"/);
+    expect(lowRiskBranch).not.toMatch(/status:\s*"trial_limited"|access_tier:\s*"trial_limited"/);
+  });
+
   it("rate-limits the public endpoint per email and per IP before inserting", () => {
     const source = read("supabase/functions/submit-business-application/index.ts");
     // Per-email and per-IP throttles must both exist with finite ceilings.
@@ -49,11 +58,20 @@ describe("business application intake", () => {
     expect(source).toMatch(/\.eq\("owner_email", params\.email\)/);
     expect(source).toMatch(/\.eq\("ip_address", params\.ip\)/);
     expect(source).toMatch(/\.gte\("created_at", windowStart\)/);
-    // Exceeding either ceiling returns HTTP 429, and the client IP is read
-    // from the x-forwarded-for header rather than trusted from the body.
+    // Exceeding either ceiling returns HTTP 429. The client IP is derived from
+    // trusted edge/CDN headers and validated as a real IP — never trusting the
+    // attacker-controllable leftmost x-forwarded-for hop on this public endpoint.
     expect(source).toMatch(/Too many requests/);
     expect(source).toMatch(/\},\s*429\)/);
-    expect(source).toMatch(/firstForwardedIp\(req\.headers\.get\("x-forwarded-for"\)\)/);
+    // IP derivation lives in the shared trusted-IP helper (validated, prefers
+    // unspoofable edge headers, never the leftmost XFF hop) — see client-ip.test.ts.
+    expect(source).toMatch(/from "\.\.\/_shared\/client-ip\.ts"/);
+    expect(source).toMatch(/clientIpFromRequest\(req\)/);
+    expect(source).not.toMatch(/firstForwardedIp/);
+    // A client-independent flood ceiling backstops evasion of the per-actor caps
+    // (email/IP rotation) by bounding the costly admin alert + quick-approval mint.
+    expect(source).toMatch(/const RATE_LIMIT_MAX_ALERTS_PER_WINDOW\s*=\s*\d+/);
+    expect(source).toMatch(/alertFloodExceeded/);
     // A honeypot field short-circuits obvious bots before any DB work.
     expect(source).toMatch(/cleanString\(payload\.company_website/);
 
@@ -64,6 +82,14 @@ describe("business application intake", () => {
     expect(rateCheckAt).toBeGreaterThan(-1);
     expect(insertAt).toBeGreaterThan(-1);
     expect(rateCheckAt).toBeLessThan(insertAt);
+
+    // The throttle-counted onboarding request must be recorded BEFORE the costly
+    // outbound admin alert, so network I/O stays out of the rate-limit window.
+    const onboardingAt = source.indexOf("createOnboardingRequest(supabase");
+    const alertAt = source.indexOf("sendNewApplicationAdminAlert(");
+    expect(onboardingAt).toBeGreaterThan(-1);
+    expect(alertAt).toBeGreaterThan(-1);
+    expect(onboardingAt).toBeLessThan(alertAt);
   });
 
   it("registers the public function and website CORS origin", () => {
@@ -85,11 +111,17 @@ describe("business application intake", () => {
     expect(source).toMatch(/from\("admin_users"\)/);
     expect(source).toMatch(/from\("business_applications"\)/);
     expect(source).toMatch(/createOnboardingRequest/);
-    expect(source).toMatch(/admin_business_application_approved_limited/);
-    expect(source).toMatch(/admin_business_application_approved_full/);
-    expect(source).toMatch(/admin_business_application_billing_sync_failed/);
-    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/admin_business_application_approved_for_setup/);
+    expect(source).toMatch(/admin_business_application_approved_for_setup_full/);
+    expect(source).toMatch(/approved_not_activated/);
+    expect(source).not.toMatch(/admin_business_application_billing_sync_failed/);
+    expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).toMatch(/billing_sync_warning/);
+    // Token-gated quick_preview PII disclosure is audited (reachable without an
+    // admin session), and quick_confirm re-runs the duplicate screen on the
+    // freshly claimed row before granting.
+    expect(source).toMatch(/admin_business_application_quick_previewed/);
+    expect(source).toMatch(/hasPossibleDuplicate/);
     expect(source).not.toMatch(/auth\.admin\.listUsers/);
     expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
   });
@@ -101,8 +133,8 @@ describe("business application intake", () => {
     expect(page).toMatch(/\/admin\/trial-requests\.js/);
     expect(script).toMatch(/action: "list"/);
     expect(script).toMatch(/action: "decide"/);
-    expect(script).toMatch(/approve_limited/);
-    expect(script).toMatch(/approve_full/);
+    expect(script).toMatch(/approve_setup/);
+    expect(script).toMatch(/suspend/);
     expect(script).toMatch(/AbortController/);
     expect(script).toMatch(/networkFailureMessage/);
     expect(script).toMatch(/billing_sync_warning/);
@@ -130,7 +162,7 @@ describe("business application intake", () => {
 
   it("rejects an unrecognized action with a clear 400 instead of silently falling through to listApplications", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business"\]\)/);
+    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"\]\)/);
     expect(source).toMatch(/if \(!KNOWN_ACTIONS\.has\(action\)\) \{\s*\n\s*return json\(req, \{ ok: false, error: "Unknown action\.", request_id: requestId \}, 400\);/);
   });
 

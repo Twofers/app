@@ -11,6 +11,7 @@ import {
   getUnverifiedLocationFromDealRows,
 } from "../_shared/business-verification.ts";
 import { validateExactLocalizationApprovalPayload } from "../_shared/localization-approval-validation.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { validatePosterSpecV1 } from "../../../lib/poster/posterAdSpec.ts";
 import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
@@ -114,6 +115,22 @@ function coerceDealRows(value: unknown): Record<string, unknown>[] {
   return value.filter((row): row is Record<string, unknown> => {
     return !!row && typeof row === "object" && !Array.isArray(row);
   });
+}
+
+/**
+ * A deal whose end does not follow its start is dead on arrival — already
+ * expired the moment it is written. Neither the publish RPC nor the deals table
+ * rejects one, so nothing downstream catches it. Clients advance a start that
+ * has slipped into the past up to "now", which can invert a window that was
+ * coherent when it was composed, and builds already in the field have no guard
+ * of their own. Only a pair that is present and parseable is judged here;
+ * missing or malformed values are left to the column types.
+ */
+function hasInvertedDealWindow(row: Record<string, unknown>): boolean {
+  const start = Date.parse(cleanText(row.start_time));
+  const end = Date.parse(cleanText(row.end_time));
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return end <= start;
 }
 
 function cleanText(value: unknown): string {
@@ -413,6 +430,16 @@ serve(async (req) => {
     if (dealRows.some((row) => row.business_id !== businessId)) {
       return jsonResponse(req, { error: "Deal row business_id mismatch" }, 403);
     }
+    if (dealRows.some((row) => hasInvertedDealWindow(row))) {
+      return jsonResponse(
+        req,
+        {
+          error: "Deal end time must be after its start time.",
+          error_code: "INVALID_DEAL_WINDOW",
+        },
+        400,
+      );
+    }
 
     const offerDefinition = body.offer_definition as OfferDefinitionPayload;
     const validation = validateOfferDefinitionPayload(offerDefinition);
@@ -438,6 +465,19 @@ serve(async (req) => {
       .maybeSingle();
     if (businessError || !business || business.owner_id !== user.id) {
       return jsonResponse(req, { error: "Business not found for owner" }, 403);
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_publish_offer) {
+      return jsonResponse(
+        req,
+        {
+          error: "Business access does not currently allow publishing.",
+          error_code: "BUSINESS_PUBLISH_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        },
+        403,
+      );
     }
 
     // Independent of billing/verification: publishing requires the owner to have

@@ -27,9 +27,11 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useRegisterSuccessSound } from "@/hooks/use-register-success-sound";
 import { localizedDealTitle, type LocalizedDealFields } from "@/lib/deal-localization";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import {
   confirmStaffRedemption,
   exitRedemptionMode,
@@ -86,6 +88,7 @@ export default function RedemptionModeScreen() {
   const [scanned, setScanned] = useState(false);
   const [exiting, setExiting] = useState(false);
   const busyRef = useRef(false);
+  const playRegisterSuccess = useRegisterSuccessSound();
 
   const staffReady = isRedeemerSession(session) && sessionStatus === "ready";
   const lockedExpired = Boolean(state) && !staffReady;
@@ -179,14 +182,14 @@ export default function RedemptionModeScreen() {
       setPreview(result);
       setLastInput(body);
       if (!result.ok) {
-        setBanner({ message: result.message || t("redemptionMode.previewFailed", { defaultValue: "Cannot redeem this code." }), tone: "error" });
+        setBanner({ message: result.message ? translateKnownApiMessage(result.message, t) : t("redemptionMode.previewFailed", { defaultValue: "Cannot redeem this code." }), tone: "error" });
       }
     } catch (err) {
       setPreview(null);
       setLastInput(null);
       setScanned(false);
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.sessionExpired", { defaultValue: "Redemption session expired. Owner PIN required." }),
+        message: err instanceof Error ? translateKnownApiMessage(err.message, t) : t("redemptionMode.sessionExpired", { defaultValue: "Redemption session expired. Owner PIN required." }),
         tone: "error",
       });
     } finally {
@@ -203,16 +206,17 @@ export default function RedemptionModeScreen() {
     try {
       const result = await confirmStaffRedemption(lastInput);
       if (!result.ok) {
-        setBanner({ message: result.message || t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }), tone: "error" });
+        setBanner({ message: result.message ? translateKnownApiMessage(result.message, t) : t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }), tone: "error" });
         return;
       }
       setPreview(null);
       setSuccess(result);
       setManualCode("");
       setScanned(false);
+      void playRegisterSuccess();
     } catch (err) {
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }),
+        message: err instanceof Error ? translateKnownApiMessage(err.message, t) : t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }),
         tone: "error",
       });
     } finally {

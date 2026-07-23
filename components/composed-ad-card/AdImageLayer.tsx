@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
@@ -15,6 +16,13 @@ type AdImageLayerProps = {
   tokens: AdThemeTokens;
   fallbackVisualLabel?: string | null;
   rounded?: boolean;
+  /**
+   * "cover" (default) fills the frame, cropping overflow — right for full-bleed
+   * hero layouts. "contain" shows the WHOLE image with a soft blurred copy behind
+   * it filling the letterbox gaps — used by the shorter feed cards so the poster
+   * is never cropped and deal text still sits above the fold.
+   */
+  fit?: "cover" | "contain";
 };
 
 function clean(value: string | null | undefined): string {
@@ -30,25 +38,55 @@ export function AdImageLayer({
   tokens,
   fallbackVisualLabel,
   rounded,
+  fit = "cover",
 }: AdImageLayerProps) {
+  // Fall back to the placeholder art when a poster URL fails to load (e.g. a
+  // missing or non-public Storage object) instead of rendering a blank frame.
+  // Reset on imageUri change so a recycled list row retries the new poster.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUri]);
   const fallbackVisual = buildDeterministicAdFallbackVisual({
     businessName: merchantName,
     headline,
     offerLine,
   });
-  const showImage = Boolean(clean(imageUri)) && presentation.imageSourceType !== "deterministic_fallback";
+  const showImage = Boolean(clean(imageUri)) && presentation.imageSourceType !== "deterministic_fallback" && !failed;
   const label = clean(fallbackVisualLabel) || "Twofer offer";
 
   return (
     <View style={[styles.root, rounded ? styles.rounded : null]}>
       {showImage ? (
-        <Image
-          source={{ uri: imageUri! }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={200}
-          accessibilityLabel={headline}
-        />
+        fit === "contain" ? (
+          <>
+            <Image
+              source={{ uri: imageUri! }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              blurRadius={22}
+              transition={200}
+              onError={() => setFailed(true)}
+            />
+            <Image
+              source={{ uri: imageUri! }}
+              style={StyleSheet.absoluteFill}
+              contentFit="contain"
+              transition={200}
+              accessibilityLabel={headline}
+              onError={() => setFailed(true)}
+            />
+          </>
+        ) : (
+          <Image
+            source={{ uri: imageUri! }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+            accessibilityLabel={headline}
+            onError={() => setFailed(true)}
+          />
+        )
       ) : (
         <>
           <LinearGradient

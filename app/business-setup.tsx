@@ -30,6 +30,8 @@ import {
   type BusinessOnboardingContext,
 } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { isBusinessNameLocked } from "@/lib/business-name-change";
+import { BusinessNameChangeCard } from "@/components/business-name-change-request";
 import { isSiteImportEnabled } from "@/lib/runtime-env";
 import {
   importBusinessWebsite,
@@ -37,14 +39,10 @@ import {
   type SiteImportMenuItem,
   type SiteImportResult,
 } from "@/lib/business-site-import";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
+import { setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
-import {
-  BUSINESS_INVITE_PENDING_META_KEY,
-  isUserInviteValidated,
-  isValidBusinessInviteCode,
-  submitBusinessInvite,
-} from "@/lib/business-invite";
 
 type Tone = "error" | "success" | "info";
 
@@ -113,6 +111,12 @@ export default function BusinessSetupScreen() {
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
   const [onboardingContext, setOnboardingContext] = useState<BusinessOnboardingContext | null>(null);
+  // Existing business id + lifecycle status (from either prefill path). Once
+  // the business is publicly visible the name is locked server-side
+  // (migration 20260816120000); the UI mirrors that with a read-only field +
+  // the name change request card.
+  const [existingBusinessId, setExistingBusinessId] = useState<string | null>(null);
+  const [businessStatus, setBusinessStatus] = useState<string | null>(null);
   const [importedFromWebsite, setImportedFromWebsite] = useState(false);
   // Website-import (flag-gated). `websiteUrl` is populated by applyLookupResult
   // from the verified Google Places result; the card only shows once it's set.
@@ -122,17 +126,13 @@ export default function BusinessSetupScreen() {
   const [selectedLogoCandidate, setSelectedLogoCandidate] = useState<number | null>(null);
   const [importItems, setImportItems] = useState<SiteImportMenuItem[]>([]);
   const [importConsent, setImportConsent] = useState(false);
+  // Optional promotional-materials authorization. Starts unchecked and never
+  // gates submit — declining is a first-class outcome with no warning styling.
+  const [promoAuthChecked, setPromoAuthChecked] = useState(false);
   const [logoFromImport, setLogoFromImport] = useState(false);
   // Shown inline when someone taps an imported logo before checking the
   // copyright-consent box — otherwise the tap is a silent no-op.
   const [showLogoConsentHint, setShowLogoConsentHint] = useState(false);
-  // Gap fix for the invite-code soft gate. `null` while we still don't know,
-  // `true` if the user has a row in business_invite_validations (or just earned
-  // one by auto-consuming the code stashed at signup), `false` if they reached
-  // this screen without ever validating — in which case we render the input.
-  const [inviteValidated, setInviteValidated] = useState<boolean | null>(null);
-  const [inviteCodeInput, setInviteCodeInput] = useState("");
-  const [inviteError, setInviteError] = useState<string | null>(null);
   // FIX: Track the post-submit redirect timer so it can be cancelled on unmount.
   // Without this, the setTimeout callback fires after navigation away, causing
   // state updates on an unmounted component and potential double-navigation.
@@ -182,16 +182,21 @@ export default function BusinessSetupScreen() {
   const resolvedCategory = category === "other" ? customCategory.trim() : category;
   const resolvedHours = hoursPreset === "custom_prompt" ? customHours.trim() : hoursPreset ? t(`businessSetup.hoursPreset.${hoursPreset}`) : "";
   const copyKeys = useMemo(() => getBusinessSetupCopyKeys(setupMode, busy), [setupMode, busy]);
+  const setupBypass = useMemo(
+    () =>
+      isAuthBypassEnabled({
+        skipSetup: String(params.skipSetup ?? ""),
+        e2e: String(params.e2e ?? ""),
+        isDev: __DEV__,
+      }),
+    [params.skipSetup, params.e2e],
+  );
+  const nameLocked = isBusinessNameLocked(businessStatus);
 
   useEffect(() => {
     if (authLoading) return;
-    const bypass = isAuthBypassEnabled({
-      skipSetup: String(params.skipSetup ?? ""),
-      e2e: String(params.e2e ?? ""),
-      isDev: __DEV__,
-    });
-    if (!bypass && !session?.user?.id) router.replace("/auth-landing");
-  }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
+    if (!setupBypass && !session?.user?.id) router.replace("/auth-landing");
+  }, [router, setupBypass, session?.user?.id, authLoading]);
 
   // Pre-fill the form when an existing business is found for this owner. Without
   // this, navigating back to /business-setup to "edit" shows an empty form, and
@@ -212,10 +217,11 @@ export default function BusinessSetupScreen() {
         if (context.business) {
           const row = context.business;
           setSetupMode("edit");
+          setExistingBusinessId(row.id);
+          setBusinessStatus(row.status ?? null);
           setImportedFromWebsite(
             Boolean(context.field_sources?.some((source) => source.source === "website_signup" || source.source === "app_login")),
           );
-          setInviteValidated(true);
           setExistingLogoUrl((prev) => prev ?? (row.logo_url ?? null));
           setBusinessName((prev) => prev || (row.name ?? ""));
           setAddress((prev) => prev || (row.address ?? row.location ?? ""));
@@ -258,6 +264,8 @@ export default function BusinessSetupScreen() {
         return;
       }
       setSetupMode("edit");
+      setExistingBusinessId(row.id);
+      setBusinessStatus(row.status ?? null);
       setExistingLogoUrl((prev) => prev ?? (row.logo_url ?? null));
       setBusinessName((prev) => prev || (row.name ?? ""));
       setAddress((prev) => prev || (row.address ?? ""));
@@ -289,37 +297,6 @@ export default function BusinessSetupScreen() {
       cancelled = true;
     };
   }, [authLoading, session?.user?.id, t]);
-
-  // Invite-validation check. Lives separately from the business prefill so a
-  // first-time user (no business row yet) still gets the right gate state.
-  // If the signup stashed a code in user_metadata we try it server-side once;
-  // either way, the resulting state drives whether the invite-code field is
-  // rendered below.
-  useEffect(() => {
-    if (authLoading) return;
-    const uid = session?.user?.id;
-    if (!uid) return;
-    let cancelled = false;
-    void (async () => {
-      if (await isUserInviteValidated(supabase, uid)) {
-        if (!cancelled) setInviteValidated(true);
-        return;
-      }
-      const meta = session?.user?.user_metadata as Record<string, unknown> | undefined;
-      const pending = meta?.[BUSINESS_INVITE_PENDING_META_KEY];
-      if (typeof pending === "string" && pending.length > 0) {
-        const result = await submitBusinessInvite(supabase, pending);
-        if (!cancelled && result.ok) {
-          setInviteValidated(true);
-          return;
-        }
-      }
-      if (!cancelled) setInviteValidated(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, session?.user?.id, session?.user?.user_metadata]);
 
   async function pickLogo() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -461,16 +438,20 @@ export default function BusinessSetupScreen() {
         .from("business_menu_items")
         .select("name")
         .eq("business_id", businessId);
+      // Legacy library rows may still carry "Name ( long description )" — dedupe
+      // on the split short name so a re-import doesn't duplicate those items.
+      const nameKey = (value: string) => splitMenuItemDescription(value).name.toLowerCase();
       const existingNames = new Set(
         (existing ?? [])
-          .map((r) => (typeof (r as { name?: unknown }).name === "string" ? (r as { name: string }).name.trim().toLowerCase() : ""))
+          .map((r) => (typeof (r as { name?: unknown }).name === "string" ? nameKey((r as { name: string }).name) : ""))
           .filter(Boolean),
       );
-      const toInsert = importItems.filter((r) => !existingNames.has(r.name.trim().toLowerCase()));
+      const toInsert = importItems.filter((r) => !existingNames.has(nameKey(r.name)));
       if (toInsert.length === 0) return true;
       const payload = toInsert.map((r, i) => ({
         business_id: businessId,
         name: r.name,
+        description: r.description?.trim() || null,
         category: r.category?.trim() || null,
         price_text: r.price_text?.trim() || null,
         size_options: r.size_options.length > 0 ? r.size_options : null,
@@ -601,10 +582,29 @@ export default function BusinessSetupScreen() {
     }
   }
 
+  /**
+   * Records the optional promotional-materials authorization after a successful
+   * profile save. Returns false on failure so the caller can show a soft notice
+   * — this must never fail or block onboarding completion.
+   */
+  async function applyPromoAuthorization(businessId: string | null | undefined): Promise<boolean> {
+    if (!promoAuthChecked || !businessId) return true;
+    try {
+      await setPromoMaterialsAuthorization({
+        businessId,
+        action: "authorize",
+        source: "app_onboarding",
+      });
+      return true;
+    } catch (e) {
+      if (__DEV__) console.warn("[business-setup] promo materials authorization failed:", e);
+      return false;
+    }
+  }
+
   async function onSubmit() {
     if (busy) return;
     setBanner(null);
-    setInviteError(null);
     if (!trimmed.businessName || !trimmed.address) {
       setBanner({ message: t("businessSetup.errNameAddress"), tone: "error" });
       return;
@@ -616,43 +616,8 @@ export default function BusinessSetupScreen() {
       return;
     }
 
-    // Gap fix: if we still don't know whether this user is invite-validated,
-    // make them wait one beat instead of letting them slip through. This is
-    // briefly true on first mount before the validations check resolves.
-    if (inviteValidated === null) {
-      setBanner({ message: t("businessSetup.errCheckingInvite", { defaultValue: "Hold on a moment…" }), tone: "info" });
-      return;
-    }
-
     setBusy(true);
     try {
-      // Gap fix: a customer who switched roles to Business gets challenged
-      // here, since they never went through the signup-side invite gate.
-      // submitBusinessInvite re-validates the code server-side, so a forged
-      // client check still can't get past the trigger on businesses.
-      if (inviteValidated === false) {
-        if (!isValidBusinessInviteCode(inviteCodeInput)) {
-          setInviteError(
-            t("businessSetup.errInviteCode", {
-              defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
-            }),
-          );
-          setBusy(false);
-          return;
-        }
-        const result = await submitBusinessInvite(supabase, inviteCodeInput);
-        if (!result.ok) {
-          setInviteError(
-            t("businessSetup.errInviteCode", {
-              defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
-            }),
-          );
-          setBusy(false);
-          return;
-        }
-        setInviteValidated(true);
-      }
-
       const addr = trimmed.address;
 
       // Not an upsert on owner_id anymore: `ON CONFLICT (owner_id) DO UPDATE`
@@ -661,6 +626,10 @@ export default function BusinessSetupScreen() {
       // get_my_business() and branch instead.
       const { row: existingBiz, error: existingErr } = await fetchOwnerBusiness(supabase);
       if (existingErr) throw new Error(existingErr.message);
+      if (!setupBypass && !existingBiz && !onboardingContext?.business) {
+        setBanner({ message: t("businessSetup.approvalRequired"), tone: "info" });
+        return;
+      }
 
       const bizPayload = {
         name: trimmed.businessName,
@@ -691,12 +660,16 @@ export default function BusinessSetupScreen() {
           }
         }
         const menuSaveOk = await saveImportedMenuItems(onboardingContext.business.id);
-        if (menuSaveOk) {
-          setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-          scheduleDashboardRedirect(250);
-        } else {
+        const promoOk = await applyPromoAuthorization(onboardingContext.business.id);
+        if (!menuSaveOk) {
           setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
           scheduleDashboardRedirect(1500);
+        } else if (!promoOk) {
+          setBanner({ message: t("businessSetup.promoAuthDeferred"), tone: "info" });
+          scheduleDashboardRedirect(1500);
+        } else {
+          setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+          scheduleDashboardRedirect(250);
         }
         return;
       }
@@ -751,12 +724,16 @@ export default function BusinessSetupScreen() {
 
       const savedBizId = existingBiz?.id ?? bizData?.id;
       const menuSaveOk = savedBizId ? await saveImportedMenuItems(savedBizId) : true;
-      if (menuSaveOk) {
-        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
-        scheduleDashboardRedirect(250);
-      } else {
+      const promoOk = await applyPromoAuthorization(savedBizId);
+      if (!menuSaveOk) {
         setBanner({ message: t("businessSetup.import.menuSaveFailed"), tone: "error" });
         scheduleDashboardRedirect(1500);
+      } else if (!promoOk) {
+        setBanner({ message: t("businessSetup.promoAuthDeferred"), tone: "info" });
+        scheduleDashboardRedirect(1500);
+      } else {
+        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+        scheduleDashboardRedirect(250);
       }
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);
@@ -834,55 +811,6 @@ export default function BusinessSetupScreen() {
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
-        {inviteValidated === false ? (
-          <View
-            style={{
-              backgroundColor: "rgba(255,159,28,0.08)",
-              borderRadius: Radii.lg,
-              borderWidth: 1,
-              borderColor: theme.primary,
-              padding: Spacing.md,
-              gap: Spacing.sm,
-            }}
-          >
-            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
-              {t("businessSetup.inviteCodeLabel", { defaultValue: "Business invite code" })}
-            </Text>
-            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75, color: theme.text }}>
-              {t("businessSetup.inviteCodeHint", {
-                defaultValue:
-                  "Twofer is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
-              })}
-            </Text>
-            <TextInput
-              value={inviteCodeInput}
-              onChangeText={(v) => {
-                setInviteCodeInput(v);
-                if (inviteError) setInviteError(null);
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={t("businessSetup.inviteCodePlaceholder", {
-                defaultValue: "Enter the code Twofer gave you",
-              })}
-              placeholderTextColor={theme.mutedText}
-              style={{
-                borderWidth: 1,
-                borderColor: inviteError ? theme.danger : theme.border,
-                borderRadius: Radii.md,
-                backgroundColor: theme.surface,
-                color: theme.text,
-                paddingVertical: Spacing.sm,
-                paddingHorizontal: Spacing.md,
-                fontSize: 16,
-              }}
-            />
-            {inviteError ? (
-              <Text style={{ fontSize: 13, color: theme.danger }}>{inviteError}</Text>
-            ) : null}
-          </View>
-        ) : null}
-
         {/* Logo upload */}
         <View style={{ alignItems: "center", marginBottom: Spacing.xs }}>
           <Pressable onPress={pickLogo} style={{ alignItems: "center" }}>
@@ -918,24 +846,57 @@ export default function BusinessSetupScreen() {
           </Pressable>
         </View>
 
-        <Field
-          label={t("businessSetup.businessName")}
-          value={businessName}
-          onChangeText={(s) => {
-            setBusinessName(s);
-            setLookupResults(null);
-            // Editing the name invalidates a prior verified match + its import.
-            if (websiteUrl) setWebsiteUrl("");
-            resetSiteImport();
-          }}
-          theme={theme}
-        />
+        {nameLocked ? (
+          <View>
+            <Text style={{ fontWeight: "700", marginBottom: 6, color: theme.text }}>
+              {t("businessSetup.businessName")}
+            </Text>
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                backgroundColor: theme.surfaceMuted ?? theme.surface,
+                paddingVertical: Spacing.sm,
+                paddingHorizontal: Spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 16, color: theme.text }}>{businessName}</Text>
+            </View>
+            <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6, color: theme.text }}>
+              {t("businessSetup.nameChange.lockedHint")}
+            </Text>
+          </View>
+        ) : (
+          <Field
+            label={t("businessSetup.businessName")}
+            value={businessName}
+            onChangeText={(s) => {
+              setBusinessName(s);
+              setLookupResults(null);
+              // Editing the name invalidates a prior verified match + its import.
+              if (websiteUrl) setWebsiteUrl("");
+              resetSiteImport();
+            }}
+            theme={theme}
+          />
+        )}
 
-        <SecondaryButton
-          title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
-          onPress={() => void onLookup()}
-          disabled={searching || detailsLoadingPlaceId !== null || !businessName.trim()}
-        />
+        {nameLocked && existingBusinessId && session?.user?.id ? (
+          <BusinessNameChangeCard
+            businessId={existingBusinessId}
+            userId={session.user.id}
+            currentName={businessName || null}
+          />
+        ) : null}
+
+        {!nameLocked && (
+          <SecondaryButton
+            title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+            onPress={() => void onLookup()}
+            disabled={searching || detailsLoadingPlaceId !== null || !businessName.trim()}
+          />
+        )}
 
         {searching && (
           <View style={{ alignItems: "center", paddingVertical: Spacing.sm }}>
@@ -1116,6 +1077,11 @@ export default function BusinessSetupScreen() {
                           <Text style={{ fontSize: 14, color: theme.text }} numberOfLines={1}>
                             {item.name}
                           </Text>
+                          {item.description ? (
+                            <Text style={{ fontSize: 12, opacity: 0.6, color: theme.text }} numberOfLines={1}>
+                              {item.description}
+                            </Text>
+                          ) : null}
                           {item.price_text ? (
                             <Text style={{ fontSize: 12, opacity: 0.6, color: theme.text }}>
                               {item.price_text}
@@ -1291,6 +1257,32 @@ export default function BusinessSetupScreen() {
               }}
             />
           ) : null}
+        </View>
+
+        {/*
+          Optional promotional-materials authorization. Kept visually separate
+          from the required legal block below and out of business-terms-gate.tsx
+          entirely, so it can never read as part of accepting the terms.
+        */}
+        <View style={{ gap: Spacing.xs }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+            {t("businessSetup.promoAuthOptionalLabel")}
+          </Text>
+          <Pressable
+            onPress={() => setPromoAuthChecked((prev) => !prev)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: promoAuthChecked }}
+            style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.xs }}
+          >
+            <MaterialIcons
+              name={promoAuthChecked ? "check-box" : "check-box-outline-blank"}
+              size={22}
+              color={promoAuthChecked ? theme.primary : theme.icon}
+            />
+            <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: theme.text }}>
+              {t("businessSetup.promoAuthCheckbox")}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ gap: Spacing.sm }}>

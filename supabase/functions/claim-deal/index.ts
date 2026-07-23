@@ -18,6 +18,8 @@ import {
   normalizeRepeatClaimPolicyType,
 } from "../_shared/repeat-claim-policy.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
+import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -522,13 +524,6 @@ serve(async (req) => {
 
     const nowMs = now.getTime();
 
-    await supabaseAdmin
-      .from("deal_claims")
-      .update({ claim_status: "expired" })
-      .eq("user_id", user.id)
-      .in("claim_status", ["active", "redeeming"])
-      .lte("expires_at", now.toISOString());
-
     // 🚫 At most one active claim app-wide (unredeemed, before redeem-by deadline). Same deal → idempotent 200.
     const { data: unredeemedRows, error: unredeemedErr } = await supabaseAdmin
       .from("deal_claims")
@@ -543,11 +538,34 @@ serve(async (req) => {
         (row: { claim_status?: string | null }) =>
           row.claim_status === "active" || row.claim_status === "redeeming",
       );
+      // Audit F-004: a claim is only "over" at the shared redeem deadline
+      // (expires_at + grace, per-row grace_period_minutes) — never at nominal
+      // expiry. Redemption honors the grace window, so claim bookkeeping must
+      // too, or a still-redeemable claim gets expired here and a second
+      // logical claim allowed while the first can still be redeemed.
+      const isPastDeadline = (row: { expires_at: string; grace_period_minutes?: number | null }) => {
+        const expires = Date.parse(row.expires_at);
+        if (!Number.isFinite(expires)) return false;
+        return isPastRedeemDeadline(nowMs, row.expires_at, row.grace_period_minutes as number);
+      };
+      const staleIds = (statusActive as { id: string; expires_at: string; grace_period_minutes?: number | null }[])
+        .filter(isPastDeadline)
+        .map((row) => row.id);
+      if (staleIds.length > 0) {
+        await supabaseAdmin
+          .from("deal_claims")
+          .update({ claim_status: "expired", redeem_started_at: null })
+          .in("id", staleIds)
+          .eq("user_id", user.id)
+          .in("claim_status", ["active", "redeeming"])
+          .is("redeemed_at", null);
+      }
       const activeRows = statusActive.filter((row: {
         expires_at: string;
+        grace_period_minutes?: number | null;
       }) => {
         const expires = Date.parse(row.expires_at);
-        return Number.isFinite(expires) && expires > nowMs;
+        return Number.isFinite(expires) && !isPastDeadline(row);
       });
 
       const forThisDeal = activeRows.find((r: { deal_id: string }) => r.deal_id === dealId);
@@ -557,12 +575,17 @@ serve(async (req) => {
           token: string | null;
           expires_at: string;
           short_code: string | null;
+          grace_period_minutes?: number | null;
         };
         return new Response(
           JSON.stringify({
             claim_id: fc.id,
             token: fc.token ?? null,
             expires_at: fc.expires_at,
+            // A grace-window claim has nominal expires_at in the past but is
+            // still redeemable; the client needs the grace to render the
+            // correct redeem-by countdown instead of showing it expired.
+            grace_period_minutes: fc.grace_period_minutes ?? null,
             short_code: fc.short_code ?? null,
             message: "You already have an active claim for this deal",
           }),
@@ -598,6 +621,21 @@ serve(async (req) => {
     if (suspendedLocation) {
       return new Response(
         JSON.stringify(suspendedLocationResponseBody("claim new deals")),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const capabilities = await getBusinessCapabilities(supabaseAdmin as any, businessId);
+    if (!capabilities.can_receive_new_claims) {
+      return new Response(
+        JSON.stringify({
+          error: "This business is not accepting new deal claims.",
+          error_code: "BUSINESS_NEW_CLAIMS_DISABLED",
+          reason_code: capabilities.reason_code,
+        }),
         {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

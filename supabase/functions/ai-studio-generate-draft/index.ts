@@ -11,6 +11,13 @@ import {
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
 } from "../_shared/ai-image-provider.ts";
+import {
+  aiImageDeadlineReport,
+  createAiImageDeadline,
+  type AiImageDeadline,
+  type AiImageDeadlineReport,
+} from "../_shared/ai-image-deadline.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 // Static anchors so Supabase's remote bundler includes the optional JPEG->PNG
 // conversion packages used by `_shared/ai-image-provider.ts`.
@@ -51,12 +58,13 @@ type ImageGenerationResult = {
   signedUrl: string | null;
   provider: "gemini" | "none";
   model: string | null;
-  endpoint: "models.generateContent" | "disabled";
+  endpoint: "models.generateContent" | "interactions.create" | "disabled";
   estimatedCostUsd: number;
   success: boolean;
   errorCode: string | null;
   errorMessage: string | null;
   promptHash: string | null;
+  deadlineReport: AiImageDeadlineReport | null;
 };
 
 type PosterCreative = {
@@ -162,6 +170,11 @@ function bool(value: unknown, fallback = false): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") return /^(1|true|yes|on)$/i.test(value.trim());
   return fallback;
+}
+
+function envNumber(name: string, fallback: number): number {
+  const parsed = Number(Deno.env.get(name));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function positiveInteger(value: unknown): number | null {
@@ -684,6 +697,8 @@ async function generateAndStoreGeminiImage(params: {
   productName: string;
   stylePreset: string;
   compositionPlan: CompositionPlan;
+  deadline: AiImageDeadline;
+  stageTimingsMs?: Record<string, number>;
 }): Promise<ImageGenerationResult> {
   const imageConfig = resolveAiImageProviderConfig();
   if (imageConfig.primaryProvider !== "gemini" || !imageConfig.geminiEnabled) {
@@ -698,6 +713,7 @@ async function generateAndStoreGeminiImage(params: {
       errorCode: "GEMINI_IMAGE_DISABLED",
       errorMessage: "Gemini image provider is not enabled.",
       promptHash: null,
+      deadlineReport: aiImageDeadlineReport(params.deadline, Date.now(), params.stageTimingsMs),
     };
   }
 
@@ -713,6 +729,10 @@ async function generateAndStoreGeminiImage(params: {
     aspectRatio: "4:5",
     imageSize: "1K",
     estimatedCostUsd: imageConfig.geminiEstimatedCost1KUsd,
+    deadline: params.deadline,
+    firstAttemptLeg: "ai_studio_gemini_image",
+    retryAttemptLeg: "ai_studio_gemini_image_retry",
+    fastRetryMaxLatencyMs: 15_000,
     retryOnFailure: true,
   });
   const attempt = image.attempts.find((item) => item.success) ?? image.attempts[image.attempts.length - 1] ?? null;
@@ -722,12 +742,13 @@ async function generateAndStoreGeminiImage(params: {
       signedUrl: null,
       provider: "gemini",
       model: image.model,
-      endpoint: "models.generateContent",
+      endpoint: attempt?.endpoint ?? "models.generateContent",
       estimatedCostUsd: 0,
       success: false,
       errorCode: attempt?.errorCode ?? "GEMINI_IMAGE_FAILED",
       errorMessage: attempt?.errorMessage ?? "Gemini returned no image bytes.",
       promptHash: image.promptHash,
+      deadlineReport: aiImageDeadlineReport(params.deadline, Date.now(), params.stageTimingsMs),
     };
   }
 
@@ -750,12 +771,13 @@ async function generateAndStoreGeminiImage(params: {
       signedUrl: null,
       provider: "gemini",
       model: image.model,
-      endpoint: "models.generateContent",
+      endpoint: attempt?.endpoint ?? "models.generateContent",
       estimatedCostUsd: image.estimatedCostUsd,
       success: false,
       errorCode: "AI_ASSET_UPLOAD_FAILED",
       errorMessage: upload.error.message.slice(0, 160),
       promptHash: image.promptHash,
+      deadlineReport: aiImageDeadlineReport(params.deadline, Date.now(), params.stageTimingsMs),
     };
   }
 
@@ -765,16 +787,28 @@ async function generateAndStoreGeminiImage(params: {
     signedUrl: signed.data?.signedUrl ?? null,
     provider: "gemini",
     model: image.model,
-    endpoint: "models.generateContent",
+    endpoint: attempt?.endpoint ?? "models.generateContent",
     estimatedCostUsd: image.estimatedCostUsd,
     success: true,
     errorCode: null,
     errorMessage: null,
     promptHash: image.promptHash,
+    deadlineReport: aiImageDeadlineReport(params.deadline, Date.now(), params.stageTimingsMs),
   };
 }
 
 serve(async (req) => {
+  const requestStartedAtMs = Date.now();
+  const stageTimingsMs: Record<string, number> = {};
+  const timeStage = async <T>(stage: string, work: () => Promise<T>): Promise<T> => {
+    const startedAt = Date.now();
+    try {
+      return await work();
+    } finally {
+      stageTimingsMs[stage] = Date.now() - startedAt;
+    }
+  };
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders(req) });
   }
@@ -824,9 +858,31 @@ serve(async (req) => {
     return json(req, { error: "You do not manage this business." }, 403);
   }
 
+  const capabilities = await getBusinessCapabilities(admin as any, input.businessId);
+  if (!capabilities.can_generate_ai) {
+    return json(
+      req,
+      {
+        error: "AI generation unlocks after trial activation.",
+        error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+        reason_code: capabilities.reason_code,
+      },
+      403,
+    );
+  }
+
   const requestGroupId = crypto.randomUUID();
   const idempotencyHash = await sha256Hex(JSON.stringify({ userId: user.id, input }));
   const idempotencyKey = `ai-studio-dev:${idempotencyHash.slice(0, 40)}`;
+  const imageDeadline = createAiImageDeadline({
+    startedAtMs: requestStartedAtMs,
+    budgetMs: Math.max(
+      60_000,
+      envNumber("AI_STUDIO_IMAGE_REQUEST_DEADLINE_MS", envNumber("AI_IMAGE_REQUEST_DEADLINE_MS", 110_000)),
+    ),
+    reserveMs: Math.max(5_000, envNumber("AI_STUDIO_IMAGE_REQUEST_RESERVE_MS", 12_000)),
+    minAttemptMs: Math.max(10_000, envNumber("AI_IMAGE_MIN_PROVIDER_TIMEOUT_MS", 15_000)),
+  });
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const forceDryRun = bool(Deno.env.get("AI_STUDIO_DRY_RUN"), false);
@@ -853,13 +909,15 @@ serve(async (req) => {
 
   if (!dryRun && openAiKey) {
     try {
-      const generated = await generateCopyWithTextProvider({
-        admin,
-        openAiKey,
-        geminiApiKey,
-        requestGroupId,
-        input,
-      });
+      const generated = await timeStage("copy", () =>
+        generateCopyWithTextProvider({
+          admin,
+          openAiKey,
+          geminiApiKey,
+          requestGroupId,
+          input,
+        })
+      );
       draft = generated.draft;
       const attempt = representativeAttempt(generated.attempts);
       provider = attempt?.provider ?? "openai";
@@ -871,13 +929,18 @@ serve(async (req) => {
     } catch (error) {
       fallbackReason = error instanceof Error ? error.message.slice(0, 120) : "AI_TEXT_PROVIDER_FAILED";
       if (!input.dryRun && !forceDryRun) {
+        if (stageTimingsMs.copy == null) stageTimingsMs.copy = Date.now() - requestStartedAtMs;
         return json(req, {
           error: "AI text generation failed.",
           error_code: "AI_TEXT_PROVIDER_FAILED",
           details: fallbackReason,
+          total_latency_ms: Date.now() - requestStartedAtMs,
+          stage_timings_ms: stageTimingsMs,
         }, 502);
       }
     }
+  } else {
+    stageTimingsMs.copy = 0;
   }
   draft.image_prompt = ensureTextFreeImagePrompt(draft.image_prompt, fallbackDraft({
     productName: input.productName,
@@ -900,27 +963,36 @@ serve(async (req) => {
     errorCode: copyOnly ? "COPY_ONLY" : null,
     errorMessage: null,
     promptHash: null,
+    deadlineReport: aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs),
   };
 
   if (!copyOnly) {
-    imageResult = await generateAndStoreGeminiImage({
-      admin,
-      geminiApiKey,
-      userId: user.id,
-      businessId: input.businessId,
-      requestGroupId,
-      imagePrompt: draft.image_prompt,
-      productName: input.productName,
-      stylePreset: input.stylePreset,
-      compositionPlan: draft.composition_plan,
-    });
+    imageResult = await timeStage("image", () =>
+      generateAndStoreGeminiImage({
+        admin,
+        geminiApiKey,
+        userId: user.id,
+        businessId: input.businessId,
+        requestGroupId,
+        imagePrompt: draft.image_prompt,
+        productName: input.productName,
+        stylePreset: input.stylePreset,
+        compositionPlan: draft.composition_plan,
+        deadline: imageDeadline,
+        stageTimingsMs,
+      })
+    );
     if (imageResult.success) {
       draft.image_asset_path = imageResult.path;
       draft.image_signed_url = imageResult.signedUrl;
     } else {
       fallbackReason = imageResult.errorCode ?? fallbackReason;
     }
+  } else {
+    stageTimingsMs.image = 0;
+    imageResult.deadlineReport = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
   }
+  imageResult.deadlineReport = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
   const inputOffer = {
     product_name: input.productName,
@@ -1048,6 +1120,8 @@ serve(async (req) => {
       creative_id: creative.id,
       provider,
       model,
+      total_latency_ms: Date.now() - requestStartedAtMs,
+      stage_timings_ms: stageTimingsMs,
       dry_run: dryRun,
       copy_only: copyOnly,
       layout_recommendation: draft.layout_recommendation,
@@ -1059,6 +1133,7 @@ serve(async (req) => {
       source_asset_path: draft.image_asset_path,
       rendered_asset_path: null,
       image_prompt_hash: imageResult.promptHash,
+      image_deadline: imageResult.deadlineReport,
       publishing_disabled: true,
     },
     openai_called: provider === "openai",
@@ -1112,6 +1187,7 @@ serve(async (req) => {
       image_model: imageResult.model,
       image_generation_success: imageResult.success,
       image_generation_error_code: imageResult.errorCode,
+      image_deadline: imageResult.deadlineReport,
       text_provider: provider,
       text_model: model,
       fallback_reason: fallbackReason,

@@ -8,13 +8,19 @@ import {
   validateOfferDefinitionV1,
 } from "./offer-definition";
 
-function definitionFor(input: DealEligibilityInput) {
+function definitionFor(
+  input: DealEligibilityInput,
+  overrides: Partial<{
+    businessName: string;
+    locationName: string;
+  }> = {},
+) {
   const eligibilityResult = validateDealEligibility(input);
   const definition = buildOfferDefinitionV1({
     businessId: "biz_123",
-    businessName: "Merit Coffee",
+    businessName: overrides.businessName ?? "Merit Coffee",
     locationId: "loc_123",
-    locationName: "Merit Coffee - Deep Ellum",
+    locationName: overrides.locationName ?? "Merit Coffee - Deep Ellum",
     dealEligibility: input,
     eligibilityResult,
     activeWindowHumanReadable: "Today 2:00 PM to 4:00 PM",
@@ -129,6 +135,24 @@ describe("OfferDefinitionV1", () => {
       "scheduled_window",
       "claim_cutoff",
     ]);
+  });
+
+  it("does not duplicate punctuation for location names ending in punctuation", () => {
+    const definition = definitionFor(
+      {
+        dealType: "BUY_ONE_GET_ONE_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "latte",
+        freeItemQuantity: 1,
+        freeItemDescription: "latte",
+        freeItemDiscountPercent: 100,
+      },
+      { businessName: "Bluebird Coffee Co.", locationName: "Bluebird Coffee Co." },
+    );
+
+    expect(definition.canonicalTermsLine).toContain("Redeem only at Bluebird Coffee Co.");
+    expect(definition.canonicalTermsLine).not.toContain("Co..");
   });
 
   it("rejects invalid offer definition shapes", () => {

@@ -26,7 +26,17 @@ import {
   type OpenAiImageAttempt,
 } from "../_shared/dalle-image.ts";
 import {
+  aiImageDeadlineReport,
+  aiImageElapsedMs,
+  aiImageRemainingMs,
+  canSpendAiImageDeadline,
+  createAiImageDeadline,
+  type AiImageDeadline,
+  type AiImageDeadlineReport,
+} from "../_shared/ai-image-deadline.ts";
+import {
   buildGeminiAdImagePrompt,
+  computeImageBandLuminanceDetailed,
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   type AiImageProvider,
@@ -36,6 +46,7 @@ import {
   type GeminiImageAttempt,
 } from "../_shared/ai-image-provider.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { fetchOpenAiWithFallback } from "../_shared/openai-fetch.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -55,6 +66,7 @@ import {
   getSuspendedPrimaryBusinessLocation,
   suspendedLocationResponseBody,
 } from "../_shared/billing-suspension.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
   AD_COPY_PROMPT_VERSION,
@@ -75,7 +87,11 @@ import {
   type DealOfferContract,
   type ValidatedDealCopy,
 } from "../../../lib/deal-offer-contract.ts";
-import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import {
+  evaluateAdCopyStyleGate,
+  isFormulaicValueHeadline,
+  startsWithDanglingConnector,
+} from "../../../lib/ad-copy-style-gate.ts";
 import { buildDeterministicRevisionFallbackCopy } from "../../../lib/ai-revision-fallback-copy.ts";
 import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
 import {
@@ -107,6 +123,7 @@ import {
   unavailableSourceAwareImageQaResult,
   type AdImageQaDecision,
   type AdImageQaSourceType,
+  type AdImageRenderFormat,
   type QuickDealImageQaResult,
   type SourceAwareImageQaResult,
 } from "../../../lib/quick-deal-image-qa.ts";
@@ -134,6 +151,7 @@ import {
   buildPosterSpecFromOfferDefinition,
   choosePosterTemplateForOffer,
 } from "../../../lib/poster/posterCopy.ts";
+import { POSTER_TEXT_LIMITS } from "../../../lib/poster/posterPolicy.ts";
 import type { PosterDraftV1, PosterStyleChoice } from "../../../lib/poster/posterTypes.ts";
 import type {
   AdLocalizationBundle,
@@ -463,17 +481,22 @@ async function callResearchModel(params: {
         temperature: isWebSearch ? undefined : 0.4,
       }),
     };
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
+    const { response: res } = await fetchOpenAiWithFallback({
+      url: "https://api.openai.com/v1/chat/completions",
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        // Bound the (web-search) research call so a slow model can't, together with
+        // copy + image, push total server time past the app's 120s invoke budget.
+        // On timeout the catch below returns null → graceful fallback, never a hard error.
+        signal: AbortSignal.timeout(25_000),
       },
-      body: JSON.stringify(body),
-      // Bound the (web-search) research call so a slow model can't, together with
-      // copy + image, push total server time past the app's 120s invoke budget.
-      // On timeout the catch below returns null → graceful fallback, never a hard error.
-      signal: AbortSignal.timeout(25_000),
+      existingKeyOverride: openAiKey,
+      logTag: "ai_ads_v2",
+      event: "research_openai_key_source",
     });
     if (!res.ok) {
       console.log(
@@ -604,6 +627,7 @@ async function generateCopy(params: {
   let providerFallbackUsed = false;
   let providerFallbackReason: string | undefined;
   let latestPreparedVariants: AiDealCopyVariant[] = [];
+  let qualityRepairFeedback: string | undefined;
   const merchantProfile = buildMerchantCreativeProfile({
     businessId: offerContract.businessId,
     businessName,
@@ -618,6 +642,11 @@ async function generateCopy(params: {
   let selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
+      // Attempt 2 corrective feedback from the contract layer only covers offer
+      // validation; append the concrete style-gate/diversity rejection reasons
+      // from attempt 1 so the repair does not trip the same wire again.
+      const combinedValidationFeedback =
+        [validationFeedback, qualityRepairFeedback].filter(Boolean).join("\n\n") || undefined;
       const { system, userText, jsonSchema } = buildAdCopyPrompt({
         itemHint,
         research,
@@ -631,7 +660,7 @@ async function generateCopy(params: {
         revisionFeedback,
         previousAd,
         offerContract,
-        validationFeedback,
+        validationFeedback: combinedValidationFeedback,
         merchantCreativeProfile: merchantProfile,
         creativeFormat,
       });
@@ -694,6 +723,7 @@ async function generateCopy(params: {
           creativeFormat,
         });
         copyQuality.push(prepared.telemetry);
+        qualityRepairFeedback = qualityGateRepairFeedback(prepared.telemetry) ?? qualityRepairFeedback;
         judgeAttempts.push(...prepared.judgeAttempts);
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
@@ -804,6 +834,9 @@ async function generateCopy(params: {
       };
     }
   }
+  // R12: the deterministic-kicker backstop lived here. It substituted a fact-safe kicker
+  // when the merchant asked for a different subheadline and no candidate changed it. The
+  // poster has no kicker slot now, so there is nothing to back-stop.
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
   const copyAlternatives = buildCopyAlternatives({
@@ -821,7 +854,7 @@ async function generateCopy(params: {
     terms_summary: clip(selected.terms_summary, DEAL_COPY_LIMITS.terms),
     social_caption: selected.social_caption ? clip(selected.social_caption, DEAL_COPY_LIMITS.socialCaption) : undefined,
     image_brief: selected.image_brief ? clip(selected.image_brief, 260) : undefined,
-    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, 32) : undefined,
+    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, POSTER_TEXT_LIMITS.subline) : undefined,
     locked_offer_line: selected.locked_offer_line,
     locked_terms_line: selected.locked_terms_line,
     copy_source: selected.copy_source,
@@ -1171,27 +1204,35 @@ function normalizeRevisionCopyText(value: string | null | undefined): string {
     : "";
 }
 
+function previousRevisionKicker(previousAd: SingleAd): string {
+  return normalizeRevisionCopyText(previousAd.poster?.copy?.subline ?? previousAd.poster_kicker);
+}
+
 function hasVisibleRevisionCopyChange(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
   const nextHeadline = normalizeRevisionCopyText(candidate.headline);
   const nextDescription = normalizeRevisionCopyText(candidate.short_description);
   const nextPush = normalizeRevisionCopyText(candidate.push_body || candidate.push_notification);
+  const nextKicker = normalizeRevisionCopyText(candidate.poster_kicker);
   const previousHeadlines = [
     previousAd.headline,
     previousAd.poster?.copy?.headline,
   ].map(normalizeRevisionCopyText).filter(Boolean);
   const previousDescription = normalizeRevisionCopyText(previousAd.short_description || previousAd.subheadline);
   const previousPush = normalizeRevisionCopyText(previousAd.push_notification);
+  const previousKicker = previousRevisionKicker(previousAd);
 
   return (
     (nextHeadline.length > 0 && !previousHeadlines.includes(nextHeadline)) ||
     (nextDescription.length > 0 && nextDescription !== previousDescription) ||
-    (nextPush.length > 0 && nextPush !== previousPush)
+    (nextPush.length > 0 && nextPush !== previousPush) ||
+    (nextKicker.length > 0 && nextKicker !== previousKicker)
   );
 }
 
 type RevisionFeedbackIntent = {
   active: boolean;
   requiresHeadlineChange: boolean;
+  requiresKickerChange: boolean;
   wantsShorter: boolean;
   wantsDirect: boolean;
   wantsLocal: boolean;
@@ -1237,6 +1278,7 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
     return {
       active: false,
       requiresHeadlineChange: false,
+      requiresKickerChange: false,
       wantsShorter: false,
       wantsDirect: false,
       wantsLocal: false,
@@ -1249,6 +1291,8 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
     active: true,
     requiresHeadlineChange:
       /\b(?:ad copy|caption|headline|heading|hero|main copy|main line|main message|opening|poster copy|poster headline|poster text|tagline|title|top|top copy|top text|wording)\b/.test(normalized),
+    requiresKickerChange:
+      /\b(?:kicker|eyebrow|sub[\s-]?headings?|sub[\s-]?headlines?|sub[\s-]?lines?|sub[\s-]?titles?|supporting (?:copy|line|text)|second line|small(?:er)? (?:line|text))\b/.test(normalized),
     wantsShorter: /\b(?:shorter|too long|less text|fewer words|trim|tighten|concise)\b/.test(normalized),
     wantsDirect: /\b(?:actual ad|awkward|boring|clear|confusing|direct|doesn t make sense|doesn t read right|full offer|generic|make sense|natural|plain|read right|reads weird|real ad|simple|sounds off|whole deal|whole offer)\b/.test(normalized),
     wantsLocal: /\b(?:local|nearby|neighborhood|neighbourhood|regulars|community|around here)\b/.test(normalized),
@@ -1265,6 +1309,7 @@ function revisionFeedbackMentionsImageOnly(feedback: string | undefined): boolea
   if (!mentionsImage) return false;
   const intent = parseRevisionFeedbackIntent(feedback);
   return !intent.requiresHeadlineChange &&
+    !intent.requiresKickerChange &&
     !intent.wantsShorter &&
     !intent.wantsDirect &&
     !intent.wantsLocal &&
@@ -1283,6 +1328,9 @@ function shouldUseDeterministicRevisionCopyFallback(params: {
   if (hasVisibleRevisionCopyChange(params.selected, params.previousAd)) return false;
   return true;
 }
+
+// R12: revisionKickerChanged and deterministicRevisedKicker lived here. Both existed only
+// to enforce and back-stop kicker changes, and the poster has no kicker slot now.
 
 function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
   const nextHeadline = normalizeRevisionCopyText(candidate.headline);
@@ -1338,6 +1386,12 @@ function scoreRevisionFeedbackFit(params: {
     hardFailReasons.push("headline_unchanged_for_headline_feedback");
   }
   if (headlineChanged) softScore += 2;
+
+  // R12: there is no kicker any more, so "the subheadline is unchanged" can no longer be a
+  // hard fail — the kicker is permanently empty, which would make EVERY candidate fail for
+  // any feedback mentioning a subheadline/subline/supporting line. Subheadline feedback now
+  // means the card description (the prompt says so too), and the generic
+  // hasVisibleRevisionCopyChange guard still rejects a revision that changed nothing.
 
   if (intent.wantsShorter) {
     const previousLength = revisionPreviousVisibleLength(previousAd);
@@ -1401,11 +1455,60 @@ function normalizePosterHeadlineText(value: string | null | undefined): string {
     : "";
 }
 
+function posterVisibleLength(value: string | null | undefined): number {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().length : 0;
+}
+
+const QUALITY_GATE_REPAIR_GUIDANCE: Record<string, string> = {
+  WEAK_TRY_OUR_PHRASE: 'Never begin any field with "Try our" or "Try the". Lead with the item, the reward, or the customer moment.',
+  POSTER_HEADLINE_TRY_OUR: 'Never begin the poster headline with "Try our".',
+  POSTER_HEADLINE_REPEATS_LOCKED_OFFER:
+    "Do not repeat the locked offer line word-for-word as the headline. The app renders the locked offer line separately; write a fresh angle.",
+  MISSING_REQUIRED_STRATEGY: "Return exactly one candidate for each of the five strategy IDs.",
+  DUPLICATE_STRATEGY: "Return exactly one candidate for each of the five strategy IDs.",
+  UNKNOWN_STRATEGY: "Use only the five listed strategy IDs.",
+  IDENTICAL_HEADLINE: "Every headline must be clearly different from the others.",
+  DUPLICATE_HEADLINE_OPENING: "Every headline must open with different words.",
+  OBVIOUS_PARAPHRASE: "Each candidate must be a different idea, not a paraphrase of another candidate.",
+};
+
+function qualityGateRepairFeedback(telemetry: CopyQualityTelemetry): string | undefined {
+  const codes = [
+    ...new Set([
+      ...telemetry.style_gate_rejected.flatMap((rejection) => rejection.reasons),
+      ...telemetry.diversity.hard_failures.map((failure) => failure.code),
+    ]),
+  ];
+  if (codes.length === 0) return undefined;
+  return [
+    "Some previous candidates were rejected by automated quality checks. Every new candidate must avoid these issues:",
+    ...codes.map((code) => `- ${code}: ${QUALITY_GATE_REPAIR_GUIDANCE[code] ?? "Avoid this rejection reason."}`),
+  ].join("\n");
+}
+
 function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {
   const headline = normalizePosterHeadlineText(candidate.headline);
   const reasons: string[] = [];
-  if (!headline) return reasons;
+  // Oversized poster text would be silently word-dropped or sliced by the
+  // sanitize clamps downstream; reject the candidate here instead so a repair
+  // attempt or the deterministic fallback produces copy that actually fits.
+  if (posterVisibleLength(candidate.headline) > POSTER_TEXT_LIMITS.headline) {
+    reasons.push("POSTER_HEADLINE_OVER_LIMIT");
+  }
+  if (posterVisibleLength(candidate.poster_kicker) > POSTER_TEXT_LIMITS.subline) {
+    reasons.push("POSTER_KICKER_OVER_LIMIT");
+  }
+  if (!headline) return [...new Set(reasons)];
   if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
+
+  // R6/R5 headline-craft gates. Both live in lib/ad-copy-style-gate.ts as pure,
+  // unit-tested predicates rather than inline regexes here.
+  if (startsWithDanglingConnector(headline)) {
+    reasons.push("POSTER_HEADLINE_DANGLING_CONNECTOR");
+  }
+  if (isFormulaicValueHeadline(headline)) {
+    reasons.push("POSTER_HEADLINE_FORMULAIC_VALUE");
+  }
 
   const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
   if (canonicalOffer && headline === canonicalOffer) {
@@ -1932,6 +2035,7 @@ async function inspectGeneratedImageForOffer(params: {
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
   sourceType?: AdImageQaSourceType;
+  renderFormat?: AdImageRenderFormat;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   try {
@@ -1942,6 +2046,7 @@ async function inspectGeneratedImageForOffer(params: {
         userPrompt: buildAdImageQaPrompt({
           sourceType: params.sourceType ?? "ai_generated",
           requiredVisualItems,
+          renderFormat: params.renderFormat,
         }),
         jsonSchema: QUICK_DEAL_IMAGE_QA_SCHEMA,
         imageInputs: [{ bytes: params.imageBytes, mimeType: "image/png" }],
@@ -1976,6 +2081,7 @@ async function sourceAwareQaForImageBytes(params: {
   costContext: AiCostContext;
   sourceType: AdImageQaSourceType;
   merchantOverrideAcknowledged?: boolean;
+  renderFormat?: AdImageRenderFormat;
 }): Promise<SourceAwareImageQaResult> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   const raw = await inspectGeneratedImageForOffer({
@@ -1985,6 +2091,7 @@ async function sourceAwareQaForImageBytes(params: {
     requiredVisualItems,
     costContext: params.costContext,
     sourceType: params.sourceType,
+    renderFormat: params.renderFormat,
   });
   return normalizeSourceAwareImageQaResult({
     raw,
@@ -2140,6 +2247,17 @@ type OpenAiProducedImage = {
   treatment: PhotoTreatment | null;
   prompt: string | null;
   qa: ImageQaTelemetry;
+  attempts?: ImageProviderAttemptSummary[];
+  /**
+   * The bytes we just uploaded, kept in memory so poster-spec assembly can measure
+   * band luminance without re-downloading the object it just stored (that
+   * round-trip is why `poster.luma` came back null in prod). Absent for paths
+   * that never held bytes (stock, reused previous ad).
+   */
+  posterImageBytes?: Uint8Array | null;
+  posterImageMime?: string | null;
+  /** Luminance already measured from decoded pixels upstream, when available. */
+  posterImageLuma?: { top: number; bottom: number } | null;
 };
 
 type ProducedImageBase = OpenAiProducedImage & {
@@ -2151,6 +2269,44 @@ type ProducedImageBase = OpenAiProducedImage & {
 type ProducedImage = ProducedImageBase & {
   selection: AdImageSelection;
 };
+
+type ImageProviderAttemptSummary = {
+  provider: "gemini" | "openai";
+  endpoint: string;
+  model: string | null;
+  success: boolean;
+  errorCode: string | null;
+  latencyMs: number | null;
+  retry: boolean;
+};
+
+function summarizeOpenAiImageAttempts(attempts: readonly OpenAiImageAttempt[]): ImageProviderAttemptSummary[] {
+  return attempts.map((attempt) => ({
+    provider: "openai",
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    errorCode: attempt.errorCode,
+    latencyMs: attempt.latencyMs,
+    retry: false,
+  }));
+}
+
+function summarizeGeminiImageAttempts(attempts: readonly GeminiImageAttempt[]): ImageProviderAttemptSummary[] {
+  return attempts.map((attempt) => ({
+    provider: "gemini",
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    errorCode: attempt.errorCode,
+    latencyMs: attempt.latencyMs,
+    retry: attempt.retry,
+  }));
+}
+
+function mergeImageAttempts(...attemptGroups: Array<readonly ImageProviderAttemptSummary[] | undefined>): ImageProviderAttemptSummary[] {
+  return attemptGroups.flatMap((attempts) => attempts ?? []);
+}
 
 async function produceImageOpenAiOnly(params: {
   openAiKey: string;
@@ -2172,6 +2328,7 @@ async function produceImageOpenAiOnly(params: {
   revisionFeedback?: string;
   costContext: AiCostContext;
   imageAspectRatio: AiImageAspectRatio;
+  imageDeadline?: AiImageDeadline;
 }): Promise<OpenAiProducedImage> {
   const {
     openAiKey,
@@ -2244,6 +2401,8 @@ async function produceImageOpenAiOnly(params: {
         imageBytes,
         imageMime,
         treatment: photoTreatment,
+        deadline: params.imageDeadline,
+        timeoutLeg: "openai_photo_edit",
         customEditInstruction: [
           params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
           imageRevisionInstruction({
@@ -2253,11 +2412,12 @@ async function produceImageOpenAiOnly(params: {
         ].filter(Boolean).join(" "),
       });
       await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
+      const enhancedAttempts = summarizeOpenAiImageAttempts(enhancedResult.attempts);
       const enhanced = enhancedResult.bytes;
 
       if (!enhanced) {
         // Enhancement failed — fall back to the original photo only if QA did not hard-block it.
-        if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+        if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
       } else {
         const editQa = await sourceAwareQaForImageBytes({
           openAiKey,
@@ -2266,9 +2426,10 @@ async function produceImageOpenAiOnly(params: {
           requiredVisualItems,
           costContext,
           sourceType: "merchant_ai_edit",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         if (shouldFailClosedForImageQa(editQa)) {
-          if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+          if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
         } else {
           const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2284,9 +2445,9 @@ async function produceImageOpenAiOnly(params: {
                 err: upErr.message?.slice(0, 200),
               }),
             );
-            if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+            if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
           } else {
-            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
+            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry, attempts: enhancedAttempts };
           }
         }
       }
@@ -2309,8 +2470,15 @@ async function produceImageOpenAiOnly(params: {
     }),
     aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
   });
-  let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
+  let imageGeneration = await generatePhotoAdImageWithTelemetry(
+    openAiKey,
+    prompt,
+    "ai_ads_v2",
+    params.imageDeadline,
+    "openai_primary",
+  );
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
+  let providerAttempts = summarizeOpenAiImageAttempts(imageGeneration.attempts);
   let png = imageGeneration.bytes;
   const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
     normalizeSourceAwareImageQaResult({
@@ -2332,7 +2500,7 @@ async function produceImageOpenAiOnly(params: {
     }),
   );
   if (!png) {
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
 
   if (requiredVisualItems.length > 0) {
@@ -2343,6 +2511,7 @@ async function produceImageOpenAiOnly(params: {
       requiredVisualItems,
       costContext,
       sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -2384,10 +2553,17 @@ async function produceImageOpenAiOnly(params: {
       // miss keeps the first image / existing fallback instead of a second image.
       const retryGeneration =
         MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
-          ? await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt)
+          ? await generatePhotoAdImageWithTelemetry(
+            openAiKey,
+            retryPrompt,
+            "ai_ads_v2",
+            params.imageDeadline,
+            "openai_required_item_retry",
+          )
           : null;
       if (retryGeneration) {
         await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
+        providerAttempts = mergeImageAttempts(providerAttempts, summarizeOpenAiImageAttempts(retryGeneration.attempts));
       }
       const retryPng = retryGeneration?.bytes ?? null;
       if (retryPng) {
@@ -2399,17 +2575,14 @@ async function produceImageOpenAiOnly(params: {
           requiredVisualItems,
           costContext,
           sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          Object.assign(
-            qa,
-            imageQaTelemetryFromSourceAware(
-              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
-              2,
-              true,
-            ),
-          );
+          // Retry inspection unavailable: keep the first image's known failing
+          // verdict rather than erasing it, so a QA-failed image cannot ship
+          // uninspected under the fail-open rule.
+          console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           Object.assign(
             qa,
@@ -2441,8 +2614,11 @@ async function produceImageOpenAiOnly(params: {
       );
     }
   }
-  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+  // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
+  // discard a generated image; an unavailable inspector ships it with the
+  // VISION_QA_UNAVAILABLE warning instead of cascading to paid fallbacks.
+  if (qa.hardFailReasons.length > 0 || qa.missingItems.length > 0) {
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
   const { error: upErr } = await admin.storage
@@ -2456,9 +2632,18 @@ async function produceImageOpenAiOnly(params: {
         err: upErr.message?.slice(0, 200),
       }),
     );
-    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
-  return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa };
+  return {
+    posterStoragePath: generatedPath,
+    source: "generated",
+    treatment: null,
+    prompt,
+    qa,
+    attempts: providerAttempts,
+    posterImageBytes: png,
+    posterImageMime: "image/png",
+  };
 }
 
 function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase {
@@ -2482,8 +2667,15 @@ async function produceFallbackImage(params: {
   costContext: AiCostContext;
   sourcePhotoPath?: string | null;
   editMode?: MerchantImageEditMode;
+  attempts?: readonly ImageProviderAttemptSummary[];
+  /**
+   * R4: false when the wall-clock budget is already spent. Stock fallback runs a
+   * vision QA pass per candidate, so on an exhausted chain it is the difference
+   * between returning a copy-only ad and being killed by the worker limit.
+   */
+  allowStockFallback?: boolean;
 }): Promise<ProducedImage> {
-  if (params.imageProviderConfig.stockFallbackEnabled) {
+  if (params.imageProviderConfig.stockFallbackEnabled && params.allowStockFallback !== false) {
     const stockPaths = await findStockImageFallbacks({
       admin: params.admin,
       requiredVisualItems: params.requiredVisualItems,
@@ -2509,6 +2701,7 @@ async function produceFallbackImage(params: {
           provider: "stock",
           model: null,
           estimatedCostUsd: 0,
+          attempts: [...(params.attempts ?? [])],
         },
         {
           sourcePhotoPath: params.sourcePhotoPath ?? null,
@@ -2528,6 +2721,7 @@ async function produceFallbackImage(params: {
       provider: "none",
       model: null,
       estimatedCostUsd: 0,
+      attempts: [...(params.attempts ?? [])],
     },
     {
       sourcePhotoPath: params.sourcePhotoPath ?? null,
@@ -2559,8 +2753,46 @@ async function produceImage(params: {
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
   imageAspectRatio: AiImageAspectRatio;
+  imageDeadline: AiImageDeadline;
+  stageTimingsMs?: Record<string, number>;
+  /** Caller-owned sink for the wall-clock budget report (see R4 below). */
+  budgetSink?: { report?: AiImageDeadlineReport };
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
+  // R4: the edge worker is killed with WORKER_RESOURCE_LIMIT at roughly 150s wall
+  // clock. This chain can queue up to four Gemini calls (primary + its retry, then
+  // the category-safe attempt + its retry) plus a gpt-image-1 fallback and a vision
+  // QA pass, which comfortably exceeds that — a 40%-off barber-fade deal reproduced
+  // the kill at ~150s twice. Escalating legs are now skipped when they cannot finish
+  // inside the budget, so the merchant lands on the deterministic fallback (an ad
+  // with no photo) instead of a hard dead end after 2.5 minutes of waiting.
+  const pipelineElapsedMs = (): number => aiImageElapsedMs(params.imageDeadline);
+  const pipelineHasBudgetFor = (leg: string, estimateMs: number): boolean => {
+    const allowed = canSpendAiImageDeadline(params.imageDeadline, leg, estimateMs);
+    if (!allowed) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "image_leg_skipped_for_budget",
+          leg,
+          elapsedMs: pipelineElapsedMs(),
+          estimateMs,
+          remainingMs: aiImageRemainingMs(params.imageDeadline),
+          budgetMs: params.imageDeadline.budgetMs,
+        }),
+      );
+    }
+    // Publish on every check (not just skips) so the response carries the budget
+    // picture regardless of which return path the chain takes.
+    publishBudgetReport();
+    return allowed;
+  };
+  // Written to a caller-owned sink rather than a module global: a Deno isolate can
+  // serve concurrent requests, so per-request state must not live at module scope.
+  const publishBudgetReport = (): void => {
+    if (!params.budgetSink) return;
+    params.budgetSink.report = aiImageDeadlineReport(params.imageDeadline, Date.now(), params.stageTimingsMs);
+  };
   const originalUploadedPhoto = async (): Promise<ProducedImage> => {
     let qa = originalPhotoQaTelemetry(params.merchantOverrideAcknowledged);
     if (params.photoPath) {
@@ -2619,9 +2851,14 @@ async function produceImage(params: {
     );
     return generateWithoutSourcePhoto();
   };
-  const openAiFallback = async (): Promise<ProducedImage> => {
+  const openAiFallback = async (
+    priorAttempts: readonly ImageProviderAttemptSummary[] = [],
+  ): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
-    const withMetadata = withOpenAiImageMetadata(result);
+    const withMetadata = {
+      ...withOpenAiImageMetadata(result),
+      attempts: mergeImageAttempts(priorAttempts, result.attempts),
+    };
     if (withMetadata.posterStoragePath || withMetadata.source === "uploaded_original") {
       return withImageSelection(withMetadata, {
         sourcePhotoPath: params.photoPath,
@@ -2638,6 +2875,7 @@ async function produceImage(params: {
       costContext: params.costContext,
       sourcePhotoPath: params.photoPath,
       editMode: params.imageEditMode,
+      attempts: withMetadata.attempts,
     });
   };
 
@@ -2804,11 +3042,15 @@ async function produceImage(params: {
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      deadline: params.imageDeadline,
+      firstAttemptLeg: "gemini_photo_reference",
+      retryAttemptLeg: "gemini_photo_reference_retry",
     });
     await logGeminiImageAttempts(params.costContext, "image_edit", gemini.attempts);
+    const geminiAttempts = summarizeGeminiImageAttempts(gemini.attempts);
 
     if (!gemini.bytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
 
     const editQa = await sourceAwareQaForImageBytes({
@@ -2818,9 +3060,10 @@ async function produceImage(params: {
       requiredVisualItems,
       costContext: params.costContext,
       sourceType: "merchant_ai_edit",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     if (shouldFailClosedForImageQa(editQa)) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
     const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2834,7 +3077,7 @@ async function produceImage(params: {
       rand,
     });
     if (!enhancedPath) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
+      return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
     return withImageSelection(
       {
@@ -2846,6 +3089,7 @@ async function produceImage(params: {
         provider: "gemini",
         model: gemini.model,
         estimatedCostUsd: gemini.estimatedCostUsd,
+        attempts: geminiAttempts,
       },
       {
         sourcePhotoPath: params.photoPath,
@@ -2861,12 +3105,19 @@ async function produceImage(params: {
     aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
     estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+    deadline: params.imageDeadline,
+    firstAttemptLeg: "gemini_primary",
+    retryAttemptLeg: "gemini_primary_retry",
   });
   await logGeminiImageAttempts(params.costContext, "image_generation", gemini.attempts);
+  let providerAttempts = summarizeGeminiImageAttempts(gemini.attempts);
   let imageBytes = gemini.bytes;
   let imageMimeType = gemini.mimeType;
   let imagePrompt = gemini.prompt;
   let estimatedCostUsd = gemini.estimatedCostUsd;
+  // Tracks alongside imageBytes so a retry's luminance replaces the first
+  // attempt's rather than describing bytes we discarded.
+  let imageLuma = gemini.luma ?? null;
   const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
     normalizeSourceAwareImageQaResult({
       raw: {
@@ -2889,6 +3140,107 @@ async function produceImage(params: {
     gemini.attempts.some((attempt) => attempt.retry && attempt.success),
   );
 
+  // F4 (2026-07-20): the primary prompt embeds the merchant's exact item names as
+  // "required visible items". An evocative branded name (e.g. a coffee named after
+  // military insignia) makes both image providers refuse and return no image — the
+  // fallback chain then burns ~2 minutes before a hard IMAGE_REQUIRED. When the
+  // primary attempt produced no bytes, retry ONCE with a category-safe prompt that
+  // drops the brand tokens and asks only for the business-category product. The
+  // exact identity is rendered by the app as native text, so this stays faithful
+  // to the offer. Runs only on the no-image path, so working generations are
+  // untouched.
+  // 60s estimate: this leg passes retryOnFailure, so it is up to two Gemini calls.
+  if (!imageBytes && pipelineHasBudgetFor("gemini_category_safe", 60_000)) {
+    const categorySafePrompt = buildGeminiAdImagePrompt(
+      {
+        businessId: params.businessId,
+        businessName: params.businessName,
+        businessCategory: params.businessCategory,
+        offerTitle: params.offerContract.canonicalOfferLine,
+        offerDescription: params.offerContract.canonicalShortTerms,
+        paidItem: offerItems.paidItem,
+        freeItem: offerItems.freeItem,
+        dealType: params.offerContract.dealType,
+        creativeDirection: params.creativeImageBrief,
+        customEditInstruction: revisionImageInstruction,
+        stylePreset,
+        aspectRatio: params.imageAspectRatio,
+        imageSize: "1K",
+      },
+      { genericizeItems: true },
+    );
+    const categoryGen = await generateGeminiAdImageWithTelemetry({
+      apiKey: params.geminiApiKey,
+      model: params.imageProviderConfig.geminiModel,
+      prompt: categorySafePrompt,
+      aspectRatio: params.imageAspectRatio,
+      imageSize: "1K",
+      estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+      deadline: params.imageDeadline,
+      firstAttemptLeg: "gemini_category_safe",
+      retryAttemptLeg: "gemini_category_safe_retry",
+      fastRetryMaxLatencyMs: 15_000,
+      // Retry on a transient failure: this is the last real shot at an image
+      // before the deterministic no-image path, and a single attempt is flaky
+      // against provider hiccups (a lone attempt failed on-device even though the
+      // same prompt succeeded via API).
+      retryOnFailure: true,
+    });
+    await logGeminiImageAttempts(params.costContext, "image_generation_category_safe", categoryGen.attempts);
+    providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(categoryGen.attempts));
+    if (categoryGen.bytes) {
+      const categoryPath = await uploadGeneratedBytes({
+        admin: params.admin,
+        businessId: params.businessId,
+        bytes: categoryGen.bytes,
+        contentType: categoryGen.mimeType,
+        provider: "gemini",
+        ts,
+        rand,
+      });
+      if (categoryPath) {
+        console.log(
+          JSON.stringify({ tag: "ai_ads_v2", event: "category_safe_image_used", businessId: params.businessId }),
+        );
+        return withImageSelection(
+          {
+            posterStoragePath: categoryPath,
+            source: "generated",
+            treatment: null,
+            prompt: categoryGen.prompt,
+            qa: imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: {
+                  all_required_items_present: true,
+                  items: [],
+                  missing_items: [],
+                  has_readable_text: false,
+                  has_forbidden_logo_or_brand: false,
+                  has_qr_code: false,
+                  has_unrelated_mascot_or_animal: false,
+                  has_crop_or_overlay_risk: false,
+                  forbidden_elements: [],
+                  crop_or_overlay_issues: [],
+                  notes:
+                    "Category-safe fallback image (brand tokens dropped after a provider refusal); item-name QA not applicable.",
+                },
+                requiredVisualItems: [],
+                sourceType: "ai_generated",
+              }),
+              0,
+              true,
+            ),
+            provider: "gemini",
+            model: gemini.model,
+            estimatedCostUsd: estimatedCostUsd + categoryGen.estimatedCostUsd,
+            attempts: providerAttempts,
+          },
+          { sourcePhotoPath: null, editMode: "none" },
+        );
+      }
+    }
+  }
+
   if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey: params.openAiKey,
@@ -2897,6 +3249,7 @@ async function produceImage(params: {
       requiredVisualItems,
       costContext: params.costContext,
       sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -2945,11 +3298,14 @@ async function produceImage(params: {
               aspectRatio: params.imageAspectRatio,
               imageSize: "1K",
               estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+              deadline: params.imageDeadline,
+              firstAttemptLeg: "gemini_required_item_retry",
               retryOnFailure: false,
             })
           : null;
       if (retryGeneration) {
         await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
+        providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(retryGeneration.attempts));
       }
       if (retryGeneration?.bytes) {
         qa.regenerated = true;
@@ -2960,17 +3316,14 @@ async function produceImage(params: {
           requiredVisualItems,
           costContext: params.costContext,
           sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          Object.assign(
-            qa,
-            imageQaTelemetryFromSourceAware(
-              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
-              2,
-              true,
-            ),
-          );
+          // Retry inspection unavailable: keep the first image's known failing
+          // verdict rather than erasing it, so a QA-failed image cannot ship
+          // uninspected under the fail-open rule.
+          console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           Object.assign(
             qa,
@@ -2987,6 +3340,7 @@ async function produceImage(params: {
           imageBytes = retryGeneration.bytes;
           imageMimeType = retryGeneration.mimeType;
           imagePrompt = retryGeneration.prompt;
+          imageLuma = retryGeneration.luma ?? null;
           estimatedCostUsd += retryGeneration.estimatedCostUsd;
         }
       }
@@ -3005,9 +3359,13 @@ async function produceImage(params: {
       );
     }
   }
-  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
+  // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
+  // discard a generated image; an unavailable inspector ships it with the
+  // VISION_QA_UNAVAILABLE warning instead of cascading to paid fallbacks.
+  if (qa.hardFailReasons.length > 0 || qa.missingItems.length > 0) {
     imageBytes = null;
     imageMimeType = null;
+    imageLuma = null;
   }
 
   if (imageBytes) {
@@ -3031,6 +3389,10 @@ async function produceImage(params: {
           provider: "gemini",
           model: gemini.model,
           estimatedCostUsd,
+          attempts: providerAttempts,
+          posterImageBytes: imageBytes,
+          posterImageMime: imageMimeType,
+          posterImageLuma: imageLuma,
         },
         {
           sourcePhotoPath: null,
@@ -3040,23 +3402,29 @@ async function produceImage(params: {
     }
   }
 
-  if (useOpenAiFallback) {
-    const result = await openAiFallback();
+  // 45s estimate: a gpt-image-1 generation plus its upload. This is the leg most
+  // likely to push a slow chain past the worker limit, because it only runs after
+  // every Gemini attempt has already failed and burned its own time.
+  if (useOpenAiFallback && pipelineHasBudgetFor("openai_residual_fallback", 45_000)) {
+    const result = await openAiFallback(providerAttempts);
     if (result.posterStoragePath || result.source === "stock" || result.source === "copy_only") {
       return result;
     }
   }
 
+  publishBudgetReport();
   return produceFallbackImage({
     admin: params.admin,
     openAiKey: params.openAiKey,
     geminiApiKey: params.geminiApiKey,
     prompt,
     requiredVisualItems,
+    allowStockFallback: pipelineHasBudgetFor("stock_fallback_qa", 20_000),
     imageProviderConfig: params.imageProviderConfig,
     costContext: params.costContext,
     sourcePhotoPath: params.photoPath,
     editMode: params.imageEditMode,
+    attempts: providerAttempts,
   });
 }
 
@@ -3138,6 +3506,41 @@ function providerAttemptTelemetry(attempt: ProviderAttempt) {
     reasoning_tokens: attempt.reasoningTokens ?? null,
     output_tokens: attempt.outputTokens ?? null,
     estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+  };
+}
+
+function imageProviderAttemptTelemetry(attempt: ImageProviderAttemptSummary) {
+  return {
+    provider: attempt.provider,
+    endpoint: attempt.endpoint,
+    model: attempt.model,
+    success: attempt.success,
+    error_code: attempt.errorCode,
+    latency_ms: attempt.latencyMs,
+    retry: attempt.retry,
+  };
+}
+
+function imageFailureDebug(imageResult: ProducedImage) {
+  const attempts = (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry);
+  return {
+    source: imageResult.source,
+    provider: imageResult.provider,
+    model: imageResult.model,
+    produced_image: imageResult.posterStoragePath !== null,
+    attempts: attempts.slice(-8),
+    qa: {
+      unavailable: imageResult.qa.unavailable,
+      decision: imageResult.qa.decision,
+      hard_fail_reasons: imageResult.qa.hardFailReasons.slice(0, 8),
+      missing_items: imageResult.qa.missingItems.slice(0, 8),
+      attempts: imageResult.qa.attempts,
+      regenerated: imageResult.qa.regenerated,
+    },
+    selection: {
+      source_mode: imageResult.selection.sourceMode,
+      selected_storage_path_present: Boolean(imageResult.selection.selectedStoragePath),
+    },
   };
 }
 
@@ -3242,6 +3645,7 @@ function buildGenerationTelemetry(params: {
   localizationResult?: VerifiedAdLocalizationBundleResult | null;
   posterDraft?: PosterDraftV1 | null;
   requestedCreativeFormat?: "standard_card" | "poster_v1";
+  stageTimingsMs?: Record<string, number>;
 }) {
   const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
@@ -3257,6 +3661,7 @@ function buildGenerationTelemetry(params: {
     events,
     success: productionSuccess,
     total_latency_ms: totalLatencyMs,
+    stage_timings_ms: params.stageTimingsMs ?? {},
     structured_offer: offerTelemetry(offerContract),
     generated: {
       headline: copy.headline,
@@ -3272,6 +3677,7 @@ function buildGenerationTelemetry(params: {
       estimated_cost_usd: imageResult.estimatedCostUsd,
       produced_image: imageResult.posterStoragePath !== null,
       requested_aspect_ratio: params.posterDraft?.aspect_ratio ?? "1:1",
+      provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
     },
     poster: params.posterDraft
       ? {
@@ -3532,6 +3938,20 @@ Deno.serve(async (req) => {
     }
     const businessName = typeof business.name === "string" ? business.name : "";
 
+    const capabilities = await getBusinessCapabilities(admin as any, businessId);
+    if (!capabilities.can_generate_ai || !capabilities.can_consume_offer_credits) {
+      return new Response(
+        JSON.stringify({
+          error: "AI ad generation unlocks after trial activation.",
+          error_code: !capabilities.can_generate_ai
+            ? "BUSINESS_AI_CAPABILITY_REQUIRED"
+            : "BUSINESS_OFFER_CREDIT_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (quotaStatusOnly) {
       const quota = await fetchAdQuota(admin, businessId);
       return new Response(JSON.stringify({ ok: true, quota }), {
@@ -3692,6 +4112,24 @@ Deno.serve(async (req) => {
       ownerUserId: user.id,
       requestGroupId,
     };
+    const stageTimingsMs: Record<string, number> = {};
+    const timeStage = async <T>(stage: string, work: () => Promise<T>): Promise<T> => {
+      const startedAt = Date.now();
+      try {
+        return await work();
+      } finally {
+        stageTimingsMs[stage] = Date.now() - startedAt;
+      }
+    };
+    const imageDeadline = createAiImageDeadline({
+      startedAtMs: requestStartedAtMs,
+      budgetMs: Math.max(
+        60_000,
+        envNumber("AI_IMAGE_REQUEST_DEADLINE_MS", envNumber("AI_IMAGE_PIPELINE_BUDGET_MS", 132_000)),
+      ),
+      reserveMs: Math.max(5_000, envNumber("AI_IMAGE_REQUEST_RESERVE_MS", 12_000)),
+      minAttemptMs: Math.max(10_000, envNumber("AI_IMAGE_MIN_PROVIDER_TIMEOUT_MS", 15_000)),
+    });
 
     const previousAd = isRevision ? coerceSingleAd(previousAdRaw as Record<string, unknown>) : null;
     const sourceHint = hintText || previousAd?.item_research.item_name || "";
@@ -3700,15 +4138,18 @@ Deno.serve(async (req) => {
     if (isRevision && previousAd) {
       // Reuse research from the previous ad — revisions iterate, they don't re-look up
       research = previousAd.item_research;
+      stageTimingsMs.research = 0;
     } else {
-      research = await researchMenuItem({
-        openAiKey,
-        geminiApiKey,
-        itemHint: sourceHint,
-        businessName,
-        businessLocation: businessContext.location ?? "",
-        costContext,
-      });
+      research = await timeStage("research", () =>
+        researchMenuItem({
+          openAiKey,
+          geminiApiKey,
+          itemHint: sourceHint,
+          businessName,
+          businessLocation: businessContext.location ?? "",
+          costContext,
+        })
+      );
     }
 
     let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
@@ -3728,6 +4169,7 @@ Deno.serve(async (req) => {
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
+      stageTimingsMs.copy = 0;
       copy = {
         headline: previousAd.headline,
         subheadline: previousAd.subheadline,
@@ -3748,24 +4190,26 @@ Deno.serve(async (req) => {
       };
     } else {
       try {
-        copy = await generateCopy({
-          openAiKey,
-          geminiApiKey,
-          itemHint: sourceHint,
-          research,
-          businessName,
-          businessContext,
-          offerContract,
-          offerScheduleSummary,
-          quantityLimit,
-          redemptionLimit,
-          outputLanguage,
-          revisionPreset: revisionPreset || undefined,
-          revisionFeedback: revisionFeedback || undefined,
-          previousAd: previousAd ?? undefined,
-          creativeFormat: creativeRequest.requestedFormat,
-          costContext,
-        });
+        copy = await timeStage("copy", () =>
+          generateCopy({
+            openAiKey,
+            geminiApiKey,
+            itemHint: sourceHint,
+            research,
+            businessName,
+            businessContext,
+            offerContract,
+            offerScheduleSummary,
+            quantityLimit,
+            redemptionLimit,
+            outputLanguage,
+            revisionPreset: revisionPreset || undefined,
+            revisionFeedback: revisionFeedback || undefined,
+            previousAd: previousAd ?? undefined,
+            creativeFormat: creativeRequest.requestedFormat,
+            costContext,
+          })
+        );
       } catch {
         console.log(
           JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", errorCode: "COPY_FAILED" }),
@@ -3785,6 +4229,7 @@ Deno.serve(async (req) => {
             events: ["quick_deal_ai_generation_failed"],
             stage: "copy",
             total_latency_ms: Date.now() - requestStartedAtMs,
+            stage_timings_ms: stageTimingsMs,
             structured_offer: offerTelemetry(offerContract),
           },
         });
@@ -3796,10 +4241,91 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Localization is started HERE, before the image chain, and awaited after it ──
+    // Localization consumes offer FACTS and `copy`; it never reads the generated
+    // image. `sourceAssetIds` is the only image-derived field on the definition and
+    // it is a pure passthrough — buildOfferDisclosureLine's own Pick<> signature
+    // cannot see it, and no canonical line, disclosure id or hash derives from it —
+    // so every fact localization needs is final once `copy` is done. Run serially
+    // this cost a measured ~8s on top of a ~44.6s generation (image ~24.3s,
+    // localization ~8.0s); overlapped it is effectively free. Same provider calls,
+    // same output, same spend.
+    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
+    const offerDefinitionFacts = buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput!,
+      redemptionLimit,
+      schedule: {
+        mode: "summary_only",
+        summary: offerScheduleSummary,
+      },
+      sourceAssetIds: [],
+    });
+    const localizationPromise = shouldBuildLocalizationBundle()
+      ? timeStage("localization", () =>
+          generateVerifiedAdLocalizationBundle({
+            request: {
+              adVersionId: `draft:${requestGroupId}`,
+              sourceLocale,
+              targetLocales: [...SUPPORTED_LOCALES],
+              sourceCreative: {
+                strategy: copy.copy_source ?? null,
+                headline: copy.headline,
+                supportingCopy: copy.short_description || copy.subheadline,
+                imageAltText: localizationImageAltText({
+                  businessName,
+                  headline: copy.headline,
+                  offerLine: offerDefinitionFacts.canonicalOfferLine,
+                }),
+              },
+              creativeBrief: {
+                targetCustomerMoment: "",
+                exactCustomerHook: offerDefinitionFacts.canonicalOfferLine,
+                desiredFeeling: "",
+                naturalLanguageDirection: "",
+              },
+              offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinitionFacts),
+              protectedTerms: protectedTermsForLocalization(offerDefinitionFacts),
+              localizedTerms: [],
+              merchantProfile: buildMerchantCreativeProfile({
+                businessId,
+                businessName,
+                category: businessContext.category,
+                tone: businessContext.tone,
+                location: businessContext.location,
+                address: businessContext.address,
+                description: businessContext.description,
+                itemHint: sourceHint,
+                research,
+              }),
+              generationRunId: requestGroupId,
+            },
+            offerDefinition: offerDefinitionFacts,
+            deps: {
+              openAiApiKey: openAiKey,
+              geminiApiKey,
+              admin,
+              config: resolveAiTextProviderConfig(),
+            },
+            providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
+            repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+            semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+          })
+        )
+      : null;
+    // If the image chain throws, nothing below awaits this promise. Attach a sink so
+    // a localization rejection can never surface as an unhandled rejection and kill
+    // the isolate; `await localizationPromise` still rejects normally.
+    localizationPromise?.catch(() => {});
+
+    // R4: per-request sink for the image pipeline's wall-clock budget report.
+    // Surfaced in the response because edge logs are not readable via the CLI, so a
+    // smoke has to be able to see which legs were skipped and why.
+    const imagePipelineBudget: { report?: AiImageDeadlineReport } = {};
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
     if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
       // Copy-only revision: keep the existing image. If there is no existing image,
       // fall through to image generation because every deal must have an image.
+      stageTimingsMs.image = 0;
       imageResult = withImageSelection(
         {
           posterStoragePath: previousAd.poster_storage_path ?? null,
@@ -3819,42 +4345,44 @@ Deno.serve(async (req) => {
         },
       );
     } else {
-      imageResult = await produceImage({
-        openAiKey,
-        geminiApiKey,
-        admin,
-        userClient,
-        businessId,
-        photoPath: effectivePhotoPath || null,
-        photoTreatment: effectivePhotoTreatment,
-        imageSourceMode,
-        imageEditMode,
-        customImageEditInstruction,
-        merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
-        research,
-        itemHint: sourceHint,
-        businessName,
-        businessCategory: businessContext.category,
-        offerContract,
-        creativeImageBrief: copy.image_brief,
-        revisionPreset: revisionPreset || undefined,
-        revisionFeedback: revisionFeedback || undefined,
-        imageProviderConfig,
-        costContext,
-        imageAspectRatio: creativeRequest.imageAspectRatio,
-      });
+      imageResult = await timeStage("image", () =>
+        produceImage({
+          budgetSink: imagePipelineBudget,
+          imageDeadline,
+          stageTimingsMs,
+          openAiKey,
+          geminiApiKey,
+          admin,
+          userClient,
+          businessId,
+          photoPath: effectivePhotoPath || null,
+          photoTreatment: effectivePhotoTreatment,
+          imageSourceMode,
+          imageEditMode,
+          customImageEditInstruction,
+          merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
+          research,
+          itemHint: sourceHint,
+          businessName,
+          businessCategory: businessContext.category,
+          offerContract,
+          creativeImageBrief: copy.image_brief,
+          revisionPreset: revisionPreset || undefined,
+          revisionFeedback: revisionFeedback || undefined,
+          imageProviderConfig,
+          costContext,
+          imageAspectRatio: creativeRequest.imageAspectRatio,
+        })
+      );
     }
+    imagePipelineBudget.report = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
-    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
-    const offerDefinition = buildOfferDefinitionV1FromContract(offerContract, {
-      dealEligibility: eligibilityInput!,
-      redemptionLimit,
-      schedule: {
-        mode: "summary_only",
-        summary: offerScheduleSummary,
-      },
-      sourceAssetIds: imageResult.posterStoragePath ? [imageResult.posterStoragePath] : [],
-    });
+    // Same facts localization already received, plus the asset the image chain just
+    // produced. Spread rather than rebuilt so the two objects cannot drift: every
+    // other field is byte-identical to what localization was verified against.
+    const offerDefinition = imageResult.posterStoragePath
+      ? { ...offerDefinitionFacts, sourceAssetIds: [imageResult.posterStoragePath] }
+      : offerDefinitionFacts;
     const posterDraft = creativeRequest.posterEnabled
       ? buildPosterSpecFromOfferDefinition({
           definition: offerDefinition,
@@ -3867,68 +4395,84 @@ Deno.serve(async (req) => {
           sourceAssetPath: imageResult.posterStoragePath,
           renderedAssetPath: null,
           headline: copy.headline,
-          subline: copy.poster_kicker,
+          // R12: the poster has no kicker slot. `copyForLocale` drops `subline` for every
+          // locale and the canvas renders copy_by_language, so anything set here was
+          // discarded before render — while still being offered to the merchant as an
+          // editable field. Pinned to null so it cannot come back through a model that
+          // ignores the prompt. The field remains on the type for stored-spec compatibility.
+          subline: null,
           businessCategory: businessContext.category,
           compositionPlan: imageResult.prompt,
         })
       : null;
+    // Best-effort: measure the poster image's top/bottom band luminance so the
+    // native renderer sizes its legibility scrim to the image (vs a fixed
+    // fallback). Fail-safe — any decode issue leaves luma off and the renderer
+    // keeps its safe fallback. Never blocks or fails generation.
+    let posterLumaDebug: { source: string | null; reason: string | null } | null = null;
+    const posterLumaStartedAt = Date.now();
+    if (posterDraft && imageResult.posterStoragePath) {
+      try {
+        let luma = imageResult.posterImageLuma ?? null;
+        // "upstream" = measured from pixels decoded during JPEG->PNG conversion;
+        // "memory" = decoded here from the bytes we just uploaded;
+        // "download" = last resort for paths that never held bytes (stock, reuse).
+        let lumaSource: "upstream" | "memory" | "download" | null = luma ? "upstream" : null;
+        let lumaReason: string | null = null;
+        if (!luma && imageResult.posterImageBytes) {
+          const outcome = await computeImageBandLuminanceDetailed(
+            imageResult.posterImageBytes,
+            imageResult.posterImageMime ?? null,
+          );
+          luma = outcome.luma;
+          lumaReason = outcome.reason;
+          if (luma) lumaSource = "memory";
+        }
+        if (!luma) {
+          const { data: blob } = await admin.storage
+            .from("deal-photos")
+            .download(imageResult.posterStoragePath);
+          if (blob) {
+            const outcome = await computeImageBandLuminanceDetailed(
+              new Uint8Array(await blob.arrayBuffer()),
+              (blob as { type?: string }).type ?? null,
+            );
+            luma = outcome.luma;
+            lumaReason = outcome.reason ?? lumaReason;
+            if (luma) lumaSource = "download";
+          } else if (!lumaReason) {
+            lumaReason = "storage_download_empty";
+          }
+        }
+        if (luma) {
+          (posterDraft as { luma?: { top: number; bottom: number } }).luma = luma;
+        }
+        // Carried in the response (not just logs) because edge logs are not
+        // readable via the CLI — this is how a smoke proves which path ran.
+        posterLumaDebug = { source: lumaSource, reason: luma ? null : lumaReason };
+      } catch (lumaErr) {
+        posterLumaDebug = { source: null, reason: `threw:${String((lumaErr as Error)?.name ?? "Error").slice(0, 40)}` };
+        console.log(JSON.stringify({ tag: "ai_ads_v2", event: "poster_luma_skipped", message: String(lumaErr) }));
+      } finally {
+        stageTimingsMs.poster_luma = Date.now() - posterLumaStartedAt;
+      }
+    } else {
+      stageTimingsMs.poster_luma = 0;
+    }
     let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
-    if (shouldBuildLocalizationBundle()) {
-      const merchantProfile = buildMerchantCreativeProfile({
-        businessId,
-        businessName,
-        category: businessContext.category,
-        tone: businessContext.tone,
-        location: businessContext.location,
-        address: businessContext.address,
-        description: businessContext.description,
-        itemHint: sourceHint,
-        research,
-      });
-      localizationResult = await generateVerifiedAdLocalizationBundle({
-        request: {
-          adVersionId: `draft:${requestGroupId}`,
-          sourceLocale,
-          targetLocales: [...SUPPORTED_LOCALES],
-          sourceCreative: {
-            strategy: copy.copy_source ?? null,
-            headline: copy.headline,
-            supportingCopy: copy.short_description || copy.subheadline,
-            imageAltText: localizationImageAltText({
-              businessName,
-              headline: copy.headline,
-              offerLine: offerDefinition.canonicalOfferLine,
-            }),
-          },
-          creativeBrief: {
-            targetCustomerMoment: "",
-            exactCustomerHook: offerDefinition.canonicalOfferLine,
-            desiredFeeling: "",
-            naturalLanguageDirection: "",
-          },
-          offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinition),
-          protectedTerms: protectedTermsForLocalization(offerDefinition),
-          localizedTerms: [],
-          merchantProfile,
-          generationRunId: requestGroupId,
-        },
-        offerDefinition,
-        deps: {
-          openAiApiKey: openAiKey,
-          geminiApiKey,
-          admin,
-          config: resolveAiTextProviderConfig(),
-        },
-        providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
-        repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
-        semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
-      });
+    if (localizationPromise) {
+      // Started before the image chain; by now it has usually already resolved.
+      // stageTimingsMs.localization therefore overlaps stageTimingsMs.image — it is
+      // still the true duration of the localization work, not added wall clock.
+      localizationResult = await localizationPromise;
       await logTextProviderAttempts(costContext, "ad_localization_transcreation", localizationResult.transcreation.attempts);
       await logTextProviderAttempts(costContext, "ad_localization_translation_qa", localizationResult.semanticQa.attempts);
       await logTextProviderAttempts(costContext, "ad_localization_repaired_translation_qa", localizationResult.repairedSemanticQa.attempts);
       for (const repair of Object.values(localizationResult.repairs)) {
         if (repair) await logTextProviderAttempts(costContext, "ad_localization_repair", repair.attempts);
       }
+    } else {
+      stageTimingsMs.localization = 0;
     }
 
     const ad: SingleAd = {
@@ -3972,11 +4516,12 @@ Deno.serve(async (req) => {
     };
 
     /**
-     * Copy-only is an intentional fallback when every image source fails. Unexpected null-image
-     * states still fail closed so they do not burn quota.
+     * AI ads require a usable image asset. Copy-only remains useful telemetry for
+     * the exhausted fallback path, but it is not a successful generated ad.
      */
-    const imageProductionFailed = imageResult.posterStoragePath === null && imageResult.source !== "copy_only";
+    const imageProductionFailed = imageResult.posterStoragePath === null;
     const productionSuccess = !imageProductionFailed;
+    imagePipelineBudget.report = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
     await admin.from("ai_generation_logs").insert({
       business_id: businessId,
@@ -4007,6 +4552,7 @@ Deno.serve(async (req) => {
         localizationResult,
         posterDraft,
         requestedCreativeFormat: creativeRequest.requestedFormat,
+        stageTimingsMs,
       }),
     });
 
@@ -4020,10 +4566,17 @@ Deno.serve(async (req) => {
 
     if (imageProductionFailed) {
       await releaseReservedChargeableRevision("image_failed");
+      const imageFailure = imageFailureDebug(imageResult);
       return new Response(
         JSON.stringify({
           error: "AI image generation failed. Try again.",
           error_code: "IMAGE_REQUIRED",
+          image_failure: imageFailure,
+          stage_timings_ms: stageTimingsMs,
+          // R4: this is the failure path that most needs the budget picture — it is
+          // where a chain that ran out of wall clock lands. Without it, an operator
+          // cannot tell "every provider refused" from "we ran out of time".
+          image_pipeline_budget: imagePipelineBudget.report ?? null,
           quota,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -4036,7 +4589,15 @@ Deno.serve(async (req) => {
       chargeableRevisionCredit = null;
     }
 
-    return new Response(JSON.stringify({ ad, ads: [ad], quota }), {
+    return new Response(JSON.stringify({
+      ad,
+      ads: [ad],
+      quota,
+      image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
+      poster_luma_debug: posterLumaDebug,
+      image_pipeline_budget: imagePipelineBudget.report ?? null,
+      stage_timings_ms: stageTimingsMs,
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

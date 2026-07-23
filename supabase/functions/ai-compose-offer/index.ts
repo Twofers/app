@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { fetchOpenAiWithFallback } from "../_shared/openai-fetch.ts";
 import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
 import {
   generateStructuredText,
@@ -10,6 +11,7 @@ import {
 } from "../_shared/ai-text-provider.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -180,13 +182,21 @@ async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<
 }> {
   const raw = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
   const blob = new Blob([raw], { type: "audio/m4a" });
-  const form = new FormData();
-  form.append("file", blob, "clip.m4a");
-  form.append("model", WHISPER_MODEL);
-  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${openAiKey}` },
-    body: form,
+  // Rebuild the multipart body per attempt so the prepaid -> existing key retry
+  // sends a fresh, unconsumed form (a FormData request body is single-use).
+  const buildTranscriptionForm = (): FormData => {
+    const form = new FormData();
+    form.append("file", blob, "clip.m4a");
+    form.append("model", WHISPER_MODEL);
+    return form;
+  };
+  const { response: res } = await fetchOpenAiWithFallback({
+    url: "https://api.openai.com/v1/audio/transcriptions",
+    init: { method: "POST" },
+    buildBody: buildTranscriptionForm,
+    existingKeyOverride: openAiKey,
+    logTag: "ai_compose_offer",
+    event: "transcription_openai_key_source",
   });
   if (!res.ok) {
     throw new Error(`Whisper provider request failed with HTTP_${res.status}.`);
@@ -266,6 +276,18 @@ serve(async (req) => {
     if (bizErr || !biz || biz.owner_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const capabilities = await getBusinessCapabilities(admin as any, business_id);
+    if (!capabilities.can_generate_ai) {
+      return new Response(
+        JSON.stringify({
+          error: "AI generation unlocks after trial activation.",
+          error_code: "BUSINESS_AI_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
