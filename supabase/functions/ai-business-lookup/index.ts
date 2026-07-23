@@ -45,6 +45,12 @@ const TYPE_MAP: Record<string, string> = {
 
 const DFW_LAT = 32.85;
 const DFW_LNG = -96.97;
+// Per-account rate limit for the un-onboarded applicant lookup path only.
+// Approved owners keep their existing unlimited access; this bounds Google
+// Places cost for accounts with no approved business (the apply-flow path).
+const APPLICANT_LOOKUP_EVENT = "business_lookup_applicant";
+const APPLICANT_LOOKUP_LIMIT = 20;
+const APPLICANT_LOOKUP_WINDOW_MS = 60 * 60 * 1000;
 const SEARCH_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.types,places.location";
 const DETAILS_FIELD_MASK =
@@ -275,18 +281,63 @@ serve(async (req) => {
       .eq("owner_id", user.id)
       .limit(2);
     if (businessError) throw businessError;
-    if (!Array.isArray(ownedBusinesses) || ownedBusinesses.length !== 1) {
+
+    if (Array.isArray(ownedBusinesses) && ownedBusinesses.length === 1) {
+      // Existing owner: keep the stricter setup-capability gate unchanged.
+      const capabilities = await getBusinessCapabilities(admin as any, ownedBusinesses[0].id);
+      if (!capabilities.can_use_setup_tools) {
+        return jsonResponse(corsHeaders, 403, {
+          error: "Business lookup is unavailable for this account.",
+          error_code: "BUSINESS_SETUP_CAPABILITY_REQUIRED",
+          reason_code: capabilities.reason_code,
+        });
+      }
+    } else if (!Array.isArray(ownedBusinesses) || ownedBusinesses.length === 0) {
+      // Prospective applicant with no business row yet. The old gate hard-required
+      // owning an approved business, which blocked the lookup for exactly the
+      // people the in-app application flow is for — they can't self-fill their
+      // business before they've been approved. Allow the lookup here, still gated
+      // on an authenticated, email-confirmed, non-redeemer session (the redeemer
+      // check above already excluded redemption accounts).
+      const confirmedAt =
+        (user as { email_confirmed_at?: unknown }).email_confirmed_at ??
+        (user as { confirmed_at?: unknown }).confirmed_at;
+      if (typeof confirmedAt !== "string" || !confirmedAt) {
+        return jsonResponse(corsHeaders, 403, {
+          error: "Confirm your email to look up your business.",
+          error_code: "BUSINESS_LOOKUP_EMAIL_UNCONFIRMED",
+        });
+      }
+
+      // Rate limit this account's applicant lookups in the trailing window, then
+      // log this one. Non-atomic count-then-log (like the site-import limiter) —
+      // fine for cost-bounding, not a security control. Owners never reach here.
+      const since = new Date(Date.now() - APPLICANT_LOOKUP_WINDOW_MS).toISOString();
+      const { count: recentLookups, error: rateError } = await admin
+        .from("system_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_type", APPLICANT_LOOKUP_EVENT)
+        .eq("metadata->>actor_user_id", user.id)
+        .gte("created_at", since);
+      if (!rateError && typeof recentLookups === "number" && recentLookups >= APPLICANT_LOOKUP_LIMIT) {
+        logLookup("applicant_rate_limited", { recentLookups });
+        return jsonResponse(corsHeaders, 429, {
+          error: "You've reached the lookup limit for now. Try again later or enter details manually.",
+          error_code: "BUSINESS_LOOKUP_RATE_LIMITED",
+        });
+      }
+      await admin.from("system_events").insert({
+        event_type: APPLICANT_LOOKUP_EVENT,
+        severity: "info",
+        source: "mobile_app",
+        message: "Applicant business lookup.",
+        metadata: { actor_user_id: user.id },
+      });
+    } else {
+      // Unexpected multi-business ownership — keep the strict block.
       return jsonResponse(corsHeaders, 403, {
         error: "Approved business setup is required before business lookup.",
         error_code: "BUSINESS_SETUP_CAPABILITY_REQUIRED",
-      });
-    }
-    const capabilities = await getBusinessCapabilities(admin as any, ownedBusinesses[0].id);
-    if (!capabilities.can_use_setup_tools) {
-      return jsonResponse(corsHeaders, 403, {
-        error: "Business lookup is unavailable for this account.",
-        error_code: "BUSINESS_SETUP_CAPABILITY_REQUIRED",
-        reason_code: capabilities.reason_code,
       });
     }
 
