@@ -126,8 +126,10 @@ describe("promotional materials UI defaults", () => {
     expect(setup).toMatch(/accessibilityState=\{\{ checked: promoAuthChecked \}\}/);
     expect(setup).toMatch(/businessSetup\.promoAuthOptionalLabel/);
     expect(setup).toMatch(/businessSetup\.promoAuthCheckbox/);
-    // Submit is gated only on busy/upload/loading — never on the checkbox.
-    expect(setup).toMatch(/disabled=\{busy \|\| logoUploading \|\| setupMode === "loading"\}/);
+    // Submit is gated only on busy/upload (loading is handled by an earlier
+    // return) — never on the promo checkbox.
+    expect(setup).toMatch(/disabled=\{busy \|\| logoUploading\}/);
+    expect(setup).not.toMatch(/disabled=\{[^}]*promoAuthChecked/);
     // A failure records a soft notice instead of failing the save.
     expect(setup).toMatch(/async function applyPromoAuthorization[\s\S]*?catch[\s\S]*?return false/);
     expect(setup).toMatch(/businessSetup\.promoAuthDeferred/);

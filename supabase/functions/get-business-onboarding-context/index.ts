@@ -32,6 +32,49 @@ function friendlyStatus(status: string | null | undefined, accessLevel: string |
   return "Your business profile is being reviewed. You can finish setup and preview an offer now. Publishing will unlock after verification.";
 }
 
+type ApplicationSummary = {
+  status: "none" | "pending" | "waitlisted" | "rejected";
+  submitted_at: string | null;
+};
+
+// Reports THIS confirmed identity's own most-recent application state so the app
+// can say "under review" / "waitlisted" / "not approved" instead of always
+// showing "apply". Safe to expose here (unlike the public submit endpoint, which
+// echoes nothing): the caller has already proven ownership of `email` via a
+// confirmed session, so this reveals no information about other accounts.
+async function readApplicationStatus(supabase: DbClient, email: string): Promise<ApplicationSummary> {
+  const { data, error } = await supabase
+    .from("business_applications")
+    .select("status, created_at")
+    .eq("email", email)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return { status: "none", submitted_at: null };
+  }
+  const row = data[0] as { status?: unknown; created_at?: unknown };
+  const raw = String(row.status ?? "");
+  const submittedAt = typeof row.created_at === "string" ? row.created_at : null;
+  if (raw === "waitlisted") return { status: "waitlisted", submitted_at: submittedAt };
+  if (raw === "rejected") return { status: "rejected", submitted_at: submittedAt };
+  // Approved tiers normally never reach the business:null branch (the claim
+  // would have materialized a business), but if the claim is momentarily behind,
+  // "pending" keeps the app on the recheck path until it resolves.
+  const pending = new Set([
+    "pending_review",
+    "pending_verification",
+    "review_required",
+    "trial_limited",
+    "trial_active",
+    "approved_not_billed",
+    "active",
+  ]);
+  if (pending.has(raw)) return { status: "pending", submitted_at: submittedAt };
+  // suspended / expired / archived (or unknown): the INSERT gate intentionally
+  // lets these re-apply, so surface "none" and let them submit again.
+  return { status: "none", submitted_at: submittedAt };
+}
+
 /**
  * Claims the one approved application for this confirmed auth identity and
  * returns its inert or activated business. The database RPC owns all
@@ -96,9 +139,11 @@ serve(async (req) => {
 
     const businessId = await ensureLinkedBusiness(supabaseAdmin, user.id, email);
     if (!businessId) {
+      const application = await readApplicationStatus(supabaseAdmin, email);
       return json(req, {
         ok: true,
         business: null,
+        application,
         locations: [],
         contact_channels: [],
         slow_hours: [],

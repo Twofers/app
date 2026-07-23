@@ -83,9 +83,40 @@ type Payload = {
   privacy_acknowledged?: unknown;
   promo_materials_authorized?: unknown;
   company_website?: unknown;
+  source?: unknown;
 };
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
+
+// In-app submissions carry the owner's session JWT. Resolve the confirmed
+// identity's email from it so an authenticated caller can only apply as
+// themselves (and so get-business-onboarding-context can match the application
+// by that same verified email later). Website submissions carry no user JWT —
+// getUser returns no user for the anon key — so this returns null and the
+// public form keeps using the typed email. Best-effort: any failure falls back
+// to the payload email rather than blocking a genuine submission.
+async function resolveAuthedEmail(
+  req: Request,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
+  try {
+    const authedClient = createClient(supabaseUrl, serviceRoleKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data, error } = await authedClient.auth.getUser();
+    if (error || !data.user?.email) return null;
+    const confirmedAt =
+      (data.user as { email_confirmed_at?: unknown }).email_confirmed_at ??
+      (data.user as { confirmed_at?: unknown }).confirmed_at;
+    if (typeof confirmedAt !== "string" || !confirmedAt) return null;
+    return data.user.email.trim().toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 type IntakeDecision = {
   status: "pending_review" | "review_required" | "pending_verification" | "waitlisted" | "rejected";
@@ -301,24 +332,31 @@ serve(async (req) => {
 
   const businessName = cleanString(payload.business_name, 120);
   const contactName = cleanString(payload.contact_name, 120);
-  const email = cleanEmail(payload.email);
   const termsAccepted = payload.terms_accepted === true;
   const privacyAcknowledged = payload.privacy_acknowledged === true;
   // Optional and opt-in: absent, false, or any non-true value all mean "not
   // authorized". Deliberately NOT part of the required-fields guard below.
   const promoMaterialsAuthorized = payload.promo_materials_authorized === true;
+  // Where the application came from. Allowlisted so a caller can never write an
+  // arbitrary source; the public website form omits it and falls back here.
+  const resolvedSource = payload.source === "app_business_setup" ? "app_business_setup" : "website_start_trial";
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json(req, { error: "Business applications are not configured." }, 500);
+  }
+
+  // Authenticated (in-app) callers apply as their own confirmed email; the
+  // public website form has no user JWT and uses the typed email.
+  const authedEmail = await resolveAuthedEmail(req, supabaseUrl, serviceRoleKey);
+  const email = authedEmail ?? cleanEmail(payload.email);
 
   if (!businessName || !contactName || !email || !termsAccepted || !privacyAcknowledged) {
     return json(req, { error: "Missing required fields." }, 400);
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json(req, { error: "Business applications are not configured." }, 500);
-    }
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const requestIp = clientIpFromRequest(req);
     if (await isRateLimited(supabase, { email, ip: requestIp })) {
@@ -373,7 +411,7 @@ serve(async (req) => {
       terms_accepted: termsAccepted,
       privacy_acknowledged: privacyAcknowledged,
       promo_materials_authorized: promoMaterialsAuthorized,
-      source: "website_start_trial",
+      source: resolvedSource,
       status: decision.status,
       access_tier: decision.access_tier,
       verification_status: decision.verification_status,
@@ -444,7 +482,7 @@ serve(async (req) => {
         accessTier: decision.access_tier,
         verificationStatus: decision.verification_status,
         riskScore: decision.risk_score,
-        source: "website_start_trial",
+        source: resolvedSource,
       }, quickApprovalUrl);
     }
     await enqueueStripeCustomerSync(supabase, {

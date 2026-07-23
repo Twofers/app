@@ -14,6 +14,15 @@ export const SUPPORT_URL = process.env.EXPO_PUBLIC_SUPPORT_URL ?? "https://www.t
 export const BUSINESS_START_TRIAL_URL =
   process.env.EXPO_PUBLIC_BUSINESS_START_TRIAL_URL ?? "https://www.twoferapp.com/business/billing/start";
 
+/**
+ * New-business application form. This is where a merchant who has NOT been
+ * approved yet applies (posts to submit-business-application). Distinct from
+ * BUSINESS_START_TRIAL_URL, which is the post-approval "activate your approved
+ * trial via Stripe" page and assumes an approval already exists.
+ */
+export const BUSINESS_APPLY_URL =
+  process.env.EXPO_PUBLIC_BUSINESS_APPLY_URL ?? "https://www.twoferapp.com/business/start-trial";
+
 export const DELETE_ACCOUNT_URL =
   process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL ?? "https://www.twoferapp.com/delete-account";
 

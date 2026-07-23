@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Image, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, AppState, BackHandler, Image, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import { File as ExpoFsFile, Paths } from "expo-file-system";
@@ -43,6 +43,9 @@ import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { CardShell } from "@/components/ui/card-shell";
+import { BUSINESS_APPLY_URL, SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { readOnboardingApplication } from "@/lib/business-application";
 
 type Tone = "error" | "success" | "info";
 
@@ -110,6 +113,11 @@ export default function BusinessSetupScreen() {
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
+  // Bumped to re-run the onboarding-context fetch while parked on the
+  // pending-approval view (manual "check again" + app foreground). Without it
+  // the mount-only fetch means an approval granted while this screen is open
+  // can never be discovered short of force-closing the app.
+  const [pendingRecheckNonce, setPendingRecheckNonce] = useState(0);
   const [onboardingContext, setOnboardingContext] = useState<BusinessOnboardingContext | null>(null);
   // Existing business id + lifecycle status (from either prefill path). Once
   // the business is publicly visible the name is locked server-side
@@ -209,6 +217,9 @@ export default function BusinessSetupScreen() {
     if (!uid) return;
     let cancelled = false;
     setSetupMode("loading");
+    if (__DEV__ && pendingRecheckNonce > 0) {
+      console.log("[business-setup] re-checking onboarding state", pendingRecheckNonce);
+    }
     void (async () => {
       try {
         const context = await getBusinessOnboardingContext();
@@ -296,7 +307,39 @@ export default function BusinessSetupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, session?.user?.id, t]);
+  }, [authLoading, session?.user?.id, t, pendingRecheckNonce]);
+
+  // While parked on the pending-approval view, re-check when the app returns
+  // to the foreground — the expected journey is "tap Apply → browser → get
+  // approved → switch back". Scoped to create mode so an owner editing their
+  // profile never has the form yanked into a reload mid-typing.
+  useEffect(() => {
+    if (setupMode !== "create" || setupBypass) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setPendingRecheckNonce((n) => n + 1);
+    });
+    return () => sub.remove();
+  }, [setupMode, setupBypass]);
+
+  // Re-check when this screen regains focus (e.g. returning from the in-app
+  // apply screen) so a just-submitted application flips the card to "under
+  // review". Skips the first focus (mount already fetched) and never fires in
+  // edit mode, where a reload would flash away an owner's in-progress form.
+  const hasBlurredRef = useRef(false);
+  const setupModeRef = useRef(setupMode);
+  useEffect(() => {
+    setupModeRef.current = setupMode;
+  }, [setupMode]);
+  useFocusEffect(
+    useCallback(() => {
+      if (hasBlurredRef.current && setupModeRef.current !== "edit") {
+        setPendingRecheckNonce((n) => n + 1);
+      }
+      return () => {
+        hasBlurredRef.current = true;
+      };
+    }, []),
+  );
 
   async function pickLogo() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -763,6 +806,132 @@ export default function BusinessSetupScreen() {
     siteImportResult.logo_candidates.length === 0 &&
     importItems.length === 0 &&
     (!siteImportResult.menu || siteImportResult.menu.items.length === 0);
+
+  // A "create"-mode screen means no business row exists for this owner yet —
+  // i.e. they have not been approved. Rather than let them fill the whole form
+  // and dead-end at submit (the onSubmit guard blocks it), tell them up front
+  // what they need and give them an actionable path. The dev/e2e bypass keeps
+  // the editable form so onboarding automation can still seed a business.
+  const showPendingApproval = setupMode === "create" && !setupBypass;
+  const signedInEmail = session?.user?.email ?? null;
+
+  const signOutFromSetup = useCallback(() => {
+    const uid = session?.user?.id;
+    if (!uid) {
+      router.replace("/auth-landing");
+      return;
+    }
+    void signOutAndRedirectToAuthLanding({ userId: uid, replace: router.replace });
+  }, [router, session?.user?.id]);
+
+  if (setupMode === "loading") {
+    return (
+      <View
+        style={{
+          flex: 1,
+          paddingTop: top,
+          paddingHorizontal: horizontal,
+          backgroundColor: theme.background,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator color={primary} />
+      </View>
+    );
+  }
+
+  if (showPendingApproval) {
+    const applicationSummary = readOnboardingApplication(onboardingContext);
+    const appStatus = applicationSummary?.status ?? "none";
+    const submittedAtRaw = applicationSummary?.submitted_at ?? null;
+    let submittedLabel: string | null = null;
+    if (submittedAtRaw) {
+      const submittedDate = new Date(submittedAtRaw);
+      if (Number.isFinite(submittedDate.getTime())) {
+        submittedLabel = t("businessApply.submittedOn", { date: submittedDate.toLocaleDateString() });
+      }
+    }
+    const content =
+      appStatus === "pending"
+        ? { title: t("businessApply.underReviewTitle"), body: t("businessApply.underReviewBody") }
+        : appStatus === "waitlisted"
+          ? { title: t("businessApply.waitlistTitle"), body: t("businessApply.waitlistBody") }
+          : appStatus === "rejected"
+            ? { title: t("businessApply.rejectedTitle"), body: t("businessApply.rejectedBody") }
+            : { title: t("businessSetup.pendingApprovalTitle"), body: t("businessSetup.pendingApprovalBody") };
+
+    return (
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
+            {content.title}
+          </Text>
+          <CardShell>
+            <View style={{ gap: Spacing.sm }}>
+              <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: "600", color: theme.mutedText }}>
+                {content.body}
+              </Text>
+              {submittedLabel ? (
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.mutedText }}>{submittedLabel}</Text>
+              ) : null}
+              {signedInEmail ? (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+                    {t("businessSetup.pendingApprovalEmailLabel")}
+                  </Text>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>{signedInEmail}</Text>
+                </View>
+              ) : null}
+              <View style={{ marginTop: Spacing.sm, gap: Spacing.sm }}>
+                {appStatus === "none" ? (
+                  <>
+                    <PrimaryButton
+                      title={t("businessApply.applyNowCta")}
+                      onPress={() => router.push("/business-apply" as Href)}
+                      style={{ borderRadius: Radii.md }}
+                    />
+                    <Pressable
+                      onPress={() => void openWebsiteUrl(BUSINESS_APPLY_URL)}
+                      accessibilityRole="button"
+                      style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary }}>
+                        {t("businessApply.applyOnWebsiteInstead")}
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : null}
+                {appStatus === "pending" ? (
+                  <PrimaryButton
+                    title={t("businessSetup.pendingApprovalCheckCta")}
+                    onPress={() => setPendingRecheckNonce((n) => n + 1)}
+                    style={{ borderRadius: Radii.md }}
+                  />
+                ) : null}
+                <SecondaryButton
+                  title={t("merchantAccess.contactSupport")}
+                  onPress={() => void openWebsiteUrl(SUPPORT_URL)}
+                  style={{ borderRadius: Radii.md }}
+                />
+              </View>
+            </View>
+          </CardShell>
+          <Pressable
+            onPress={signOutFromSetup}
+            accessibilityRole="button"
+            style={{ alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: Spacing.md }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: theme.mutedText }}>{t("account.logOut")}</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <KeyboardScreen>
@@ -1293,7 +1462,7 @@ export default function BusinessSetupScreen() {
         <PrimaryButton
           title={t(copyKeys.submitKey)}
           onPress={() => void onSubmit()}
-          disabled={busy || logoUploading || setupMode === "loading"}
+          disabled={busy || logoUploading}
         />
       </ScrollView>
     </View>

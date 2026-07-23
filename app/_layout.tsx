@@ -182,6 +182,7 @@ function RootNavigationStack() {
           }}
         />
         <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />
+        <Stack.Screen name="business-apply" options={{ title: t('businessApply.navTitle') }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
         <Stack.Screen name="reset-password" options={{ title: t('passwordRecovery.resetTitle') }} />
