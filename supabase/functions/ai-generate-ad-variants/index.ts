@@ -3916,8 +3916,16 @@ Deno.serve(async (req) => {
       !!previousAdRaw && typeof previousAdRaw === "object" && !Array.isArray(previousAdRaw);
     const isRevision: boolean = revisionTarget !== null && previousAdIsObject;
     if (!quotaStatusOnly && !isRevision && !photoPath && !hintText) {
+      // MISSING_OFFER_INPUT: no photo and no free-text description. This runs
+      // before deal_eligibility is parsed, so structured offer facts alone do
+      // not satisfy it. The code lets the client show an actionable "add a photo
+      // or describe the deal" message instead of mislabeling this as an image
+      // outage (the legacy message text contains the word "photo").
       return new Response(
-        JSON.stringify({ error: "Provide at least a photo or a description of the offer." }),
+        JSON.stringify({
+          error: "Provide at least a photo or a description of the offer.",
+          error_code: "MISSING_OFFER_INPUT",
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

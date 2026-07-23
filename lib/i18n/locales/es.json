@@ -1922,6 +1922,7 @@
     "errAiGenerationFailed": "AI generation failed.",
     "errImageGenerationNoImage": "La IA no pudo crear una imagen para este anuncio. Agrega una foto o inténtalo de nuevo antes de usarlo.",
     "errImageServiceDown": "Nuestro servicio de imágenes está ocupado ahora. Inténtalo de nuevo en unos minutos o añade tu propia foto.",
+    "errNeedPhotoOrDescription": "Añade una foto o describe tu oferta y vuelve a generar.",
     "offerMechanicsInvalid": "La configuración de tu oferta no coincide con este tipo de oferta. Revisa qué compra el cliente, el artículo gratis y la regla de la oferta, luego inténtalo de nuevo.",
     "errUploadPhotoForDevCreate": "Sube una foto primero.",
     "fallbackIntro": "No pudimos generar anuncios ahora. Aun así puedes terminar esta oferta manualmente.",

@@ -2791,7 +2791,17 @@ export default function AiDealScreen() {
     if (code === "COOLDOWN_ACTIVE") return t("createAi.cooldownCaption");
     if (code === "REVISION_LIMIT") return t("createAi.errRegenClientLimit");
     if (code === "COPY_FAILED") return t("createAi.friendlyCopyFailed");
+    // No photo and no description reached the server (MISSING_OFFER_INPUT). The
+    // structured offer facts alone do not satisfy the server's input gate. Match
+    // the code AND the legacy message text so this resolves correctly even on a
+    // build whose edge function predates the code — otherwise the message ("…a
+    // photo or a description…") falls through to the photo/image branch below
+    // and is mislabeled as an image-service outage.
+    if (code === "MISSING_OFFER_INPUT") return t("createAi.errNeedPhotoOrDescription");
     const lower = raw.toLowerCase();
+    if (lower.includes("a photo or a description")) {
+      return t("createAi.errNeedPhotoOrDescription");
+    }
     if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) {
       return t("createAi.friendlyTimeout");
     }

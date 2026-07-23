@@ -1922,6 +1922,7 @@
     "errAiGenerationFailed": "AI generation failed.",
     "errImageGenerationNoImage": "AI가 이 광고 이미지를 만들지 못했습니다. 사용하기 전에 사진을 추가하거나 다시 시도하세요.",
     "errImageServiceDown": "이미지 서비스가 지금 혼잡합니다. 몇 분 후에 다시 시도하거나 직접 사진을 추가하세요.",
+    "errNeedPhotoOrDescription": "사진을 추가하거나 딜을 설명한 후 다시 생성하세요.",
     "offerMechanicsInvalid": "오퍼 설정이 이 딜 유형과 일치하지 않습니다. 고객이 구매하는 항목, 무료 항목, 오퍼 규칙을 확인한 후 다시 시도하세요.",
     "errUploadPhotoForDevCreate": "먼저 사진을 업로드하세요.",
     "fallbackIntro": "지금은 광고를 생성할 수 없습니다. 그래도 이 오퍼를 직접 완료할 수 있습니다.",
