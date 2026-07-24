@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `160`
-- Latest: `20260820190000_entire_order_scan_only_matches_basket_wording.sql`
+- Count: `161`
+- Latest: `20260821120000_admin_full_access_grant.sql`
 
 ## Edge Functions (supabase/functions, 79 local)
 

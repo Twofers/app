@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 160,
-    "latest": "20260820190000_entire_order_scan_only_matches_basket_wording.sql"
+    "count": 161,
+    "latest": "20260821120000_admin_full_access_grant.sql"
   },
   "edgeFunctions": {
     "count": 79,
