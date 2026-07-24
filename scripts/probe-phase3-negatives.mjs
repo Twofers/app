@@ -1,19 +1,19 @@
 // Phase 3 prod-safe behavioral negatives (pre-launch rare-feature QA plan §6).
 //
 // 100% negative/read tests — no prod mutation:
-//   3.1  admin-* sweep: every admin fn must reject anon AND a normal (shopper)
-//        non-admin JWT. Any 2xx is a P0 auth bypass.
+//   3.1  admin-* sweep: every admin fn must reject anon, a shopper JWT, and a
+//        normal business-role JWT. Any 2xx is a P0 auth bypass.
 //   3.2  simulate-subscribe must reject anon + normal user.
 //   3.3  stripe-webhook rejects unsigned + garbage-signed payloads (400, no stack).
 //   3.6  public reads return sane payloads with no secret-like strings.
 //   3.8  refund/cancel fns reject invalid/foreign ids (no money moves).
 //   3.9  website form fns reject invalid payloads.
 //
-// The business-JWT half of 3.1 is covered here by a SHOPPER JWT — a normal
-// authenticated non-admin caller (the real attack surface). A business-role JWT
-// is blocked until F-03 (stale owner creds) is fixed.
+// Identities: anon, TWOFER_QA_SHOPPER_* (consumer) and TWOFER_QA_BUSINESS_*
+// (business role, MUST NOT be an admin — the probe checks this and skips the
+// arm rather than reporting the resulting 200s as a bypass).
 //
-// Reads .env + .env.development.local. Signs in as the QA shopper (read-only).
+// Reads .env + .env.development.local. Read-only; no prod state is mutated.
 // Run: node scripts/probe-phase3-negatives.mjs
 
 import { existsSync, readFileSync } from "node:fs";
@@ -55,14 +55,18 @@ async function call(fn, { token, body = {}, rawBody } = {}) {
   return { status: res.status, text };
 }
 
-async function signInShopper() {
+async function signIn(email, password, label, { required = true } = {}) {
   const res = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: ANON, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: env.TWOFER_QA_SHOPPER_EMAIL, password: env.TWOFER_QA_SHOPPER_PASSWORD }),
+    body: JSON.stringify({ email, password }),
   });
   const b = await res.json();
-  if (!res.ok || !b.access_token) { console.error("Shopper sign-in failed", res.status); process.exit(2); }
+  if (!res.ok || !b.access_token) {
+    console.error(`${label} sign-in failed (${res.status})`);
+    if (required) process.exit(2);
+    return null;
+  }
   return b.access_token;
 }
 
@@ -79,19 +83,48 @@ const ADMIN_FNS = [
 ];
 // admin-auth-session is the login endpoint (email/password); tested separately in 1c.
 
-const shopperToken = await signInShopper();
-console.log("Signed in as QA shopper (normal non-admin JWT).\n");
+const shopperToken = await signIn(env.TWOFER_QA_SHOPPER_EMAIL, env.TWOFER_QA_SHOPPER_PASSWORD, "Shopper");
+let businessToken = await signIn(env.TWOFER_QA_BUSINESS_EMAIL, env.TWOFER_QA_BUSINESS_PASSWORD, "Business role", { required: false });
 
-// ---- 3.1 Admin negative sweep (anon + shopper) ----------------------------
-console.log("3.1 Admin negative sweep (anon + normal shopper JWT) — any 2xx is P0:");
+/**
+ * Guard this probe's own premise.
+ *
+ * 3.1 only means something when the extra identity is NOT an admin. The QA
+ * "owner" account is the platform super-admin (`admin_users.role = owner`), so
+ * pointing this arm at it produces 21 correct-but-alarming 200s that look
+ * exactly like an auth bypass. Detect it and skip instead of crying wolf.
+ */
+async function isAdminIdentity(token) {
+  if (!token) return false;
+  const r = await call("admin-dashboard-summary", { token });
+  return r.status >= 200 && r.status < 300;
+}
+if (await isAdminIdentity(businessToken)) {
+  console.warn(
+    "  WARNING  TWOFER_QA_BUSINESS_* is in the ADMIN allowlist — admin functions\n" +
+      "           answering it is correct, not a bypass. Skipping the business arm.\n" +
+      "           Point it at a normal business-role account to make 3.1 meaningful.",
+  );
+  businessToken = null;
+}
+console.log(`Identities: anon + shopper JWT${businessToken ? " + non-admin business-role JWT" : " (business arm SKIPPED)"}\n`);
+
+// ---- 3.1 Admin negative sweep (anon + shopper + business owner) -----------
+console.log("3.1 Admin negative sweep — any 2xx is a P0 auth bypass:");
 for (const fn of ADMIN_FNS) {
   // Give admin-qr-campaigns a valid-shaped action so it reaches requireAdmin, not the 400 action-guard.
   const body = fn === "admin-qr-campaigns" ? { action: "overview" } : {};
   const anon = await call(fn, { token: ANON, body });
   const shop = await call(fn, { token: shopperToken, body });
-  const anonOk = anon.status === 401 || anon.status === 403;
-  const shopOk = shop.status === 401 || shop.status === 403;
-  check(fn, anonOk && shopOk, `anon ${anon.status} / shopper ${shop.status}`);
+  const rejected = (s) => s === 401 || s === 403;
+  let ok = rejected(anon.status) && rejected(shop.status);
+  let detail = `anon ${anon.status} / shopper ${shop.status}`;
+  if (businessToken) {
+    const biz = await call(fn, { token: businessToken, body });
+    ok = ok && rejected(biz.status);
+    detail += ` / business ${biz.status}`;
+  }
+  check(fn, ok, detail);
 }
 
 // ---- 3.2 simulate-subscribe lockdown --------------------------------------
