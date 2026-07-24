@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { hashPin, normalizePin, verifyPin } from "../_shared/redemption-crypto.ts";
 import { pinRotationRequiresCurrentPin } from "../_shared/owner-pin-policy.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_PIN_ATTEMPTS = 5;
@@ -72,7 +73,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = getServiceRoleKey();
     const supabaseUser = createClient(supabaseUrl, serviceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
       auth: { persistSession: false, autoRefreshToken: false },

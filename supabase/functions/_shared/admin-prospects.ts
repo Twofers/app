@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "./cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "./redemption-role.ts";
 import { isAal2 } from "./admin-mfa.ts";
+import { tryGetServiceRoleKey } from "./service-role-key.ts";
 
 export type AdminRole =
   | "owner"
@@ -142,7 +143,7 @@ export async function requireAdmin(
   permission: ProspectPermission,
 ): Promise<AdminContext | Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 

@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { applyPendingFullAccessGrant } from "../_shared/admin-full-access-grant.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -113,7 +114,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Business onboarding is not configured." }, 500);

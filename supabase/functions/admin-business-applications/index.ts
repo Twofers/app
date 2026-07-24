@@ -15,6 +15,7 @@ import {
 import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 import { grantFullAccessTrial } from "../_shared/admin-full-access-grant.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type AdminRole =
   | "owner"
@@ -388,7 +389,7 @@ async function readPayload(req: Request): Promise<Payload> {
 
 async function requireAdmin(req: Request, requestId: string): Promise<AdminContext | Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
@@ -897,7 +898,7 @@ async function loadQuickApprovalContext(
   payload: Payload,
 ): Promise<QuickApprovalContext | Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { error: "Quick approval is not configured." }, 500);
   }

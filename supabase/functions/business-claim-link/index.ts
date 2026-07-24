@@ -10,6 +10,7 @@ import {
   normalizePhone,
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -110,7 +111,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Business claim is not configured." }, 500);

@@ -10,6 +10,7 @@ import {
   resolvePrimaryLocationId,
   revokeAuthorization,
 } from "../_shared/promo-materials.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -87,7 +88,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Promotional materials authorization is not configured." }, 500);

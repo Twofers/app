@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadSubscriptionPricingFromAppConfig } from "../_shared/subscription-pricing.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -21,7 +22,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
 
     // User JWT for auth.getUser only. Do not use this client for DB: overriding

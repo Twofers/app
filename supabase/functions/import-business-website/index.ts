@@ -32,6 +32,7 @@ import {
   type MenuExtractionResult,
 } from "../_shared/site-import.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type JsonHeaders = Record<string, string>;
 
@@ -279,7 +280,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseServiceKey = getServiceRoleKey();
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const dailyLimit = (() => {

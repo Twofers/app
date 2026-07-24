@@ -13,6 +13,7 @@ import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts
 import { adminAlertInbox, sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
 import { mintFullTrialQuickApproval } from "../_shared/admin-quick-approval.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 30;
 const RATE_LIMIT_MAX_PER_EMAIL = 3;
@@ -342,7 +343,7 @@ serve(async (req) => {
   const resolvedSource = payload.source === "app_business_setup" ? "app_business_setup" : "website_start_trial";
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { error: "Business applications are not configured." }, 500);
   }

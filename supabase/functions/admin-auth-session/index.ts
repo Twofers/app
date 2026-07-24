@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { decodeJwtAal, verifiedTotpFactor } from "../_shared/admin-mfa.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type AdminRole =
   | "owner"
@@ -210,7 +211,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       return json(req, { error: "Admin login is not configured." }, 500);

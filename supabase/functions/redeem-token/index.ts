@@ -9,6 +9,7 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
@@ -79,7 +80,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
 
     const supabase = createClient(
       supabaseUrl,

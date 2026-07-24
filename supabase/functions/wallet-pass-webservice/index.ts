@@ -20,11 +20,17 @@ import {
 } from "../_shared/apple-pass-auth.ts";
 import { buildAppleWalletPassBytes } from "../_shared/apple-wallet-issue.ts";
 import { isNativeWalletPassServerEnabled } from "../_shared/wallet-pass-sync.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceKey = getServiceRoleKey();
   const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+  // Keying material for the ApplePass tokens, deliberately NOT the resolved service-role
+  // key above. Tokens are HMAC-derived at issue time from the legacy env var (see
+  // _shared/apple-wallet-issue.ts) and their hashes are already stored in wallet_passes,
+  // so verification has to use that same secret or every existing pass fails auth.
+  const walletAuthSecret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*\/wallet-pass-webservice/, "");
@@ -57,7 +63,7 @@ serve(async (req) => {
       .maybeSingle();
     const userId = data?.user_id as string | null | undefined;
     if (!userId) return null;
-    const expected = await deriveAppleAuthToken(serviceKey, userId);
+    const expected = await deriveAppleAuthToken(walletAuthSecret, userId);
     return timingSafeEqualStrings(presented, expected) ? userId : null;
   }
 

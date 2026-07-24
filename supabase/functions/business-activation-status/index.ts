@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -17,7 +18,7 @@ serve(async (req) => {
   if (req.method !== "POST") return json(req, { error: "Method not allowed." }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { error: "Activation status is not configured." }, 500);
   }

@@ -9,6 +9,7 @@ import {
 } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   const corsHeaders = getCorsHeaders(req);
@@ -31,7 +32,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
 
     const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {

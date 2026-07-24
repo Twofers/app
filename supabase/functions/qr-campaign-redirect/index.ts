@@ -9,6 +9,7 @@ import {
   resolveQrRedirect,
   type QrDestinationType,
 } from "../_shared/qr-campaign.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type ActiveCampaign = {
   id: string;
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
   if (!slug) return redirect(fallbackUrl);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) return redirect(fallbackUrl);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);

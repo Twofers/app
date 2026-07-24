@@ -23,6 +23,7 @@ import {
   type DealReleaseNotificationState,
 } from "../../../lib/deal-release-notification.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const BASE_DEAL_SELECT = "id,title,business_id,location_id,start_time,end_time,is_active,max_claims,businesses(name,owner_id)";
 const STRUCTURED_DEAL_SELECT = [
@@ -452,7 +453,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = getServiceRoleKey();
     const admin = createClient(supabaseUrl, serviceKey);
 
     let body: { deal_id?: string; dispatch_due?: boolean; dry_run?: boolean };

@@ -15,6 +15,7 @@ import {
   type BusinessBillingProfileInput,
 } from "../_shared/stripe-business-billing.ts";
 import { ensurePrimaryBusinessLocationId } from "../_shared/business-location-entitlement-sync.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type BillingSource = "admin" | "website" | "email";
 const STANDARD_TRIAL_DAYS = 30;
@@ -297,7 +298,7 @@ serve(async (req) => {
   let stripeForCleanup: Stripe | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) return jsonResponse(req, { error: "Stripe is not configured." }, 500);
 

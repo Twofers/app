@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 // Public exchange endpoint for the payment link emailed to an approved business.
 //
@@ -81,7 +82,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { ok: false, error: "This link isn't available right now." }, 500);
     }

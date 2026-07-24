@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -21,7 +22,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });

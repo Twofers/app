@@ -17,6 +17,7 @@ import { createClient, type SupabaseClient as SupabaseClientBase } from "https:/
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { countAiQuotaUsage } from "../_shared/ai-quota-resets.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhotoWithTelemetry,
@@ -3760,7 +3761,7 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     const imageProviderConfig = resolveAiImageProviderConfig();

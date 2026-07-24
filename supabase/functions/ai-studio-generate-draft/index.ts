@@ -23,6 +23,7 @@ import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 // conversion packages used by `_shared/ai-image-provider.ts`.
 import "jpeg-js";
 import "pngjs";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type DraftInput = {
   business_id?: unknown;
@@ -817,7 +818,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { error: "Function is not configured." }, 500);
   }

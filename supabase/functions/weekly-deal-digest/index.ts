@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push.ts";
 import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "../_shared/digest-targeting.ts";
 import { buildDigestPushCopy, fetchProfileLocaleByUserId } from "../_shared/viewer-locale.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const DIGEST_DAYS = 7;
 
@@ -29,7 +30,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, getServiceRoleKey());
 
   // Authorize the caller. Accept EITHER the CRON_SECRET env (manual/ops invocation)
   // OR the Vault-stored cron secret used by the scheduled pg_cron job (generated

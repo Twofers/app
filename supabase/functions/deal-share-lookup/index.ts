@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 // Mirrors lib/deal-share-link.ts SHARE_CODE_RE and the RPC's own validation:
 // 7 chars from the crockford-ish alphabet (no 0/O/I/L/1).
@@ -59,7 +60,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      getServiceRoleKey(),
     );
     const { data, error } = await supabase.rpc("lookup_deal_share", { lookup_code: code });
     if (error) {
