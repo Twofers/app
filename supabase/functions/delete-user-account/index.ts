@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -20,7 +21,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
 
     const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
@@ -44,6 +45,31 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    /**
+     * Prove the Auth admin API is reachable BEFORE anything destructive runs.
+     *
+     * `auth.admin.*` talks to GoTrue, not PostgREST, and the two validate the
+     * service-role credential differently — a key that works fine for the database
+     * can still be rejected here (a stale key fails with `bad_jwt`). Without this
+     * probe the purge below succeeds, the auth delete then fails, and the account is
+     * left permanently stripped of its data but still able to log in.
+     *
+     * The purge cannot simply be moved after the delete instead: `deal_claims.user_id`
+     * is ON DELETE CASCADE, so deleting the auth user first would destroy those rows
+     * rather than anonymize them, taking the merchant's aggregates with it.
+     */
+    const { error: adminProbeErr } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (adminProbeErr) {
+      console.error("delete-user-account: admin auth probe failed:", adminProbeErr);
+      return new Response(
+        JSON.stringify({
+          error: "Could not delete account. Please contact support.",
+          error_code: "admin_auth_unavailable",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     /**
      * Deleting the auth user cascades through the schema automatically —
@@ -137,10 +163,13 @@ serve(async (req) => {
 
     if (delErr) {
       console.error("delete-user-account error:", delErr);
-      return new Response(JSON.stringify({ error: "Could not delete account. Please contact support." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Could not delete account. Please contact support.",
+          error_code: "auth_delete_failed",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(JSON.stringify({ ok: true }), {
@@ -149,7 +178,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ error: "Server error" }), {
+    return new Response(JSON.stringify({ error: "Server error", error_code: "server_error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

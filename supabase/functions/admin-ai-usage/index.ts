@@ -11,6 +11,7 @@ import {
   type AiQuotaScope,
 } from "../_shared/ai-quota-resets.ts";
 import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type AdminRole =
   | "owner"
@@ -100,7 +101,7 @@ async function readPayload(req: Request): Promise<Payload> {
 
 async function requireAdmin(req: Request, requestId: string): Promise<AdminContext | Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
