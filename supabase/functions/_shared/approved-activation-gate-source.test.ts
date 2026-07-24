@@ -17,8 +17,22 @@ describe("approved-not-activated lifecycle", () => {
     expect(admin).toMatch(/decision === "approve_setup_verified"[\s\S]*?status: "approved_not_activated"/);
     expect(admin).toMatch(/trialDays: null/);
     expect(admin).toMatch(/subscriptionAccessStatus: "approved_not_activated"/);
-    // The pre-2026-07-23 name is gone; it read as "grants full access" and never did.
-    expect(admin).not.toMatch(/"approve_full"/);
+    // The pre-2026-07-23 name read as "grants full access" and never did. It
+    // survives ONLY as a transition shim for the not-yet-deployed website
+    // forms; it must never be a decision key the `decide` action accepts, or
+    // the retired name is effectively back.
+    const isDecisionFn = admin.slice(
+      admin.indexOf("function isDecision"),
+      admin.indexOf("function isApprovalDecision"),
+    );
+    expect(isDecisionFn).toBeTruthy();
+    expect(isDecisionFn).not.toMatch(/"approve_full"/);
+    // While the shim exists it must map to the renamed key, never fall through
+    // to approve_limited (which would write basic_verified on a form that
+    // promises manual verification).
+    expect(admin).toMatch(
+      /decision === "approve_setup_verified" \|\| decision === "approve_full"\s*\n?\s*\? "approve_setup_verified"/,
+    );
     expect(admin).toMatch(/APPROVED_ACTIVATION_GATE_DISABLED/);
     expect(admin).toMatch(/linkedBusinessHasProtectedAccess/);
     expect(admin).toMatch(/LINKED_BUSINESS_ACCESS_PROTECTED/);

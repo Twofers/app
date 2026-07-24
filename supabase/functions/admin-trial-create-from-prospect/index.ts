@@ -20,7 +20,9 @@ import { sendApprovalEmail } from "../_shared/approval-email.ts";
 // starts only after the owner activates through Stripe Checkout.
 function decisionConfig(value: unknown) {
   const decision = cleanString(value, 40);
-  if (decision === "approve_setup_verified") {
+  // TRANSITION SHIM — remove once the website deploy ships (2026-07-23).
+  // The deployed /admin/prospects/detail still POSTs the retired `approve_full`.
+  if (decision === "approve_setup_verified" || decision === "approve_full") {
     return {
       applicationStatus: "approved_not_activated",
       accessTier: "approved_not_activated",
@@ -289,7 +291,9 @@ Deno.serve(async (req) => {
 
     // Approval email (best-effort; never blocks the decision). Both tiers here
     // are setup approvals; the 30-day trial starts only after Checkout.
-    const emailDecision = cleanString(payload.decision, 40) === "approve_setup_verified"
+    // TRANSITION SHIM — remove once the website deploy ships (2026-07-23).
+    const rawDecision = cleanString(payload.decision, 40);
+    const emailDecision = rawDecision === "approve_setup_verified" || rawDecision === "approve_full"
       ? "approve_setup_verified"
       : "approve_limited";
     const approvalEmailWarning = await sendApprovalEmail({

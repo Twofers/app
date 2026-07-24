@@ -1225,11 +1225,16 @@ async function createApplication(req: Request, ctx: AdminContext, payload: Paylo
   const contactName = cleanString(input.contact_name, 120);
   const email = cleanString(input.email, 200).toLowerCase();
   const decision = (payload as Record<string, unknown>).decision;
-  const accessDecision: DecisionKey = decision === "approve_setup_verified"
-    ? "approve_setup_verified"
-    : decision === "review_required"
-    ? "review_required"
-    : "approve_limited";
+  // TRANSITION SHIM — remove once the website deploy ships (2026-07-23).
+  // The deployed /admin/businesses/new still POSTs the retired `approve_full`.
+  // Without this it falls through to approve_limited and silently writes
+  // basic_verified on a form that promises manual verification.
+  const accessDecision: DecisionKey =
+    decision === "approve_setup_verified" || decision === "approve_full"
+      ? "approve_setup_verified"
+      : decision === "review_required"
+      ? "review_required"
+      : "approve_limited";
 
   if (!businessName || !contactName || !EMAIL_RE.test(email)) {
     return json(req, { error: "Business name, contact name, and a valid email are required." }, 400);
