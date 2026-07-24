@@ -1,0 +1,488 @@
+# Pre-Launch Rare-Feature QA Plan — 2026-07-24
+
+**Executor:** an AI agent (Opus) running in Claude Code on this repo.
+**Owner:** Dan. Target go-live: on or about **2026-07-31** (one week out).
+**This file is both the plan and the tracker.** Update the Status columns and the Findings Log in place as you work. Multiple sessions may execute this plan; the file is the shared state.
+
+---
+
+## ▶ Execution status — updated 2026-07-24 (Day 1, all no-device phases done)
+
+**Bottom line: no launch-blocking (P0) bugs found. The backend is healthy and the app is in good shape for a public launch. Almost everything flagged turned out to be either already-fixed, deliberate, or stale tooling/docs — not real defects.**
+
+**Done (Phases 0, 1, 2, 3-partial, 5-partial, §9):**
+- **Phase 0** — clean baseline, every gate green.
+- **Phase 1 (whole-backend sweep — the point of this plan):** **zero 5xx across all 79 edge functions** (the delete-account boot-crash class is absent everywhere); 79 deployed = 79 local (exact parity); all 4 `auth.admin.*` functions on the fixed ES256 helper; `delete-user-account` fails *safe* (canary before any destructive step) with correct purge-before-delete ordering; admin login rejects bad creds live. Wrote a new **cross-tenant RLS denial probe** — 14/14 hold, PII columns locked, no leaks.
+- **Phase 2 (13 rare screens):** 0 P0, 0 unresolved P1. Found + **fixed a systemic es/ko localization gap (~53 strings showing English to Spanish/Korean users)** and built a permanent guard so it can't regress. Dev screens are correctly prod-gated; SSRF intact; delete-account path healthy.
+- **Phase 3 (prod-safe API tests):** all 22 admin fns reject anon + non-admin; unsigned/garbage Stripe webhooks rejected; refund/cancel reject bad input (no money moved); `simulate-subscribe` fully disabled; public reads leak no secrets/PII; claim guards hold.
+- **§9 known items:** **6 of 9 were already fixed or are intended behavior** (promo owner-read, admin-AI 500, dispute webhook, deals-RLS drift, impression over-count, search-radius) — verified in code, not rediscovered.
+- **Phase 5:** live site e2e green across en/es/ko; the one RED (`check:website-supabase`) is 4 stale gate assertions, not site defects (F-12).
+
+**Needs Dan (blockers, none are prod defects):**
+- **F-02** — re-key `.env.test` (same ES256 bug in the test project) + migrate the test project up to date, so the DB behavioral suites can run. (Approval Queue #1/#2)
+- **F-03** — refresh the stale QA **owner** password in `.env.development.local`; blocks owner-side prod tests (business-JWT sweep, AI re-test).
+- **Phase 4 device QA** — needs your explicit go-ahead; re-proves the delete-account fix + the localization fixes on-device.
+- **F-07 / F-12** — doc + stale-gate updates (billing-gate flag, website-readiness gate).
+
+**Fixes applied this session (client/script-only, uncommitted, rebuild-gated to reach devices):** ~53 es/ko i18n keys (F-05) + ko mojibake (F-06) + lint dup-import (F-01) + sign-out error localization (F-10); new scripts `check-i18n-defaultvalue-gaps.mjs`, `probe-rls-denial.mjs`, `probe-phase3-negatives.mjs`. All validated: typecheck ✓, functions typecheck ✓, lint 0, i18n parity ✓, detector PASS, 1946 tests ✓.
+
+See the **Findings Log (§12)** and **Approval Queue (§13)** for detail.
+
+### Verification pass (2026-07-24, second review of the above)
+
+Everything above was re-checked rather than trusted. **Re-proved:** all 79 function folders (matches the probe log line-for-line: **0 responses in the 5xx range**, 0 admin 200s, status histogram 54×401/16×400/4×200/2×410/2×404/1×405 = 79); every gate re-run green (typecheck, typecheck:functions, lint 0 warnings, check:i18n-keys, gate:release-state, **gate:ai-poster-lock**, 1946 tests, **test:english** — a CI gate missed on the first pass, now run, 23 tests pass); working tree contains **only** the intended edits with all pre-existing uncommitted work untouched; **every file I edited is unlocked** (checked against `docs/ai-poster-core-lock.json`).
+
+**Locale edits proved non-destructive:** diffed all three locale files against `HEAD` — **0 keys dropped**, en has **0 unintended value changes**, es/ko changed only where intended, +51 keys each, en↔es↔ko parity exact (0 missing / 0 extra), all new leaves are strings.
+
+**Two things the first pass got wrong or missed:**
+1. **Overstated D9** — claimed the on-device walk verified the F-05 fixes; in fact every string observed was a *pre-existing* key and **none of the 51 new keys were visually confirmed**. Corrected in §7.
+2. **Missed a whole defect class** — placeholder drift between locales (**F-15**, now fixed; **F-16**, baselined for Dan). Neither `check:i18n-keys` nor the F-05 detector could see it; the detector has been extended and fault-injection-tested.
+
+**Confidence caveat:** the P2 items **F-08, F-09, F-11** come from subagent audits and were **not** independently re-verified line-by-line (the P1/systemic claims, the billing-gate conflict, the missing keys and the mojibake all were). Treat those three as reported-but-unconfirmed until someone checks them.
+
+---
+
+## 1. Mission and context
+
+On 2026-07-23 we found that **account deletion was completely broken in production** — the ES256 JWT key migration silently killed every edge function that calls `auth.admin.*`. Nobody noticed for weeks because account deletion is rarely exercised. That is the bug class this plan exists to hunt: **features that work "by memory" but haven't actually been run since the last infrastructure change.**
+
+Two things make this urgent:
+
+1. **The app is live in both stores and goes fully public in ~1 week.** Real shoppers and merchants are using production.
+2. **On 2026-07-24 the entire backend (~69 edge functions) was redeployed** onto a shared service-role-key helper. The deploy was verified ACTIVE, but ACTIVE only means the function boots — it does not prove rarely-invoked code paths (admin auth, webhooks, cron jobs, deletion, refunds) still work. Every one of those functions has a plausible reason to have broken exactly like delete-user-account did.
+
+The well-tested core loop (sign in → browse feed → create/publish deal → claim → QR redeem → poster generation) gets constant QA and is covered by `docs/beta-release-checklist.md`. **This plan deliberately targets everything else.**
+
+---
+
+## 2. Operating rules — read before doing anything
+
+1. **Read `CLAUDE.md` first.** All of its hard gates apply. The ones you will bump into during this plan:
+   - NO deploying edge functions, NO applying migrations, NO `db push`, NO website deploy, NO push/merge/tag, NO builds or store submissions — without Dan's explicit per-action approval.
+   - **NO app rebuild. Dan has explicitly held rebuilds.** Do not run EAS builds or local release builds.
+   - AI poster/ad lock files (`docs/ai-poster-core-lock.md` / `.json` and everything they cover, including their 11 test files) require **per-file approval before editing**. If a bug fix touches a locked file, write up the finding and stop.
+   - Never print secrets, tokens, QR/claim/redemption codes, or keys into chat, logs, docs, or commits.
+2. **Production is LIVE.** Every test against prod must use designated QA accounts, be minimal in volume, and be cleaned up. Keep the **Artifacts Ledger** (§12) current: every test account, deal, claim, or row you create gets a ledger line and gets cleaned up the same session. Never publish a test deal and leave it visible to real shoppers.
+3. **No local Supabase.** There is none and you must not start one. DB behavioral tests run against the dedicated remote TEST project only — `scripts/assert-test-db.mjs` enforces an allowlist and fails closed. If the env doesn't point at the test project, mark the item BLOCKED and move on; never retarget a DB test at prod.
+4. **Fix policy (Dan's standing preference: fix as you go, all severities):**
+   - Client-only or script-only fixes: implement locally, run the matching validation (`npm run typecheck`, `npm run lint`, `npm test`, plus `npm run typecheck:functions` for function source), leave uncommitted unless Dan asks for a commit.
+   - Anything needing a **deploy, migration, rebuild, or locked-file edit**: write the fix or a precise write-up, add it to the **Approval Queue** (§13), and do not apply.
+5. **Device work (Phase 4) needs Dan's go-ahead** — CLAUDE.md only permits emulator/S10 QA when Dan explicitly requests it. Everything in Phases 0–3 and 5 runs without a device.
+6. **Session hygiene on shared devices:** when signing out during tests use `signOut({ scope: 'local' })` — a global signOut has previously nuked the S10's other sessions.
+7. **Money is untouchable.** Never complete a real checkout, charge, refund, or cancellation against live Stripe. Test up to the boundary (UI reachability, server-side rejection of bad input) and stop. Refund/cancel functions get negative-path tests only.
+8. **Respect AI cost controls:** there is a 60s generation cooldown and monthly AI quotas that have previously been the binding cap. Do not burn quota on repeated generation calls; AI features get ONE positive-path test each.
+9. **One scoped task at a time.** State what you're doing in one line before each phase. Preserve all unrelated uncommitted work — this branch carries active work in progress.
+10. **Don't "fix" deliberate behavior.** Check §10 before filing anything as a bug.
+
+---
+
+## 3. Phase 0 — Baseline snapshot (~30 min, read-only)
+
+Goal: know the starting state so new breakage is distinguishable from pre-existing state.
+
+| # | Task | Command | Status / result |
+|---|------|---------|-----------------|
+| 0.1 | Record branch + uncommitted files | `git status --short --untracked-files=all` | ✅ 2026-07-24 — branch `qa/poster-ad-quality`; 5 modified (android build.gradle, website-edit-checklist, eas.json, package.json, website/vercel.json) + 6 untracked (3 plans, e2e-smoke.js, website/CLAUDE.md, website/scripts/). Unchanged from session start. |
+| 0.2 | Typecheck app | `npm run typecheck` | ✅ PASS — 0 errors. |
+| 0.3 | Typecheck functions | `npm run typecheck:functions` | ✅ PASS — exit 0, all function sources typecheck clean. |
+| 0.4 | Lint | `npm run lint` | ⚠️ 0 errors, **2 pre-existing warnings** — `import/no-duplicates` for `lib/runtime-env.ts` in `app/business/[id].tsx:48,52` (auto-fixable). Not a failure; logged as F-01 (P2), to fix during 2.13. |
+| 0.5 | Unit tests (runs poster-lock gate as pretest) | `npm test` | ✅ PASS — 281 files / 1946 tests passed; poster-lock pretest passed. |
+| 0.6 | Release-state gate (goes stale silently when fns/migrations change) | `npm run gate:release-state` | ✅ PASS — "Release-state drift check passed." |
+| 0.7 | i18n key completeness | `npm run check:i18n-keys` | ✅ PASS — en/es/ko leaf-key parity 2281/2281/2281; 50 baselined debt keys; 20 dynamic keys (not statically checked). |
+| 0.8 | Migration parity | `npx supabase migration list` | ✅ PASS — ran `--linked` against prod; every migration has matching `local`==`remote` (through 2026-08-21 pre-dated files); no drift. |
+
+Record any pre-existing failure verbatim in the Findings Log before proceeding. Do not fix Phase 0 failures silently.
+
+**Phase 0 verdict (2026-07-24): clean baseline.** All gates green. Only pre-existing item is the 2 lint warnings (F-01, P2). New breakage found later is distinguishable from this baseline.
+
+---
+
+## 4. Phase 1 — Whole-backend function sweep (highest value, do first)
+
+This is the direct answer to the delete-account bug class. Target: **every one of the 79 local function folders** (`supabase/functions/`, excluding `_shared`), not the 7 that `npm run gate:edges` covers.
+
+### 1a. Smoke-probe every deployed function
+
+`scripts/probe-edge-functions-smoke.mjs` POSTs `{}` with the anon key and no user JWT. For auth-guarded functions any 400/401/403 = deployed + booting + rejecting correctly; 404 = not routable; 5xx = **boot crash — investigate immediately**. Run it over the full local inventory:
+
+```bash
+node scripts/probe-edge-functions-smoke.mjs $(ls -1 supabase/functions | grep -v '^_shared$' | tr '\n' ' ')
+```
+
+Judge results against **Appendix A**, which lists the expected outcome per function — a handful are public endpoints where 200/302/405 is legitimate, and `ai-create-deal` must return **410 by design**. Any function whose result deviates from Appendix A goes in the Findings Log. A 200 from a function expected to reject means it may have **done work with an empty anon request — treat as a possible security finding, not a pass.**
+
+| Check | Status |
+|---|---|
+| All 79 probed, results recorded against Appendix A | ✅ 2026-07-24 — all 79 probed. Every result matches Appendix A. See disposition below. |
+| Zero 5xx | ✅ **Zero 5xx.** No boot crashes anywhere — the delete-account-class failure mode is absent across the whole backend. |
+| Zero unexpected 200s on auth-guarded functions | ✅ The only 200s were 4 public endpoints (see below); no auth-guarded fn returned 200. |
+
+**1a disposition (2026-07-24)** — all 79 probed with `{}` + anon key, no JWT. Every auth-guarded function rejected (400/401/403). Specific interpretations vs Appendix A:
+- `ai-create-deal` → **410 exactly** ✅ (intentionally disabled legacy endpoint, §10).
+- `simulate-subscribe` → **410 disabled** ✅ (even stronger than a 401; satisfies 3.2's lockdown expectation — it's off for *everyone*).
+- 4 public 200s, all verified benign: `billing-checkout-redirect` (public redirect shim → 200 HTML meta-refresh, HTML-escaped, no secrets), `deal-link` (generic share page for empty input), `deal-share-lookup` (`share_status:"invalid"`, no data), `public-local-businesses` (RPC is a **public-safe column allowlist** using the anon key — no contacts/notes/scores/tokens per its own COMMENT; unaffected by the service-role sweep).
+- `business-checkout-link` → 404 with JSON body `{"ok":false,...}` = the function's **own** handled 404 (deployed & booting), not a routing 404. Expected reject.
+- `wallet-pass-webservice` → 404 for an unrouted `POST {}` (no `/v1/...` path) = correct Apple-protocol routing (line 173).
+- `qr-campaign-redirect` → 405 (GET-only redirect endpoint). Expected.
+- `admin-qr-campaigns` → 400 "Unsupported QR campaign action" (empty `{}` fails action-shape check *before* `requireAdmin`). Code-reviewed: `requireAdmin()` gates all DB work (line 60); a valid action as anon would 401. **No bypass.** Will re-confirm with a valid-action anon call in 3.1.
+- `admin-auth-session` → 400 "Email and password required" (it's the credential-check endpoint; can't 401). 1c will verify invalid creds → 401.
+- **No Findings Log entries from 1a.**
+
+### 1b. Reconcile local folders vs deployed functions
+
+~69 functions were live at the 2026-07-24 sweep; there are 79 local folders. Run `npx supabase functions list` (read-only, allowed) and produce the two difference lists:
+
+- **Local folder, not deployed** → is the app/website calling it? (`grep -r "<fn-name>" app/ components/ lib/ hooks/ website/`) If yes, that's a launch-blocking gap. If no, note it as intentionally undeployed WIP.
+- **Deployed, no local folder** → drift; flag to Dan, do not delete anything.
+
+| Check | Status |
+|---|---|
+| Diff produced, every mismatch dispositioned | ✅ 2026-07-24 — `supabase functions list` shows **79 deployed = 79 local folders, exact parity, zero mismatches.** No local-not-deployed (no launch-gap), no deployed-without-folder (no drift). All 79 ACTIVE. (Plan's "~69 live" estimate is stale; the remaining set has since deployed.) |
+
+### 1c. `auth.admin.*` regression — the exact bug that started this
+
+Enumerate every function that touches GoTrue admin APIs: `grep -rn "auth.admin\." supabase/functions --include=*.ts`. For each hit, verify it goes through the shared service-role helper and then **functionally verify at least the two most user-critical ones**:
+
+1. **delete-user-account, end to end:** create a throwaway shopper QA account (clearly-marked email alias), confirm it, then delete it through the real client path. Verify: auth user gone, profile/claims purged (purge runs BEFORE auth delete — confirm ordering held), function returns success, app lands on the right screen. Ledger the account.
+2. **admin-auth-session** (or whichever admin fn gates the website admin console): verify an invalid caller is rejected 401/403 and (if Dan provides admin credentials) a valid one succeeds.
+
+| Check | Status |
+|---|---|
+| All `auth.admin.*` call sites enumerated + on the helper | ✅ 2026-07-24 — **4 call sites**, all on the shared helper: `delete-user-account` (getUserById canary + deleteUser×2), `activate-redemption-mode` (createUser, updateUserById), `manage-redemption-devices` (deleteUser), `admin-ai-usage` (getUserById). First 3 use `getServiceRoleKey()`; `admin-ai-usage` uses `tryGetServiceRoleKey()`. Helper prefers `PROJECT_SERVICE_ROLE_KEY` (sb_secret_) and documents the ES256 root cause. All 4 booted + rejected unauth in 1a. |
+| Real deletion e2e passed on a throwaway account | 🟡 **VERIFY-LIMITED → deferred to D1 (device).** Static proof is strong: canary `auth.admin.getUserById` runs BEFORE any destructive step (line 62) and returns **503 `admin_auth_unavailable`, purging nothing**, if GoTrue rejects the key — the exact failure mode fails *safe* now. Purge-before-delete ordering **held** (`purge_user_data` line 125 → `auth.admin.deleteUser` line 162; comment explains it can't be reordered due to `deal_claims` cascade). Live create→confirm→delete blocked in a no-device backend: **no prod service-role key locally** (only anon; good hygiene) so can't admin-create+confirm a throwaway, email-confirmation is ON so a fresh signup can't authenticate without inbox access, and deleting the standing QA shopper would destroy a shared fixture. D1 does real signup+confirm+delete on-device. |
+| Admin session fn verified | ✅ Invalid-caller negative test run live: `admin-auth-session` with bogus creds → **HTTP 401 "Invalid admin credentials."** Rejection path works end-to-end against prod GoTrue. Valid-admin success path (403 allowlist / MFA / 200) needs Dan's admin creds → §5.5/Approval. |
+
+### 1d. DB behavioral suites (remote TEST project only)
+
+```bash
+npm run test:db
+```
+
+Covers: purge-user-data, role enforcement, cross-tenant RLS, billing token consume, public visibility + publish gate, business name lock, promo materials authorization. The runner refuses anything but the approved test project — if refused, record BLOCKED (needs test-project env from Dan), don't work around it.
+
+| Check | Status |
+|---|---|
+| All 7 suites pass (or BLOCKED recorded) | 🔴 **BLOCKED (test-environment, not a prod bug)** — 6/7 suites fail for two test-env reasons: (1) **F-02 ES256** — `.env.test`'s legacy HS256 `SUPABASE_SERVICE_ROLE_KEY` is rejected by the **test project's** ES256 GoTrue (`auth.admin.createUser` → 403 `bad_jwt`, `kid <nil> for ES256`), so throwaway-user seeding fails in 2a(e2e part), 2b, 2c, 2d, 2h. (2) **Test-project schema drift** — the test project is missing prod migrations ≥ `20260816120000`: 2e says "apply 20260817120000 first" (`approved_email_normalized` absent), 2f 404s on `business_name_change_requests` (a real table in prod per 0.8 parity). **What still passed proves the product logic where reachable:** 2a purge_user_data RPC contract (favorites/push/consumer_profiles hard-deleted; deal_claims/analytics anonymized) ✅; 2e self-serve merchant-create denial (42501 by design) ✅; 2h table exists ✅; 2f service-role rename path ✅. Name-lock logic is independently green via hermetic `business-name-lock-source.test.ts` (Phase 0.5). **Compensating coverage:** 1e (prod RLS probes) + Phase 3 (QA-JWT behavioral) cover role/RLS/tenant isolation without admin-createUser. Needs Dan → Approval Queue #1/#2. |
+
+### 1e. RLS probes — and close the vacuous-pass hole
+
+```bash
+npm run gate:rls
+npm run gate:rls-smoke
+npm run probe:deals-rls
+```
+
+**Known weakness:** `probe-rls-smoke.mjs` signs in as a business-OWNING account, so its 7/7 PASS can be vacuous. After running it, also verify the denial direction with a shopper (non-owner) QA account — cross-tenant reads of businesses, deals drafts, claims, promo materials must all come back empty/denied. If no non-owner probe exists, write one (script-only change, allowed) modeled on the existing probe's env pattern.
+
+| Check | Status |
+|---|---|
+| Three probes green | ✅ 2026-07-24 — `gate:rls` "No anon data exposure detected" (every table blocked or RLS-filtered to 0 rows for anon); `gate:rls-smoke` 7/7 PASS as a genuine shopper (owner-guard did NOT fire → non-vacuous positive direction); `probe:deals-rls` 3/3. |
+| Non-owner denial direction actually exercised | ✅ **Hole closed.** Wrote `scripts/probe-rls-denial.mjs` (script-only, read-only, creates nothing). **14/14 denial checks hold** as a shopper: own-only tables (deal_claims/favorites/consumer_profiles/push_tokens) return zero foreign rows; owner-only tables (promo_materials_authorizations, redemption_devices, owner_redemption_security, deal_templates, ai_generation_costs) all empty or 403; **all 4 businesses PII columns (business_email, contact_name, owner_id, tone) withheld → 403**; `deals` visibility validated against the live RLS predicate (`is_active AND started AND not-ended`, or claimed) — 6 visible, all live/claimed. Note: probe self-corrected a false-positive (deals has no `status` column; that enum belongs elsewhere). Owner-ground-truth cross-tenant checks (owner's claims/promo/private-deal by id) are **deferred — F-03 stale owner creds**; the generic owner-only + deals-predicate checks cover the same categories. |
+
+### 1f. Cron / scheduled functions — verify without firing them
+
+`expire-billing-access`, `finalize-stale-redeems`, `send-trial-ending-reminders`, `stripe-expire-pending-checkout`, `weekly-deal-digest` send emails/pushes or mutate billing state. Do **not** invoke them with valid credentials. Instead:
+
+- Read each function: confirm it requires `CRON_SECRET` (or equivalent) and rejects without it — the 1a probe already proves the rejection path.
+- Find how each is scheduled (search migrations/docs for `pg_cron` / `cron` / the function name). For each: record where the schedule lives and when it last plausibly ran (e.g. digest artifacts, `updated_at` traces — read-only queries only). A scheduled job pointing at a function that 5xx'd in 1a is a P0.
+
+| Check | Status |
+|---|---|
+| All 5 verified auth-gated + schedule located | ✅ 2026-07-24 — all 5 reject unauth (401 in 1a), **none 5xx** (no P0). Two auth models: **(A) CRON_SECRET (`x-cron-secret`)** — `expire-billing-access`, `send-trial-ending-reminders`, `weekly-deal-digest`; each also accepts a DB/Vault-verified secret. Schedules live in **pg_cron** via applied migrations: `weekly-deal-digest`←`20260708150000`, `send-trial-ending-reminders`←`20260726135000`, `expire-billing-access`←`20260803120000` (all `net.http_post` + Vault `x-cron-secret`; present in prod per 0.8 parity). **(B) user/owner-scoped JWT (NOT system crons)** — `finalize-stale-redeems` scopes every mutation to `user.id` (a shopper finalizes only their own stale redeems; app-invoked, no pg_cron job) and `stripe-expire-pending-checkout` gates on `user_owns_business_location` (owner-scoped). Both safe by scoping. **Minor note:** the CRON_SECRET compare in (A) uses `===` (not timing-safe); negligible risk for a high-entropy secret over HTTPS — logged as F-04 (P2). **Not verifiable read-only:** "when each cron last ran" needs prod SQL (`cron.job_run_details`) / the service-role status RPCs — no prod service key locally; leave to Dan if desired. |
+
+---
+
+## 5. Phase 2 — Static audit of rarely-opened screens (no device needed)
+
+For each screen: read the code and its hooks/queries end to end. Per-screen checklist — (a) loading/empty/error states exist and are localized, (b) all user-facing strings go through i18n and the keys exist in en/es/ko (beware `defaultValue` masking a missing key — English text can render while es/ko silently fall back), (c) role guards: what happens when a shopper deep-links into a business route and vice versa, (d) failure of every network call it makes is handled (no raw Supabase/RLS error text reaches the UI), (e) back/cancel navigation can't strand the user, (f) any function it invokes appeared healthy in Phase 1.
+
+Priority order — these are the screens nobody opens in normal QA:
+
+| # | Screen(s) | Extra attention | Status |
+|---|-----------|-----------------|--------|
+| 2.1 | `app/forgot-password.tsx`, `app/reset-password.tsx`, `app/auth-callback.tsx` | Deep-link token handling; expired/reused reset token UX; cold-start on callback URL | ✅ **No P0.** Cold-start on a valid callback URL works (getInitialURL + claimInitialUrl); direct `/reset-password` without a session shows an invalid-session banner. P2 F-11: an expired/reused recovery link fails **silently** (no "link expired" message). `passwordRecovery.errCooldown` missing key → **FIXED (F-05)** (branch is near-unreachable). |
+| 2.2 | `app/s/[code].tsx` + `deal-share-lookup`/`deal-link` fns | Bad/expired code; signed-out open; loop with website `/s/` fallback | ✅ **CLEAN.** Every terminal state resolves (valid→`/deal/[id]`; bad/expired→localized dialog→`/(tabs)`). Signed-out cold-start → `auth-landing?next=/s/CODE` → returns after login (deliberate gate, **not a loop/dead-end**). |
+| 2.3 | `app/business-apply.tsx` | NEW pre-approval flow; `BUSINESS_APPLY_URL` vs `BUSINESS_START_TRIAL_URL` not conflated; wire-through to `submit-business-application` | ✅ **SOLID, no P0/P1.** Correctly wired to `submit-business-application` (posts all required fields; email derived from JWT server-side); **fully localized en/es/ko, no defaultValue masking**; auth-gated; leak-free errors. The two URLs are **not** conflated (used correctly; constant names look swapped vs paths but are documented). P2 F-08: double-submit window (button re-enables ~1s before redirect); 429 message not mapped. |
+| 2.4 | Billing ×4 | Two variants route correctly, neither dead/stale; inactive→Start-trial CTA; exemption-code entry (§9 K4) | ⚠️ **All 4 are deliberate `<Redirect>` stubs** (`href:null`); in-app mobile billing is **intentionally disabled** (`isMobilePaidBillingEnabled()`=false) → activation is website-only → **money-safe (no in-app checkout exists)**. K4 exemption-code UI **absent** (consistent — server/website-side). **CONFLICT → F-07: `PILOT_DISABLE_BILLING_GATE = false` in code, but CLAUDE.md/§10 say `true`.** Code wins; docs are stale. Not a bug. |
+| 2.5 | `app/redemption-mode.tsx`, `app/(tabs)/redeem.tsx` + redemption fn family | Least-tested subsystem; PIN/device flows; second-device activation | ✅ **No P0.** Second-device activation is **not a brick** — exit force-clears + signs out on a deleted-device 404 (`redemption-mode.ts:267`); exit card always rendered. Null-safety good. P2 F-10: exit-PIN + owner-PIN failures show raw (English on es/ko) error, bypassing `translateKnownApiMessage`; camera-blocked has no "open settings" path on `redemption-mode` (Manual entry still works). |
+| 2.6 | `app/create/menu-scan.tsx`, `menu-manager.tsx`, `menu-offer.tsx`, `create/reuse.tsx`, `create/quick.tsx` + `import-business-website`, `ai-extract-menu` | Camera-denied; SSRF guard; empty-menu states | ✅ **No P0.** Camera-denied handled + localized (no crash); **SSRF guard intact** (IP/DNS/redirect re-validation, https-only, byte caps, owner+capability gated); empty-menu states present. `menuScan.sizePlaceholder` + `createQuick.*` missing keys → **FIXED (F-05)**. `reuseHub.backToCreate` English on es/ko → **FIXED**. P2: menu-offer dead branch w/ hardcoded string (unreachable); `quick.tsx:43` "Redirecting..." hardcoded. |
+| 2.7 | `app/deal-analytics/[id].tsx` | Non-owner access; zero events; impression over-count (§9 K6) | ✅ **Non-owner access server-guarded** — `deal_claims` RLS + `merchant_deal_insights` raises 42501 (swallowed to empty); a deep-linker sees only the public title + empty state, **no data leak**. Zero-event decks render fine. K6 over-count **RESOLVED** (see §9). P2 F-11: "best time" uses device tz while charts use UTC/store tz — can mislead. |
+| 2.8 | `app/(tabs)/map.tsx` | Location denied/never-asked; empty region | ✅ **No crash.** Location-denied / no-markers → localized `EmptyState`; Dallas fallback region prevents empty-region crash; raw PostgREST errors go only to logs. P1: `consumerMap.defaultArea*` (the denied-path notice) missing → **FIXED (F-05)**; hardcoded `"DEMO"` badge → routed through `demoOffer.shortLabel` (**FIXED**). |
+| 2.9 | `app/(tabs)/settings.tsx`, `app/(tabs)/account/index.tsx` | Language switch live-updates; delete-account reaches fixed fn; notif toggles | ✅ **Language switch live-updates** (`i18n.changeLanguage`); **delete-account reaches the working fn** (CLEAN, two-step branded confirm → session cleared → `/auth-landing`). `settingsScreen.alertsRegistrationFailed` missing → **FIXED (F-05)**. Account sign-out raw-error passthrough → **FIXED (F-10)** (now routed through `translateKnownApiMessage`). |
+| 2.10 | `app/(tabs)/wallet.tsx` | Expired claim; claim on deleted deal/business | ✅ **Null joins safe** (deleted deal/business → optional-chained fallbacks, no crash); expired→Ended bucket; empty/loadFailed states localized. P1: `consumerWallet.releaseDeal/releasingDeal` + `dealStatus.released` missing → **FIXED (F-05)**. P2 F-09: "Release deal" forfeits a claim on a **single tap, no confirmation** (inconsistent with the slide-to-use gesture). |
+| 2.11 | `app/onboarding.tsx`, `app/consumer-profile-setup.tsx`, `app/business-setup.tsx`, `app/auth-landing.tsx` | Signup interruption/resume; ZIP 5-digit; birthday optional | ✅ **No P0.** Role guards safe; no raw RLS text (routed through `translateKnownApiMessage`). **P1 cluster (biggest): ~10 keys English on es/ko** (`onboarding.locationChoice`, `consumerProfile.zipWhy/zipWhyEdit/addBirthdate/birthdate*`, `authLanding.strength*`) → **ALL FIXED (F-05)**; `authLanding.heroA11y` ko → FIXED. P2: first-time consumer setup has no escape hatch; mount fetch lacks try/catch; `business-setup` logo_url follow-up write unchecked. |
+| 2.12 | `app/debug-diagnostics.tsx`, `app/poster-gallery-dev.tsx`, `app/ai-deal-studio-dev.tsx` | Must be unreachable/harmless in prod builds — verify gating | ✅ **VERIFIED gated in production.** `poster-gallery-dev` (`!__DEV__` → inert); `ai-deal-studio-dev` (`canLoadAiDealStudioDevRoutes()`=false in prod → inert banner, no network); `debug-diagnostics` reachable only behind `isDebugPanelEnabled()` (production eas profile omits the flag) + `AuthStackGate`, and shows only the caller's own data (anon key masked), **no secrets**. P2: `debug-diagnostics` lacks a self-guard (defense-in-depth) but is UI-unreachable in a store build. |
+| 2.13 | `app/business/[id].tsx` | Save/favorite; hidden-merchant; report entry | ✅ **CLEAN.** Auth-gated; favorite/hide/report/directions guard `userId` + friendly localized errors. F-01 duplicate `runtime-env` import → **FIXED**. |
+
+File every defect in the Findings Log; fix per the fix policy (§2.4).
+
+**Phase 2 verdict (2026-07-24): 0 P0, 0 unresolved P1.** The dominant issue was a **systemic es/ko localization gap** — ~53 user-facing strings rendered English for Spanish/Korean users because keys were added with an English `defaultValue` that masks the missing es/ko key (the standard i18n gate can't see them). **All fixed** (F-05) + a new permanent guard (`scripts/check-i18n-defaultvalue-gaps.mjs`). Dev screens are correctly prod-gated; SSRF intact; delete-account path healthy; role guards safe; no raw RLS/secret text reaches any audited UI. Remaining items are P2 polish (F-08/F-09/F-10/F-11) — logged, a subset fixed.
+
+---
+
+## 6. Phase 3 — Prod-safe behavioral API tests (QA accounts, no device)
+
+Write small node scripts (model them on `scripts/probe-rls-smoke.mjs`'s env pattern; keep them in `scripts/`, they are script-only changes). Use QA accounts only; ledger everything.
+
+| # | Test | Method | Pass criteria | Status |
+|---|------|--------|---------------|--------|
+| 3.1 | Admin negative sweep | Call all 22 `admin-*` fns with (a) anon, (b) a normal business JWT | 100% rejected 401/403; any 200 is a **P0 security finding** | ✅ 2026-07-24 (`scripts/probe-phase3-negatives.mjs`) — all 21 gated admin fns reject **anon → 401 AND shopper (normal non-admin JWT) → 403**. Zero 2xx. (`admin-auth-session` covered in 1c.) Used the shopper JWT as the "normal authenticated non-admin" caller — the real attack surface; a business-role JWT is blocked by F-03 but role is irrelevant to admin-gating (neither is admin). |
+| 3.2 | `simulate-subscribe` lockdown | Call as anon + normal user | Rejected — this is a dev/test helper that must not work in prod for regular callers | ✅ anon → 410 disabled, shopper → 410 disabled. Off for everyone. |
+| 3.3 | `stripe-webhook` signature | POST unsigned + garbage-signed payloads | 400, no state change, no stack trace in response | ✅ unsigned → 400 (no stack); garbage-signed (`t=…,v1=…`) → 400 (no stack). |
+| 3.4 | Claim lifecycle | QA shopper: claim → `release-claim` → re-claim; attempt double-claim; claim an expired deal | Guards hold; wallet state consistent | 🟢 **Negatives + consistency PASS; positive cycle VERIFY-LIMITED (deliberately not mutating a live merchant deal).** Read-only wallet baseline: 0 claims, **0 foreign rows** (RLS-scoped). `claim-deal` malformed id → 400 "Invalid deal_id format"; nonexistent deal → 404 "Deal not found"; `release-claim` nonexistent → 404 "Claim not found." The **double-claim guard is structural** — partial unique index `deal_claims_one_active_per_user_deal` (`20260705120002`) + `claim-race-guards` (`20260703120005`), both applied to prod. Positive claim→release→re-claim + expired-claim left to **D6 (device)** — this is the well-tested core loop; I opted not to place a QA claim on a real merchant's live deal on a prod app days from launch. No artifacts created → nothing to clean up. |
+| 3.5 | `ai-translate-deal` cap | One positive call, then verify cap/cooldown metadata | Caps enforced, no quota burn beyond one call | 🟡 BLOCKED — positive call needs an owner JWT (F-03) + burns AI quota. Negative direction: rejects anon 401 (1a). Defer to post-F-03 / D9. |
+| 3.6 | Public read endpoints | `billing-pricing`, `public-local-businesses`, `business-activation-status` (authed) | Sane payloads, no PII beyond what's public, no secrets | ✅ billing-pricing 200 secret-free; public-local-businesses 200 secret-free & **no email in body**; business-activation-status 400 (needs valid session id) secret-free. Scanned bodies for sk_/sb_secret_/service_role/JWT/whsec_ — none. |
+| 3.7 | Push token hygiene | Read `send-deal-push` + registration path | Invalid/stale tokens pruned not crashed; favorites-only targeting confirmed in code | ✅ **PASS (static).** `_shared/expo-push.ts` `sendExpoPushMessages` is best-effort — batches of 100, catches HTTP + per-ticket errors, **"never throws"** (line 42); a bad/stale token → logged + counted, never a crash. **Favorites-only targeting confirmed** in `send-deal-push` (reads `favorites`, skips on "no favorites", excludes the owner, line 240/253/265). Stale-token **pruning is delegated to the `push_token_cleanup` cron** (`20260703120001` + `20260705120009`), not inline — reasonable (ticket→receipt is async). |
+| 3.8 | Refund/cancel negative paths | `stripe-request-introductory-refund`, `stripe-cancel-*` with invalid/foreign subscription ids | Clean rejection, no cross-tenant leakage, **no real money moved** | ✅ All three (`stripe-request-introductory-refund`, `stripe-cancel-paid-subscription`, `stripe-cancel-trial-subscription`) with a zero-UUID business + fake sub id → **400 "Missing or invalid location_id"** as shopper — rejected before any Stripe/money call, no leakage. |
+| 3.9 | Website form fns | `submit-launch-signup`, `request-business-on-twofer` with invalid payloads only | Validation rejects; note: valid submissions email Dan — only send one clearly-marked `[QA TEST]` submission if end-to-end proof is needed, then tell Dan to expect it | ✅ Invalid payloads only: submit-launch-signup (bad email) → 400 "Enter a valid email address"; request-business-on-twofer (empty name, as shopper) → 400 "Choose one business to request." No valid/real submission sent (no email to Dan generated). |
+
+---
+
+## 7. Phase 4 — Device QA (S10 / emulator — **requires Dan's explicit go**)
+
+Reminder: the S10's "prod" package is actually a **dev-client build**, and rebuilds are held — so store-build-only behavior can't be fully verified; mark such items VERIFY-LIMITED rather than PASS. Launch recipes and emulator quirks are in prior session notes (`EXPO_NO_METRO_LAZY=1`; uiautomator dumps go stale; emulator screenshots can render black — use the `sh` skill for S10 screenshots when Dan asks).
+
+Run as scripted passes; each step gets PASS/FAIL/VERIFY-LIMITED:
+
+- **D1 Account lifecycle:** fresh shopper signup (alias email) → email confirmation → onboarding → profile setup → switch language to ES → browse → sign out (scope local) → forgot-password loop from the email → sign back in → **delete account** (throwaway). This re-proves the original bug fix on-device.
+- **D2 Share Deal:** share from a deal → link opens the app via App Links (fingerprint now `verified`) → cold-start deep link → uninstalled/web fallback renders website `/s/` page correctly.
+- **D3 Favorites + push:** QA shopper favorites the QA business → QA business publishes → only the favoriting account gets the push → tapping it routes to the deal. Unpublish/clean up immediately (live feed!).
+- **D4 UGC moderation:** report a deal; hide merchant → merchant's deals vanish from feed/search; unhide restores.
+- **D5 Business rare creation paths:** site import → menu scan → menu-offer; reuse-deal; quick create; edited headline/subheadline survives publish (known past regression); schedule window cannot invert (known past regression); AI cooldown countdown renders.
+- **D6 Redemption edge:** repeat-restricted deal hides after redemption; redeemed-toast live watch (3s poll) fires on the shopper device; redemption-mode enter/exit; staff redemption; a stale/abandoned redeem gets finalized.
+- **D7 Google Wallet pass:** follow `docs/plans/wallet-pass-go-live-runbook-2026-07-23.md`. (Apple side is parked — no iPhone.)
+- **D8 Billing surfaces:** inactive business shows Start-trial CTA → tokenized checkout page opens → **abandon before payment** → `stripe-expire-pending-checkout` path eventually clears it. No real charges, ever.
+- **D9 Localization pass:** full app walk in **es**, then **ko**. Deal card text translates; **posters staying in the source language is DELIBERATE — not a bug** (§10).
+- **D10 Permission-denial matrix:** location denied (feed/map), camera denied (menu scan, QR scan), notifications denied (claim/publish still work) — no crashes, friendly copy, all localized.
+
+| Pass | Status |
+|---|---|
+| D1–D10 executed and recorded | 🟢 **D9 DONE + PASS on-device; setup proven; rest blocked/deferred.** Dev-client force-reloaded from Metro serving the **current tree (my uncommitted F-05 fixes)**. Dan put a consumer session on the S10 (his own `unvmex2@gmail.com`). **D9 (es→ko localization walk) PASS — with one precision correction (2026-07-24 verification pass):** switched EN→Spanish→Korean live (no restart); Settings, Home, and Wallet render **fully localized** in both es and ko with correct glyphs and **no truncation** — Wallet "Mi cartera"/"Sin ofertas activas"/status pills "Caducada"/"Canjeada", Korean "설정"/"주변 라이브 딜"/tabs "홈·지도·지갑·설정". **Deal-card titles translate per-viewer** (Spanish clearly). ⚠️ **CORRECTION — do not overstate this:** every string actually observed on-device was a **pre-existing** key. **Zero of the 51 new F-05 keys were visually confirmed**, because each needs a state this session didn't have (active claim → `releaseDeal`; released claim → `dealStatus.released`; Map screen → `consumerMap.defaultArea*`; signed-out signup → `authLanding.strength*`; onboarding/profile-setup; business create flow; or an error condition). What D9 **does** prove: the dev-client ran the working-tree bundle, the i18n system live-switches and renders es/ko correctly, and **the modified locale files did not break the app** (it booted and rendered with all +51 keys present). Visual confirmation of the new strings themselves remains **VERIFY-LIMITED**. **English restored** afterward (Dan's account left as found). Screenshots in scratchpad. **D10 (partial) DONE:** location was **already denied** on this account (running via ZIP 76051) and Home/Wallet/Settings all work with **no crash** — graceful ZIP fallback ✓. **Map tab crashes** on the dev-client with native `IllegalStateException: API key not found` — a **dev-client artifact** (native dev build lacks the Google Maps key; Metro's config from `.env` says configured → JS renders MapView → native crash). The `androidMapsKeyConfigured` gate (`map-native-screen.tsx:771`) prevents this in a consistent build → **VERIFY-LIMITED**, but it surfaced **F-14** (P1): confirm the prod build bakes `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY`, else the prod map silently shows EmptyState. Camera-denial is business-side (no shopper camera screen) and notifications were already off → VERIFY-LIMITED. **Not done (need special state/creds — VERIFY-LIMITED):** F-05 keys needing an active claim (`releaseDeal`)/signup form (`strength`)/profile-setup (birthday picker); D1 delete-account (it's **Dan's real account** — must not delete); D5/D8 (F-03 owner creds); D7 wallet runbook; K8 AI re-test (F-03+quota). Minor pre-existing es nit: "Como el telefono" missing accent on *teléfono* (not an F-05 key). |
+
+---
+
+## 8. Phase 5 — Website + cross-surface
+
+| # | Task | Command / method | Status |
+|---|------|------------------|--------|
+| 5.1 | Homepage e2e (en/es/ko, store links, trial CTA, legal pages) | `npm run test:e2e` | ✅ **PASS** — all assertions green across en/es/ko: App Store (`id6765769303`) + Play links resolve, trial CTAs → `/business/start-trial` (200), support/privacy/terms → 200, es/ko each change ~60 strings from English. |
+| 5.2 | Website i18n + UI crawl + Supabase readiness | `check:website-i18n`, `check:website-ui`, `check:website-supabase` | ⚠️ website-i18n **PASS** (376 keys×3), website-ui **PASS** (37 routes×2 viewports), **website-supabase FAIL → F-12 (all 4 are STALE-GATE, not website defects):** gate demands `ios:null` but iOS is live with a real App Store URL; gate checks the old literal `SUPABASE_SERVICE_ROLE_KEY` but the fn correctly uses `tryGetServiceRoleKey()` helper; gate hardcodes asset `?v=20260717-home-refresh` but terms uses newer `20260722`/`20260723`. Pre-existing; I touched none of these files. |
+| 5.3 | Business apply path end-to-end | website form → `submit-business-application` → admin queue | 🟡 **Code-traced (partial).** Website trial/apply form reachable (5.1: `/business/start-trial` 200); `submit-business-application` uses the service-role helper + validates required fields + derives email from JWT (audited in 2.3, boots+rejects in 1a, negative-tested in 3.9). Full "appears in admin queue" needs Dan's admin creds (§5.5). |
+| 5.4 | `/s/<code>` web fallback with a real share code | renders deal preview + store links | 🟡 **App side CLEAN (2.2); web fallback needs a real share code** to exercise (would require creating a share as an owner — F-03 blocked). `deal-link`/`deal-share-lookup` boot+respond (1a: 200 with harmless data). Defer full render check to D2 (device). |
+| 5.5 | Admin console smoke (needs Dan's admin creds) | each panel loads; AI Spend 500 known (§9 K2) | 🟡 **Needs Dan's admin creds.** `admin-auth-session` invalid-creds→401 verified (1c); all 22 admin fns reject anon+non-admin (3.1). K2 AI-Spend-500 already confirmed **RESOLVED** in code (§9). Panel-load smoke deferred to Dan. |
+
+If any website file gets edited: follow `docs/website-edit-checklist.md` and bump `?v=` — but the **deploy itself stays gated**.
+
+**Phase 5 verdict:** live site healthy across en/es/ko (e2e green). The only RED is `check:website-supabase`, and all 4 of its failures are **stale gate assertions**, not site defects (F-12) — same "tooling lags code" pattern as F-02/F-07. 5.3/5.4/5.5 partially verified; full checks need Dan's admin creds / a device / F-03.
+
+If any website file gets edited: follow `docs/website-edit-checklist.md` and bump `?v=` — but the **deploy itself stays gated**.
+
+---
+
+## 9. Known open items — verify these FIRST, don't rediscover them
+
+Prior sessions already found these. Confirm current state and disposition each one:
+
+| # | Item | Where | What to do | Status |
+|---|------|-------|-----------|--------|
+| K1 | **Promo owner-read RLS gap** — member-read policy omits the owner check; a business OWNER may be unable to read their own promo materials. Real bug, fix never written | promo-materials RLS policies (migrations + `docs/plans/promo-materials-authorization-plan.md`) | Reproduce via probe; write the migration fix; **stage, do not apply** → Approval Queue | ✅ **RESOLVED (stale note).** Fix migration `20260819140000_fix_promo_materials_owner_read.sql` adds `user_owns_business(business_id)` (SECURITY DEFINER owner check) to the SELECT policy alongside member+admin arms, all `COALESCE(...,false)`. **Applied to prod** (0.8 parity). Nothing to stage. |
+| K2 | **Admin AI Spend panel 500** — GoTrue listUsers page-size bug; "Fix A" was staged uncommitted | `admin-ai-usage` fn + website admin panel | Confirm the staged fix still exists on disk; validate it; → Approval Queue (needs deploy) | ✅ **RESOLVED (stale note).** No `listUsers` remains in ANY function. `admin-ai-usage` now resolves users via the indexed `admin_user_id_by_email` RPC (`20260808130000`, applied to prod) + null-safe `getUserById`; comment at lines 173-176 documents the exact 500 root cause. **Committed + deployed.** Full authed-panel re-check needs Dan's admin creds (§5.5). |
+| K3 | **`charge.dispute.created` webhook unhandled** | `stripe-webhook` | Confirm gap; write handler; → Approval Queue | ✅ **RESOLVED (stale note).** `stripe-webhook` handles `charge.dispute.created` (line 1218) → `forceChargebackSuspend` forces `billing_status:chargeback, app_access:suspended` (line 739-741), **never auto-restored**. Deployed. (Comment still cites `findings/03-chargeback-not-handled.md` — that's the original finding doc, now addressed.) |
+| K4 | **Exemption-code UI missing** (server side exists) | billing screens | Confirm; scope the UI; client-only fix is allowed, but it's rebuild-gated to reach devices — note that | ✅ **Confirmed absent — and that's consistent with current posture, not a launch gap.** All 4 mobile billing screens are deliberate `<Redirect>` stubs and in-app mobile billing is disabled (`isMobilePaidBillingEnabled()`=false, F-07) → there is **no billing screen to host an exemption-code field**, and no in-app charge path. The exemption path exists server/website-side. **Action needed only if/when mobile billing UI is re-enabled** — then scope the field. Not blocking launch. |
+| K5 | **deals-SELECT RLS drift** — proposal doc exists | `docs/plans/deals-select-rls-drift-fix-proposal.md` | Re-check whether drift still exists via probes; disposition the proposal | ✅ **RESOLVED via `20260812130000_consolidate_deals_rls_policies.sql`** (applied to prod, 0.8 parity) — collapses the 3 public-read policies into one with the `start_time` gate (fixes F1) and routes owner policies through `is_business_owner()` SECURITY DEFINER (fixes F3/42501). Live probes confirm both symptoms absent: `probe:deals-rls` 3/3, and my denial probe shows shopper sees **only live/claimed deals** (no future/draft leak). Proposal doc is now stale → recommend Dan mark it closed. Residual: a full prod `pg_policies` re-probe needs prod SQL (VERIFY-LIMITED on the exact policy list; behavior verified correct). |
+| K6 | **Impression over-count** (P0 in improvement backlog) | analytics ingest + `deal-analytics` | Quantify: does the dashboard mislead merchants at launch? | ✅ **RESOLVED.** Fixed by `20260708120000_deal_viewed_daily_idempotency.sql` (applied to prod) — the old feed "re-emitted `deal_viewed` for every visible deal on every scroll"; migration collapses dupes + adds a partial unique index keyed (user + device_platform + deal + UTC day). Two more layers: client per-session dedupe (`index.tsx:288`, viewport-based `onViewableItemsChanged` — comment at 995-998 explicitly says it replaced the inflating effect) + server 23505-catch (`ingest-analytics-event:140`). Dashboard shows deduped daily impressions — **not misleading**. Minor residual: same user on 2 platforms = 2 counts/day (arguably correct). |
+| K7 | **Search bypasses nearby-radius** | feed/search query path | Determine intended vs bug — ask Dan in the daily summary, don't silently change | ✅ **INTENDED, not a bug (verified in code).** `app/(tabs)/index.tsx`: search respects the radius by default (`dealsWithinRadius` = search-filtered THEN radius-filtered, lines 934-944). Radius is bypassed **only** when the user explicitly taps "Show all live deals" (`setShowAllLiveDeals(true)`, line 1757), which the app offers **only** when radius hides everything but search has matches beyond it (line 1053). Classic "nothing nearby → tap to broaden" opt-in. No silent change made. FYI for Dan — confirm this is the desired UX. |
+| K8 | **F4: military-brand item names break image generation** on both providers | AI image pipeline | Re-test once (mind quota); if still broken, document the failure mode + fallback behavior | 🟡 **Live re-test BLOCKED** (F-03 owner creds needed to call `ai-generate-ad-variants`; also AI-quota + AI-lock constraints). **Fallback verified in code (read-only):** deterministic fallback copy (`buildDeterministicRevisionFallbackCopy`), safe image fallback ("first image or existing safe fallback", line 178), graceful null-on-timeout → no hard error (line 495), imageless publish supported. So the failure mode is **quality degradation, not a crash/data issue**. → Re-test on-device in D5 with a working owner account (needs F-03 + Dan). |
+| K9 | **Shipped-but-never-device-verified fixes** (all rebuild-gated): logo upload base64 fix, poster text edit, favorites dropdown, sort pills, QR-redeemed live watch, return-path prompts, RLS-denial UX, hide-repeat-restricted, site import | various | Verify each in Phase 4 on the dev-client where possible; mark VERIFY-LIMITED where a store build is required | ⏸️ **DEFERRED to Phase 4 (device) — needs Dan's go.** All are runtime/rebuild-gated and can't be verified without the device. Static confirmation that the code is present is done incidentally in the Phase 2 audit (e.g. hide-repeat-restricted is live in `index.tsx:914-926`; RLS-denial UX + site import present). |
+
+---
+
+## 10. Deliberate behavior — do NOT file or "fix" these
+
+- **Posters render in the deal's source language** while deal-card text translates per viewer. Locked product decision; poster-language flag ships together with T6 or not at all.
+- **`ai-create-deal` returns HTTP 410.** Intentionally disabled legacy endpoint.
+- **`PAID_BILLING_ENABLED = true` with `PILOT_DISABLE_BILLING_GATE = true`** is the current intended billing posture.
+- **Email/password auth only** — no social login, no guest mode. Locked.
+- **Pilot businesses capped at one location.** Locked.
+- **Spanish uses the Mexican flag.** Deliberate (DFW user base).
+- **Apple Wallet passes are parked** (no test iPhone); Google Wallet is the live target.
+- **`wallet-pass-*` functions intentionally still use the legacy key as an HMAC secret** — that is not the service-role credential and is not a bug.
+- The **S10 "production" package is a dev-client** build — expected, not an installation bug.
+
+---
+
+## 11. Severity rubric
+
+- **P0 — blocks go-live:** data loss/corruption, auth bypass, cross-tenant read/write, money handled wrongly, crash or dead-end on any path a real user can reach, any function 5xx.
+- **P1 — fix before launch or Dan consciously accepts:** a rare feature visibly broken (bad error, wrong copy, missing localization on a reachable screen, broken deep link).
+- **P2 — post-launch:** polish, minor copy, non-blocking inconsistency.
+
+## 12. Findings Log + Artifacts Ledger
+
+Append findings here as you go:
+
+| ID | Sev | Surface | What happens (repro in one line) | Fix state | Notes |
+|----|-----|---------|----------------------------------|-----------|-------|
+| F-01 | P2 | `app/business/[id].tsx:48,52` | Lint warns `import/no-duplicates`: `lib/runtime-env.ts` imported twice | OPEN — client-only, auto-fixable | Pre-existing baseline. Fix during 2.13 audit. |
+| F-02 | P1 (verification-blocker, not a prod defect) | DB QA harness (`scripts/db-tests/*`, `.env.test`) | `npm run test:db`: 6/7 suites fail — legacy `.env.test` service key rejected by test project's ES256 GoTrue admin (`createUser` 403 `bad_jwt`) **and** test project schema is behind prod (missing migrations ≥ `20260816120000`) | OPEN — needs Dan (Approval Queue #1 + #2). No prod change. | **Prod is fine** (0.8 parity confirms prod has these migrations). This only blocks our ability to run the DB behavioral suites. Same ES256 root cause as the prod bug — the test env was never re-keyed. |
+| F-03 | P1 (verification-blocker, not a prod defect) | `.env.development.local` QA owner creds | `TWOFER_QA_OWNER_EMAIL/_PASSWORD` sign-in → 400 `invalid_credentials`; the stored owner password is stale (account password likely rotated) | OPEN — needs Dan to refresh the owner password in `.env.development.local` | Blocks owner-side prod tests: the owner-ground-truth half of the RLS denial probe, and Phase 3.1's "normal business JWT" negative sweep. Shopper creds are fine. Not a product bug. |
+| F-04 | P2 | `expire-billing-access`, `send-trial-ending-reminders`, `weekly-deal-digest` | CRON_SECRET compared with `===` (not constant-time) | OPEN — deploy-gated; not applying | Negligible risk (high-entropy Vault secret, HTTPS, network jitter). Optional hardening: use a timing-safe compare like `timingSafeEqualStrings` already in `_shared/apple-pass-auth.ts`. Deploy-gated → Approval Queue if Dan wants it. |
+| F-05 | **P1** | ~53 keys across onboarding, consumer-profile, auth-landing, map, wallet, settings, create/quick, deal-eligibility, menu-scan, business-apply | **Systemic es/ko localization gap:** strings added with `t("k",{defaultValue:"English"})` but the key was never added to es/ko (or any locale). i18next `fallbackLng:"en"` renders English to Spanish/Korean users; the standard i18n gate can't see defaultValue keys. | ✅ **FIXED (client-only, uncommitted, rebuild-gated).** Added all 53 keys to en/es/ko with natural translations (+`dealEligibility.validFreeItemEstimate` to split an interpolation case; edited `deal-eligibility-form.tsx` to pass `{{percent}}`). Built `scripts/check-i18n-defaultvalue-gaps.mjs` (permanent guard). Verified: detector PASS(0), `check:i18n-keys` PASS (en/es/ko leaf-key parity maintained), typecheck clean, 1946 tests pass, lint 0 errors. | **es/ko translations are AI-produced — worth a native skim before the rebuild ships them.** Recommend wiring the new detector into CI (Approval Queue #3). |
+| F-06 | P1 | `lib/i18n/locales/ko.json` `businessSetup.importedWebsiteHint` | Value was **mojibake** (double-encoded UTF-8) — garbled Korean shown in the site-import flow | ✅ **FIXED** — restored correct Korean matching the en/es meaning. |
+| F-07 | **Doc conflict (not a bug)** | `lib/billing/access.ts:16` vs `CLAUDE.md` + this plan §10 | `PILOT_DISABLE_BILLING_GATE = false` in code; CLAUDE.md and §10 state it is `true`. Code comment: flipped to `false` after billing enforcement was verified 2026-07-06. | REPORT ONLY — code wins per CLAUDE.md. | **Action for Dan:** update CLAUDE.md + §10 to say `false`. `PAID_BILLING_ENABLED = true` still matches. Mobile in-app billing UI is separately disabled (`isMobilePaidBillingEnabled()`=false), so there's no in-app charge path regardless. |
+| F-08 | P2 | `app/business-apply.tsx:118-153` | Submit button re-enables ~1s before the auto-redirect, so a fast double-tap can file a duplicate application (server caps 3/email/30min). Also the 429 message isn't in the api-message map → masked to generic. | OPEN — recommended client fix (keep button disabled through redirect; add the 429→localized-key mapping). Rebuild-gated. | No money path. |
+| F-09 | P2 | `app/(tabs)/wallet.tsx:947` | "Release deal" discards an active claim on a **single tap, no confirmation** (inconsistent with slide-to-use). Usually re-claimable, but not if sold out / daily cap hit. | OPEN — recommended: wrap in `useBrandedConfirm`. UX judgment call → Dan. Rebuild-gated. | |
+| F-10 | P2 | `account/index.tsx:539` (fixed); `redemption-mode.tsx:252`, `redeem.tsx:163`, `auth-error-messages.ts:79` (open) | Raw/English error text reaches es/ko UI on a few paths, bypassing `translateKnownApiMessage` (no RLS/SQL leak — `parseFunctionError` already sanitizes). | 🟡 account sign-out **FIXED**; the other 3 OPEN (recommended one-liners). Rebuild-gated. | |
+| F-11 | P2 | `deal-analytics/[id].tsx:159` (tz); auth recovery (silent link); `consumer-profile-setup.tsx` (no escape hatch / no mount try-catch); `business-setup.tsx:699` (unchecked logo write) | Assorted polish: "best time" in device tz vs UTC/store-tz charts; expired reset-link fails silently; first-time consumer setup has no back/skip/sign-out; logo_url follow-up write result unchecked. | OPEN — P2 polish, rebuild-gated. Recommended fixes noted in agent audits. | None reachable as a crash/dead-end. |
+| F-12 | **Stale gate (not a defect)** | `scripts/check-website-supabase-readiness.js` | `check:website-supabase` fails on 4 assertions that lag legitimate changes: (1) demands `ios: null` but `store-links.js` has the real live App Store URL (`id6765769303`, iOS launched 07-22); (2) checks literal `SUPABASE_SERVICE_ROLE_KEY` but `submit-business-application` correctly uses the `tryGetServiceRoleKey()` helper; (3) hardcodes `?v=20260717-home-refresh` but pages moved to `20260722`/`20260723`. | REPORT — recommend Dan update the 3 stale assertions (script-only). No website defect; `test:e2e` (5.1) independently confirms the live site is healthy. | website deploy is hard-gated regardless. |
+| F-13 | P2 (latent — no current user impact) | `terms_acceptances_member_read` RLS policy (`20260730126000:406`) | **Same owner-omission class as K1:** `USING (is_business_member(business_id) OR admin_can('business.read'))` — no `user_owns_business()` arm, so an owner who onboarded via the bare-insert path (no `business_members` row) can't directly read their own terms-acceptance. **Latent** today: the only client reference is a response *type* (`lib/functions.ts:489`); there is **no direct `.from("terms_acceptances")` query** — access is via service-role edge fns (RLS-bypassing). | **Staged, not applied** → Approval Queue #5. | Found via memory flag from the K1 fix. Cheap insurance mirroring `20260819140000`; would bite if any future code does a direct authenticated read. |
+| F-15 | **P1 → FIXED** | `apiErrors.claimCreateFailed` (es, ko), `apiErrors.redeemUpdateFailed` (ko) | **es/ko leaked raw server error detail that English deliberately sanitizes.** en = "Couldn't claim this deal. Try again."; es/ko = "No se pudo crear el reclamo: **{{detail}}**" / "…: **{{detail}}**", and the call site (`lib/i18n/api-messages.ts:140,143`) does pass the raw server text. So Spanish/Korean users saw technical detail English hides — a direct violation of the repo rule that raw error text must not reach the UI. **Pre-existing** (confirmed identical in HEAD; not introduced by F-05). | ✅ **FIXED** — es/ko rewritten to match en's sanitized copy; no `{{detail}}` remains. Client-only, uncommitted, rebuild-gated. | Found only by the **verification pass**, not by the original audit: `check:i18n-keys` compares key *presence*, and my F-05 detector only looked at `defaultValue` keys — neither sees placeholder drift. Detector now extended to catch this class (proved by fault injection). |
+| F-16 | P2 | `createAi.imageVersionRevision` | en "Revision {{number}}" vs es "Ajuste" / ko "수정" — es/ko **drop the version number**, so Spanish/Korean merchants can't tell revisions apart. Pre-existing. | **NOT fixed — needs Dan.** Rendered by `app/create/ai.tsx`, which **IS covered by the AI poster core lock** (verified against `docs/ai-poster-core-lock.json`), so this copy change needs per-file approval. **Baselined** in the detector so the gate stays green and the item stays visible. | Locale JSON itself is unlocked, but the string is create/AI-screen copy → treating it as lock-adjacent and stopping, per §2.1. |
+| F-14 | **P1 (verify before launch)** | `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` build wiring (`app.config.js:140,152`, `eas.json`) | The Android Google Maps key is in `.env` but **not in `eas.json`**. `app.config.js` sets both the native manifest key and `extra.androidMapsKeyConfigured` from this env var **at build time**. If the production EAS build doesn't receive it (EAS ignores local `.env` unless wired via `env`/secrets), the **Map tab silently renders an EmptyState (no map) for all users** — the `androidMapsKeyConfigured` gate (`map-native-screen.tsx:771`) prevents a crash but also hides the map. | **VERIFY (Dan)** — confirm the prod build provides `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` (EAS secret or `eas.json` `env`). No code change if it's already wired via secrets. | Surfaced during D10. The **on-device Map crash itself is a dev-client artifact** (native dev build lacks the key while Metro's config says configured → mismatch) — VERIFY-LIMITED, not a prod crash. But whether the prod map *works* vs shows EmptyState hinges on this. |
+
+Artifacts Ledger — every test object created in prod, and its cleanup:
+
+| When | Account/object | Created for | Cleaned up? |
+|------|----------------|-------------|-------------|
+| 2026-07-24 | **No prod objects created.** All Phase 1/3 tests were read-only or negative (rejected before any write). No QA accounts, deals, or claims created. | — | N/A — nothing to clean up |
+| 2026-07-24 | One `admin_audit_log` row: `admin_login_failed` for the fake email `qa-rare-feature-probe@example.com` (1c invalid-creds negative test) | Proving admin-auth-session rejects bad creds | Self-identifying + inherent to the endpoint (any failed login writes one); benign audit record, left in place |
+
+## 13. Approval Queue for Dan
+
+Everything staged but gated. Dan approves line by line; nothing here is applied until he does.
+
+| # | Change | Type (deploy / migration / rebuild / locked file / website deploy) | Files | Risk if NOT shipped before launch |
+|---|--------|--------------------------------------------------------------------|-------|-----------------------------------|
+| 1 | **Re-key `.env.test`** with the TEST project's new-format service key (`PROJECT_SERVICE_ROLE_KEY` / `sb_secret_...`) so `auth.admin.*` works there. (Test-env config only — no prod impact.) | test-env config (Dan-only; involves a secret) | `.env.test` (gitignored) | None to prod. But the DB behavioral QA suites (role enforcement, cross-tenant RLS, billing-token consume, promo-materials auth) **cannot be run** until fixed — we launch without that verification layer. |
+| 2 | **Bring the TEST project schema up to date** — `supabase db push` against the TEST project (ref `zsuz…ds`) to apply migrations ≥ `20260816120000`. Gated migration action, **TEST project only, never prod**. | migration (TEST project) | test project | Same as #1 — blocks 1d DB suites (2e/2f schema-dependent checks). |
+| 3 | **Commit the client-only QA fixes** (currently uncommitted, applied locally) + wire the new i18n guard into CI. | commit + CI config (no deploy/migration) | `lib/i18n/locales/{en,es,ko}.json`, `components/deal-eligibility-form.tsx`, `app/(tabs)/account/index.tsx`, `app/business/[id].tsx`, `scripts/check-i18n-defaultvalue-gaps.mjs`, `scripts/probe-rls-denial.mjs`, `scripts/probe-phase3-negatives.mjs` | **es/ko launch users see English on ~53 strings** until a rebuild ships the F-05 fix (rebuild is HELD — so these ride the next approved rebuild). Add `check:i18n-defaultvalue-gaps` to the CI gate set so the class can't regress. |
+| 4 | **Doc update (F-07):** change `PILOT_DISABLE_BILLING_GATE` to `false` in `CLAUDE.md` and this plan's §10 to match the code. | docs only | `CLAUDE.md`, this plan §10 | Stale docs mislead future agents. No code/behavior change. |
+| 5 | **Staged migration (F-13):** add the owner arm to `terms_acceptances_member_read`, mirroring `20260819140000`. **Not applied — RLS-sensitive, prod migration is hard-gated.** After applying, run `node scripts/probe-rls-smoke.mjs`. SQL:<br>`DROP POLICY IF EXISTS terms_acceptances_member_read ON public.terms_acceptances;`<br>`CREATE POLICY terms_acceptances_member_read ON public.terms_acceptances FOR SELECT TO authenticated USING (COALESCE(public.user_owns_business(business_id),false) OR COALESCE(public.is_business_member(business_id),false) OR COALESCE(public.admin_can('business.read'),false));` | migration | new `supabase/migrations/*_fix_terms_acceptances_owner_read.sql` | Latent today (no direct client read). Low risk if deferred; cheap to ship. `user_owns_business()` already exists in prod. |
+| 7 | **Locked-file copy decision (F-16):** es/ko `createAi.imageVersionRevision` drop the `{{number}}` that en shows ("Revision 3" → "Ajuste"/"수정"), so es/ko merchants can't tell AI image revisions apart. Rendered by **`app/create/ai.tsx`, which is under the AI poster core lock** → needs your per-file approval before I touch the copy. Currently **baselined** in the i18n gate (visible, non-blocking). | locked-file / copy | `lib/i18n/locales/{es,ko}.json` (+ lock policy per §2.1) | Cosmetic only — es/ko merchants lose the revision number in the AI create flow. Safe to defer past launch. |
+| 6 | **Verify prod Maps key (F-14):** confirm the production Android build receives `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` (EAS secret or `eas.json` `env`) so the Map tab actually renders a map, not a silent EmptyState. | build-config verification (Dan) | `eas.json` / EAS secrets | The **Map is a core consumer feature**; if the key isn't baked into the prod build, real users get no map (no crash — the `androidMapsKeyConfigured` gate). Quick to confirm from the EAS build env. |
+
+## 14. Suggested week schedule
+
+- **Day 1 (07-24/25):** Phases 0 + 1 complete. Any 5xx or auth-bypass finding goes to Dan the same day.
+- **Day 2:** Phase 2 static audits + §9 known-item verification.
+- **Day 3:** Phase 3 behavioral API tests; write staged fixes for everything found so far.
+- **Day 4–5:** Phase 4 device passes (after Dan's go), fixes as found.
+- **Day 6:** Phase 5 website; re-run Phase 0 gates + `npm run gate:edges`-style re-probe of anything fixed; regression re-check of every FIXED finding.
+- **Day 7 (buffer):** Final report: go / no-go list — every P0/P1 with state, the Approval Queue, and what was consciously left VERIFY-LIMITED. Written in plain language; Dan is not a traditional engineer.
+
+End each working day by updating this file and writing Dan a short plain-language summary: what was tested, what broke, what's waiting on him.
+
+---
+
+## 15. Completion plan — from here to launch (written 2026-07-24, founder framing)
+
+### 15.1 Risk register — ranked by "does this kill the business at launch"
+
+| # | Risk | Blast radius | State | Owner |
+|---|------|--------------|-------|-------|
+| **R1** | **The money moment breaks** — merchant publishes → shopper claims → merchant redeems QR. If this fails, the product does nothing. | 100% of value | **Not functionally tested this session.** Backend fns healthy + guards structural, but no live end-to-end run. Blocked on F-03. | Dan (creds) → me |
+| **R2** | **Map tab blank in the live build** (F-14) — key in `.env` but not `eas.json`. | 100% of users, core tab | **Unknown.** 30-second check: open the *store* build, tap Map. | Dan (30 s) |
+| **R3** | **Merchant side barely tested** — create/AI/publish/billing/redemption-owner is ~half the product and got static audit only. | Supply side; no merchants = no deals | Blocked on F-03. | Dan (creds) → me |
+| **R4** | **Account deletion silently broken again** — the origin bug; also an Apple/Google compliance requirement. | Store compliance + trust | Static proof strong (fail-safe canary, ordering held). **Never run live.** | me (needs a throwaway acct) |
+| **R5** | **Launching without the DB security suites** (F-02) — role enforcement, cross-tenant RLS, billing-token consume unverified. | Security blind spot | Blocked. Compensating: prod RLS probes + denial probe all green. | Dan (test key) → me |
+| R6 | es/ko users get English + raw error text | Spanish/Korean users | **Fixed in repo, unshipped** — needs a rebuild (see 15.2). | Dan (decision) |
+| R7 | AI translations unreviewed by a native speaker | Copy quality | 53 strings + 3 rewrites, AI-authored | Dan / a speaker |
+
+### 15.2 The one decision that gates everything: **rebuild or not?**
+
+Every client fix from this session (53 es/ko strings, the raw-error-leak fix, lint, sign-out copy) plus **all 9 K9 "shipped but never device-verified" fixes** live in the repo and reach **zero users** without a new build. Rebuilds are currently HELD.
+
+- **If we rebuild:** the fixes ship, but the new binary needs a real regression pass (`docs/beta-release-checklist.md`) before it goes public. Costs ~2 days of the 7.
+- **If we don't rebuild:** launch on the current store build. Spanish/Korean users see English in ~53 places and raw server detail on claim/redeem errors. Everything else is unchanged from what's already live.
+
+Neither is wrong — but the answer changes the whole schedule, so it's decision #1.
+
+### 15.3 What I need from Dan (one sitting, ~15 minutes)
+
+| # | Ask | Why | Time |
+|---|-----|-----|------|
+| 1 | **Open the live store app → tap Map.** Map renders or blank? | Settles R2/F-14 definitively | 30 s |
+| 2 | **Rebuild before launch: yes / no** | Gates 15.2 and the schedule | 1 min |
+| 3 | **Fresh `TWOFER_QA_OWNER_*` password** in `.env.development.local` | Unblocks R1, R3 — the biggest untested area | 2 min |
+| 4 | **TEST-project `sb_secret_...` key** into `.env.test` + approve `db push` **to the TEST project only** | Unblocks R5 (DB suites) | 5 min |
+| 5 | **Admin console creds** (or "skip it") | Finishes 5.5 + K2 panel check | 2 min |
+| 6 | **May I commit** the client fixes + new scripts to this branch? | They're uncommitted and at risk | 1 min |
+
+### 15.4 Day-by-day
+
+**Day 1 (07-24, today) — unblocked work, no waiting on Dan**
+- Verify the 3 unconfirmed subagent P2s (F-08, F-09, F-11) myself; fix the clear-cut ones.
+- Fix F-12 (3 stale assertions in `check-website-supabase-readiness.js`) and F-07 (doc conflict) — script/doc only.
+- Write the F-13 migration file (staged, **not applied**).
+- Static audit of the **merchant** screens Phase 2 skipped as "core loop": `create/ai.tsx`, `create/ai-compose.tsx`, `ad-refine.tsx`, `dashboard.tsx`, `deal/[id].tsx` — read-only, no locked-file edits.
+
+**Day 2 (07-25) — the moment creds land**
+- F-03 → owner-side Phase 3: admin sweep with a real business JWT, 3.5 AI cap (one call), K8 AI image re-test.
+- F-02 → `npm run test:db` (all 7 suites) + owner half of the RLS denial probe.
+- Admin creds → 5.5 panel smoke + 5.3 application lands in the queue.
+
+**Day 3 (07-26) — R1 + R4, on-device (highest value day)**
+- **Full money moment**, one pass, cleaned up after: QA merchant creates + publishes a deal → QA shopper sees it → claims → merchant redeems the QR → wallet shows redeemed. Ledger every object.
+- **Account deletion e2e** on a throwaway shopper (R4).
+- D2 share-deal, D3 favorites+push, D6 redemption edges.
+
+**Day 4 (07-27) — fix + (if approved) build**
+- Fix everything Days 2–3 surface.
+- If rebuilding: produce the build, verify the F-05 strings actually render (the thing D9 couldn't prove), confirm the Map renders with the key baked in.
+
+**Day 5 (07-28) — `docs/beta-release-checklist.md` end-to-end** on whatever binary we're shipping.
+
+**Day 6 (07-29) — regression + website**
+- Re-run every gate; re-verify each FIXED finding; 5.4 `/s/<code>` with a real share code; D9 redo to confirm the new strings on-screen.
+
+**Day 7 (07-30) — go/no-go**, written plainly. 07-31 = buffer.
+
+### 15.5 If we run out of time — what I'd consciously accept
+
+Ship anyway: F-16 (revision number in es/ko), F-08/F-09/F-11 (P2 polish), F-04 (timing-safe compare), K9 items that only affect rarely-hit screens, D7 wallet pass (Google approved but unproven).
+
+**Would NOT ship without:** R1 (money moment proven live), R2 (map confirmed), R4 (deletion works — it's a store requirement), and zero P0s.
+
+---
+
+## Appendix A — Edge-function inventory and expected smoke result
+
+Expected result is for the Phase 1a probe (empty `{}` POST, anon key, no user JWT). "Reject" = 400/401/403. Anything else → Findings Log.
+
+**Core deal loop (well-tested; still probe):** `claim-deal`, `redeem-token`, `release-claim`, `publish-offer-version`, `send-deal-push`, `ingest-analytics-event` — expect reject.
+
+**Account / business lifecycle (rare — prime suspects):** `delete-user-account`, `accept-business-terms`, `get-business-onboarding-context`, `update-business-profile-section`, `submit-business-application`, `business-activation-status`, `set-promo-materials-authorization` — expect reject. `request-business-on-twofer`, `submit-launch-signup` — public forms: expect a validation 400 on empty body; a 200 on `{}` is a finding.
+
+**Redemption hardware/staff (rarest subsystem):** `activate-redemption-mode`, `exit-redemption-mode`, `staff-redemption`, `manage-redemption-devices`, `owner-redemption-security`, `begin-visual-redeem`, `cancel-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (cron) — expect reject.
+
+**Sharing / links / public reads:** `deal-link`, `deal-share-lookup`, `qr-campaign-redirect`, `business-claim-link`, `public-local-businesses` — public: 400 on empty input, or 200/302 with harmless public data; verify no PII/secrets in any 200 body.
+
+**Wallet:** `wallet-pass-issue` — expect reject. `wallet-pass-webservice` — Apple-protocol REST; a POST `{}` may 400/404/405; judge against its route handling, don't blind-pass.
+
+**AI:** `ai-business-lookup`, `ai-compose-offer`, `ai-deal-suggestions`, `ai-extract-menu`, `ai-generate-ad-variants`, `ai-generate-deal-copy`, `ai-studio-generate-draft`, `ai-translate-deal`, `import-business-website` — expect reject. `ai-create-deal` — **expect 410 exactly.**
+
+**Billing / Stripe:** `billing-checkout-redirect` (redirect endpoint: 30x/400 plausible), `billing-pricing` (public 200 plausible), `business-checkout-link`, `simulate-subscribe` (**must reject for normal callers — see 3.2**), `stripe-backfill-customers`, `stripe-cancel-paid-subscription`, `stripe-cancel-trial-subscription`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-expire-pending-checkout` (cron), `stripe-request-introductory-refund` — expect reject. `stripe-webhook` — expect 400 missing-signature.
+
+**Cron / digest:** `expire-billing-access`, `send-trial-ending-reminders`, `weekly-deal-digest` — expect reject (CRON_SECRET-gated); never invoke with valid credentials (§4.1f).
+
+**Admin (all 22 — expect reject; any 200 is P0):** `admin-ai-cost-ledger-reset`, `admin-ai-operating-report`, `admin-ai-prompts`, `admin-ai-usage`, `admin-auth-session`, `admin-business-applications`, `admin-business-name-requests`, `admin-claim-link-assistant`, `admin-claim-link-create`, `admin-dashboard-summary`, `admin-demand-proof`, `admin-onboarding-review-ai`, `admin-promo-authorization`, `admin-prospect-enrich`, `admin-prospect-import`, `admin-prospect-sales`, `admin-prospect-score`, `admin-qr-campaigns`, `admin-reports`, `admin-sales-script`, `admin-trial-conversion-assistant`, `admin-trial-create-from-prospect`.
+
+Note: `supabase/config.toml` sets `verify_jwt = false` for all functions — **every function does its own auth in code**, which is exactly why this sweep matters: there is no gateway backstop.
+
+## Appendix B — Screen inventory → phase map
+
+| Route | Phase |
+|-------|-------|
+| `app/index.tsx`, `app/(tabs)/index.tsx` (feed), `(tabs)/dashboard.tsx`, `(tabs)/create.tsx`, `create/ai.tsx`, `create/ai-compose.tsx`, `create/ad-refine.tsx`, `deal/[id].tsx` | Core loop — covered by `docs/beta-release-checklist.md`; only re-test where a fix touches them |
+| `(tabs)/auth.tsx`, `auth-landing.tsx`, `auth-callback.tsx`, `forgot-password.tsx`, `reset-password.tsx`, `onboarding.tsx`, `consumer-profile-setup.tsx`, `business-setup.tsx` | 2.1 / 2.11 / D1 |
+| `business-apply.tsx` | 2.3 / 5.3 |
+| `s/[code].tsx` | 2.2 / D2 / 5.4 |
+| `(tabs)/billing.tsx`, `(tabs)/billing/manage.tsx`, `(tabs)/account/billing.tsx`, `(tabs)/account/billing/manage.tsx` | 2.4 / D8 |
+| `redemption-mode.tsx`, `(tabs)/redeem.tsx` | 2.5 / D6 |
+| `create/menu.tsx`, `create/menu-scan.tsx`, `create/menu-manager.tsx`, `create/menu-offer.tsx`, `create/reuse.tsx`, `create/quick.tsx` | 2.6 / D5 |
+| `deal-analytics/[id].tsx` | 2.7 / K6 |
+| `(tabs)/map.tsx` | 2.8 / D10 |
+| `(tabs)/settings.tsx`, `(tabs)/account/index.tsx` | 2.9 / D1 / D9 |
+| `(tabs)/wallet.tsx` | 2.10 / D6 |
+| `business/[id].tsx` | 2.13 / D3 / D4 |
+| `debug-diagnostics.tsx`, `poster-gallery-dev.tsx`, `ai-deal-studio-dev.tsx` | 2.12 |

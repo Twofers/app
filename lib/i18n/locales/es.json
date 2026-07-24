@@ -61,7 +61,8 @@
     "expired": "Caducada",
     "canceled": "Cancelada",
     "liveDeal": "Oferta en vivo",
-    "noLiveDeal": "Sin oferta en vivo"
+    "noLiveDeal": "Sin oferta en vivo",
+    "released": "Liberada"
   },
   "consumerHome": {
     "segmentDeals": "Ofertas",
@@ -128,7 +129,8 @@
     "timeLeftHM": "{{h}}h {{m}}m restantes",
     "timeLeftM": "{{m}}m restantes",
     "onlyOneLeft": "Solo queda 1",
-    "onlyNLeft": "Solo quedan {{count}}"
+    "onlyNLeft": "Solo quedan {{count}}",
+    "noPhotoYet": "Foto próximamente"
   },
   "consumerMap": {
     "title": "Mapa",
@@ -149,7 +151,10 @@
     "a11yToggleAllHint": "Mostrar todos los negocios en el mapa",
     "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa",
     "viewDeal": "Ver oferta",
-    "viewShop": "Ver tienda"
+    "viewShop": "Ver tienda",
+    "businessCardA11y": "Ver {{name}} en el mapa",
+    "defaultAreaTitle": "Usando área predeterminada",
+    "defaultAreaBody": "Activa la ubicación o agrega un código postal en Configuración para centrar las ofertas cercanas en tu zona."
   },
   "consumerSettings": {
     "accountCta": "Cuenta e inicio de sesión",
@@ -217,7 +222,8 @@
     "notifyBody": "Te avisamos cuando haya ofertas nuevas cerca. Cambiable en Ajustes.",
     "favoriteHint": "Consejo: favoritos pueden avisarte aunque estén lejos.",
     "enableNotifications": "Activar notificaciones",
-    "notNow": "Ahora no"
+    "notNow": "Ahora no",
+    "locationChoice": "Elige tu método de ubicación"
   },
   "businessProfile": {
     "reportBusinessLink": "Reportar este negocio",
@@ -232,7 +238,8 @@
     "notProvided": "No indicado",
     "liveDeal": "Oferta en vivo actual",
     "noLiveDeal": "Sin oferta en vivo ahora. Vuelve luego o guarda el negocio para alertas.",
-    "noLiveDealSaved": "Sin oferta en vivo ahora. Te avisaremos cuando publique una."
+    "noLiveDealSaved": "Sin oferta en vivo ahora. Te avisaremos cuando publique una.",
+    "mapsOpenFailed": "No pudimos abrir el mapa. Usa la dirección de esta página."
   },
   "pushTemplates": {
     "weeklyDigestTitle": "Nuevas ofertas cerca de ti",
@@ -272,7 +279,7 @@
     "claimDailyLimitBusiness": "Solo puedes reclamar una vez por negocio en el día local mientras tu reclamo siga siendo canjeable. Canjéalo o espera a que caduque antes de reclamar otra oferta desde este negocio.",
     "claimHourlyLimit": "Solo puedes reclamar una oferta por hora. Vuelve a intentarlo en unos minutos.",
     "claimSoldOut": "Esta oferta alcanzó el límite de reclamos.",
-    "claimCreateFailed": "No se pudo crear el reclamo: {{detail}}",
+    "claimCreateFailed": "No se pudo reclamar esta oferta. Inténtalo de nuevo.",
     "redeemUnauthorized": "No autorizado. Inicia sesión como titular del negocio.",
     "redeemNotBusinessOwner": "Solo este negocio puede canjear este ticket.",
     "redeemRedemptionModeInactive": "Activa el Modo de canje en este dispositivo antes de canjear tickets.",
@@ -346,7 +353,21 @@
     "freeItemPlaceholder": "Ejemplo: cualquier pastel",
     "optionalMoneyPlaceholder": "Opcional",
     "invalidTitle": "Aún no elegible",
-    "invalidBody": "Completa las reglas obligatorias de la oferta antes de elegir el horario y generar un anuncio."
+    "invalidBody": "Completa las reglas obligatorias de la oferta antes de elegir el horario y generar un anuncio.",
+    "title": "Reglas de la oferta",
+    "helper": "Twofer acepta 2x1, compra uno y llévate algo gratis, o 40%+ de descuento en un solo artículo.",
+    "requiredItemLabel": "El cliente compra",
+    "requiredValueLabel": "Valor del artículo de compra (opcional)",
+    "freeItemLabel": "El cliente recibe gratis",
+    "freeValueLabel": "Valor del artículo gratis (opcional)",
+    "itemLabel": "Artículo único",
+    "itemValueLabel": "Valor de venta (opcional)",
+    "discountLabel": "Porcentaje de descuento",
+    "validTitle": "Oferta válida",
+    "validBody": "El valor para el cliente es de aproximadamente {{percent}}%.",
+    "validFreeItemBody": "Válida: los clientes reciben un artículo indicado gratis con la compra.",
+    "validFreeItemEstimate": " El valor estimado es de aproximadamente {{percent}}%.",
+    "validPercentBody": "Válida: el descuento es de al menos 40% en un artículo."
   },
   "createQuick": {
     "prefillFromAiCompose": "Oferta rellenada desde AI Compose.",
@@ -373,7 +394,13 @@
     "needInput": "Agrega un producto o una foto primero.",
     "needTitle": "Agrega un título primero.",
     "photoPermission": "Permite el acceso a las fotos para agregar una imagen.",
-    "errGenerate": "No se pudo crear la oferta. Inténtalo de nuevo."
+    "errGenerate": "No se pudo crear la oferta. Inténtalo de nuevo.",
+    "placeholderTitle": "Título de la oferta",
+    "previewTitle": "Vista previa de la oferta",
+    "previewHint": "Revisa lo que verán los clientes antes de publicar.",
+    "previewPublish": "Publicar oferta",
+    "previewGoBack": "Atrás",
+    "publishing": "Publicando..."
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -533,7 +560,8 @@
     "saveErrorBody": "Revisa tu conexión e intenta de nuevo.",
     "loading": "Cargando ajustes...",
     "loadErrorTitle": "No se pudieron cargar los ajustes",
-    "loadErrorBody": "Revisa tu conexión e intenta de nuevo."
+    "loadErrorBody": "Revisa tu conexión e intenta de nuevo.",
+    "alertsRegistrationFailed": "No pudimos activar las alertas de ofertas porque este dispositivo no completó la configuración de notificaciones. Revisa tu conexión e inténtalo de nuevo."
   },
   "createHub": {
     "title": "Crear",
@@ -626,7 +654,8 @@
     "savedWithSkipped": "Guardadas {{count}} líneas nuevas ({{skipped}} omitidas — ya en la biblioteca).",
     "someOversizedSkipped_one": "{{count}} foto era demasiado grande y se omitió — prueba con un encuadre más cercano.",
     "someOversizedSkipped_other": "{{count}} fotos eran demasiado grandes y se omitieron — prueba con encuadres más cercanos.",
-    "allOversized": "Las fotos eran demasiado grandes para escanear. Prueba un encuadre más cercano o usa la cámara en menor resolución."
+    "allOversized": "Las fotos eran demasiado grandes para escanear. Prueba un encuadre más cercano o usa la cámara en menor resolución.",
+    "sizePlaceholder": "Tamaños como se muestran (opcional)"
   },
   "menuOffer": {
     "title": "Oferta del menú",
@@ -766,7 +795,7 @@
     "templateDeleted": "Plantilla eliminada.",
     "repeatCta": "Repetir en Oferta rápida →",
     "backToAiCompose": "← Volver a oferta IA",
-    "backToCreate": "← Back to Create"
+    "backToCreate": "← Volver a Crear"
   },
   "dealDetail": {
     "hideBusinessLink": "Ocultar este negocio",
@@ -1033,7 +1062,10 @@
     "backToSignIn": "Volver a iniciar sesión",
     "hintEnterEmail": "Ingresa tu correo para continuar.",
     "hintEnterPassword": "Ingresa tu contraseña para continuar.",
-    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar."
+    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar.",
+    "strengthWeak": "Débil",
+    "strengthMedium": "Media",
+    "strengthStrong": "Fuerte"
   },
   "supportContact": {
     "sectionTitle": "Ayuda y contacto",
@@ -1149,7 +1181,8 @@
     "checkingSession": "Comprobando el enlace…",
     "invalidSession": "Este enlace no es válido o caducó. Solicita uno nuevo desde el inicio de sesión.",
     "backToSignIn": "Volver a entrar",
-    "continueToApp": "Continuar"
+    "continueToApp": "Continuar",
+    "errCooldown": "Espera 60 segundos antes de solicitar otro correo."
   },
   "errorBoundary": {
     "appTitle": "Algo salió mal",
@@ -1186,7 +1219,8 @@
     "dealEndsVerb": "Termina",
     "modalTitle": "Modal",
     "tapToRetry": "Toca para reintentar",
-    "tryAgain": "Reintentar"
+    "tryAgain": "Reintentar",
+    "settings": "Configuración"
   },
   "debugDiagnostics": {
     "title": "Diagnósticos"
@@ -1300,7 +1334,10 @@
     "statRedeemed": "Ofertas canjeadas",
     "statSaved": "Ahorro est.",
     "statSavedValue": "${{amount}}",
-    "passRedeemByLine": "Canjea antes de {{datetime}} (incluye período de gracia)"
+    "passRedeemByLine": "Canjea antes de {{datetime}} (incluye período de gracia)",
+    "releaseDeal": "Liberar oferta",
+    "releasingDeal": "Liberando...",
+    "releaseError": "No se pudo liberar esta oferta. Inténtalo de nuevo."
   },
   "consumerDealDetail": {
     "timeLeft": "Tiempo restante",
@@ -1650,7 +1687,19 @@
     "errZipInvalid": "Usa un código postal válido de 5 dígitos en EE. UU.",
     "errBirthdate": "Elige una fecha de nacimiento válida.",
     "errSave": "No se pudo guardar. Inténtalo de nuevo.",
-    "errLogin": "Vuelve a iniciar sesión."
+    "errLogin": "Vuelve a iniciar sesión.",
+    "addBirthdate": "Agregar cumpleaños",
+    "birthdateMonth": "Mes",
+    "birthdateDay": "Día",
+    "birthdateYear": "Año",
+    "birthdateNextMonth": "Mes siguiente",
+    "birthdateNextDay": "Día siguiente",
+    "birthdateNextYear": "Año siguiente",
+    "birthdatePreviousMonth": "Mes anterior",
+    "birthdatePreviousDay": "Día anterior",
+    "birthdatePreviousYear": "Año anterior",
+    "zipWhy": "Twofer usa tu código postal como zona general para que las ofertas y alertas cercanas sean relevantes desde el inicio. Luego podrás elegir tu radio de búsqueda.",
+    "zipWhyEdit": "Twofer usa tu código postal como zona general para que las ofertas y alertas cercanas sigan siendo relevantes. Puedes cambiar tu radio en Configuración."
   },
   "ageBands": {
     "under_18": "Menos de 18",
@@ -2457,5 +2506,9 @@
       "inappropriate": "Comportamiento inapropiado",
       "other": "Otra cosa"
     }
+  },
+  "demoOffer": {
+    "label": "Oferta de demostración",
+    "shortLabel": "DEMO"
   }
 }

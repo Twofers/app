@@ -536,7 +536,7 @@ export default function AccountScreen() {
       });
       if (!result.ok) {
         setBanner({
-          message: result.message || t("account.errLogoutFailed"),
+          message: result.message ? translateKnownApiMessage(result.message, t) : t("account.errLogoutFailed"),
           tone: "error",
         });
       }

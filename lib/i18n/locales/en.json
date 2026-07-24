@@ -61,7 +61,8 @@
     "expired": "Expired",
     "canceled": "Canceled",
     "liveDeal": "Live deal",
-    "noLiveDeal": "No live deal"
+    "noLiveDeal": "No live deal",
+    "released": "Released"
   },
   "consumerHome": {
     "segmentDeals": "Deals",
@@ -128,7 +129,8 @@
     "timeLeftHM": "{{h}}h {{m}}m left",
     "timeLeftM": "{{m}}m left",
     "onlyOneLeft": "Only 1 left",
-    "onlyNLeft": "Only {{count}} left"
+    "onlyNLeft": "Only {{count}} left",
+    "noPhotoYet": "Photo coming soon"
   },
   "consumerMap": {
     "title": "Map",
@@ -149,7 +151,10 @@
     "a11yToggleAllHint": "Show every business on the map",
     "a11yToggleLiveHint": "Show only businesses with a live deal",
     "viewDeal": "View deal",
-    "viewShop": "View shop"
+    "viewShop": "View shop",
+    "businessCardA11y": "View {{name}} on map",
+    "defaultAreaTitle": "Using default area",
+    "defaultAreaBody": "Turn on location or add a ZIP in Settings to center nearby deals around you."
   },
   "consumerSettings": {
     "accountCta": "Account & sign in",
@@ -217,7 +222,8 @@
     "notifyBody": "Get a heads-up when new deals go live near you. You can change this anytime in Settings.",
     "favoriteHint": "Favorite shops to hear when they post a deal.",
     "enableNotifications": "Turn on notifications",
-    "notNow": "Not now"
+    "notNow": "Not now",
+    "locationChoice": "Choose your location method"
   },
   "businessProfile": {
     "reportBusinessLink": "Report this business",
@@ -232,7 +238,8 @@
     "notProvided": "Not listed",
     "liveDeal": "Current live deal",
     "noLiveDeal": "No live deal right now. Save this shop to hear when one posts.",
-    "noLiveDealSaved": "No live deal right now. You'll hear when one posts."
+    "noLiveDealSaved": "No live deal right now. You'll hear when one posts.",
+    "mapsOpenFailed": "We couldn't open maps. Try the address from this page."
   },
   "pushTemplates": {
     "weeklyDigestTitle": "New deals near you",
@@ -346,7 +353,21 @@
     "freeItemPlaceholder": "Example: any pastry",
     "optionalMoneyPlaceholder": "Optional",
     "invalidTitle": "Not eligible yet",
-    "invalidBody": "Finish the required offer rules before choosing schedule and generating an ad."
+    "invalidBody": "Finish the required offer rules before choosing schedule and generating an ad.",
+    "title": "Offer rules",
+    "helper": "Twofer accepts buy-one-get-one free, buy-one-get-something-free, or 40%+ off one single item.",
+    "requiredItemLabel": "Customer buys",
+    "requiredValueLabel": "Buy item value (optional)",
+    "freeItemLabel": "Customer gets free",
+    "freeValueLabel": "Free item value (optional)",
+    "itemLabel": "Single item",
+    "itemValueLabel": "Retail value (optional)",
+    "discountLabel": "Discount percent",
+    "validTitle": "Eligible offer",
+    "validBody": "Customer value is about {{percent}}%.",
+    "validFreeItemBody": "Eligible: customers get a named item free with purchase.",
+    "validFreeItemEstimate": " Estimated value is about {{percent}}%.",
+    "validPercentBody": "Eligible: discount is at least 40% for one item."
   },
   "createQuick": {
     "prefillFromAiCompose": "Deal prefilled from AI Compose.",
@@ -373,7 +394,13 @@
     "needInput": "Add an item or photo first.",
     "needTitle": "Add a headline first.",
     "photoPermission": "Allow photo access to add a picture.",
-    "errGenerate": "Couldn't draft a deal. Please try again."
+    "errGenerate": "Couldn't draft a deal. Please try again.",
+    "placeholderTitle": "Deal title",
+    "previewTitle": "Deal preview",
+    "previewHint": "Review what customers will see before publishing.",
+    "previewPublish": "Publish deal",
+    "previewGoBack": "Back",
+    "publishing": "Publishing..."
   },
   "language": {
     "sectionApp": "App language",
@@ -533,7 +560,8 @@
     "saveErrorBody": "Check your connection and try again.",
     "loading": "Loading settings...",
     "loadErrorTitle": "Couldn't load settings",
-    "loadErrorBody": "Check your connection and try again."
+    "loadErrorBody": "Check your connection and try again.",
+    "alertsRegistrationFailed": "We couldn't turn on deal alerts because this device did not finish push setup. Check your connection and try again."
   },
   "createHub": {
     "title": "Create",
@@ -626,7 +654,8 @@
     "savedWithSkipped": "Saved {{count}} new lines ({{skipped}} skipped — already in library).",
     "someOversizedSkipped_one": "{{count}} photo was too large to scan and was skipped — try a closer crop.",
     "someOversizedSkipped_other": "{{count}} photos were too large to scan and were skipped — try a closer crop.",
-    "allOversized": "Photos were too large to scan. Try a closer shot or a lower-resolution camera setting."
+    "allOversized": "Photos were too large to scan. Try a closer shot or a lower-resolution camera setting.",
+    "sizePlaceholder": "Sizes as shown (optional)"
   },
   "menuOffer": {
     "title": "Menu offer",
@@ -1033,7 +1062,10 @@
     "backToSignIn": "Back to sign in",
     "hintEnterEmail": "Enter your email to continue.",
     "hintEnterPassword": "Enter your password to continue.",
-    "hintEnterBoth": "Enter your email and password to continue."
+    "hintEnterBoth": "Enter your email and password to continue.",
+    "strengthWeak": "Weak",
+    "strengthMedium": "Medium",
+    "strengthStrong": "Strong"
   },
   "supportContact": {
     "sectionTitle": "Help & contact",
@@ -1149,7 +1181,8 @@
     "checkingSession": "Checking your link…",
     "invalidSession": "This reset link is invalid or has expired. Request a new one from sign-in.",
     "backToSignIn": "Back to sign in",
-    "continueToApp": "Continue"
+    "continueToApp": "Continue",
+    "errCooldown": "Please wait 60 seconds before requesting another email."
   },
   "createAi": {
     "actualPhotoFinalSelected": "Actual photo selected as final ad",
@@ -1542,7 +1575,8 @@
     "dealEndsVerb": "Ends",
     "modalTitle": "Modal",
     "tapToRetry": "Tap to retry",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "settings": "Settings"
   },
   "debugDiagnostics": {
     "title": "Diagnostics"
@@ -1656,7 +1690,10 @@
     "expiresLocal": "Expires {{datetime}} (business time)",
     "statRedeemed": "Deals redeemed",
     "statSaved": "Est. savings",
-    "statSavedValue": "${{amount}}"
+    "statSavedValue": "${{amount}}",
+    "releaseDeal": "Release deal",
+    "releasingDeal": "Releasing...",
+    "releaseError": "Could not release this deal. Try again."
   },
   "consumerDealDetail": {
     "timeLeft": "Time left",
@@ -2006,7 +2043,19 @@
     "errZipInvalid": "Use a valid 5-digit US ZIP.",
     "errBirthdate": "Choose a valid birthday.",
     "errSave": "Could not save. Try again.",
-    "errLogin": "Please log in again."
+    "errLogin": "Please log in again.",
+    "addBirthdate": "Add birthday",
+    "birthdateMonth": "Month",
+    "birthdateDay": "Day",
+    "birthdateYear": "Year",
+    "birthdateNextMonth": "Next month",
+    "birthdateNextDay": "Next day",
+    "birthdateNextYear": "Next year",
+    "birthdatePreviousMonth": "Previous month",
+    "birthdatePreviousDay": "Previous day",
+    "birthdatePreviousYear": "Previous year",
+    "zipWhy": "Twofer uses your ZIP as a general area so nearby deals and alerts start relevant. You can choose your browsing radius next.",
+    "zipWhyEdit": "Twofer uses your ZIP as a general area so nearby deals and alerts stay relevant. You can change your radius in Settings."
   },
   "ageBands": {
     "under_18": "Under 18",
@@ -2457,5 +2506,9 @@
       "inappropriate": "Inappropriate behavior",
       "other": "Something else"
     }
+  },
+  "demoOffer": {
+    "label": "Demo offer",
+    "shortLabel": "DEMO"
   }
 }
