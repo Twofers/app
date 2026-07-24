@@ -165,12 +165,17 @@ for (const [table, col] of [
 }
 
 // ---- B. Owner-scoped tables: a shopper owns nothing → must be empty or denied.
+// business_locations is included deliberately: the DB suite (2c) treats it as a
+// PRIVATE owner-only table, and on the TEST project a cross-tenant read of it
+// succeeded (HTTP 200, 1 row). That project is behind on migrations, so this
+// asserts the production policy directly rather than inferring it.
 for (const table of [
   "promo_materials_authorizations",
   "redemption_devices",
   "owner_redemption_security",
   "deal_templates",
   "ai_generation_costs",
+  "business_locations",
 ]) {
   const r = await rest(S, `${table}?select=*&limit=50`);
   const pass = isDenied(r) || (Array.isArray(r.json) && r.json.length === 0);
@@ -235,7 +240,12 @@ for (const { name, pass, detail } of results) {
 }
 console.log("");
 if (failed > 0) {
-  console.error(`${failed} DENIAL CHECK(S) FAILED — cross-tenant leak. This is a P0.`);
+  console.error(
+    `${failed} DENIAL CHECK(S) FAILED — a non-owner read data the policy intends to be owner-only.\n` +
+      "Classify before escalating: check WHICH columns leaked. Anything already granted\n" +
+      "publicly on `businesses` (name/address/phone/lat/lng) is a policy-intent bug, not a\n" +
+      "data breach; owner_id, emails, billing or internal fields would be a genuine P0.",
+  );
   process.exit(1);
 }
 console.log(`All ${results.length} cross-tenant denial checks held.`);
