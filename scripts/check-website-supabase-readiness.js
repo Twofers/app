@@ -155,14 +155,29 @@ if (failures.length === 0) {
   const adminLoginHtml = read("website/admin/login/index.html");
   const adminGuardScript = read("website/admin/admin-guard.js");
   const styles = read("website/styles.css");
+  // Cache-key consistency. The real risk that docs/website-edit-checklist.md
+  // guards is a page left behind on an OLD ?v= after an asset edit, which
+  // serves stale CSS/JS to returning visitors. Pinning a literal version here
+  // just goes stale itself (it sat on 20260717-home-refresh while the site had
+  // moved to 20260722/20260723, failing this gate for no real reason), so
+  // derive the expected version from the home page and require every other
+  // page to agree with it.
+  const assetVersion = (asset) => {
+    const m = homePage.match(new RegExp(`/${asset.replace(".", "\\.")}\\?v=([0-9a-z-]+)`));
+    return m ? m[1] : null;
+  };
+  const expectedStyles = assetVersion("styles.css");
+  const expectedLocalization = assetVersion("localization.js");
   for (const rel of walkFiles("website").filter((file) => file.endsWith(".html"))) {
     const html = read(rel);
     assertNotIncludes(rel, html, "20260701-logo", "website pages must not point at stale stylesheet cache keys");
-    if (html.includes("/styles.css?v=")) {
-      assertIncludes(rel, html, "/styles.css?v=20260717-home-refresh", "website pages must load the current shared stylesheet version");
+    if (expectedStyles && html.includes("/styles.css?v=")) {
+      assertIncludes(rel, html, `/styles.css?v=${expectedStyles}`,
+        `website pages must all load the same stylesheet cache key as the home page (${expectedStyles})`);
     }
-    if (html.includes("/localization.js?v=")) {
-      assertIncludes(rel, html, "/localization.js?v=20260717-home-refresh", "public pages must load the current localization version");
+    if (expectedLocalization && html.includes("/localization.js?v=")) {
+      assertIncludes(rel, html, `/localization.js?v=${expectedLocalization}`,
+        `public pages must all load the same localization cache key as the home page (${expectedLocalization})`);
     }
   }
   assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
@@ -203,7 +218,12 @@ if (failures.length === 0) {
     assertIncludes("website/localization.js", localizationScript, key, `localization script must cover ${key}`);
   }
   assertIncludes("website/404.html", read("website/404.html"), 'name="robots" content="noindex,follow"', "custom 404 must not be indexed");
-  assertIncludes("website/store-links.js", storeLinksScript, "ios: null", "iOS store CTA must stay hidden until a real listing exists");
+  // iOS shipped 2026-07-22, so the CTA is no longer meant to be hidden. Assert
+  // the real listing the same way the Android one is asserted; Dan confirmed on
+  // 2026-07-24 that the live store build resolves this link.
+  assertIncludes("website/store-links.js", storeLinksScript,
+    'ios: "https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303"',
+    "iOS store CTA must use the live App Store listing");
   assertIncludes("website/store-links.js", storeLinksScript, 'android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"', "Android store CTA must use the verified Google Play listing");
   assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
   assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
@@ -426,7 +446,10 @@ if (failures.length === 0) {
 
   const fn = read("supabase/functions/submit-business-application/index.ts");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "company_website", "function must enforce honeypot");
-  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "SUPABASE_SERVICE_ROLE_KEY", "function must use service role insert");
+  // The ES256 migration moved every function off the raw SUPABASE_SERVICE_ROLE_KEY
+  // env read and onto the shared helper, which prefers PROJECT_SERVICE_ROLE_KEY
+  // and falls back to the legacy name. Assert the helper, not the old literal.
+  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "tryGetServiceRoleKey", "function must resolve the service role key through the shared helper");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, 'from("business_applications").insert', "function must insert applications");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "createOnboardingRequest", "function must save normalized onboarding requests");
   // This is a public, unauthenticated endpoint: it must never materialize a

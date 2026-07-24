@@ -308,7 +308,7 @@ Prior sessions already found these. Confirm current state and disposition each o
 
 - **Posters render in the deal's source language** while deal-card text translates per viewer. Locked product decision; poster-language flag ships together with T6 or not at all.
 - **`ai-create-deal` returns HTTP 410.** Intentionally disabled legacy endpoint.
-- **`PAID_BILLING_ENABLED = true` with `PILOT_DISABLE_BILLING_GATE = true`** is the current intended billing posture.
+- **`PAID_BILLING_ENABLED = true` with `PILOT_DISABLE_BILLING_GATE = false`** is the current intended billing posture (corrected 2026-07-24 — see F-07; the bypass was turned off on 07-06 once enforcement was verified). In-app mobile billing UI is separately disabled, so there is no in-app checkout path.
 - **Email/password auth only** — no social login, no guest mode. Locked.
 - **Pilot businesses capped at one location.** Locked.
 - **Spanish uses the Mexican flag.** Deliberate (DFW user base).
