@@ -2509,6 +2509,8 @@
   },
   "demoOffer": {
     "label": "Oferta de demostración",
-    "shortLabel": "DEMO"
+    "shortLabel": "DEMO",
+    "shortExplanation": "Este es contenido de muestra solo para pruebas. No es una oferta real.",
+    "detailExplanation": "Esta oferta se incluye para que los evaluadores prueben la app. No es una oferta real de un negocio y no se puede canjear."
   }
 }

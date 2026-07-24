@@ -2509,6 +2509,8 @@
   },
   "demoOffer": {
     "label": "Demo offer",
-    "shortLabel": "DEMO"
+    "shortLabel": "DEMO",
+    "shortExplanation": "This is sample content for testing only. Not a real offer.",
+    "detailExplanation": "This deal is included so testers can try the app. It is not a real business offer and cannot be redeemed."
   }
 }

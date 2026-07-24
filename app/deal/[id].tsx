@@ -546,7 +546,7 @@ export default function DealDetail() {
       }
       if (!deal) return;
       if (isDemoOffer(deal)) {
-        setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+        setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
         return;
       }
       if (isClaiming) return;
@@ -590,7 +590,7 @@ export default function DealDetail() {
 
   async function viewQr() {
     if (deal && isDemoOffer(deal)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (activeClaim) {
@@ -648,7 +648,7 @@ export default function DealDetail() {
     if (!shareDealEnabled) return;
     if (!deal || isSharing) return;
     if (isDemoOffer(deal)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     setIsSharing(true);
@@ -753,7 +753,7 @@ export default function DealDetail() {
   const scheduleBlockReason = getDealClaimScheduleBlock(deal);
   const claimBlockedLabel =
     dealIsDemo
-      ? DEMO_OFFER_LABEL
+      ? t("demoOffer.label", { defaultValue: DEMO_OFFER_LABEL })
       : claimsCountReliable && deal.max_claims > 0 && remaining <= 0
       ? t("dealDetail.soldOut")
       : scheduleBlockReason

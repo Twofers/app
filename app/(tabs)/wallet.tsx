@@ -362,7 +362,7 @@ export default function WalletScreen() {
 
   function openVerifyForClaim(row: ClaimRow) {
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     const dead = claimNotRedeemable(row, nowMs);
@@ -389,7 +389,7 @@ export default function WalletScreen() {
     }
     const activeClaim = claims.find((c) => c.deal_id === activeDealId);
     if (isDemoOffer(activeClaim?.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (refreshingQr) return;
@@ -428,7 +428,7 @@ export default function WalletScreen() {
 
   async function refreshClaimFromRow(row: ClaimRow) {
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (claimingRefreshId) return;
@@ -479,7 +479,7 @@ export default function WalletScreen() {
   async function shareWalletDeal(row: ClaimRow) {
     if (!shareDealEnabled || isSharing) return;
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     setIsSharing(true);
@@ -608,7 +608,7 @@ export default function WalletScreen() {
   async function startUseDealFlow(row: ClaimRow) {
     setBanner(null);
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (row.claim_status === "redeeming") {
@@ -622,7 +622,7 @@ export default function WalletScreen() {
     const row = useDealState?.row;
     if (!row || useDealState.confirmed) return;
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       setUseDealState(null);
       return;
     }

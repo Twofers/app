@@ -727,10 +727,13 @@ export default function HomeScreen() {
         }
         const requestedDeal = dealsRef.current.find((d) => d.id === dealId);
         if (isDemoOffer(requestedDeal)) {
-          setBanner(DEMO_OFFER_SHORT_EXPLANATION);
+          const demoMessage = t("demoOffer.shortExplanation", {
+            defaultValue: DEMO_OFFER_SHORT_EXPLANATION,
+          });
+          setBanner(demoMessage);
           setClaimStatus((prev) => ({
             ...prev,
-            [dealId]: { message: DEMO_OFFER_SHORT_EXPLANATION, tone: "info" },
+            [dealId]: { message: demoMessage, tone: "info" },
           }));
           return;
         }

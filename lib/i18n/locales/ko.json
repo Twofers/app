@@ -2509,6 +2509,8 @@
   },
   "demoOffer": {
     "label": "데모 오퍼",
-    "shortLabel": "데모"
+    "shortLabel": "데모",
+    "shortExplanation": "테스트용 샘플 콘텐츠입니다. 실제 오퍼가 아닙니다.",
+    "detailExplanation": "테스터가 앱을 사용해 볼 수 있도록 포함된 딜입니다. 실제 매장 오퍼가 아니며 사용할 수 없습니다."
   }
 }

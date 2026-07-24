@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
@@ -17,7 +18,10 @@ type DemoOfferNoticeProps = {
 export function DemoOfferNotice({ compact = false, detail = false }: DemoOfferNoticeProps) {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const body = detail ? DEMO_OFFER_DETAIL_EXPLANATION : DEMO_OFFER_SHORT_EXPLANATION;
+  const { t } = useTranslation();
+  const body = detail
+    ? t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION })
+    : t("demoOffer.shortExplanation", { defaultValue: DEMO_OFFER_SHORT_EXPLANATION });
 
   return (
     <View
@@ -36,7 +40,7 @@ export function DemoOfferNotice({ compact = false, detail = false }: DemoOfferNo
       <MaterialIcons name="info-outline" size={18} color={theme.accentText} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: compact ? 12 : 14 }} maxFontSizeMultiplier={1.15}>
-          {DEMO_OFFER_LABEL}
+          {t("demoOffer.label", { defaultValue: DEMO_OFFER_LABEL })}
         </Text>
         {!compact ? (
           <Text style={{ marginTop: 3, color: colorScheme === "dark" ? theme.text : "#7C2D12", fontSize: 13, lineHeight: 18 }} maxFontSizeMultiplier={1.15}>
