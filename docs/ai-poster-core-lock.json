@@ -7,17 +7,19 @@
   "files": [
     {
       "path": "AGENTS.md",
-      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "sha256": "a9781eae56f26ffa7fd9badd42788a52b8d863048334480e959a56546b5d21cd",
       "approvedBy": "Dan",
       "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Codex agent instructions must preserve the owner-approval gate for AI poster/ad-generation changes."
+      "rationale": "Codex agent instructions must preserve the owner-approval gate for AI poster/ad-generation changes.",
+      "latestApprovalRef": "2026-07-24 Dan explicit approval (chat: \"2 approved\", answering the F-07 doc-conflict finding) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Corrects one stale bullet: the file claimed PILOT_DISABLE_BILLING_GATE = true while lib/billing/access.ts:16 has it false (bypass turned off 2026-07-06 after billing enforcement was verified), and adds that in-app mobile billing UI is disabled so activation is website-only. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-03 initial AI poster core lock"
     },
     {
       "path": "CLAUDE.md",
-      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "sha256": "a9781eae56f26ffa7fd9badd42788a52b8d863048334480e959a56546b5d21cd",
       "approvedBy": "Dan",
       "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Claude agent instructions must match AGENTS.md and preserve the same approval gate."
+      "rationale": "Claude agent instructions must match AGENTS.md and preserve the same approval gate.",
+      "latestApprovalRef": "2026-07-24 Dan explicit approval (chat: \"2 approved\", answering the F-07 doc-conflict finding) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Corrects one stale bullet: the file claimed PILOT_DISABLE_BILLING_GATE = true while lib/billing/access.ts:16 has it false (bypass turned off 2026-07-06 after billing enforcement was verified), and adds that in-app mobile billing UI is disabled so activation is website-only. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-03 initial AI poster core lock"
     },
     {
       "path": "app/create/ai.tsx",
