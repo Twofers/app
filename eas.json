@@ -81,7 +81,7 @@
         "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false",
-        "EXPO_PUBLIC_ENABLE_SOCIAL_AUTH": "false",
+        "EXPO_PUBLIC_ENABLE_SOCIAL_AUTH": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "991672961636-g49j352d13frqmtbqm0iv3slutvh6mka.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "991672961636-2aishdg2m54avhl027ggkfr9pdn9794k.apps.googleusercontent.com",
         "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED": "true",
