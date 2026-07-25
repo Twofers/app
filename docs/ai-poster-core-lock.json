@@ -69,10 +69,11 @@
     },
     {
       "path": "lib/ad-variants.ts",
-      "sha256": "2226903e9c047889bf856350a49c3d0133550e9efcd5651bfdeb50724ab037a7",
+      "sha256": "e06e16a7c4e6f02e05e171ec9ee5e53a6792e4c2ea0d4008b47be6fdc9671529",
       "approvedBy": "Dan",
       "approvalRef": "2026-07-07 F-010: drop canonical offer line from offer_details when a promo line is present",
-      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation. F-010: adToDealDraft no longer emits the locked offer line into offer_details when short_description already carries the offer, so the stored deal description states the offer twice (promo + terms) instead of three times."
+      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation. F-010: adToDealDraft no longer emits the locked offer line into offer_details when short_description already carries the offer, so the stored deal description states the offer twice (promo + terms) instead of three times.",
+      "latestApprovalRef": "2026-07-25 Dan chat approval ('fix the whitespace collapse too', same session): composeListingDescription now collapses runs of spaces and tabs in each part and strips trailing horizontal whitespace at line ends before joining. Previously only the ends of each part were trimmed, so a gap left by a merchant edit - e.g. deleting the item name from \"Save 40% on one THE RECON ROAST espresso.\" leaving \"on one  espresso.\" - published verbatim to deals.description. Newlines are deliberately preserved: the offer details field is multiline and adToDealDraft emits a newline between the offer line and the terms line, so collapsing all whitespace would have destroyed the merchant's own line breaks. Presentation-only cleanup of merchant text; no change to offer facts, validation, prompts, poster layout or image generation. Tests added in lib/ad-variants.test.ts (not a locked file) covering doubled spaces, tabs, preserved line breaks, trailing-space stripping and whitespace-only parts. Prior ref: 2026-07-07 F-010: drop canonical offer line from offer_details when a promo line is present"
     },
     {
       "path": "lib/ai-poster-core-lock.test.ts",

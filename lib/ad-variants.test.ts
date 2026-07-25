@@ -254,3 +254,32 @@ describe("buildFallbackTemplateAd", () => {
     expect(ad.poster_storage_path).toBeNull();
   });
 });
+
+describe("composeListingDescription whitespace", () => {
+  it("collapses doubled spaces left behind by merchant edits", () => {
+    // Deleting the item name from "Save 40% on one THE RECON ROAST espresso."
+    // leaves the gap this collapses.
+    expect(composeListingDescription("Save 40% on one  espresso.", "", "")).toBe(
+      "Save 40% on one espresso.",
+    );
+    expect(composeListingDescription("Save 40%\ton one\t\tespresso.", "", "")).toBe(
+      "Save 40% on one espresso.",
+    );
+  });
+
+  it("keeps the merchant's own line breaks in the offer details", () => {
+    expect(composeListingDescription("Promo line", "", "Redeem only at 12 Test St.\nLimited to 25 available.")).toBe(
+      "Promo line\n\nRedeem only at 12 Test St.\nLimited to 25 available.",
+    );
+  });
+
+  it("drops trailing spaces at the end of a line without joining the lines", () => {
+    expect(composeListingDescription("", "", "First line.   \nSecond line.")).toBe(
+      "First line.\nSecond line.",
+    );
+  });
+
+  it("still drops parts that are empty or whitespace only", () => {
+    expect(composeListingDescription("Promo", "   ", "Details")).toBe("Promo\n\nDetails");
+  });
+});

@@ -96,9 +96,22 @@ export type GenerateAdResponse = {
   ads?: GeneratedAd[];
 };
 
+// Merchant-typed copy carries the gaps editing leaves behind: deleting a word
+// from "Save 40% on one THE RECON ROAST espresso." leaves "on one  espresso.",
+// which used to publish verbatim because only the ends were trimmed. Collapse
+// runs of spaces and tabs, and drop trailing ones at line ends. Newlines are
+// left alone — the offer details field is multiline and its line breaks are the
+// merchant's own.
+function collapseInlineSpaces(value: string): string {
+  return value
+    .replace(/[^\S\r\n]+/g, " ")
+    .replace(/[^\S\r\n]+$/gm, "")
+    .trim();
+}
+
 /** Single string stored on `deals.description` / templates (consumer sees one block). */
 export function composeListingDescription(promo: string, cta: string, offerDetails: string): string {
-  return [promo.trim(), cta.trim(), offerDetails.trim()].filter(Boolean).join("\n\n");
+  return [promo, cta, offerDetails].map(collapseInlineSpaces).filter(Boolean).join("\n\n");
 }
 
 export function stripAppRenderedTimingMetadata(value: string): string {
