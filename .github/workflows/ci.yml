@@ -49,6 +49,12 @@ jobs:
       - name: i18n key parity
         run: npm run check:i18n-keys
 
+      # Second half of the localization gate: catches keys that only exist as a
+      # t() defaultValue, which renders English to es/ko users while key parity
+      # still passes. Placeholder drift between locales fails here too.
+      - name: i18n defaultValue gaps
+        run: node scripts/check-i18n-defaultvalue-gaps.mjs
+
       - name: Test
         run: npm run test
 
