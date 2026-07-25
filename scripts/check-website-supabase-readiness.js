@@ -122,6 +122,16 @@ function assertNotIncludes(rel, text, needle, message) {
   if (text.includes(needle)) failures.push(`${rel}: ${message}`);
 }
 
+// Same reasoning as the derived styles.css/localization.js versions below: a
+// frozen `?v=` literal rots and fails the gate on a correct edit. For scripts
+// with a single including page there is nothing to cross-check against, so
+// assert only that the include carries SOME cache key — the behaviour that
+// version was standing in for is asserted directly elsewhere.
+function assertCacheBustedScript(rel, text, scriptPath, message) {
+  const pattern = new RegExp(`${scriptPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?v=[0-9a-z-]+`);
+  if (!pattern.test(text)) failures.push(`${rel}: ${message}`);
+}
+
 for (const rel of requiredFiles) {
   if (!exists(rel)) failures.push(`${rel}: required file is missing`);
 }
@@ -227,8 +237,12 @@ if (failures.length === 0) {
   assertIncludes("website/store-links.js", storeLinksScript, 'android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"', "Android store CTA must use the verified Google Play listing");
   assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
   assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
-  assertIncludes("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js?v=20260712-session-hardening", "admin login must load the current session script version");
-  assertIncludes("website/business/claim/index.html", read("website/business/claim/index.html"), "/business/claim/claim.js?v=20260712-claim-hardening", "claim page must load the current guarded claim script version");
+  // The hardening these two used to pin by version string is asserted directly:
+  // opt-in `remember` above, and claim.js's setFormEnabled(false) below. All
+  // that is left to require here is a cache key, so a legitimate script edit
+  // (which the checklist requires bumping `?v=` for) does not turn the gate red.
+  assertCacheBustedScript("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js", "admin login must load its session script with a cache key");
+  assertCacheBustedScript("website/business/claim/index.html", read("website/business/claim/index.html"), "/business/claim/claim.js", "claim page must load its guarded claim script with a cache key");
   assertIncludes("website/admin/admin-guard.js", adminGuardScript, "window.location.replace", "signed-out admin subroutes must return to login");
   for (const rel of walkFiles("website/admin").filter((file) => file.endsWith("/index.html") && !["website/admin/index.html", "website/admin/login/index.html"].includes(file))) {
     assertIncludes(rel, read(rel), "/admin/admin-guard.js", "admin subroutes must load the signed-out session guard");

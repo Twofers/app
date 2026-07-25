@@ -127,6 +127,7 @@ export default function BusinessApplyScreen() {
       return;
     }
     setBusy(true);
+    let submitted = false;
     try {
       await submitBusinessApplication({
         business_name: businessName.trim(),
@@ -139,6 +140,7 @@ export default function BusinessApplyScreen() {
         privacy_acknowledged: agreed,
         promo_materials_authorized: promoAuthorized,
       });
+      submitted = true;
       setBanner({ message: t("businessApply.successBanner"), tone: "success" });
       scheduleReturn();
     } catch (e: unknown) {
@@ -149,7 +151,12 @@ export default function BusinessApplyScreen() {
         tone: "error",
       });
     } finally {
-      setBusy(false);
+      // F-08: only re-enable on failure. scheduleReturn navigates a second
+      // later, and re-enabling inside that window let a second tap file a
+      // duplicate application — or trip the server's 429 flood ceiling, which
+      // then replaced the success banner with an error on a submit that
+      // actually worked.
+      if (!submitted) setBusy(false);
     }
   }
 

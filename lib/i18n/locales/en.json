@@ -261,6 +261,7 @@
     "methodNotAllowed": "This action isn't available.",
     "invalidJsonBody": "Check your entry and try again.",
     "rateLimit30s": "Too many attempts. Try again in 30 seconds.",
+    "rateLimitTryLater": "Too many requests. Wait a moment and try again.",
     "serverErrorGeneric": "Something went wrong. Try again.",
     "claimUnauthorized": "Log in to claim deals.",
     "claimMissingDealId": "We couldn't find this deal.",
@@ -994,6 +995,7 @@
     "errGeneric": "Something went wrong. Try again.",
     "errNetwork": "Network error. Check your connection and try again.",
     "errFieldsRequired": "Enter email and password.",
+    "errEmailAlreadyRegistered": "That email already has an account. Sign in instead, or reset your password.",
     "alertSignUpSuccessTitle": "Success",
     "alertSignUpSuccessMsg": "Check your email to confirm, then log in.",
     "alertSignUpFailTitle": "Couldn't sign up",
@@ -1703,7 +1705,11 @@
     "statSavedValue": "${{amount}}",
     "releaseDeal": "Release deal",
     "releasingDeal": "Releasing...",
-    "releaseError": "Could not release this deal. Try again."
+    "releaseError": "Could not release this deal. Try again.",
+    "releaseConfirmTitle": "Release this deal?",
+    "releaseConfirmBody": "This gives up your claim and returns it to the deal. You may not be able to claim it again if it sells out or reaches its daily limit.",
+    "releaseConfirmCta": "Yes, release it",
+    "releaseKeepCta": "Keep it"
   },
   "consumerDealDetail": {
     "timeLeft": "Time left",

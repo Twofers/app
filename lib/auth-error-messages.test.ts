@@ -34,12 +34,13 @@ describe("friendlyAuthError — signup errors", () => {
     expect(friendlyAuthError(undefined, t)).toBe("auth.errGeneric");
   });
 
-  it("passes an unrecognized signup message through verbatim (current behavior)", () => {
-    // e.g. "User already registered", weak-password copy, etc. are not specially
-    // mapped today; the raw upstream message is surfaced. Documents actual behavior.
+  it("maps the signup collision to localized copy instead of the raw GoTrue string", () => {
+    // F-10: this used to surface "User already registered" verbatim — English,
+    // whatever the user's locale. It is actionable, so it gets a real branch
+    // rather than the generic mask that unknown messages now receive.
     expect(
       friendlyAuthError({ message: "User already registered", status: 422 }, t)
-    ).toBe("User already registered");
+    ).toBe("auth.errEmailAlreadyRegistered");
   });
 
   it("returns errGeneric when an error is present but carries no message", () => {
@@ -147,8 +148,28 @@ describe("friendlyAuthMessage — remaining branches", () => {
     expect(friendlyAuthMessage("Network request failed", t)).toBe("auth.errNetwork");
   });
 
-  it("passes an unknown non-empty message through, and empty -> errGeneric", () => {
-    expect(friendlyAuthMessage("Something oddly specific", t)).toBe("Something oddly specific");
+  it("masks an unknown non-empty message instead of echoing it, and empty -> errGeneric", () => {
+    // F-10: this branch used to `return raw`, so any unmapped GoTrue/network
+    // string reached the user verbatim — always English, including for es/ko.
+    // It now routes through translateKnownApiMessage, whose unknown-input
+    // fallback is apiErrors.operationFailedTryAgain. (With this file's
+    // pass-through `t`, that key resolves to itself, so the translator returns
+    // its hardcoded English backstop; under a real `t` it is localized copy.)
+    const masked = friendlyAuthMessage("Something oddly specific", t);
+    expect(masked).not.toBe("Something oddly specific");
+    expect(masked).toBe("Something went wrong. Try again.");
     expect(friendlyAuthMessage("", t)).toBe("auth.errGeneric");
+  });
+
+  it("still maps infra strings the auth branches miss but the API translator knows", () => {
+    // Net gain from the reroute: these never had an auth-specific branch and so
+    // used to be echoed raw. translateKnownApiMessage only accepts a mapping
+    // when `t` actually resolves the key, so this needs a translator that
+    // returns copy rather than the pass-through used above.
+    const tr = ((key: string) => `tr:${key}`) as unknown as TFunction;
+    expect(friendlyAuthMessage("JWT expired", tr)).toBe("tr:apiErrors.sessionExpired");
+    expect(friendlyAuthMessage("permission denied for table profiles", tr)).toBe("tr:apiErrors.dbRlsViolation");
+    // …and an unmapped string is masked, never echoed.
+    expect(friendlyAuthMessage("Something oddly specific", tr)).toBe("tr:apiErrors.operationFailedTryAgain");
   });
 });

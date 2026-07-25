@@ -96,12 +96,12 @@ gaps.sort((a, b) => a.key.localeCompare(b.key));
 // Neither is visible to `check:i18n-keys`, which only compares key presence.
 //
 // Baselined: values that legitimately differ and need a product decision.
-const PLACEHOLDER_BASELINE = new Set([
-  // en "Revision {{number}}" vs es "Ajuste" / ko "수정" — es/ko omit the version
-  // number. Rendered by app/create/ai.tsx, which is covered by the AI poster
-  // core lock, so changing this copy needs Dan's per-file approval.
-  "createAi.imageVersionRevision",
-]);
+//
+// createAi.imageVersionRevision was baselined here on the assumption that fixing
+// it meant editing app/create/ai.tsx (poster-lock covered). It did not: the call
+// site already passes `number`, and the missing placeholder was only in the es
+// and ko strings, which no lock covers. Fixed 2026-07-25, baseline removed.
+const PLACEHOLDER_BASELINE = new Set([]);
 
 const placeholdersOf = (v) =>
   (String(v).match(/\{\{[^}]+\}\}/g) ?? []).map((s) => s.replace(/\s+/g, "")).sort().join(",");

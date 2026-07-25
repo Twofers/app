@@ -32,6 +32,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { useSaveBusinessPrompt } from "@/hooks/use-save-business-prompt";
 import { useSecondTick } from "@/hooks/use-second-tick";
 import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -162,6 +163,7 @@ export default function WalletScreen() {
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
   const [releasingClaimId, setReleasingClaimId] = useState<string | null>(null);
+  const { confirm, confirmModal } = useBrandedConfirm();
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
   const playRegisterSuccess = useRegisterSuccessSound();
@@ -535,6 +537,22 @@ export default function WalletScreen() {
     const name = businessName(row);
     const place = business?.address?.trim() || business?.location?.trim() || "";
     return place ? `${name} - ${place}` : name;
+  }
+
+  // F-09: releasing is a forfeit, and it is not always reversible — a sold-out
+  // deal or one that has hit its daily cap cannot be claimed again. Confirm
+  // before giving the claim up.
+  function confirmReleaseWalletClaim(row: ClaimRow) {
+    if (row.claim_status !== "active" && row.claim_status !== "redeeming") return;
+    if (releasingClaimId) return;
+    confirm({
+      iconName: "remove-circle-outline",
+      title: t("consumerWallet.releaseConfirmTitle"),
+      message: t("consumerWallet.releaseConfirmBody"),
+      confirmLabel: t("consumerWallet.releaseConfirmCta"),
+      onConfirm: () => void releaseWalletClaim(row),
+      cancelLabel: t("consumerWallet.releaseKeepCta"),
+    });
   }
 
   async function releaseWalletClaim(row: ClaimRow) {
@@ -945,7 +963,7 @@ export default function WalletScreen() {
               </NativePressable>
             ) : null}
             <NativePressable
-              onPress={() => void releaseWalletClaim(row)}
+              onPress={() => confirmReleaseWalletClaim(row)}
               disabled={rowIsDemo || releasingClaimId !== null || isRedeeming}
               accessibilityRole="button"
               accessibilityLabel={t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
@@ -1190,6 +1208,7 @@ export default function WalletScreen() {
       />
 
       {saveBusinessPromptElement}
+      {confirmModal}
     </View>
   );
 }

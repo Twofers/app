@@ -13,6 +13,9 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "Method not allowed": "apiErrors.methodNotAllowed",
   "Invalid JSON in request body": "apiErrors.invalidJsonBody",
   "Too many attempts. Try again in 30 seconds.": "apiErrors.rateLimit30s",
+  // submit-business-application's flood ceiling (429). Reaches the client as the
+  // server's JSON `error` field via invokeErrorMessage.
+  "Too many requests. Please try again later.": "apiErrors.rateLimitTryLater",
   "Server error": "apiErrors.serverErrorGeneric",
 
   "Unauthorized. Please log in.": "apiErrors.claimUnauthorized",

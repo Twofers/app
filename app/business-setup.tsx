@@ -46,6 +46,8 @@ import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { CardShell } from "@/components/ui/card-shell";
 import { BUSINESS_APPLY_URL, SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { readOnboardingApplication } from "@/lib/business-application";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { useDeleteAccountFlow } from "@/hooks/use-delete-account-flow";
 
 type Tone = "error" | "success" | "info";
 
@@ -108,6 +110,19 @@ export default function BusinessSetupScreen() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
+  const { confirm, confirmModal } = useBrandedConfirm();
+  // A merchant parked here (no application yet, or one still under review) is
+  // redirected away from every business tab, so this screen is their only
+  // in-app surface — and the published privacy policy plus Apple 5.1.1(v)
+  // require account deletion to be reachable from inside the app.
+  const { startDeleteAccount, deleting } = useDeleteAccountFlow({
+    confirm,
+    includesBusinessData: true,
+    onError: (message) => setBanner({ message, tone: "error" }),
+    onBusyChange: (inFlight) => {
+      if (inFlight) setBanner(null);
+    },
+  });
   const [searching, setSearching] = useState(false);
   const [detailsLoadingPlaceId, setDetailsLoadingPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
@@ -871,6 +886,7 @@ export default function BusinessSetupScreen() {
           <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
             {content.title}
           </Text>
+          {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
           <CardShell>
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: "600", color: theme.mutedText }}>
@@ -928,7 +944,24 @@ export default function BusinessSetupScreen() {
           >
             <Text style={{ fontSize: 15, fontWeight: "700", color: theme.mutedText }}>{t("account.logOut")}</Text>
           </Pressable>
+          <Pressable
+            onPress={startDeleteAccount}
+            disabled={deleting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: deleting }}
+            accessibilityLabel={t("deleteAccount.cta")}
+            style={{
+              alignSelf: "center",
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: Spacing.md,
+              opacity: deleting ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: theme.danger }}>{t("deleteAccount.cta")}</Text>
+          </Pressable>
         </ScrollView>
+        {confirmModal}
       </View>
     );
   }

@@ -261,6 +261,7 @@
     "methodNotAllowed": "허용되지 않은 메서드입니다",
     "invalidJsonBody": "요청 본문의 JSON이 올바르지 않습니다",
     "rateLimit30s": "시도가 너무 많습니다. 30초 후 다시 시도하세요.",
+    "rateLimitTryLater": "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
     "serverErrorGeneric": "서버 오류",
     "claimUnauthorized": "인증되지 않았습니다. 로그인하세요.",
     "claimMissingDealId": "이 딜을 찾지 못했습니다.",
@@ -994,6 +995,7 @@
     "errGeneric": "문제가 발생했습니다. 다시 시도하세요.",
     "errNetwork": "네트워크 오류입니다. 연결을 확인하세요.",
     "errFieldsRequired": "이메일과 비밀번호를 입력하세요.",
+    "errEmailAlreadyRegistered": "이미 가입된 이메일입니다. 로그인하거나 비밀번호를 재설정하세요.",
     "alertSignUpSuccessTitle": "완료",
     "alertSignUpSuccessMsg": "이메일을 확인한 뒤 로그인하세요.",
     "alertSignUpFailTitle": "가입 실패",
@@ -1345,7 +1347,11 @@
     "passRedeemByLine": "{{datetime}}까지 사용(유예 시간 포함)",
     "releaseDeal": "딜 해제",
     "releasingDeal": "해제 중...",
-    "releaseError": "이 딜을 해제할 수 없습니다. 다시 시도해 주세요."
+    "releaseError": "이 딜을 해제할 수 없습니다. 다시 시도해 주세요.",
+    "releaseConfirmTitle": "이 딜을 해제할까요?",
+    "releaseConfirmBody": "예약을 포기하고 딜을 다시 공개합니다. 딜이 매진되거나 일일 한도에 도달하면 다시 예약하지 못할 수 있습니다.",
+    "releaseConfirmCta": "네, 해제할게요",
+    "releaseKeepCta": "그대로 두기"
   },
   "consumerDealDetail": {
     "timeLeft": "남은 시간",
@@ -2168,7 +2174,7 @@
     "imageVersionsTitle": "이미지 버전",
     "imageVersionGenerated": "생성됨",
     "imageVersionEdited": "편집됨",
-    "imageVersionRevision": "수정",
+    "imageVersionRevision": "수정 {{number}}",
     "imageVersionFallback": "대체",
     "imageRestoreVersion": "이 버전 사용",
     "imageRestoredBanner": "이미지가 복원되었습니다.",

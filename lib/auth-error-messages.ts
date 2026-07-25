@@ -1,5 +1,7 @@
 import type { TFunction } from "i18next";
 
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+
 function lower(raw: string): string {
   return (raw ?? "").toLowerCase();
 }
@@ -76,5 +78,19 @@ export function friendlyAuthMessage(raw: string, t: TFunction, code?: string): s
   if (m.includes("network")) {
     return t("auth.errNetwork");
   }
-  return raw?.trim() ? raw : t("auth.errGeneric");
+  // GoTrue's signup collision. It reached the user verbatim before the masking
+  // fallback below existed, and it is genuinely actionable, so it needs a real
+  // localized branch rather than being flattened into generic copy. (Password
+  // length and email format are rejected client-side in app/auth-landing.tsx,
+  // so they never arrive here.)
+  if (m.includes("already registered") || m.includes("user already exists")) {
+    return t("auth.errEmailAlreadyRegistered");
+  }
+  // Anything still unmatched is raw GoTrue / network / Postgres text, always in
+  // English. Echoing it showed Spanish and Korean users an English sentence, so
+  // hand it to the shared API-message translator: it maps the infra strings it
+  // knows (JWT expired, RLS, network) and masks the rest with localized generic
+  // copy. Empty input keeps the auth-specific generic message.
+  const trimmed = raw?.trim();
+  return trimmed ? translateKnownApiMessage(trimmed, t) : t("auth.errGeneric");
 }

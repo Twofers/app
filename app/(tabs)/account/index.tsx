@@ -24,8 +24,7 @@ import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-de
 import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { useTabMode } from "@/lib/tab-mode";
 import { LegalExternalLinks } from "@/components/legal-external-links";
-import { deleteUserAccount, updateBusinessProfileSection } from "@/lib/functions";
-import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { updateBusinessProfileSection } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
@@ -33,7 +32,6 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
-import { clearLocalAuthSessionState } from "@/lib/auth-local-session-state";
 import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
@@ -54,7 +52,7 @@ import { BusinessNameChangeCard } from "@/components/business-name-change-reques
 import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
-import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
+import { useDeleteAccountFlow } from "@/hooks/use-delete-account-flow";
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 import { localizedBusinessCategoryLabel } from "@/lib/business-category-label";
 
@@ -152,6 +150,15 @@ export default function AccountScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const { startDeleteAccount } = useDeleteAccountFlow({
+    confirm,
+    includesBusinessData: deleteMayIncludeBusinessData,
+    onError: (message) => setBanner({ message, tone: "error" }),
+    onBusyChange: (deleting) => {
+      setBusy(deleting);
+      if (deleting) setBanner(null);
+    },
+  });
   const supportEmail = getSupportEmail();
   const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   // Server-side identity lock (migration 20260816120000): once the business
@@ -554,57 +561,6 @@ export default function AccountScreen() {
       onConfirm: () => void performSignOut(),
       cancelLabel: t("commonUi.cancel"),
     });
-  }
-
-  function confirmDeleteAccount() {
-    const copyKeys = getDeleteAccountConfirmationCopyKeys(deleteMayIncludeBusinessData);
-    confirm({
-      iconName: "delete-forever",
-      title: t("deleteAccount.title"),
-      message: t(copyKeys.impactBodyKey),
-      confirmLabel: t("deleteAccount.reviewImpactCta"),
-      onConfirm: () => confirmFinalDeleteAccount(copyKeys.finalBodyKey),
-      cancelLabel: t("commonUi.cancel"),
-    });
-  }
-
-  function confirmFinalDeleteAccount(finalBodyKey: string) {
-    confirm({
-      iconName: "delete-forever",
-      title: t("deleteAccount.finalTitle"),
-      message: t(finalBodyKey),
-      confirmLabel: t("deleteAccount.finalConfirmDestructive"),
-      onConfirm: () => void runDeleteAccount(),
-      cancelLabel: t("deleteAccount.keepAccount"),
-    });
-  }
-
-  async function runDeleteAccount() {
-    setBusy(true);
-    setBanner(null);
-    try {
-      await deleteUserAccount();
-      await supabase.auth.signOut({ scope: "local" });
-      await clearLocalAuthSessionState();
-      router.replace("/auth-landing" as Href);
-    } catch (e: unknown) {
-      // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner
-      // during a sensitive flow. Pass through translateKnownApiMessage so technical
-      // messages get a localized friendly equivalent; fall back to the generic copy.
-      const raw = e instanceof Error ? e.message : "";
-      const msg = raw ? translateKnownApiMessage(raw, t) : t("deleteAccount.errFailed");
-      setBanner({ message: msg, tone: "error" });
-      confirm({
-        iconName: "error-outline",
-        title: t("deleteAccount.errFailed"),
-        message: t("deleteAccount.fallbackWebBody"),
-        confirmLabel: t("deleteAccount.openWebsiteFallbackCta"),
-        onConfirm: () => void openWebsiteUrl(DELETE_ACCOUNT_URL),
-        cancelLabel: t("deleteAccount.alertDismiss"),
-      });
-    } finally {
-      setBusy(false);
-    }
   }
 
   function parseOptionalCoord(raw: string, kind: "lat" | "lng", tr: TFunction): number | null {
@@ -1825,7 +1781,7 @@ export default function AccountScreen() {
             </Text>
             <PrimaryButton
               title={t("deleteAccount.cta")}
-              onPress={confirmDeleteAccount}
+              onPress={startDeleteAccount}
               disabled={busy || loading}
               style={{ backgroundColor: theme.danger, minHeight: 44, paddingVertical: 8, marginTop: Spacing.xs }}
             />

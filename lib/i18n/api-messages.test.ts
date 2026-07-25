@@ -108,4 +108,21 @@ describe("translateKnownApiMessage", () => {
       "We couldn't prepare ad options. Try again.",
     );
   });
+
+  it("maps the business-application 429 in every locale", async () => {
+    // F-08: submit-business-application's flood ceiling returns this exact
+    // string, which invokeErrorMessage rethrows verbatim. Unmapped, es/ko
+    // applicants got either English or the generic mask on a real rate limit.
+    const raw = "Too many requests. Please try again later.";
+    const expected: Record<string, string> = {
+      en: "Too many requests. Wait a moment and try again.",
+      es: "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+      ko: "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
+    };
+    for (const [locale, copy] of Object.entries(expected)) {
+      await i18n.changeLanguage(locale);
+      expect(translateKnownApiMessage(raw, i18n.t.bind(i18n))).toBe(copy);
+    }
+    await i18n.changeLanguage("en");
+  });
 });

@@ -261,6 +261,7 @@
     "methodNotAllowed": "Método no permitido",
     "invalidJsonBody": "JSON no válido en el cuerpo de la petición",
     "rateLimit30s": "Demasiados intentos. Prueba de nuevo en 30 segundos.",
+    "rateLimitTryLater": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
     "serverErrorGeneric": "Error del servidor",
     "claimUnauthorized": "No autorizado. Inicia sesión.",
     "claimMissingDealId": "No pudimos encontrar esta oferta.",
@@ -994,6 +995,7 @@
     "errGeneric": "Algo salió mal. Inténtalo de nuevo.",
     "errNetwork": "Error de red. Revisa la conexión.",
     "errFieldsRequired": "Introduce correo y contraseña.",
+    "errEmailAlreadyRegistered": "Ese correo ya tiene una cuenta. Inicia sesión o restablece tu contraseña.",
     "alertSignUpSuccessTitle": "Listo",
     "alertSignUpSuccessMsg": "Revisa tu correo para confirmar y luego entra.",
     "alertSignUpFailTitle": "Registro fallido",
@@ -1345,7 +1347,11 @@
     "passRedeemByLine": "Canjea antes de {{datetime}} (incluye período de gracia)",
     "releaseDeal": "Liberar oferta",
     "releasingDeal": "Liberando...",
-    "releaseError": "No se pudo liberar esta oferta. Inténtalo de nuevo."
+    "releaseError": "No se pudo liberar esta oferta. Inténtalo de nuevo.",
+    "releaseConfirmTitle": "¿Liberar esta oferta?",
+    "releaseConfirmBody": "Renuncias a tu reserva y la oferta vuelve a estar disponible. Puede que no puedas reservarla otra vez si se agota o alcanza su límite diario.",
+    "releaseConfirmCta": "Sí, liberarla",
+    "releaseKeepCta": "Conservarla"
   },
   "consumerDealDetail": {
     "timeLeft": "Tiempo restante",
@@ -2168,7 +2174,7 @@
     "imageVersionsTitle": "Versiones de imagen",
     "imageVersionGenerated": "Generada",
     "imageVersionEdited": "Editada",
-    "imageVersionRevision": "Ajuste",
+    "imageVersionRevision": "Ajuste {{number}}",
     "imageVersionFallback": "Respaldo",
     "imageRestoreVersion": "Usar esta versión",
     "imageRestoredBanner": "Imagen restaurada.",
