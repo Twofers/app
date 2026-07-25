@@ -16,6 +16,7 @@ const suites = [
   "2e-public-visibility-and-publish-gate.mjs",
   "2f-business-name-lock.mjs",
   "2h-promo-materials-authorization.mjs",
+  "2i-claim-links-activated-business.mjs",
 ];
 
 let failed = 0;
