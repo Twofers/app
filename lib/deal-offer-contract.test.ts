@@ -720,3 +720,155 @@ describe("item names with parenthetical descriptions and banned words", () => {
     expect(result.headline).not.toMatch(/\(/);
   });
 });
+
+describe("article-prefixed item names", () => {
+  const ARTICLE_ITEM_NAMES = [
+    "latte",
+    "The Recon Roast",
+    "THE RECON ROAST",
+    "A Really Big Latte",
+    "An Americano",
+    "The Recon Roast ( roaster fresh coffee with a shot of espresso)",
+  ];
+
+  function percentOffContract(itemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription,
+      itemRetailValueCents: 600,
+    });
+  }
+
+  function bogoSameItemContract(itemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: itemDescription,
+      requiredItemRetailValueCents: 400,
+      freeItemQuantity: 1,
+      freeItemDescription: itemDescription,
+      freeItemRetailValueCents: 400,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  function bogoOtherItemContract(requiredItemDescription: string, freeItemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription,
+      requiredItemRetailValueCents: 400,
+      freeItemQuantity: 1,
+      freeItemDescription,
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  // The invariant this whole class of bug violated: copy the deterministic
+  // generators produce for a contract must satisfy the validator for that same
+  // contract. Generators strip a leading article for natural English, so any
+  // item named "The <thing>" used to fail its own validation and could never
+  // publish. Keep this passing and that failure mode cannot come back.
+  it("deterministic copy always validates against its own contract", () => {
+    for (const itemName of ARTICLE_ITEM_NAMES) {
+      const cases: [string, DealOfferContract][] = [
+        ["PERCENT_OFF_SINGLE_ITEM", percentOffContract(itemName)],
+        ["BUY_ONE_GET_ONE_FREE", bogoSameItemContract(itemName)],
+        ["BUY_ONE_GET_SOMETHING_FREE", bogoOtherItemContract(itemName, "bagel")],
+        ["BUY_ONE_GET_SOMETHING_FREE / article free item", bogoOtherItemContract(itemName, "The House Blend")],
+      ];
+      for (const [dealType, contract] of cases) {
+        const validation = validateAiCopyAgainstOffer(deterministicFallbackCopy(contract), contract);
+        expect(validation.reasonCodes, `${dealType} / ${itemName}`).toEqual([]);
+      }
+    }
+  });
+
+  // F-6 regression: a free item whose own name starts with an article supplies
+  // the "the" in "Buy a latte and the House Blend is on us.", which used to read
+  // as the customer paying for both and flagged the app's own copy.
+  it("deterministic copy validates when the free item starts with an article", () => {
+    const contract = bogoOtherItemContract("latte", "The House Blend");
+    const validation = validateAiCopyAgainstOffer(deterministicFallbackCopy(contract), contract);
+
+    expect(validation.reasonCodes).toEqual([]);
+  });
+
+  it("still flags copy that makes the free item a second purchase", () => {
+    for (const [freeItem, headline] of [
+      ["The House Blend", "Buy a latte and the House Blend for $8"],
+      ["bagel", "Buy a latte and a bagel today"],
+    ]) {
+      const contract = bogoOtherItemContract("latte", freeItem);
+      const result = validateAiCopyAgainstOffer(
+        copy({
+          headline,
+          short_description: `${headline} at the counter.`,
+          push_notification: headline,
+          social_caption: `${headline} at the shop.`,
+        }),
+        contract,
+      );
+
+      expect(result.reasonCodes, headline).toContain("FREE_ITEM_ADDED_TO_PURCHASE");
+    }
+  });
+
+  it("accepts copy that names an article-prefixed item without its article", () => {
+    const contract = percentOffContract("THE RECON ROAST");
+
+    expect(contract.singleItemDiscount?.itemName).toBe("THE RECON ROAST");
+    // The generator drops the article; the validator must accept its own output.
+    expect(contract.canonicalOfferLine).toBe("Get 40% off one RECON ROAST");
+    expect(
+      validateAiCopyAgainstOffer(
+        copyText("Get 40% off one Recon Roast", "Save 40% on one Recon Roast."),
+        contract,
+      ).valid,
+    ).toBe(true);
+  });
+
+  it("still rejects copy that names a different item", () => {
+    const contract = percentOffContract("THE RECON ROAST");
+    const result = validateAiCopyAgainstOffer(
+      copyText("Get 40% off one espresso", "Save 40% on one espresso."),
+      contract,
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("MISSING_DISCOUNT_ITEM");
+  });
+
+  it("still flags copy that swaps the free item, but not copy that drops its article", () => {
+    // CHANGES_FREE_ITEM lives in the same-item BOGO validator, so exercise it there.
+    const contract = bogoSameItemContract("The House Blend");
+
+    const swapped = validateAiCopyAgainstOffer(
+      copy({
+        headline: "Buy one House Blend and get a free muffin",
+        short_description: "Buy one House Blend and the muffin is on us.",
+        push_notification: "Buy one House Blend and get a free muffin",
+        social_caption: "Buy one House Blend and get a free muffin at the shop.",
+      }),
+      contract,
+    );
+    expect(swapped.reasonCodes).toContain("CHANGES_FREE_ITEM");
+
+    // Naming the free item without its leading article is the same item, not a swap.
+    const withoutArticle = validateAiCopyAgainstOffer(
+      copy({
+        headline: "Buy one House Blend and get one house blend free",
+        short_description: "Buy one House Blend and the second house blend is on us.",
+        push_notification: "Buy one House Blend and get one house blend free",
+        social_caption: "Buy one House Blend and get one house blend free at the shop.",
+      }),
+      contract,
+    );
+    expect(withoutArticle.reasonCodes).not.toContain("CHANGES_FREE_ITEM");
+  });
+});

@@ -717,3 +717,76 @@ describe("publish error surfacing", () => {
     expect(result.deals).toHaveLength(1);
   });
 });
+
+describe("publish mechanics validation across item-name shapes", () => {
+  // This is byte-for-byte the pre-flight that runs on Publish (app/create/ai.tsx).
+  // It validates machine-generated copy against the machine-generated contract,
+  // so the merchant cannot influence the outcome: any disagreement between the
+  // two is a deal that can never publish.
+  it("passes for every deal type, including item names that start with an article", () => {
+    const cases: { label: string; dealEligibility: DealEligibilityInput }[] = [];
+    for (const itemDescription of ["latte", "The Recon Roast", "THE RECON ROAST", "A Really Big Latte", "An Americano"]) {
+      cases.push({
+        label: `PERCENT_OFF_SINGLE_ITEM / ${itemDescription}`,
+        dealEligibility: {
+          dealType: "PERCENT_OFF_SINGLE_ITEM",
+          appliesTo: "SINGLE_ITEM",
+          discountPercent: 40,
+          itemDescription,
+          itemRetailValueCents: 600,
+        },
+      });
+      cases.push({
+        label: `BUY_ONE_GET_ONE_FREE / ${itemDescription}`,
+        dealEligibility: {
+          dealType: "BUY_ONE_GET_ONE_FREE",
+          appliesTo: "SINGLE_ITEM",
+          requiredPurchaseQuantity: 1,
+          requiredItemDescription: itemDescription,
+          requiredItemRetailValueCents: 400,
+          freeItemQuantity: 1,
+          freeItemDescription: itemDescription,
+          freeItemRetailValueCents: 400,
+          freeItemDiscountPercent: 100,
+        },
+      });
+      cases.push({
+        label: `BUY_ONE_GET_SOMETHING_FREE / ${itemDescription} -> The House Blend`,
+        dealEligibility: {
+          dealType: "BUY_ONE_GET_SOMETHING_FREE",
+          appliesTo: "SINGLE_ITEM",
+          requiredPurchaseQuantity: 1,
+          requiredItemDescription: itemDescription,
+          requiredItemRetailValueCents: 400,
+          freeItemQuantity: 1,
+          freeItemDescription: "The House Blend",
+          freeItemRetailValueCents: 300,
+          freeItemDiscountPercent: 100,
+        },
+      });
+    }
+
+    for (const { label, dealEligibility } of cases) {
+      const args = {
+        businessId: "11111111-1111-4111-8111-111111111111",
+        businessName: "Test Cafe",
+        locationId: "22222222-2222-4222-8222-222222222222",
+        locationName: "Test Cafe",
+        dealEligibility,
+        eligibilityResult: validateDealEligibility(dealEligibility),
+        activeWindowHumanReadable: "Today, 8:00 AM-10:00 AM",
+        quantityLimit: 50,
+      };
+      const contract = buildDealOfferContract(args);
+      const definition = buildOfferDefinitionV1(args);
+      if (!contract || !definition) throw new Error(`Expected a valid contract and definition for ${label}`);
+
+      expect(validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(definition), contract), label).toEqual({
+        valid: true,
+        reasonCodes: [],
+      });
+      // An unedited merchant title must never block publish either.
+      expect(checkMerchantDealTitleAgainstOffer({}, contract).ok, label).toBe(true);
+    }
+  });
+});

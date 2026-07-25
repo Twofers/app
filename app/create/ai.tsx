@@ -3601,9 +3601,16 @@ export default function AiDealScreen() {
     if (offerContract && offerDefinition) {
       const mechanicsValidation = validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(offerDefinition), offerContract);
       if (!mechanicsValidation.valid) {
-        const message = t("createAi.offerMechanicsInvalid", {
-          defaultValue: "Your offer setup doesn't match this deal type. Check what the customer buys, the free item, and the offer rule above, then try again.",
-        });
+        // A percent-off deal has no free item, so the generic wording sent
+        // merchants hunting for a field that does not exist on their form.
+        const message =
+          offerContract.dealType === "PERCENT_OFF_SINGLE_ITEM"
+            ? t("createAi.offerMechanicsInvalidPercent", {
+                defaultValue: "We couldn't match this ad to your offer. Check the item name and the discount above, then try again.",
+              })
+            : t("createAi.offerMechanicsInvalid", {
+                defaultValue: "We couldn't match this ad to your offer. Check what the customer buys, the free item, and the offer rule above, then try again.",
+              });
         showPublishError(message, "warning");
         trackEvent("deal_validation_failed", {
           businessId,
@@ -6117,6 +6124,14 @@ export default function AiDealScreen() {
                       </Text>
                     ) : null}
                   </>
+                ) : null}
+                {/* In poster mode only the two poster fields above reach the poster.
+                    These four feed the deal listing, so say so rather than leaving
+                    merchants to conclude their edits were dropped. */}
+                {showPosterFormat ? (
+                  <Text style={{ marginTop: 16, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+                    {t("createAi.posterListingFieldsNote")}
+                  </Text>
                 ) : null}
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />

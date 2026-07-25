@@ -824,10 +824,17 @@ function stripParentheticalSegments(value: string): string {
   return cleanText(value.replace(/\([^()]*\)/g, " "));
 }
 
+// A leading article is not part of item identity. The deterministic generators
+// deliberately drop it for natural English ("Get 40% off one Recon Roast" for
+// item "The Recon Roast"), so copy that names the item without its article is
+// fact-safe. Without these variants every article-prefixed item name fails
+// MISSING_* / CHANGES_FREE_ITEM against the app's own generated copy and the
+// deal can never publish.
 function itemNameSearchVariants(itemName: string): string[] {
   const full = cleanText(itemName);
   const core = stripParentheticalSegments(itemName);
-  return [...new Set([full, core])].filter((value) => value.length > 0);
+  const articleStripped = [full, core].map((value) => stripLeadingArticle(value));
+  return [...new Set([full, core, ...articleStripped])].filter((value) => value.length > 0);
 }
 
 function itemRegex(itemName: string): RegExp {
@@ -971,6 +978,11 @@ function validateGeneralCopyQuality(
   if (normalizedHeadline && normalizedHeadline === normalizedSocial) reasonCodes.push("DUPLICATE_HEADLINE_SOCIAL");
 }
 
+// Phrases that mark the preceding item as the reward rather than a second
+// purchase: "... is on us", "... are on us", "... free", "... on the house".
+const FREE_REWARD_FOLLOWS_NEGATIVE_LOOKAHEAD =
+  "(?!\\s+(?:is|are)\\s+(?:on\\s+us|free|yours)\\b|\\s+free\\b|\\s+on\\s+the\\s+house\\b)";
+
 function validateBuyOneGetSomethingFree(
   text: string,
   contract: DealOfferContract,
@@ -993,7 +1005,18 @@ function validateBuyOneGetSomethingFree(
   if (/\bbuy\s+both\b|\bpurchase\s+both\b/.test(normalized)) {
     reasonCodes.push("BUYS_BOTH_ITEMS");
   }
-  if (new RegExp(`\\bbuy\\s+(?:a\\s+|one\\s+|1\\s+)?${requiredPattern}\\s*(?:and|&|\\+)\\s+(?:a\\s+|one\\s+|1\\s+)?${freePattern}\\b`).test(normalized)) {
+  // "buy X and <free item>" only means the customer must pay for both when the
+  // free item is not immediately presented as the reward. The deterministic
+  // description writes "Buy a latte and the house blend is on us." — harmless,
+  // and it slipped through only because "the" is absent from the determiner
+  // group above. A free item whose own name starts with an article ("The House
+  // Blend") supplies that "the" itself, so the app flagged its own copy. Reward
+  // language right after the item is what tells the two apart.
+  if (
+    new RegExp(
+      `\\bbuy\\s+(?:a\\s+|one\\s+|1\\s+)?${requiredPattern}\\s*(?:and|&|\\+)\\s+(?:a\\s+|one\\s+|1\\s+)?${freePattern}\\b${FREE_REWARD_FOLLOWS_NEGATIVE_LOOKAHEAD}`,
+    ).test(normalized)
+  ) {
     reasonCodes.push("FREE_ITEM_ADDED_TO_PURCHASE");
   }
   if (/\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
