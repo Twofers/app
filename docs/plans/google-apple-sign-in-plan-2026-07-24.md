@@ -218,18 +218,51 @@ from a local APK fails after Play promotes it if this fingerprint has no OAuth c
 **D. Supabase — PROD project** ⛔ do not touch until Phase 3 passes on dev. Same two provider configs
 as step C, against `kvodhiqhdqnptqovovia`.
 
-## Phase 3 — Dev-device verification (S10, dev variant, dev Supabase — ask Dan to green-light the device session)
+## Phase 3 — Dev-device verification — RUN 2026-07-25 (S10, `com.unvmex2.twoforone.dev`, **production** Supabase)
+
+**Deviations from plan, both Dan-approved in-session:** (1) there is no schema-complete dev Supabase project — `docs/dev/AI_DEAL_STUDIO_SUPABASE_DEV_SETUP.md` targets production and separates only by package — so providers were enabled on production `kvodhiqhdqnptqovovia` (safe: the shipped production build has `EXPO_PUBLIC_ENABLE_SOCIAL_AUTH=false`, so no real user can reach a social button). (2) The build ran as the `.dev` variant rather than the production package, because the installed `com.unvmex2.twoforone` is EAS-signed (SHA-256 `9E:05:0E:94:…`) and a debug build cannot replace it without an uninstall that would wipe app data; the `.dev` app is debug-signed with the same keystore (`FA:C6:17:45:…`) so it updated in place.
+
+
 
 Build a local debug dev-client (`expo prebuild --clean` first — plain prebuild breaks on the `.dev` child package, per repo memory; then `expo run:android`). Then execute and record results for the matrix:
 
-- [ ] New Google user, customer role selected → lands in shopper tabs; `profiles.role = customer`.
-- [ ] New Google user, business role selected → business context; claim/no-application state renders sanely.
-- [ ] Existing **confirmed** email/password user, same email, taps Google → expect same `user.id` (identity linked), original role preserved. **Record actual behavior — do not assume.**
-- [ ] Existing **unconfirmed** email/password user, same email, taps Google → record what Supabase does; decide if error copy is needed.
-- [ ] Google-created user later tries password login → record the failure mode; ensure `friendlyAuthError` output is sane.
-- [ ] Brand-new user taps Google from the **login** tab → finish-setup state appears, terms enforced, role persists.
-- [ ] Cancel the Google picker → no error banner, no state corruption.
-- [ ] `DEVELOPER_ERROR` on Android = SHA-1/package/client mismatch — fix config, not code.
+- [ ] ~~New Google user, customer role selected → lands in shopper tabs; `profiles.role = customer`.~~ **NOT TESTED** — only one fresh Google account was available and it was spent on the business case; `profiles.role` is immutable so the role cannot be reset to retry.
+- [x] New Google user, business role selected → business context; claim/no-application state renders sanely. **PASS** — pending-role SecureStore carry survived the native picker, `decideSocialCompletion` took the `adopt` branch, routed to `/business-setup`, "Approval needed first" + Apply/Contact/Log out rendered correctly (screenshot captured).
+- [ ] Existing **confirmed** email/password user, same email, taps Google → **INCONCLUSIVE.** Routed as a customer with no finish-setup step, which is consistent with identity linking BUT equally consistent with the F-2 race having written a derived `customer` role first. Cannot distinguish without reading `auth.users` (service-role key). **Dan to check:** Supabase → Authentication → Users → `unvmex2@gmail.com` — one row with a Google identity and an old `created_at` means it linked; a row created 2026-07-25 means a duplicate user was made.
+- [ ] Existing **unconfirmed** email/password user, same email, taps Google → **NOT TESTED** (no unconfirmed account available).
+- [ ] Google-created user later tries password login → **NOT TESTED**.
+- [ ] Brand-new user taps Google from the **login** tab → finish-setup state appears. **NEVER OBSERVED.** `social_finish_setup` was not logged once across four sign-ins. The F-2 race is the likely reason it was unreachable; after the fix it should trigger, but that is currently proven only by unit tests, not on device.
+- [x] Cancel the Google picker → no error banner, no state corruption. **PASS** — `com.google.android.gms/.common.account.AccountPickerActivity` opened, Back returned to auth-landing with screen text byte-identical to before the tap and no banner.
+- [x] `DEVELOPER_ERROR` on Android = SHA-1/package/client mismatch. **Not hit** — the `com.unvmex2.twoforone.dev` + debug-SHA-1 client was correct first time.
+
+### Extra cases covered (not in the original matrix)
+
+- [x] Google button renders only with the kill switch on AND a real web client ID — **PASS**; official multicolor G asset, "or" divider, correct dark/light styling.
+- [x] No Apple button on Android — **PASS** (correctly gated to `Platform.OS === "ios"`).
+- [x] Terms gate on a signup-tab social tap — **PASS**; tapping Google with terms unchecked showed "Please agree to the Terms of Service to create an account." and never launched the picker.
+- [x] Business-role pre-warning hint — **PASS**; "Business accounts must use the email from your application." renders when Business is selected.
+- [x] Role persistence across a cold restart — **PASS**; force-stop + relaunch routed straight back to business context, so `profiles.role` really was written.
+- [x] Returning social user with a stored role → routes by stored role (the `route` branch) — **PASS**.
+
+### Findings
+
+**F-2 — CRITICAL, introduced by this work, FIXED 2026-07-25.** `TabModeProvider` (`lib/tab-mode.tsx:111`) calls `resolveRoleForUser` on every session change, including the instant `signInWithIdToken` creates one. For a new social account that derived `"customer"` and wrote it, racing the role the user actually picked — and `profiles.role` is immutable (`20260808120000_profiles_role_immutable.sql`, which only rejects a *changed* value), so the first write wins permanently. Observed live on the S10 as `WARN [profiles-role] upsert failed: PROFILES_ROLE_IMMUTABLE`; my `business` write happened to land first, so the account is correct, but the ordering is not guaranteed. Had the derive won, a merchant who tapped **Business** would be permanently a shopper with no in-app remedy. The password flows were immune only because `signUp` puts the role in `user_metadata.signup_role`, so the provider derives the same value — the exact protection `signInWithIdToken` cannot have.
+**Fix** (Dan chose "pending-role peek + stop persisting derived customer"): the pending-role carry moved to a new dependency-light `lib/pending-social-role.ts` with a non-consuming `peekPendingSocialRole()`; `resolveRoleForUser` now resolves stored → metadata → **pending social** → derived, so both writers agree; and it no longer persists the bare `customer` fallback, because that is a guess and writing a guess into an immutable column is the root defect. Only `business` (an owned businesses row) is treated as an affirmative signal. Three new regression tests in `lib/profiles-role.test.ts`.
+
+**F-1 — open, minor.** The app's "Log out" does not sign out of Google. `GoogleSignin` keeps its cached credential, so the next tap silently re-authenticates with no account chooser — verified: sign-in completed in under 3 seconds with no picker. Consequences: a logged-out phone re-enters the previous account on one tap, and there is no way to switch Google accounts. `signOutSocialSessionLocally()` already calls `GoogleSignin.signOut()`, but only the relay guard invokes it. Candidate fix: call it from the app's normal sign-out path too.
+
+**F-3 — open, pre-existing, not caused by this work.** A business-role account with no approved application is parked on `/business-setup` with only Apply / Apply on website / Contact support / Log out, so it cannot reach `(tabs)/settings` or `(tabs)/account` — the only places delete-account exists. Such a user cannot delete their own account in-app.
+
+### Environment notes (cost real time, worth recording)
+
+- `expo run:android --device RF8T20X0Z7P` fails with "Could not find device with name"; omit the flag.
+- The dev client could not reach Metro over Wi-Fi. `adb reverse tcp:8081 tcp:8081` fixes it, **but the tunnel drops on force-stop/re-enumeration** and must be re-established, otherwise the launcher shows `ConnectException: Failed to connect to localhost/127.0.0.1:8081`.
+- The dev launcher's read timeout is shorter than a cold Metro bundle for this app, so it reports `SocketTimeoutException` when the real state is "still bundling". Always pre-warm first: `curl "http://localhost:8081/.expo/.virtual-metro-entry.bundle?platform=android&dev=true&minify=false"`. Needed again after every code change that invalidates the cache.
+- A `./statics.js` `UnableToResolveError` inside `@react-native-google-signin` right after `npm install` was a stale Metro cache; it resolved on retry, and `--clear` avoids it.
+- `expo run:android` leaves Metro detached when it exits; that orphan reports "Metro and the client are out of sync". Kill the listener on 8081 and start Metro yourself.
+- `adb exec-out screencap -p > file.png` **corrupts the PNG** in PowerShell (BOM). Use `adb shell screencap -p /sdcard/x.png` then `adb pull`.
+- The dev launcher is Jetpack Compose and reports `bounds="[0,0][0,0]"` to uiautomator — its buttons must be tapped by pixel from a screenshot.
+- uiautomator bounds go stale after any state change: clearing an error banner reflows the layout and moved the Google button 179px. Re-dump before every tap.
 
 Apple sign-in cannot be tested here (iOS only) — it is verified in Phase 4 on TestFlight.
 

@@ -1,8 +1,17 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { getGoogleIosClientId, getGoogleWebClientId } from "./runtime-env";
-import { secureDeleteItem, secureGetItem, secureSetItem } from "./redemption-secure-store";
 import type { CachedTabModeRole as TabMode } from "./tab-mode-cache";
+
+// The pending-role carry lives in its own module so lib/profiles-role.ts can read it without
+// pulling this file's native import graph in. Re-exported so callers keep one entry point.
+export {
+  PENDING_SOCIAL_ROLE_KEY,
+  clearPendingSocialRole,
+  peekPendingSocialRole,
+  setPendingSocialRole,
+  takePendingSocialRole,
+} from "./pending-social-role";
 
 /**
  * Native Google / Apple sign-in (Dan approved 2026-07-24). Sessions come from
@@ -15,9 +24,6 @@ import type { CachedTabModeRole as TabMode } from "./tab-mode-cache";
 
 /** Apple "Hide My Email" hands back a relay address on this domain instead of the real inbox. */
 export const APPLE_PRIVATE_RELAY_DOMAIN = "privaterelay.appleid.com";
-
-/** SecureStore key for the role chosen before the native picker took over the screen. */
-export const PENDING_SOCIAL_ROLE_KEY = "twofer_pending_social_role_v1";
 
 /** Cancellation codes: Google's classic status code and Apple's rejection code. */
 export const GOOGLE_CANCELLED_CODE = "SIGN_IN_CANCELLED";
@@ -77,48 +83,6 @@ export function isAppleRelayEmail(email: string | null | undefined): boolean {
  */
 export function shouldBlockBusinessRelayEmail(role: TabMode | null, email: string | null | undefined): boolean {
   return role === "business" && isAppleRelayEmail(email);
-}
-
-// --- pending role carry ------------------------------------------------------
-// `signInWithIdToken` accepts no user metadata, so the role picked on the signup tab cannot ride the
-// token. Keep it locally: a module cache for the common case plus SecureStore so the choice survives
-// Android killing the app while the Google picker is in front.
-
-let pendingRoleCache: TabMode | null = null;
-
-function asRole(raw: unknown): TabMode | null {
-  return raw === "business" || raw === "customer" ? raw : null;
-}
-
-export async function setPendingSocialRole(role: TabMode): Promise<void> {
-  pendingRoleCache = role;
-  try {
-    await secureSetItem(PENDING_SOCIAL_ROLE_KEY, role);
-  } catch {
-    /* cache still holds it for this process */
-  }
-}
-
-/** Reads the pending role and clears it — a stale choice must never leak into a later sign-in. */
-export async function takePendingSocialRole(): Promise<TabMode | null> {
-  const cached = pendingRoleCache;
-  let stored: TabMode | null = null;
-  try {
-    stored = asRole(await secureGetItem(PENDING_SOCIAL_ROLE_KEY));
-  } catch {
-    stored = null;
-  }
-  await clearPendingSocialRole();
-  return cached ?? stored;
-}
-
-export async function clearPendingSocialRole(): Promise<void> {
-  pendingRoleCache = null;
-  try {
-    await secureDeleteItem(PENDING_SOCIAL_ROLE_KEY);
-  } catch {
-    /* noop */
-  }
 }
 
 // --- post-session completion -------------------------------------------------

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   const state = {
     profileRole: null as "business" | "customer" | null,
+    pendingSocialRole: null as "business" | "customer" | null,
     profileError: null as { message: string } | null,
     fetchOwnerBusiness: vi.fn(),
     upsert: vi.fn(async () => ({ error: null })),
@@ -33,6 +34,10 @@ vi.mock("@/lib/owner-business", () => ({
   fetchOwnerBusiness: h.fetchOwnerBusiness,
 }));
 
+vi.mock("@/lib/pending-social-role", () => ({
+  peekPendingSocialRole: async () => h.pendingSocialRole,
+}));
+
 import { deriveRoleFromData, resolveRoleForUser, SIGNUP_ROLE_META_KEY } from "./profiles-role";
 
 function user(metadata: Record<string, unknown> = {}): User {
@@ -41,6 +46,7 @@ function user(metadata: Record<string, unknown> = {}): User {
 
 beforeEach(() => {
   h.profileRole = null;
+  h.pendingSocialRole = null;
   h.profileError = null;
   h.fetchOwnerBusiness.mockReset();
   h.fetchOwnerBusiness.mockResolvedValue({ row: null, error: null });
@@ -81,12 +87,34 @@ describe("resolveRoleForUser", () => {
     );
   });
 
-  it("defaults existing accounts without a business row to customer", async () => {
+  it("defaults existing accounts without a business row to customer, but does NOT persist the guess", async () => {
+    // Regression: TabModeProvider calls this the instant a session appears, concurrently with
+    // auth-landing completing a social sign-in. profiles.role is immutable once set, so persisting
+    // the "customer" fallback here used to race the role the user actually picked and could lock a
+    // merchant out permanently (observed on the S10 as PROFILES_ROLE_IMMUTABLE, 2026-07-25).
     await expect(resolveRoleForUser(user())).resolves.toBe("customer");
+    expect(h.upsert).not.toHaveBeenCalled();
+  });
+
+  it("prefers a pending social role over the derived fallback, and persists it", async () => {
+    h.pendingSocialRole = "business";
+
+    await expect(resolveRoleForUser(user())).resolves.toBe("business");
+    // Never consults the business table: the stashed choice is authoritative for a brand-new account.
+    expect(h.fetchOwnerBusiness).not.toHaveBeenCalled();
     expect(h.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "user_1", role: "customer" }),
+      expect.objectContaining({ id: "user_1", role: "business" }),
       { onConflict: "id" },
     );
+  });
+
+  it("keeps stored and metadata roles ahead of a stale pending social role", async () => {
+    h.pendingSocialRole = "business";
+    h.profileRole = "customer";
+    await expect(resolveRoleForUser(user())).resolves.toBe("customer");
+
+    h.profileRole = null;
+    await expect(resolveRoleForUser(user({ [SIGNUP_ROLE_META_KEY]: "customer" }))).resolves.toBe("customer");
   });
 });
 
