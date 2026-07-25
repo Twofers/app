@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "node scripts/check-i18n.mjs",
   "installCommand": null,
   "outputDirectory": ".",
   "headers": [

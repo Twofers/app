@@ -18,6 +18,14 @@ doesn't match the change. Commands run from the repo root unless noted.
       Covers, per route × desktop (1366) + mobile (390): console/page errors,
       broken images, horizontal/text overflow, empty pages, EN→ES→KO language
       switch, mobile menu, admin flows with mocked endpoints, 404 handling.
+- [ ] `npm run test:e2e` passes.
+      Homepage smoke over en/es/ko: no visible untranslated English string,
+      store links resolve (App Store `id6765769303`, Play
+      `com.unvmex2.twoforone`), every Request Business Access button points at
+      `/business/start-trial` (200), and `/support` `/privacy` `/terms` return
+      200. Runs against a local static server by default; set
+      `E2E_BASE_URL=https://www.twoferapp.com` to smoke production (do this as
+      part of step 9 after a deploy).
 - [ ] If the change touched a Supabase endpoint URL, form action, or runtime
       config: `npm run check:website-supabase`.
 
@@ -62,6 +70,11 @@ A file appearing twice with different versions means a page was missed.
 - [ ] `npm run check:website-i18n` passes. It checks en/es/ko key parity, that
       every `data-i18n*` key in markup resolves, and that Spanish strings keep
       their diacritics.
+- [ ] `npm run check:i18n` passes. Narrower gate scoped to `data-i18n` /
+      `data-i18n-content` keys, asserting each is defined in all three locales;
+      this is the check wired into the Vercel build (`website/vercel.json`
+      `buildCommand`), so a missing translation fails the deploy. Prefer
+      fixing here rather than discovering it at deploy time.
 - [ ] Spanish accents that the guard cannot judge were read by eye. Its
       denylist deliberately omits words whose unaccented form is also valid
       ("mas", "esta", "si", "publica", and plurals like "opciones"), so a
