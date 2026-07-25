@@ -20,7 +20,7 @@ Older handoff, plan, audit, and status documents under `outdated/` are history o
 ## Current app state as of 2026-06-29
 
 - Stack: Expo SDK 54, React Native 0.81, React 19, TypeScript, Expo Router, Supabase Postgres/RLS/Storage/Edge Functions.
-- App version is `1.0.0`; Android `versionCode` is currently 31 in `app.json`.
+- App version is `1.0.1` in `app.json` (bumped 2026-07-24: `1.0.0` went live on the App Store 2026-07-22, and Apple will not accept a second release under an already-released version string). Build numbers are remote-managed by EAS (`"appVersionSource": "remote"` in `eas.json`) — currently iOS build `27`, Android `versionCode` `57`; read them with `npx eas-cli build:version:get --platform <ios|android>`. `autoIncrement` bumps only the build number, never `expo.version`, so bump `expo.version` by hand for each store release and re-run `npm run release:state` (the `gate:release-state` CI check pins the version). The `android.versionCode` still sitting in `app.json` (`49`) is ignored under remote versioning. (Corrected 2026-07-24; this line previously said version `1.0.0` and `versionCode` 31 — both stale — and implied `app.json` was authoritative for build numbers.)
 - Production package and bundle id remain `com.unvmex2.twoforone`.
 - A dev AI Studio Android variant exists: app name `Twofer Dev`, package `com.unvmex2.twoforone.dev`, enabled by `TWOFER_APP_VARIANT=ai-studio-dev` or `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`.
 - The current branch may contain active AI Deal Studio foundation work and local QA/store artifacts. Never delete untracked artifacts, screenshots, APKs, reports, or docs without asking.

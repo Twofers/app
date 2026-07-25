@@ -1,6 +1,6 @@
 {
   "app": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "androidVersionCode": 49,
     "iosBuildNumber": null,
     "androidPackage": "com.unvmex2.twoforone",
@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 161,
-    "latest": "20260821120000_admin_full_access_grant.sql"
+    "count": 168,
+    "latest": "20260822180000_claim_deterministic_no_raise.sql"
   },
   "edgeFunctions": {
     "count": 79,

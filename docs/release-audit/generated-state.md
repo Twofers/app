@@ -6,7 +6,7 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## App
 
-- Version: `1.0.0`
+- Version: `1.0.1`
 - Android versionCode: `49`
 - iOS buildNumber (app.json): `not set in app.json (managed via EAS)`
 - Android package: `com.unvmex2.twoforone`
@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `161`
-- Latest: `20260821120000_admin_full_access_grant.sql`
+- Count: `168`
+- Latest: `20260822180000_claim_deterministic_no_raise.sql`
 
 ## Edge Functions (supabase/functions, 79 local)
 

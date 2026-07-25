@@ -1,7 +1,7 @@
 {
   "name": "twoforone",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "start": "expo start",
     "start:go": "expo start",
@@ -13,6 +13,7 @@
     "lint": "expo lint",
     "assert:brand-assets": "node scripts/assert-no-legacy-branding.js",
     "check:mobile-store-copy": "node scripts/check-mobile-store-copy.js",
+    "check:i18n": "node website/scripts/check-i18n.mjs",
     "check:website-i18n": "node scripts/check-website-i18n.js",
     "check:website-supabase": "node scripts/check-website-supabase-readiness.js",
     "check:website-ui": "node scripts/check-website-ui-crawl.js",
@@ -23,6 +24,7 @@
     "pretest": "node scripts/check-ai-poster-core-lock.mjs",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
+    "test:e2e": "node scripts/e2e-smoke.js",
     "test:watch": "vitest",
     "copy:evaluate": "node scripts/evaluate-ai-promotional-copy.mjs",
     "gate:ai-ad": "node scripts/check-ai-ad-release-gates.mjs",
