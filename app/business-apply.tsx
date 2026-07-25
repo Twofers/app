@@ -187,6 +187,11 @@ export default function BusinessApplyScreen() {
               >
                 <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{email}</Text>
               </View>
+              {/* Claim matches the confirmed auth email to this application email, so an Apple
+                  private-relay address can never open the workspace. Say so before they apply. */}
+              <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6, color: theme.text }}>
+                {t("businessApply.emailMatchHint")}
+              </Text>
             </View>
           ) : null}
 

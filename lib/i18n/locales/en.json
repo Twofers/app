@@ -1065,7 +1065,15 @@
     "hintEnterBoth": "Enter your email and password to continue.",
     "strengthWeak": "Weak",
     "strengthMedium": "Medium",
-    "strengthStrong": "Strong"
+    "strengthStrong": "Strong",
+    "orDivider": "or",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithApple": "Continue with Apple",
+    "socialBusinessEmailHint": "Business accounts must use the email from your application.",
+    "errAppleRelayBusiness": "Your email is hidden by Apple. A business account must use the email from your application — sign in again and choose Share My Email, or use email and password.",
+    "errSocialUnavailable": "That sign-in isn't available right now. Use your email and password.",
+    "errSocialIncomplete": "That sign-in didn't finish. Please try again.",
+    "finishSetupContinue": "Continue"
   },
   "supportContact": {
     "sectionTitle": "Help & contact",
@@ -2071,6 +2079,7 @@
     "title": "Apply for a business account",
     "subtitle": "Tell us about your business. We review each one before setup opens, and we'll email you when you're approved.",
     "emailLabel": "Your account email",
+    "emailMatchHint": "Approval is matched to this email — sign in with it, not a hidden one.",
     "contactName": "Your name",
     "dfwHint": "Twofer is piloting in the Dallas–Fort Worth area.",
     "businessType": "Business type",

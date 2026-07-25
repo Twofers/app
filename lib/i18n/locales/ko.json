@@ -1065,7 +1065,15 @@
     "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요.",
     "strengthWeak": "약함",
     "strengthMedium": "보통",
-    "strengthStrong": "강함"
+    "strengthStrong": "강함",
+    "orDivider": "또는",
+    "continueWithGoogle": "Google로 계속하기",
+    "continueWithApple": "Apple로 계속하기",
+    "socialBusinessEmailHint": "비즈니스 계정은 신청서에 적은 이메일을 사용해야 합니다.",
+    "errAppleRelayBusiness": "Apple이 이메일을 숨겼습니다. 비즈니스 계정은 신청서에 적은 이메일을 사용해야 합니다. 다시 로그인해 '내 이메일 공유'를 선택하거나 이메일과 비밀번호로 로그인하세요.",
+    "errSocialUnavailable": "지금은 해당 로그인을 사용할 수 없습니다. 이메일과 비밀번호로 로그인하세요.",
+    "errSocialIncomplete": "로그인이 완료되지 않았습니다. 다시 시도해 주세요.",
+    "finishSetupContinue": "계속"
   },
   "supportContact": {
     "sectionTitle": "도움 및 문의",
@@ -1715,6 +1723,7 @@
     "title": "비즈니스 계정 신청",
     "subtitle": "비즈니스에 대해 알려주세요. 설정을 열기 전에 각 비즈니스를 검토하며, 승인되면 이메일로 알려드려요.",
     "emailLabel": "계정 이메일",
+    "emailMatchHint": "승인은 이 이메일과 연결됩니다. 숨긴 이메일이 아니라 이 이메일로 로그인하세요.",
     "contactName": "이름",
     "dfwHint": "Twofer는 댈러스–포트워스 지역에서 시범 운영 중입니다.",
     "businessType": "업종",

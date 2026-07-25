@@ -133,6 +133,9 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_SOCIAL_AUTH: process.env.EXPO_PUBLIC_ENABLE_SOCIAL_AUTH ?? "(unset)",
+    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: getGoogleWebClientId() ? "set" : "(unset)",
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: getGoogleIosClientId() ? "set" : "(unset)",
     EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: process.env.EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS ?? "(unset)",
     EXPO_PUBLIC_ENABLE_SITE_IMPORT: process.env.EXPO_PUBLIC_ENABLE_SITE_IMPORT ?? "(unset)",
     EXPO_PUBLIC_ENABLE_MOBILE_STRIPE: process.env.EXPO_PUBLIC_ENABLE_MOBILE_STRIPE ?? "(unset)",
@@ -205,6 +208,40 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+/**
+ * Native Google / Apple sign-in on auth-landing. Default off so a release train can ship with the
+ * buttons hidden if social QA fails late; email + password is unaffected either way.
+ */
+export function isSocialAuthEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_SOCIAL_AUTH === "true";
+}
+
+/**
+ * OAuth client IDs are public (they ship in the binary), so they travel as EXPO_PUBLIC_* env.
+ * eas.json carries a REPLACE-WITH-… placeholder until Dan's Google Cloud step lands; treat that
+ * as unset so a half-configured profile renders no Google button instead of a broken one.
+ */
+function configuredClientId(raw: string | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value || value.includes("REPLACE-WITH")) return null;
+  return value;
+}
+
+/** Google Web client ID — the audience Supabase validates for Android id tokens. */
+export function getGoogleWebClientId(): string | null {
+  return configuredClientId(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+}
+
+/** Google iOS client ID — the audience for iOS id tokens; also derives the reversed URL scheme in app.config.js. */
+export function getGoogleIosClientId(): string | null {
+  return configuredClientId(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
+}
+
+/** Google button renders only when the kill switch is on AND a real web client ID is configured. */
+export function isGoogleSignInConfigured(): boolean {
+  return isSocialAuthEnabled() && getGoogleWebClientId() !== null;
 }
 
 /** Native wallet pass ("Twofer Card" in Apple/Google Wallet). Default off; server has its own kill switch. */

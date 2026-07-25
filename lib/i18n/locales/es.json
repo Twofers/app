@@ -1065,7 +1065,15 @@
     "hintEnterBoth": "Ingresa tu correo y contraseña para continuar.",
     "strengthWeak": "Débil",
     "strengthMedium": "Media",
-    "strengthStrong": "Fuerte"
+    "strengthStrong": "Fuerte",
+    "orDivider": "o",
+    "continueWithGoogle": "Continuar con Google",
+    "continueWithApple": "Continuar con Apple",
+    "socialBusinessEmailHint": "Las cuentas de negocio deben usar el correo de tu solicitud.",
+    "errAppleRelayBusiness": "Apple ocultó tu correo. Una cuenta de negocio debe usar el correo de tu solicitud: vuelve a iniciar sesión y elige Compartir mi correo, o usa correo y contraseña.",
+    "errSocialUnavailable": "Ese inicio de sesión no está disponible ahora. Usa tu correo y contraseña.",
+    "errSocialIncomplete": "Ese inicio de sesión no se completó. Inténtalo de nuevo.",
+    "finishSetupContinue": "Continuar"
   },
   "supportContact": {
     "sectionTitle": "Ayuda y contacto",
@@ -1715,6 +1723,7 @@
     "title": "Solicita una cuenta de negocio",
     "subtitle": "Cuéntanos sobre tu negocio. Revisamos cada uno antes de abrir la configuración y te enviaremos un correo cuando te aprobemos.",
     "emailLabel": "Correo de tu cuenta",
+    "emailMatchHint": "La aprobación se vincula a este correo: inicia sesión con él, no con uno oculto.",
     "contactName": "Tu nombre",
     "dfwHint": "Twofer está en fase piloto en el área de Dallas–Fort Worth.",
     "businessType": "Tipo de negocio",

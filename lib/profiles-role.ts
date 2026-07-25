@@ -58,6 +58,34 @@ export async function persistRoleForUser(userId: string, role: TabMode): Promise
  * 3. derived from data (existing accounts: businesses owner -> business)
  * Persists the result when it wasn't already stored, so the account self-heals.
  */
+/**
+ * Same lookup order as `resolveRoleForUser`, but reports `null` instead of defaulting to customer
+ * when nothing identifies the account yet. Native social sign-in needs that distinction: a token
+ * exchange carries no metadata, so a brand-new Google/Apple user has to be asked for a role rather
+ * than silently filed as a shopper. Still self-heals `profiles.role` when a role IS identified.
+ */
+export async function resolveKnownRoleForUser(user: User): Promise<TabMode | null> {
+  const stored = await fetchStoredRoleForUser(user.id);
+  if (stored) return stored;
+
+  const fromSignup = asRole((user.user_metadata as Record<string, unknown> | undefined)?.[SIGNUP_ROLE_META_KEY]);
+  if (fromSignup) {
+    void persistRoleForUser(user.id, fromSignup);
+    return fromSignup;
+  }
+
+  try {
+    const { row, error } = await fetchOwnerBusiness(supabase);
+    if (!error && row) {
+      void persistRoleForUser(user.id, "business");
+      return "business";
+    }
+  } catch {
+    /* no owner business readable -> role still unknown */
+  }
+  return null;
+}
+
 export async function resolveRoleForUser(user: User): Promise<TabMode> {
   const stored = await fetchStoredRoleForUser(user.id);
   if (stored) return stored;

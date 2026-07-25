@@ -21,6 +21,7 @@
         "applinks:www.twoferapp.com"
       ],
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Twofer uses your location to sort nearby deals and match your area to business profile locations.",
         "NSCameraUsageDescription": "Twofer uses your camera to scan QR codes for redeeming deals and to capture deal, AI offer, and menu photos.",
@@ -279,6 +280,13 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-secure-store",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REPLACE-WITH-IOS-CLIENT-ID"
+        }
+      ],
       [
         "expo-location",
         {

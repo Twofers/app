@@ -34,7 +34,7 @@ Older handoff, plan, audit, and status documents under `outdated/` are history o
 
 Do not reopen these unless Dan explicitly changes them:
 
-- Email/password sign-in only. No Sign in with Apple, social login, guest browsing, or anonymous browsing.
+- Email/password sign-in plus native Google sign-in (iOS/Android) and Sign in with Apple (iOS), for both roles, approved by Dan 2026-07-24. No other social providers, no guest or anonymous browsing. Merchant claim still requires the auth email to match the approved application email; Apple private-relay emails cannot claim a business.
 - Birthday is optional; location uses a 5-digit ZIP only.
 - Age rating is 13+.
 - iPad support is off; iPhone only for iOS.
