@@ -282,9 +282,20 @@
       "expo-secure-store",
       "expo-apple-authentication",
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              { "name": "GoogleUtilities", "modular_headers": true },
+              { "name": "RecaptchaInterop", "modular_headers": true }
+            ]
+          }
+        }
+      ],
+      [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.REPLACE-WITH-IOS-CLIENT-ID"
+          "iosUrlScheme": "com.googleusercontent.apps.991672961636-2aishdg2m54avhl027ggkfr9pdn9794k"
         }
       ],
       [
