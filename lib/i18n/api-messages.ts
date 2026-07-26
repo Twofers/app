@@ -1,4 +1,25 @@
 import type { TFunction } from "i18next";
+import i18n from "./config";
+
+/**
+ * Stable `error_code` values from Edge function bodies → locale keys.
+ *
+ * This is the drift-proof half of the translator. `API_MESSAGE_KEY` below only
+ * matches exact English sentences, so any backend copy edit silently demoted a
+ * real, actionable error to the generic "Something went wrong." mask (that is
+ * exactly how `CUSTOMER_ALREADY_HAS_ACTIVE_DEAL` regressed). Codes are part of
+ * the response contract and do not get reworded, so prefer them whenever the
+ * caller threads one through (`getErrorCode` in `lib/functions.ts`).
+ */
+const API_ERROR_CODE_KEY: Record<string, string> = {
+  CUSTOMER_ALREADY_HAS_ACTIVE_DEAL: "apiErrors.claimActiveAppWide",
+  BUSINESS_REPEAT_LIMIT_FOREVER: "apiErrors.claimRepeatFirstTimeOnly",
+  // Date-less variant: the code alone cannot carry `nextEligibleAt`. When the
+  // server message is present the prefix branch below wins and shows the date.
+  BUSINESS_REPEAT_LIMIT_COOLDOWN: "apiErrors.claimRepeatCooldownSoon",
+  DEAL_NOT_ELIGIBLE: "apiErrors.claimNotEligible",
+  BUSINESS_NEW_CLAIMS_DISABLED: "apiErrors.claimBusinessNotAccepting",
+};
 
 /**
  * Exact English strings from Edge functions, `parseFunctionError` fallbacks,
@@ -32,6 +53,11 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "You already have an active claim for this deal": "apiErrors.claimDuplicateActive",
   "You already have an active claim from this business. Redeem or wait for it to expire before claiming another offer.":
     "apiErrors.claimActiveOtherDeal",
+  // Current claim-deal wording (409 CUSTOMER_ALREADY_HAS_ACTIVE_DEAL). The two
+  // entries below it are earlier wordings, kept so an older deployed function
+  // build still translates instead of falling through to the generic mask.
+  "You already have an active deal in your wallet. Redeem it, let it expire, or release it before claiming another.":
+    "apiErrors.claimActiveAppWide",
   "You already have an active claim. Redeem it or wait until it expires before claiming another deal.":
     "apiErrors.claimActiveAppWide",
   "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.":
@@ -41,6 +67,12 @@ const API_MESSAGE_KEY: Record<string, string> = {
     "apiErrors.claimDailyLimitBusiness",
   "You can only claim one deal per hour. Please try again shortly.": "apiErrors.claimHourlyLimit",
   "This deal has reached its claim limit.": "apiErrors.claimSoldOut",
+  "This deal is not eligible to claim.": "apiErrors.claimNotEligible",
+  "This business is not accepting new deal claims.": "apiErrors.claimBusinessNotAccepting",
+  // Business repeat-claim policy (_shared/repeat-claim-policy.ts). The COOLDOWN
+  // twin is a prefix match, not an exact one — it carries a timestamp.
+  "This business limits deals to first-time Twofer customers. You have already redeemed a deal here.":
+    "apiErrors.claimRepeatFirstTimeOnly",
 
   "Unauthorized. Please log in as a business owner.": "apiErrors.redeemUnauthorized",
   "You must be a business owner to redeem tokens.": "apiErrors.redeemNotBusinessOwner",
@@ -98,6 +130,30 @@ const API_MESSAGE_KEY: Record<string, string> = {
 const CUTOFF_PREFIX = "Claiming has closed. Cutoff was ";
 const FAILED_CREATE_CLAIM_PREFIX = "Failed to create claim: ";
 const FAILED_REDEEM_PREFIX = "Failed to redeem token: ";
+/** `_shared/repeat-claim-policy.ts` appends a raw ISO instant + "." to this. */
+const REPEAT_COOLDOWN_PREFIX = "You can claim another deal from this business on ";
+
+/**
+ * Renders the repeat-claim cooldown's ISO instant as a readable local date.
+ * Returns null when the tail isn't a parsable timestamp, so the caller can fall
+ * back to date-less copy rather than printing `2026-08-01T14:00:00.000Z` at a
+ * customer.
+ */
+function formatRepeatEligibleDate(rawTail: string): string | null {
+  const iso = rawTail.trim().replace(/\.$/, "");
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  try {
+    return new Intl.DateTimeFormat(i18n.language, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(ms));
+  } catch {
+    return null;
+  }
+}
 
 /** Substrings / patterns for Postgres, PostgREST, auth, network, and Edge Function infra (EN). */
 const DB_OR_INFRA_HINTS: { pattern: RegExp; key: string }[] = [
@@ -145,6 +201,10 @@ function translateByExactOrPrefix(s: string, t: TFunction): string | null {
   if (s.startsWith(FAILED_REDEEM_PREFIX)) {
     return String(t("apiErrors.redeemUpdateFailed", { detail: s.slice(FAILED_REDEEM_PREFIX.length) }));
   }
+  if (s.startsWith(REPEAT_COOLDOWN_PREFIX)) {
+    const date = formatRepeatEligibleDate(s.slice(REPEAT_COOLDOWN_PREFIX.length));
+    return String(date ? t("apiErrors.claimRepeatCooldown", { date }) : t("apiErrors.claimRepeatCooldownSoon"));
+  }
   return null;
 }
 
@@ -164,17 +224,47 @@ function translateByHeuristic(s: string, t: TFunction): string | null {
 }
 
 /**
- * Map known English API / Edge Function messages to locale JSON.
- * Unknown backend strings are masked with generic localized copy so source-language
- * or internal server text does not leak into non-English UI.
+ * Map a known API / Edge Function error to locale JSON, preferring the stable
+ * `error_code` over the English message.
+ *
+ * Resolution order, and why:
+ *   1. exact / prefix message match — the only branch that can interpolate data
+ *      the code cannot carry (cutoff time, cooldown date), so it goes first;
+ *      it simply misses when the backend reworded the sentence.
+ *   2. `error_code` — reworded copy still lands on the right localized string.
+ *   3. DB / infra heuristics, then a generic mask, so source-language or
+ *      internal server text never leaks into non-English UI.
  */
-export function translateKnownApiMessage(raw: string, t: TFunction): string {
-  const s = raw.trim();
-  const fromStructured = translateByExactOrPrefix(s, t);
-  if (fromStructured !== null) return fromStructured;
-  const fromHeuristic = translateByHeuristic(s, t);
-  if (fromHeuristic !== null) return fromHeuristic;
+export function translateApiError(
+  params: { code?: string | null; message?: string | null },
+  t: TFunction,
+): string {
+  const s = (params.message ?? "").trim();
+  if (s) {
+    const fromStructured = translateByExactOrPrefix(s, t);
+    if (fromStructured !== null) return fromStructured;
+  }
+  const code = (params.code ?? "").trim();
+  if (code) {
+    const codeKey = API_ERROR_CODE_KEY[code];
+    if (codeKey) {
+      const translated = String(t(codeKey));
+      if (translated !== codeKey) return translated;
+    }
+  }
+  if (s) {
+    const fromHeuristic = translateByHeuristic(s, t);
+    if (fromHeuristic !== null) return fromHeuristic;
+  }
   const fallbackKey = "apiErrors.operationFailedTryAgain";
   const fallback = String(t(fallbackKey));
   return fallback !== fallbackKey ? fallback : "Something went wrong. Try again.";
+}
+
+/**
+ * Message-only entry point. Prefer `translateApiError` at call sites that can
+ * reach the thrown error's `error_code` (see `getErrorCode` in `lib/functions.ts`).
+ */
+export function translateKnownApiMessage(raw: string, t: TFunction): string {
+  return translateApiError({ message: raw }, t);
 }
