@@ -20,6 +20,7 @@ import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { Spacing } from "@/lib/screen-layout";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { useManualQrRedeem } from "@/hooks/use-manual-qr-redeem";
 
 const PASS_VISIBLE_MS = 30_000;
 
@@ -35,6 +36,10 @@ type WalletVisualPassModalProps = {
   redeemByIso: string | null;
   nowMs: number;
   onClose: () => void;
+  /** Fired after a manual (double-tap) redemption succeeds, so the wallet can refresh. */
+  onManuallyRedeemed?: () => void;
+  dealId?: string | null;
+  businessId?: string | null;
 };
 
 function formatClock(ms: number, lang: string) {
@@ -57,10 +62,24 @@ export function WalletVisualPassModal({
   redeemByIso,
   nowMs,
   onClose,
+  onManuallyRedeemed,
+  dealId,
+  businessId,
 }: WalletVisualPassModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { confirm, confirmModal } = useBrandedConfirm();
+  const manualRedeem = useManualQrRedeem({
+    claimId,
+    confirm,
+    surface: "use_deal_pass",
+    dealId,
+    businessId,
+    onRedeemed: () => {
+      onManuallyRedeemed?.();
+      onClose();
+    },
+  });
   const pulseScale = useSharedValue(1);
   const [windowStartedAtMs, setWindowStartedAtMs] = useState(() => Date.now());
   const previousClaimIdRef = useRef(claimId);
@@ -216,9 +235,40 @@ export function WalletVisualPassModal({
         </View>
 
         {qrWindowActive ? (
-          <Animated.View style={[{ alignSelf: "center", marginBottom: 16 }, pulseAnimatedStyle]}>
-            {token ? <QRCode value={token} size={140} backgroundColor="#fff" /> : null}
+          <Animated.View style={[{ alignSelf: "center", marginBottom: 8 }, pulseAnimatedStyle]}>
+            {token ? (
+              <HapticScalePressable
+                onPress={manualRedeem.handleQrPress}
+                disabled={manualRedeem.busy}
+                {...manualRedeem.accessibilityProps}
+              >
+                <QRCode value={token} size={140} backgroundColor="#fff" />
+              </HapticScalePressable>
+            ) : null}
           </Animated.View>
+        ) : null}
+
+        {/* Manual fallback for when the staff scanner can't read the QR. Always
+            visible — no delay or countdown gating its discovery. */}
+        {qrWindowActive && token ? (
+          <View style={{ alignItems: "center", marginBottom: 16, gap: 4 }}>
+            <Text
+              style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "700", textAlign: "center" }}
+              numberOfLines={2}
+              maxFontSizeMultiplier={1.15}
+            >
+              {manualRedeem.busy ? t("consumerWallet.manualRedeemBusy") : manualRedeem.hintLabel}
+            </Text>
+            {manualRedeem.error ? (
+              <Text
+                style={{ color: "#fecaca", fontSize: 12, textAlign: "center" }}
+                numberOfLines={3}
+                maxFontSizeMultiplier={1.15}
+              >
+                {manualRedeem.error}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
 
         <View style={{ alignItems: "center", marginBottom: 24, opacity: qrWindowActive ? 1 : 0.48 }}>

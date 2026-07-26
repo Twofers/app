@@ -9,6 +9,14 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
+/**
+ * Minimum wait between `begin` and `complete`, for the legacy countdown pass
+ * where the animation itself was the merchant-facing signal. It is a UX pacing
+ * device, not a fraud control (see findings/06). A `manual: true` completion —
+ * the customer double-tapping the QR because staff cannot scan it — has no
+ * countdown to pace, so it is exempt; otherwise the confirm would sit on a
+ * 14-second spinner for no reason.
+ */
 const MIN_MS = 14_000;
 const MAX_MS = 120_000;
 
@@ -51,7 +59,7 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
-    let body: { claim_id?: string; location_id?: string };
+    let body: { claim_id?: string; location_id?: string; manual?: boolean };
     try {
       body = await req.json();
     } catch {
@@ -72,6 +80,8 @@ serve(async (req) => {
     // does, reject a mismatch the same way redeem-token's WRONG_LOCATION_REDEMPTION
     // does. See findings/06-visual-redeem-honor-system.md (Option 1).
     const clientLocationId = typeof body.location_id === "string" ? body.location_id.trim() : "";
+    /** Staff-witnessed double-tap fallback: skips the countdown pacing wait only. */
+    const isManualCompletion = body.manual === true;
 
     const now = new Date();
     const nowIso = now.toISOString();
@@ -156,7 +166,7 @@ serve(async (req) => {
 
     const started = new Date(claim.redeem_started_at as string);
     const elapsed = now.getTime() - started.getTime();
-    if (elapsed < MIN_MS) {
+    if (!isManualCompletion && elapsed < MIN_MS) {
       return new Response(JSON.stringify({ error: "Redemption window has not finished yet" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

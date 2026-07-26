@@ -8,6 +8,8 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type Sh
 import { Colors, Controls, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { AddToWalletButton } from "@/components/add-to-wallet-button";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { useManualQrRedeem } from "@/hooks/use-manual-qr-redeem";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -27,6 +29,12 @@ type QrModalProps = {
   onShare?: () => void;
   sharing?: boolean;
   shareError?: string | null;
+  /** Enables the double-tap manual redeem fallback. Omit to render a plain QR. */
+  claimId?: string | null;
+  dealId?: string | null;
+  businessId?: string | null;
+  /** Fired after a manual (double-tap) redemption succeeds. */
+  onManuallyRedeemed?: () => void;
 };
 
 type ConfettiParticleSpec = {
@@ -81,6 +89,10 @@ export function QrModal({
   onShare,
   sharing,
   shareError,
+  claimId = null,
+  dealId = null,
+  businessId = null,
+  onManuallyRedeemed,
 }: QrModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -90,6 +102,18 @@ export function QrModal({
   const compactModal = height < 760;
   const qrSize = compactModal ? 180 : 210;
   const qrBoxSize = qrSize + 24;
+  const { confirm, confirmModal } = useBrandedConfirm();
+  const manualRedeem = useManualQrRedeem({
+    claimId,
+    confirm,
+    surface: "post_claim_qr_modal",
+    dealId,
+    businessId,
+    onRedeemed: () => {
+      onManuallyRedeemed?.();
+      onHide();
+    },
+  });
   const [remaining, setRemaining] = useState<string | null>(null);
   const tick = false;
   const [toastVisible, setToastVisible] = useState(false);
@@ -346,7 +370,10 @@ export function QrModal({
           </View>
           <View style={{ alignItems: "center", marginBottom: 10 }}>
             {token && !qrExpired ? (
-              <View
+              <HapticScalePressable
+                onPress={manualRedeem.handleQrPress}
+                disabled={!claimId || manualRedeem.busy}
+                {...(claimId ? manualRedeem.accessibilityProps : {})}
                 style={{
                   padding: 12,
                   borderRadius: Radii.lg,
@@ -356,7 +383,7 @@ export function QrModal({
                 }}
               >
                 <QRCode value={token} size={qrSize} />
-              </View>
+              </HapticScalePressable>
             ) : token ? (
               <View
                 style={{
@@ -374,6 +401,28 @@ export function QrModal({
               </View>
             ) : null}
           </View>
+          {/* Manual fallback for when the staff scanner can't read the QR. Always
+              visible while the QR is live — no delay or countdown gating it. */}
+          {claimId && token && !qrExpired ? (
+            <View style={{ alignItems: "center", marginBottom: 10, gap: 4 }}>
+              <Text
+                style={{ color: theme.mutedText, fontSize: 12, fontWeight: "700", textAlign: "center" }}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.15}
+              >
+                {manualRedeem.busy ? t("consumerWallet.manualRedeemBusy") : manualRedeem.hintLabel}
+              </Text>
+              {manualRedeem.error ? (
+                <Text
+                  style={{ color: theme.danger, fontSize: 12, textAlign: "center" }}
+                  numberOfLines={3}
+                  maxFontSizeMultiplier={1.15}
+                >
+                  {manualRedeem.error}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <Text style={{ opacity: qrExpired ? 0.95 : 0.75, textAlign: "center", fontWeight: qrExpired ? "800" : "600" }}>
             {t("consumerWallet.qrValidUntil", {
               time: `${remaining ?? "--"}${tick ? " •" : " "}`,
@@ -487,6 +536,7 @@ export function QrModal({
         </View>
         </ScrollView>
       </View>
+      {confirmModal}
     </Modal>
   );
 }

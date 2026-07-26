@@ -10,7 +10,17 @@ Files:
 - `supabase/functions/redeem-token/index.ts:81-91,457,480-495` (owner redeem writes via the user client)
 - `supabase/functions/_shared/claim-redeem.ts:24-72` (`finalizeStaleVisualRedeemForClaim`, writes via whatever client it is handed)
 - `supabase/migrations/20250127000000_initial_schema.sql:143-152` (business-owner UPDATE policy, later moved to `deal_claim_visible_to_business_owner`)
-Status: NOT STARTED
+Status: RESOLVED (verified 2026-07-25 — this file had gone stale)
+
+Evidence, re-checked against live code and prod rather than assumed:
+- `supabase/migrations/20260804121000_lock_down_deal_claims_client_writes.sql`
+  does `REVOKE INSERT, UPDATE, DELETE ON public.deal_claims FROM anon,
+  authenticated` and drops the drifted end-user UPDATE policy. `supabase
+  migration list --linked` shows it applied on prod (Local 20260804121000 =
+  Remote 20260804121000).
+- `begin-visual-redeem`, `complete-visual-redeem` and `release-claim` now write
+  `deal_claims` via the **service-role** client (`supabaseAdmin`); the
+  user-scoped client is used only for RLS-scoped reads.
 
 ## What is wrong
 
