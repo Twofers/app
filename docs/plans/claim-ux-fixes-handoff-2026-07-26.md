@@ -29,13 +29,12 @@ Written 2026-07-25 end of session, for pickup 2026-07-26.
 | A | "Something went wrong" on a second claim | ✅ | none | ⛔ needs a 2nd real deal |
 | B | Pushes to repeat-blocked customers | ✅ | ⛔ 2 fns | ⛔ every business is `NONE` |
 | C | Menu-promote forced poster style | ✅ | none | ✅ **passed on S10** |
-| D | Double-tap the QR to redeem manually | ✅ | ✅ **v91 live** | ⏳ retest on device |
+| D | Double-tap the QR to redeem manually | ✅ | ✅ **v91 live** | ✅ **passed, both surfaces** |
 | E | Google Wallet pass had no route into the app | ✅ | ⛔ 7 of 8 left | ⛔ needs a claim |
-| — | Imageless ad for off-menu / no-menu items | ✅ | ✅ **v204 live** | ⏳ retest the sundae deal |
+| — | Imageless ad for off-menu / no-menu items | ✅ | ✅ **v204 live** | ⛔ blocked — AI quota 30/30 |
 
-Dan's deals from 2026-07-26 evening made claims possible again, so the device QA
-blocked earlier in this doc is now unblocked for D — retest the double-tap; a
-single one should redeem instantly.
+Dan's deals from 2026-07-26 evening made claims possible again, which unblocked
+D's device QA. **D is now fully verified** — see below.
 
 The commits, newest first:
 
@@ -253,6 +252,21 @@ Live as **v204**. The server half is in production: a refused image now returns 
 gradient-poster ad instead of 502. The client half ships with the next rebuild;
 on a dev client it loads from Metro immediately.
 
+⚠️ **Still unproven in production, and the diagnosis is not confirmed.** Two
+things found while trying to verify it on 2026-07-26 evening:
+
+- **The monthly AI limit is exhausted (30/30, resets on the 1st)**, so no
+  generation can be run at all right now — by anyone, not just QA.
+- Three deals generated at 21:42–21:47 UTC, *after* the deploy, and **all got
+  real photos** — including "Buy a grilled cheese sandwich and get a free
+  fountain drink", where neither item is on the menu. So the gradient fallback
+  has never actually fired, and an off-menu cross-item offer demonstrably *can*
+  get an image. That weakens the IMAGE_REQUIRED diagnosis for the sundae.
+
+What it does rule out: the sundae failure was **not** the monthly cap, since
+generations succeeded hours afterwards. If the sundae still fails once quota
+resets, the cause was something else — capture the on-screen error text.
+
 Until the rebuild, the **shipped v1.0.0 app** will receive the 200-with-no-image
 response. It renders the gradient poster (that build's `AdPosterCanvas` already
 handles a null `imageUri`) but shows no explanation of the missing photo.
@@ -280,7 +294,30 @@ Both in unlocked files, both green, neither needs a deploy.
    `already_redeemed: true`. Every other begin failure still throws.
    New: `lib/manual-redeem.test.ts` (7 tests).
 
-**Why Dan's two surfaces behaved differently:** they did not. `complete-visual-redeem`
+### ✅ Device QA passed on the S10, 2026-07-26 evening — both QR surfaces
+
+With `complete-visual-redeem` v91 live, a **single** double-tap now redeems. No
+second tap, no 14-second wait, no error.
+
+| Surface | Claimed | Redeemed | Method |
+| --- | --- | --- | --- |
+| Post-claim QR modal | 22:04:09 | 22:05:26 | `visual`, location stamped |
+| Use Deal pass (the one Dan reported) | 22:08:31 | 22:13:35 | `visual`, location stamped |
+
+Both wrote a `redemptions` audit row. The QR-modal run was driven over adb: the
+hint rendered, the double-tap raised the branded confirm ("Redeem now?"), and
+confirming closed the modal and flipped the card to Redeemed immediately. That
+timing is the proof — `begin` and `complete` fire back-to-back inside
+`manualRedeemClaim`, one round-trip apart, so under the old function the call was
+guaranteed to be rejected by `MIN_MS`. The pass surface was confirmed by Dan by
+hand, because slide-to-confirm cannot be driven by synthetic input:
+`input swipe` and granular `input motionevent` are both ignored by
+react-native-gesture-handler, which needs real touch timing (each adb command is
+a separate process invocation seconds apart). **Automate the QR-modal surface;
+ask a human for the pass slide.**
+
+**Why Dan's two surfaces behaved differently before this:** they did not.
+`complete-visual-redeem`
 is still not deployed, so `manual: true` is ignored and the old 14s `MIN_MS` wait
 applies to both. The claim record shows it: claimed 17:58:04, redeemed 17:59:39 —
 95 seconds later, `redeem_method=visual`. The first double-tap started the clock
