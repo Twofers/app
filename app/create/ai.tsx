@@ -3066,21 +3066,15 @@ export default function AiDealScreen() {
           setMerchantOriginalWarningAcknowledged(false);
         }
       }
-      if (!imageVersionStoragePath(normalizedAd)) {
-        const friendly = t("createAi.errImageGenerationNoImage", {
-          defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
-        });
-        setGenerationFailureState(
-          friendly,
-          hasFallbackTemplateSource() ? "ai_failed_fallback_available" : "ai_failed_no_fallback",
-        );
-        setBanner({ message: friendly, tone: "error" });
-        trackEvent(AiAdsEvents.GENERATION_FAILED, {
-          screen: "create_ai",
-          regeneration_attempt: 0,
-          error_code: "NO_IMAGE_RETURNED",
-        });
-        return;
+      // No photo is no longer a dead end. The providers refuse some subjects
+      // outright — an item the shop doesn't stock, a business that never imported
+      // a menu, or simply an awkward thing to depict — and "try again" asks for the
+      // same picture, so it never recovered. The poster renders on the template
+      // gradient without a photo, so this is a publishable ad; say what happened
+      // and carry on into review instead of blocking the merchant.
+      const generatedWithoutImage = !imageVersionStoragePath(normalizedAd);
+      if (generatedWithoutImage) {
+        setBanner({ message: t("createAi.noticeImagelessAd"), tone: "info" });
       }
       if (sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original") {
         setUsePhotoAsFinal(false);
@@ -3097,6 +3091,8 @@ export default function AiDealScreen() {
         image_model: normalizedAd.image_selection?.model ?? null,
         image_source_mode: normalizedAd.image_selection?.sourceMode ?? null,
         image_photo_source: normalizedAd.photo_source ?? null,
+        /** Distinguishes a gradient-poster ad from one that got a real photo. */
+        generated_without_image: generatedWithoutImage,
       });
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;

@@ -119,6 +119,15 @@ describe("ai-generate-ad-variants telemetry source guard", () => {
   it("treats copy-only image fallback as an image production failure", () => {
     expect(source).toContain("const imageProductionFailed = imageResult.posterStoragePath === null;");
     expect(source).not.toContain('imageResult.source !== "copy_only"');
-    expect(source).toContain('error_code: "IMAGE_REQUIRED"');
+    // The CONSEQUENCE changed on 2026-07-26 (Dan-approved): a missing image now
+    // returns a gradient-poster ad instead of 502 IMAGE_REQUIRED, because "try
+    // again" could never recover a subject the providers refuse. What must not
+    // change is that it still counts as a FAILURE for accounting and telemetry —
+    // quota untouched, reserved credit released, IMAGE_NULL logged. Pin that,
+    // not the old status code.
+    expect(source).not.toContain('error_code: "IMAGE_REQUIRED"');
+    expect(source).toContain('failure_reason: productionSuccess ? null : "IMAGE_NULL"');
+    expect(source).toContain('reason: "IMAGE_UNAVAILABLE"');
+    expect(source).toContain('releaseReservedChargeableRevision("image_failed")');
   });
 });

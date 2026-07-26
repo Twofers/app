@@ -4630,26 +4630,35 @@ Deno.serve(async (req) => {
       remaining: Math.max(0, startingQuota.limit - updatedUsed),
     };
 
+    /**
+     * An image the providers will not produce is no longer fatal.
+     *
+     * The native poster renders without a photo — AdPosterCanvas falls back to the
+     * template gradient — so copy plus a gradient poster is a complete, publishable
+     * ad, not a degraded one. Returning 502 here stranded any merchant whose item
+     * the providers refuse to depict: an item that is not on their menu, a business
+     * that never imported a menu at all, or anything awkward to render. "Try again"
+     * could never fix those, because the retry asks for the same picture.
+     *
+     * Accounting is deliberately unchanged: the reserved revision credit is still
+     * released, quota still does not tick, and the ai_generation_logs row still
+     * records success:false / IMAGE_NULL. This widens what the merchant can DO,
+     * not how a missing image is billed or measured.
+     */
+    let imageFallback: Record<string, unknown> | null = null;
     if (imageProductionFailed) {
       await releaseReservedChargeableRevision("image_failed");
-      const imageFailure = imageFailureDebug(imageResult);
-      return new Response(
-        JSON.stringify({
-          error: "AI image generation failed. Try again.",
-          error_code: "IMAGE_REQUIRED",
-          image_failure: imageFailure,
-          stage_timings_ms: stageTimingsMs,
-          // R4: this is the failure path that most needs the budget picture — it is
-          // where a chain that ran out of wall clock lands. Without it, an operator
-          // cannot tell "every provider refused" from "we ran out of time".
-          image_pipeline_budget: imagePipelineBudget.report ?? null,
-          quota,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      imageFallback = {
+        reason: "IMAGE_UNAVAILABLE",
+        detail: imageFailureDebug(imageResult),
+        // R4: the budget picture belongs with the failure — it is what tells an
+        // operator "every provider refused" apart from "we ran out of wall clock".
+        image_pipeline_budget: imagePipelineBudget.report ?? null,
+      };
+      console.log(
+        JSON.stringify({ tag: "ai_ads_v2", event: "image_fallback_gradient", errorCode: "IMAGE_NULL" }),
       );
-    }
-
-    if (chargeableRevisionCredit) {
+    } else if (chargeableRevisionCredit) {
       const reservation = chargeableRevisionCredit;
       await commitChargeableImageRevisionCredit(admin as any, reservation);
       chargeableRevisionCredit = null;
@@ -4659,6 +4668,8 @@ Deno.serve(async (req) => {
       ad,
       ads: [ad],
       quota,
+      /** Non-null when the ad ships without a photo, so the client can say why. */
+      image_fallback: imageFallback,
       image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
       poster_luma_debug: posterLumaDebug,
       image_pipeline_budget: imagePipelineBudget.report ?? null,
