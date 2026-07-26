@@ -212,9 +212,16 @@ effect; all 34 assertions still pass), so exactly one locked file changed.
 chained with `Prior ref:` (13 links now), 2-line diff, no reformatting.
 Validation: `typecheck`, `lint` 0, `vitest` 2031/2031, `gate:ai-poster-lock`
 30/30, `gate:ai-ad` PASS (incl. copy evaluator).
-Device QA owed: Create → promote a menu item → the screen should no longer
-scroll itself past the format toggle, and picking Standard card should survive
-through publish.
+**Device QA: ✅ PASSED on the S10 (2026-07-25)**, via the installed dev-client
+(`com.unvmex2.twoforone.dev`) reloaded from a cleared Metro — the change is pure
+JS, so no rebuild was needed. Create → Promote a menu item → Latte → buy one get
+one → Generate strong ad: the create screen now lands at the **top**, showing the
+prefill banner, Step 1 of 3, the **Ad style** toggle and the photo buttons.
+Waited 5s, well past the old 400ms auto-scroll, and it did not move. Tapping
+"Standard card" selects it, so the choice is real and not just visible. Poster
+style remains pre-selected (DEFAULT_CREATIVE_FORMAT unchanged, as approved).
+Screenshots: scratchpad `qa7_menu_to_create.png`, `qa8_standard_card.png`.
+Not yet exercised: carrying a Standard-card choice all the way through publish.
 
 ### Root cause
 
