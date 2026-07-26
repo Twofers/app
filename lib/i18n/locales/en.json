@@ -276,7 +276,12 @@
     "claimWindowClosed": "Claiming has closed for today's window.",
     "claimDuplicateActive": "You already claimed this deal.",
     "claimActiveOtherDeal": "You already have an active claim from this business. Redeem or wait for it to expire before claiming another offer.",
-    "claimActiveAppWide": "You already have an active claim. Redeem it or wait until it expires before claiming another deal.",
+    "claimActiveAppWide": "You can only claim one deal at a time. Redeem or release the deal in your wallet first.",
+    "claimRepeatFirstTimeOnly": "You've already redeemed a deal here. This business only offers deals to first-time customers.",
+    "claimRepeatCooldown": "You can claim another deal here on {{date}}.",
+    "claimRepeatCooldownSoon": "You've recently redeemed a deal here. Check back soon.",
+    "claimNotEligible": "This deal isn't available to claim.",
+    "claimBusinessNotAccepting": "This business isn't accepting new claims right now.",
     "claimDailyLimitBusiness": "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.",
     "claimHourlyLimit": "You can only claim one deal per hour. Please try again shortly.",
     "claimSoldOut": "This deal has reached its claim limit.",
@@ -827,6 +832,7 @@
     "dealEnded": "Deal ended",
     "claimButton": "Claim deal",
     "soldOut": "Sold out",
+    "repeatRestricted": "Already used here",
     "claimClosed": "Claiming closed",
     "notStartedYet": "Not started yet",
     "notActiveToday": "Not active today",
@@ -1587,6 +1593,7 @@
     "dealEndsVerb": "Ends",
     "modalTitle": "Modal",
     "tapToRetry": "Tap to retry",
+    "goToWallet": "Go to my wallet",
     "tryAgain": "Try again",
     "settings": "Settings"
   },
@@ -1709,7 +1716,12 @@
     "releaseConfirmTitle": "Release this deal?",
     "releaseConfirmBody": "This gives up your claim and returns it to the deal. You may not be able to claim it again if it sells out or reaches its daily limit.",
     "releaseConfirmCta": "Yes, release it",
-    "releaseKeepCta": "Keep it"
+    "releaseKeepCta": "Keep it",
+    "manualRedeemHint": "Tap the QR twice to redeem",
+    "manualRedeemBusy": "Marking as used...",
+    "manualRedeemConfirmTitle": "Redeem now?",
+    "manualRedeemConfirmBody": "This marks the deal as used. It can't be undone.",
+    "manualRedeemConfirmCta": "Redeem"
   },
   "consumerDealDetail": {
     "timeLeft": "Time left",

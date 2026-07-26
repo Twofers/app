@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
-import { claimDeal } from "@/lib/functions";
+import { claimDeal, getErrorCode } from "@/lib/functions";
 import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled, scheduleClaimExpiryReminder } from "@/lib/notifications";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { getDealClaimDeadline, isDealActiveNow } from "@/lib/deal-time";
@@ -43,6 +43,7 @@ import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { dealCountdownLabel } from "@/lib/deal-countdown";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
 import { compactLocationLabel } from "@/lib/display-format";
+import { translateApiError } from "@/lib/i18n/api-messages";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import {
@@ -231,7 +232,17 @@ export default function HomeScreen() {
   const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<string | null>(null);
   const [loadingDeals, setLoadingDeals] = useState(true);
   const [loadingBiz, setLoadingBiz] = useState(true);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBannerState] = useState<string | null>(null);
+  /**
+   * True when the banner is the "you already hold an active deal" conflict, so
+   * it offers a route to the wallet instead of the usual pull-to-refresh retry.
+   */
+  const [bannerWalletAction, setBannerWalletAction] = useState(false);
+  /** Wrapper so every ordinary setBanner() call clears a stale wallet action. */
+  const setBanner = useCallback((message: string | null) => {
+    setBannerState(message);
+    setBannerWalletAction(false);
+  }, []);
   const [claimStatus, setClaimStatus] = useState<Record<string, { message: string; tone: "success" | "error" | "info" }>>({});
   const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
     () => new Map(),
@@ -524,7 +535,7 @@ export default function HomeScreen() {
     } finally {
       setLoadingDeals(false);
     }
-  }, [loadUserClaims, loadRepeatVisibility, t]);
+  }, [loadUserClaims, loadRepeatVisibility, setBanner, t]);
 
   // Re-fetch the nearby deal set when location changes (the user's own radius filter
   // is applied client-side over the fetched set, so radius changes don't need a reload).
@@ -590,7 +601,7 @@ export default function HomeScreen() {
       setBusinesses([]);
     }
     setLoadingBiz(false);
-  }, [t]);
+  }, [setBanner, t]);
 
   // Re-fetch the shop set when location changes. The fetch radius is fixed (metro-wide),
   // so the user's radius changes don't affect the Shops list and don't need a reload.
@@ -715,7 +726,7 @@ export default function HomeScreen() {
         }
       }
     },
-    [userId, favoriteBusinessIds, t, maybeOfferDealAlerts],
+    [userId, favoriteBusinessIds, setBanner, t, maybeOfferDealAlerts],
   );
 
   const doClaim = useCallback(
@@ -805,8 +816,12 @@ export default function HomeScreen() {
           business_id: businessIdForDeal,
           context: { reason: classifyClaimBlockReason(msg) },
         });
-        const mappedClaimErr = mapClaimError(msg);
-        setBanner(mappedClaimErr);
+        // Prefer the stable error_code over the English sentence, and when the
+        // blocker is a deal held elsewhere, route to the wallet rather than
+        // offering a pull-to-refresh retry that cannot help.
+        const code = getErrorCode(e);
+        setBannerState(translateApiError({ code, message: msg }, t));
+        setBannerWalletAction(code === "CUSTOMER_ALREADY_HAS_ACTIVE_DEAL");
         setClaimStatus((prev) => {
           const next = { ...prev };
           delete next[dealId];
@@ -820,7 +835,7 @@ export default function HomeScreen() {
       isLoggedIn,
       claimingDealId,
       loadUserClaims,
-      mapClaimError,
+      setBanner,
       t,
       customerDealLocalizationLocale,
       customerDealLocalizationResolution.source,
@@ -1880,7 +1895,18 @@ export default function HomeScreen() {
   return (
     <KeyboardScreen>
     <View pointerEvents={isFocused ? "auto" : "none"} style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      {banner ? <Banner message={banner} tone="error" onRetry={() => { setBanner(null); void onPullToRefresh(); }} /> : null}
+      {banner ? (
+        <Banner
+          message={banner}
+          tone="error"
+          onRetry={
+            bannerWalletAction
+              ? () => router.push("/(tabs)/wallet" as Href)
+              : () => { setBanner(null); void onPullToRefresh(); }
+          }
+          actionLabel={bannerWalletAction ? t("commonUi.goToWallet") : undefined}
+        />
+      ) : null}
       <Animated.View style={[{ flex: 1 }, feedSegment === "deals" ? dealsFadeStyle : undefined]}>
         <FlatList<Deal | BusinessRow>
           style={{ flex: 1 }}
@@ -1943,6 +1969,10 @@ export default function HomeScreen() {
         onHide={hideClaimQrModal}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
+        claimId={lastClaimId}
+        dealId={lastClaimDealId}
+        businessId={dealsRef.current.find((d) => d.id === lastClaimDealId)?.business_id ?? null}
+        onManuallyRedeemed={() => void loadUserClaims(dealsRef.current.map((d) => d.id))}
       />
 
       <BrandedConfirmModal

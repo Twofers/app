@@ -276,7 +276,12 @@
     "claimWindowClosed": "El reclamo cerró para la ventana de hoy.",
     "claimDuplicateActive": "Ya tienes un reclamo activo para esta oferta",
     "claimActiveOtherDeal": "Ya tienes un reclamo activo de este negocio. Canjéalo o espera a que caduque antes de reclamar otra oferta.",
-    "claimActiveAppWide": "Ya tienes un reclamo activo. Canjéalo o espera a que caduque antes de reclamar otra oferta.",
+    "claimActiveAppWide": "Solo puedes reclamar una oferta a la vez. Canjea o libera la oferta de tu cartera primero.",
+    "claimRepeatFirstTimeOnly": "Ya canjeaste una oferta aquí. Este negocio solo ofrece ofertas a clientes nuevos.",
+    "claimRepeatCooldown": "Puedes reclamar otra oferta aquí el {{date}}.",
+    "claimRepeatCooldownSoon": "Canjeaste una oferta aquí hace poco. Vuelve pronto.",
+    "claimNotEligible": "Esta oferta no está disponible para reclamar.",
+    "claimBusinessNotAccepting": "Este negocio no acepta reclamos nuevos en este momento.",
     "claimDailyLimitBusiness": "Solo puedes reclamar una vez por negocio en el día local mientras tu reclamo siga siendo canjeable. Canjéalo o espera a que caduque antes de reclamar otra oferta desde este negocio.",
     "claimHourlyLimit": "Solo puedes reclamar una oferta por hora. Vuelve a intentarlo en unos minutos.",
     "claimSoldOut": "Esta oferta alcanzó el límite de reclamos.",
@@ -823,6 +828,7 @@
     "claim": "Reclamar",
     "claimButton": "Reclamar oferta",
     "soldOut": "Agotada",
+    "repeatRestricted": "Ya la usaste aquí",
     "claimClosed": "Reclamos cerrados",
     "notStartedYet": "Aún no empieza",
     "notActiveToday": "No activa hoy",
@@ -1229,6 +1235,7 @@
     "dealEndsVerb": "Termina",
     "modalTitle": "Modal",
     "tapToRetry": "Toca para reintentar",
+    "goToWallet": "Ir a mi cartera",
     "tryAgain": "Reintentar",
     "settings": "Configuración"
   },
@@ -1351,7 +1358,12 @@
     "releaseConfirmTitle": "¿Liberar esta oferta?",
     "releaseConfirmBody": "Renuncias a tu reserva y la oferta vuelve a estar disponible. Puede que no puedas reservarla otra vez si se agota o alcanza su límite diario.",
     "releaseConfirmCta": "Sí, liberarla",
-    "releaseKeepCta": "Conservarla"
+    "releaseKeepCta": "Conservarla",
+    "manualRedeemHint": "Toca el QR dos veces para canjear",
+    "manualRedeemBusy": "Marcando como usada...",
+    "manualRedeemConfirmTitle": "¿Canjear ahora?",
+    "manualRedeemConfirmBody": "Esto marca la oferta como usada. No se puede deshacer.",
+    "manualRedeemConfirmCta": "Canjear"
   },
   "consumerDealDetail": {
     "timeLeft": "Tiempo restante",

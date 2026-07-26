@@ -276,7 +276,12 @@
     "claimWindowClosed": "오늘 시간대의 신청이 마감되었습니다.",
     "claimDuplicateActive": "이미 이 딜에 대한 활성 이용권이 있습니다",
     "claimActiveOtherDeal": "이 매장에서 이미 활성 이용권이 있습니다. 사용하거나 만료될 때까지 다른 딜을 받을 수 없습니다.",
-    "claimActiveAppWide": "이미 활성 이용권이 있습니다. 사용하거나 만료될 때까지 다른 딜을 받을 수 없습니다.",
+    "claimActiveAppWide": "한 번에 하나의 딜만 받을 수 있습니다. 지갑에 있는 딜을 먼저 사용하거나 해제하세요.",
+    "claimRepeatFirstTimeOnly": "이 매장에서 이미 딜을 사용했습니다. 이 매장은 첫 방문 고객에게만 딜을 제공합니다.",
+    "claimRepeatCooldown": "{{date}}부터 이 매장에서 다른 딜을 받을 수 있습니다.",
+    "claimRepeatCooldownSoon": "최근에 이 매장에서 딜을 사용했습니다. 나중에 다시 확인해 주세요.",
+    "claimNotEligible": "이 딜은 받을 수 없습니다.",
+    "claimBusinessNotAccepting": "이 매장은 현재 새로운 신청을 받지 않습니다.",
     "claimDailyLimitBusiness": "매장 현지 달력 기준 하루에 한 번, 그리고 클레임이 아직 사용 가능할 때만 다시 받을 수 있습니다. 사용하거나 만료될 때까지 기다린 뒤 이 매장에서 다른 딜을 받으세요.",
     "claimHourlyLimit": "한 시간에 한 번만 딜을 받을 수 있습니다. 잠시 후 다시 시도하세요.",
     "claimSoldOut": "이 딜은 신청 한도에 도달했습니다.",
@@ -823,6 +828,7 @@
     "claim": "받기",
     "claimButton": "딜 받기",
     "soldOut": "매진",
+    "repeatRestricted": "이미 사용함",
     "claimClosed": "받기 마감",
     "notStartedYet": "아직 시작 전",
     "notActiveToday": "오늘 진행 안 함",
@@ -1229,6 +1235,7 @@
     "dealEndsVerb": "종료",
     "modalTitle": "모달",
     "tapToRetry": "다시 시도하려면 탭하세요",
+    "goToWallet": "내 지갑으로 이동",
     "tryAgain": "다시 시도",
     "settings": "설정"
   },
@@ -1351,7 +1358,12 @@
     "releaseConfirmTitle": "이 딜을 해제할까요?",
     "releaseConfirmBody": "예약을 포기하고 딜을 다시 공개합니다. 딜이 매진되거나 일일 한도에 도달하면 다시 예약하지 못할 수 있습니다.",
     "releaseConfirmCta": "네, 해제할게요",
-    "releaseKeepCta": "그대로 두기"
+    "releaseKeepCta": "그대로 두기",
+    "manualRedeemHint": "QR을 두 번 탭하면 사용 처리됩니다",
+    "manualRedeemBusy": "사용 처리 중...",
+    "manualRedeemConfirmTitle": "지금 사용할까요?",
+    "manualRedeemConfirmBody": "딜이 사용 완료로 표시되며 되돌릴 수 없습니다.",
+    "manualRedeemConfirmCta": "사용하기"
   },
   "consumerDealDetail": {
     "timeLeft": "남은 시간",
