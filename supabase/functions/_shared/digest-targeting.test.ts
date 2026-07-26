@@ -109,3 +109,55 @@ describe("computeDigestCounts — robustness", () => {
     expect(res.has("u")).toBe(false);
   });
 });
+
+describe("computeDigestCounts — repeat-claim restrictions", () => {
+  it("excludes a blocked business even when the deal is nearby", () => {
+    const res = computeDigestCounts(
+      [nearDeal],
+      [consumer({ user_id: "u", blocked_business_ids: ["b-near"] })],
+    );
+    expect(res.has("u")).toBe(false);
+  });
+
+  it("excludes a blocked business even when it is favorited", () => {
+    // Favorites normally override distance entirely, so this is the case that
+    // would otherwise leak: a restricted customer notified about their favorite.
+    const res = computeDigestCounts(
+      [farDeal],
+      [consumer({ user_id: "u", favorite_business_ids: ["b-far"], blocked_business_ids: ["b-far"] })],
+    );
+    expect(res.has("u")).toBe(false);
+  });
+
+  it("excludes a blocked business under favorites_only", () => {
+    const res = computeDigestCounts(
+      [nearDeal],
+      [consumer({
+        user_id: "u",
+        notification_mode: "favorites_only",
+        favorite_business_ids: ["b-near"],
+        blocked_business_ids: ["b-near"],
+      })],
+    );
+    expect(res.has("u")).toBe(false);
+  });
+
+  it("still counts unblocked businesses for the same customer", () => {
+    const res = computeDigestCounts(
+      [nearDeal, farDeal],
+      [consumer({
+        user_id: "u",
+        favorite_business_ids: ["b-far"],
+        blocked_business_ids: ["b-far"],
+      })],
+    );
+    expect(res.get("u")).toBe(1); // near deal survives, blocked favorite does not
+  });
+
+  it("counts everything when the blocked list is absent or empty", () => {
+    expect(computeDigestCounts([nearDeal], [consumer({ user_id: "u" })]).get("u")).toBe(1);
+    expect(
+      computeDigestCounts([nearDeal], [consumer({ user_id: "u", blocked_business_ids: [] })]).get("u"),
+    ).toBe(1);
+  });
+});
