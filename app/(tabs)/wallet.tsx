@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
@@ -147,6 +147,9 @@ export default function WalletScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const nowMs = useSecondTick();
+  const passParams = useLocalSearchParams<{ pass?: string | string[] }>();
+  const openPassParam = Array.isArray(passParams.pass) ? passParams.pass[0] : passParams.pass;
+  const passDeepLinkHandledRef = useRef(false);
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -610,6 +613,23 @@ export default function WalletScreen() {
     e.sort((x, y) => new Date(y.row.created_at).getTime() - new Date(x.row.created_at).getTime());
     return { active: a, ended: e };
   }, [claims, nowMs]);
+
+  // Deep link from the Google Wallet pass (`twofer://wallet?pass=1`): open the
+  // active claim's pass sheet so the manual double-tap redemption is reachable
+  // from the wallet card. Carries no claim id — a customer holds at most one
+  // active claim, which is the one the pass was built from. Fires once.
+  useEffect(() => {
+    if (openPassParam !== "1" || passDeepLinkHandledRef.current) return;
+    if (loading) return;
+    const target = active[0];
+    if (!target) {
+      // Nothing to open (already redeemed, or expired while the pass sat idle).
+      passDeepLinkHandledRef.current = true;
+      return;
+    }
+    passDeepLinkHandledRef.current = true;
+    setUseDealState({ row: target, confirmed: true });
+  }, [openPassParam, loading, active]);
 
   const stats = useMemo(() => {
     let saved = 0;
@@ -1188,6 +1208,9 @@ export default function WalletScreen() {
           )}
           nowMs={nowMs}
           onClose={closeUseDealFlow}
+          dealId={passRow.deal_id}
+          businessId={passRow.deals?.business_id ?? null}
+          onManuallyRedeemed={() => void loadClaims()}
         />
       ) : null}
 
@@ -1205,6 +1228,10 @@ export default function WalletScreen() {
         onShare={shareDealEnabled && activeQrClaim ? () => void shareWalletDeal(activeQrClaim) : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
+        claimId={qrClaimId}
+        dealId={activeQrClaim?.deal_id ?? null}
+        businessId={activeQrClaim?.deals?.business_id ?? null}
+        onManuallyRedeemed={() => void loadClaims()}
       />
 
       {saveBusinessPromptElement}

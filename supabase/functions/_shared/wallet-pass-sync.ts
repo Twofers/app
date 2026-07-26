@@ -138,6 +138,24 @@ async function getGoogleAccessToken(sa: GoogleServiceAccount): Promise<string | 
   return typeof body.access_token === "string" ? body.access_token : null;
 }
 
+/**
+ * The card's optional extras, dropped one at a time if Google rejects the write.
+ * `appLinkData` (the "open in Twofer" button) is the only entry today: its exact
+ * accepted shape could not be verified against the live API before shipping, and
+ * a 400 on an unknown field would otherwise stop every pass from updating. The
+ * card content itself is never degraded — only this add-on.
+ */
+const OPTIONAL_OBJECT_FIELDS = ["appLinkData"] as const;
+
+function withoutOptionalField(
+  object: Record<string, unknown>,
+  field: string,
+): Record<string, unknown> {
+  const next = { ...object };
+  delete next[field];
+  return next;
+}
+
 /** Insert-or-replace the Generic object. Logs status codes only, never bodies. */
 export async function upsertGoogleWalletObject(
   accessToken: string,
@@ -148,15 +166,33 @@ export async function upsertGoogleWalletObject(
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
+
+  /** One write attempt; retries once without an optional field on a 4xx rejection. */
+  async function write(payload: Record<string, unknown>, method: "PUT" | "POST", url: string) {
+    let response = await fetch(url, { method, headers, body: JSON.stringify(payload) });
+    if (response.ok) return response;
+    for (const field of OPTIONAL_OBJECT_FIELDS) {
+      if (response.status < 400 || response.status >= 500) break;
+      if (!(field in payload)) continue;
+      console.error(
+        `[wallet-pass] google rejected the object with '${field}' (HTTP ${response.status}); retrying without it`,
+      );
+      payload = withoutOptionalField(payload, field);
+      response = await fetch(url, { method, headers, body: JSON.stringify(payload) });
+      if (response.ok) return response;
+    }
+    return response;
+  }
+
   const existing = await fetch(`${WALLET_OBJECTS_BASE}/genericObject/${encodeURIComponent(objectId)}`, {
     headers,
   });
   if (existing.ok) {
-    const update = await fetch(`${WALLET_OBJECTS_BASE}/genericObject/${encodeURIComponent(objectId)}`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(object),
-    });
+    const update = await write(
+      object,
+      "PUT",
+      `${WALLET_OBJECTS_BASE}/genericObject/${encodeURIComponent(objectId)}`,
+    );
     if (!update.ok) console.error(`[wallet-pass] google object update failed: HTTP ${update.status}`);
     return update.ok;
   }
@@ -164,11 +200,7 @@ export async function upsertGoogleWalletObject(
     console.error(`[wallet-pass] google object lookup failed: HTTP ${existing.status}`);
     return false;
   }
-  const insert = await fetch(`${WALLET_OBJECTS_BASE}/genericObject`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(object),
-  });
+  const insert = await write(object, "POST", `${WALLET_OBJECTS_BASE}/genericObject`);
   if (!insert.ok) console.error(`[wallet-pass] google object insert failed: HTTP ${insert.status}`);
   return insert.ok;
 }
