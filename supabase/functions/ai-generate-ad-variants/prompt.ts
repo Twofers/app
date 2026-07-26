@@ -77,7 +77,7 @@ export type DealCopyPromptParams = {
   creativeFormat?: "standard_card" | "poster_v1";
 };
 
-export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V5";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V6";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -159,13 +159,15 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const AI_COPY_PROMPT_V5 = [
+export const AI_COPY_PROMPT_V6 = [
   `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
   "Write a polished mobile advertisement for Twofer, a mobile app where local businesses publish limited local deals. This is an ad, not a legal deal description or generic image caption.",
   "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
   "",
   "VOICE:",
-  "- Write like a sharp local cafe ad: specific, warm, and easy to scan.",
+  "- Write like a sharp local ad in this business's own voice: specific, warm, and easy to scan. The CATEGORY PLAYBOOK voice anchor and voice examples set the register; match them.",
+  "- Before returning any line, imagine the owner saying it out loud to a regular customer. If nobody would say it aloud, rewrite it until they would.",
+  '- Never echo instruction or strategy vocabulary into customer copy. Phrases like "value clarity", "exact exchange", "customer moment", "merchant context", and "clearly and simply" are planning language; customers must never see them.',
   "- Use clear, everyday American English unless a different output language is requested.",
   "- Prefer short headlines that feel like real ad hooks. They may be action-led or concept-led, but the body and push copy must make the exact exchange clear.",
   '- Never begin a headline, description, push text, or caption with "Try our" or "Try the". Lead with the item, the reward, or the customer moment instead.',
@@ -186,8 +188,10 @@ export const AI_COPY_PROMPT_V5 = [
   "- Owner-provided notes and revision feedback are instructions and context, not draft ad copy. Do not paste merchant text back verbatim unless it is an exact protected product or business name.",
   "- Do not include street addresses, city/state/ZIP, raw availability dates, exact times, or inventory counts in generated ad fields unless the channel rule explicitly says that fact was supplied.",
   "- Terms, location, schedule, and quantity are app metadata unless the field rule says to use a supplied fact.",
+  // "Avoid generic marketing language" used to sit here as its own rule; it is fully
+  // enforced mechanically by the style gate's banned/generic/AI-tone pattern lists and
+  // restating it spent tokens without adding a constraint the model could act on.
   "- Do not invent missing products.",
-  "- Avoid generic marketing language.",
   "",
   "BANNED PHRASES:",
   ...AD_COPY_BANNED_PHRASES.map((phrase) => `- "${phrase}"`),
@@ -254,7 +258,7 @@ export const AI_COPY_PROMPT_V5 = [
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
 
-export const COPY_VOICE_RULES = AI_COPY_PROMPT_V5;
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V6;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";

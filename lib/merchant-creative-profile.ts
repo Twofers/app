@@ -1,3 +1,7 @@
+import {
+  MERCHANT_ALWAYS_BANNED_CLAIM_PATTERN,
+  MERCHANT_SUPPLIED_FLAVOR_PATTERN,
+} from "./ad-language-policy.ts";
 import { getCategoryAdPlaybook, type NormalizedAdCategory } from "./category-ad-playbooks.ts";
 
 export type MerchantCreativeProfileFactSource = "merchant" | "website_confirmed" | "system";
@@ -13,6 +17,10 @@ export type MerchantCreativeProfile = {
   phrasesToAvoid: string[];
   verifiedDifferentiators: string[];
   visualStyle: string[];
+  /** Flavor wording lifted verbatim from merchant-typed text; the only sanctioned source for such words in copy. */
+  merchantSuppliedPhrases?: string[];
+  /** Owner-saved menu item names — context about what the business serves; never a substitute for the locked offer item. */
+  savedMenuItems?: string[];
   merchantNotes?: string;
   verifiedFacts: Array<{
     fact: string;
@@ -34,6 +42,7 @@ export type MerchantCreativeProfileInput = {
   address?: string | null;
   description?: string | null;
   itemHint?: string | null;
+  savedMenuItemNames?: string[] | null;
   research?: {
     item_name?: string | null;
     description?: string | null;
@@ -43,7 +52,7 @@ export type MerchantCreativeProfileInput = {
   nowIso?: string | null;
 };
 
-const PROFILE_VERSION = "merchant-creative-profile-v1";
+const PROFILE_VERSION = "merchant-creative-profile-v2";
 
 const PROHIBITED_CLAIMS = [
   "awards",
@@ -57,8 +66,32 @@ const PROHIBITED_CLAIMS = [
   "best or comparative claims",
 ];
 
-const UNSAFE_FACT_RE =
-  /\b(best|#1|number one|award|winner|rated|stars?|certified|organic|gluten[- ]free|vegan|healthy|guarantee|guaranteed|fresh|house[- ]made|homemade|locally sourced)\b/i;
+function stripAlwaysBannedClaimSentences(value: string): string {
+  const segments = value.match(/[^.!?;]+[.!?;]?\s*/g) ?? [value];
+  return segments
+    .filter((segment) => !MERCHANT_ALWAYS_BANNED_CLAIM_PATTERN.test(segment))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function collectMerchantSuppliedFlavorPhrases(values: Array<string | null | undefined>): string[] {
+  const flavorMatcher = new RegExp(MERCHANT_SUPPLIED_FLAVOR_PATTERN.source, "gi");
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of values) {
+    const clean = cleanText(raw, 240);
+    if (!clean) continue;
+    for (const match of clean.match(flavorMatcher) ?? []) {
+      const key = match.toLowerCase().replace(/\s+/g, " ").trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(key);
+      if (out.length >= 6) return out;
+    }
+  }
+  return out;
+}
 
 const STREET_OR_ZIP_RE = /\b\d{3,}(?:\s+\w+){1,5}\s+(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way)\b|\b\d{5}(?:-\d{4})?\b/i;
 
@@ -100,14 +133,15 @@ function broadLocation(value: string | null | undefined): string | undefined {
 function verifiedMerchantNote(value: string | null | undefined): string | undefined {
   const clean = cleanText(value, 240);
   if (!clean) return undefined;
-  return UNSAFE_FACT_RE.test(clean) ? undefined : clean;
+  const kept = stripAlwaysBannedClaimSentences(clean);
+  return kept || undefined;
 }
 
 function safeDifferentiator(value: string | null | undefined): string | null {
-  const clean = cleanText(value, 120);
-  if (!clean || UNSAFE_FACT_RE.test(clean)) return null;
-  if (!/\b(serves|offers|specializes in|focuses on|known for|features)\b/i.test(clean)) return null;
-  return clean;
+  const kept = stripAlwaysBannedClaimSentences(cleanText(value, 120));
+  if (!kept) return null;
+  if (!/\b(serves|offers|specializes in|focuses on|known for|features)\b/i.test(kept)) return null;
+  return kept;
 }
 
 export function buildMerchantCreativeProfile(input: MerchantCreativeProfileInput): MerchantCreativeProfile {
@@ -123,6 +157,18 @@ export function buildMerchantCreativeProfile(input: MerchantCreativeProfileInput
   ], 4);
   const merchantNotes = verifiedMerchantNote(input.merchantNotes ?? input.description);
   const verifiedDifferentiators = unique([safeDifferentiator(input.description)], 4);
+  const merchantSuppliedPhrases = collectMerchantSuppliedFlavorPhrases([
+    input.merchantNotes,
+    input.description,
+    input.itemHint,
+    ...(input.savedMenuItemNames ?? []),
+  ]);
+  const savedMenuItems = unique(
+    (input.savedMenuItemNames ?? []).filter(
+      (name) => typeof name === "string" && !MERCHANT_ALWAYS_BANNED_CLAIM_PATTERN.test(name),
+    ),
+    6,
+  );
 
   const verifiedFacts: MerchantCreativeProfile["verifiedFacts"] = [];
   if (businessName) verifiedFacts.push({ fact: `Business name: ${businessName}`, source: "system" });
@@ -134,11 +180,15 @@ export function buildMerchantCreativeProfile(input: MerchantCreativeProfileInput
   for (const differentiator of verifiedDifferentiators) {
     verifiedFacts.push({ fact: differentiator, source: "merchant" });
   }
+  for (const item of savedMenuItems) {
+    verifiedFacts.push({ fact: `Saved menu item: ${item}`, source: "merchant" });
+  }
 
   const businessPersonality = unique([...tone, "plainspoken", "local"], 5);
   const limited =
     signatureItems.length === 0 &&
     verifiedDifferentiators.length === 0 &&
+    savedMenuItems.length === 0 &&
     !neighborhood &&
     tone.length === 0;
 
@@ -153,6 +203,8 @@ export function buildMerchantCreativeProfile(input: MerchantCreativeProfileInput
     phrasesToAvoid: unique([...playbook.avoid, "luxurious", "indulgent", "artisanal experience"], 8),
     verifiedDifferentiators,
     visualStyle: playbook.visualDirection,
+    ...(merchantSuppliedPhrases.length ? { merchantSuppliedPhrases } : {}),
+    ...(savedMenuItems.length ? { savedMenuItems } : {}),
     ...(merchantNotes ? { merchantNotes } : {}),
     verifiedFacts,
     prohibitedClaims: PROHIBITED_CLAIMS,
@@ -172,6 +224,11 @@ export function buildMerchantCreativeProfilePromptBlock(profile: MerchantCreativ
     `Normalized category: ${profile.normalizedCategory}.`,
     `Merchant-specific context limited: ${profile.merchantSpecificContextLimited ? "true" : "false"}.`,
     profile.signatureItems.length ? `Signature or offer items: ${profile.signatureItems.join("; ")}.` : "Signature or offer items: none verified.",
+    ...(profile.savedMenuItems?.length
+      ? [
+          `Other saved menu items (context about what this business serves; the offer stays exactly as locked — never move the deal onto these): ${profile.savedMenuItems.join("; ")}.`,
+        ]
+      : []),
     profile.neighborhood ? `Broad place context: ${profile.neighborhood}.` : "Broad place context: none verified.",
     `Business personality for style only: ${profile.businessPersonality.join("; ")}.`,
     `Natural customer language: ${profile.naturalCustomerLanguage.join("; ")}.`,
@@ -179,6 +236,9 @@ export function buildMerchantCreativeProfilePromptBlock(profile: MerchantCreativ
     profile.verifiedDifferentiators.length
       ? `Verified differentiators: ${profile.verifiedDifferentiators.join("; ")}.`
       : "Verified differentiators: none.",
+    profile.merchantSuppliedPhrases?.length
+      ? `Merchant-supplied flavor phrases (the merchant wrote these; you may use them naturally in copy): ${profile.merchantSuppliedPhrases.join("; ")}.`
+      : "Merchant-supplied flavor phrases: none. Do not use flavor or preparation claims the merchant did not write.",
     `Phrases to avoid: ${profile.phrasesToAvoid.join("; ")}.`,
     `Prohibited claims: ${profile.prohibitedClaims.join("; ")}.`,
     ...(profile.merchantNotes

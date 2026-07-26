@@ -99,6 +99,40 @@ export const AD_COPY_CUSTOMER_FACING_FORBIDDEN_PATTERNS = [
   ...AD_COPY_BOGO_SHORTHAND_PATTERNS,
 ] as const;
 
+/**
+ * Planning/instruction vocabulary observed leaking into live customer copy
+ * ("Save 40% on one latte, clearly and simply." shipped as AI_VALIDATED on
+ * 2026-07-26). This is the pipeline's own rubric language; customers must
+ * never see it.
+ */
+export const AD_COPY_INSTRUCTION_LEAK_PATTERNS = [
+  /\bclearly and simply\b/i,
+  /\bexact exchange\b/i,
+  /\bcustomer moment\b/i,
+  /\bmerchant context\b/i,
+  /\bvalue clarity\b/i,
+  /\bplanning language\b/i,
+  /\bstrategy reason\b/i,
+] as const;
+
+/**
+ * Claim language that may never reach ad copy or the copy prompt, even when the
+ * merchant typed it: certification, health, comparative, and guarantee claims.
+ * Merchant text is cleaned at the sentence level — the sentence containing one
+ * of these is dropped, the rest of the merchant's words survive (Dan decision
+ * 2026-07-26; previously one match discarded the merchant's entire description).
+ */
+export const MERCHANT_ALWAYS_BANNED_CLAIM_PATTERN =
+  /(?:\b(?:best|number one|award(?:s|[- ]winning)?|winner|rated|stars?|certified|organic|gluten[- ]free|vegan|healthy|guarantee[ds]?|locally[- ]sourced)\b|#\s?1\b)/i;
+
+/**
+ * Flavor wording a merchant may supply about their own product or service.
+ * Allowed in ads ONLY when it appears in merchant-typed text (Dan decision
+ * 2026-07-26); the model must never invent it.
+ */
+export const MERCHANT_SUPPLIED_FLAVOR_PATTERN =
+  /\b(?:home[- ]?made|house[- ]?made|scratch[- ]made|hand[- ]?crafted|hand[- ]?made|fresh(?:ly)?(?:[- ]baked|[- ]brewed|[- ]made|[- ]squeezed)?|family[- ]recipe|family[- ]owned)\b/i;
+
 export function matchesAdCopyPattern(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }

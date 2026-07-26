@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  endsInDanglingFunctionWord,
   evaluateAdCopyStyleGate,
+  hasQuantityArticleCollision,
   isFormulaicValueHeadline,
   selectStyleSafeCopyCandidate,
   startsWithDanglingConnector,
@@ -296,5 +298,84 @@ describe("isFormulaicValueHeadline (R5)", () => {
     expect(isFormulaicValueHeadline("Açaí Bowl Savings")).toBe(true);
     expect(isFormulaicValueHeadline("  Birria   Tacos   Savings  ")).toBe(true);
     expect(isFormulaicValueHeadline("")).toBe(false);
+  });
+});
+
+describe("endsInDanglingFunctionWord (2026-07-26 corpus)", () => {
+  it("catches truncated fragments observed in live copy", () => {
+    // Shipped as AI_VALIDATED: "Coffee and a free to" / "Coffee in, to free".
+    expect(endsInDanglingFunctionWord("Coffee and a free to")).toBe(true);
+    expect(endsInDanglingFunctionWord("Buy one latte and")).toBe(true);
+    expect(endsInDanglingFunctionWord("Your usual, plus")).toBe(true);
+    expect(endsInDanglingFunctionWord("A second round of ")).toBe(true);
+  });
+
+  it("does not flag complete phrases or punctuated sentences", () => {
+    expect(endsInDanglingFunctionWord("Second latte's on us")).toBe(false);
+    expect(endsInDanglingFunctionWord("Grab the sandwich and the coffee is free.")).toBe(false);
+    // Terminal punctuation marks a finished sentence even if the last word is short.
+    expect(endsInDanglingFunctionWord("Where the regulars go to.")).toBe(false);
+    expect(endsInDanglingFunctionWord("")).toBe(false);
+  });
+});
+
+describe("hasQuantityArticleCollision (2026-07-26 corpus)", () => {
+  it("catches a count pasted directly against an article-bearing item name", () => {
+    // Shipped live: "40% off one THE SERGEANT'S STRIPES".
+    expect(hasQuantityArticleCollision("40% off one THE SERGEANT'S STRIPES")).toBe(true);
+    expect(hasQuantityArticleCollision("Buy two the house blends")).toBe(true);
+    expect(hasQuantityArticleCollision("Save on 3 the works burgers")).toBe(true);
+  });
+
+  it("does not flag natural counting or punctuated clauses", () => {
+    expect(hasQuantityArticleCollision("Buy one latte and get one free")).toBe(false);
+    expect(hasQuantityArticleCollision("Buy one, the second is free")).toBe(false);
+    expect(hasQuantityArticleCollision("One of the best ways to start the day")).toBe(false);
+    expect(hasQuantityArticleCollision("")).toBe(false);
+  });
+});
+
+describe("gate wiring for instruction leaks, fragments, and collisions", () => {
+  it("rejects planning vocabulary, truncated lines, and count-article collisions in AI copy", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Coffee and a free to",
+        supportingLine: "Save 40% on one latte, clearly and simply",
+        pushBody: "40% off one the Recon Roast",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["latte"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "displayHook",
+          reasons: expect.arrayContaining(["TRUNCATED_FRAGMENT"]),
+        }),
+        expect.objectContaining({
+          field: "supportingLine",
+          reasons: expect.arrayContaining(["INSTRUCTION_LEAK_PHRASE"]),
+        }),
+        expect.objectContaining({
+          field: "pushBody",
+          reasons: expect.arrayContaining(["QUANTITY_ARTICLE_COLLISION"]),
+        }),
+      ]),
+    );
+  });
+
+  it("still passes clean copy through unchanged", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Second latte's on us",
+        supportingLine: "Order your usual and hand the free one to a friend.",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["latte"],
+    });
+
+    expect(result.ok).toBe(true);
   });
 });

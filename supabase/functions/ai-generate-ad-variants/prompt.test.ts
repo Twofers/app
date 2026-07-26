@@ -58,7 +58,12 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("generic image caption");
     expect(basePrompt.system).toContain("This is an ad, not a legal deal description");
     expect(basePrompt.system).toContain("Owner-provided notes and revision feedback are instructions and context");
-    expect(basePrompt.system).toContain("Avoid generic marketing language");
+    // The old free-floating "Avoid generic marketing language" rule was pruned in V6;
+    // the style gate enforces it mechanically. V6 adds the say-it-aloud and
+    // no-planning-language rules instead.
+    expect(basePrompt.system).toContain("saying it out loud");
+    expect(basePrompt.system).toContain("Never echo instruction or strategy vocabulary");
+    expect(basePrompt.system).toContain("clearly and simply");
     expect(basePrompt.system).toContain('Say "Buy any large coffee drink", not "Buy an any large coffee drink"');
     expect(basePrompt.system).toContain("don't miss out");
     expect(basePrompt.system).toContain("qualifying purchase");
@@ -224,6 +229,33 @@ describe("buildAdCopyPrompt", () => {
   it("no longer frames every business as a coffee shop", () => {
     expect(basePrompt.system).not.toContain("coffee shops, cafes, bakeries");
     expect(basePrompt.system).toContain("local businesses publish limited local deals");
+  });
+
+  it("anchors voice to the business category with playbook voice examples", () => {
+    // The V5-era global register told every business to write like a cafe ad.
+    expect(basePrompt.system).not.toContain("sharp local cafe ad");
+    expect(basePrompt.system).toContain("Voice anchor: write like a friendly barista's chalkboard");
+    expect(basePrompt.system).toContain("Voice examples (tone and rhythm only");
+
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("40% off agujjim", "agujjim"),
+      businessName: "Seoul Table",
+      businessContext: {
+        category: "Korean restaurant",
+        location: "Carrollton",
+        tone: "warm and direct",
+        description: "Family-run Korean restaurant.",
+      },
+      offerContract: contractFor({
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 40,
+        itemDescription: "agujjim",
+        itemRetailValueCents: 2500,
+      }),
+    });
+    expect(prompt.system).toContain("chef's daily special board");
+    expect(prompt.system).not.toContain("barista's chalkboard");
   });
 
   it("tells the model not to invent missing facts", () => {

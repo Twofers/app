@@ -21,6 +21,10 @@ export type NormalizedAdCategory =
 export type CategoryAdPlaybook = {
   normalizedCategory: NormalizedAdCategory;
   label: string;
+  /** One-line register the copy should sound like — replaces the old global "cafe ad" voice. */
+  voiceAnchor: string;
+  /** Tone/rhythm exemplars only; the live offer's items, numbers, and mechanics always override them. */
+  voiceExamples: Array<{ headline: string; description: string }>;
   positiveCopyDirection: string[];
   avoid: string[];
   visualDirection: string[];
@@ -32,6 +36,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   coffee_cafe: {
     normalizedCategory: "coffee_cafe",
     label: "Coffee / cafe",
+    voiceAnchor: "a friendly barista's chalkboard by the register: warm, quick, specific",
+    voiceExamples: [
+      { headline: "Second latte's on us", description: "Order your usual and hand the free one to your favorite coworker." },
+      { headline: "The good-coffee shortcut", description: "One quick stop and 40% off the latte you were already craving." },
+    ],
     positiveCopyDirection: [
       "daypart and routine",
       "exact drink or food pairing",
@@ -54,6 +63,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   beverage_smoothie: {
     normalizedCategory: "beverage_smoothie",
     label: "Juice / smoothie / beverage",
+    voiceAnchor: "a bright counter sign at the juice bar: casual, fresh-sounding, unforced",
+    voiceExamples: [
+      { headline: "Midday, upgraded", description: "Grab a smoothie and the second cup is free." },
+      { headline: "Cold, quick, yours", description: "40% off one large smoothie, made while you wait." },
+    ],
     positiveCopyDirection: [
       "exact drink",
       "routine or refreshment moment",
@@ -68,6 +82,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   bakery_dessert: {
     normalizedCategory: "bakery_dessert",
     label: "Bakery / dessert",
+    voiceAnchor: "a bakery case card written by the baker: warm, homey, specific",
+    voiceExamples: [
+      { headline: "Save room this afternoon", description: "Buy one croissant and a second pastry comes along free." },
+      { headline: "Boxed and ready to go", description: "40% off one slice of chocolate cake at the counter." },
+    ],
     positiveCopyDirection: [
       "exact pastry or dessert",
       "sharing moment",
@@ -82,6 +101,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   restaurant_food: {
     normalizedCategory: "restaurant_food",
     label: "Restaurant / food",
+    voiceAnchor: "a chef's daily special board: appetizing, direct, zero corporate polish",
+    voiceExamples: [
+      { headline: "Make it birria tonight", description: "One plate, 40% off, no cooking required." },
+      { headline: "Lunch worth leaving for", description: "Buy one torta and get the second one free." },
+    ],
     positiveCopyDirection: [
       "exact dish",
       "meal moment",
@@ -96,6 +120,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   bar_beverage: {
     normalizedCategory: "bar_beverage",
     label: "Bar / brewery / beverage venue",
+    voiceAnchor: "a chalk sign in the bar's front window: relaxed, social, low-key",
+    voiceExamples: [
+      { headline: "Meet you there", description: "Buy one draft and your second pour is free." },
+      { headline: "Your after-work spot", description: "40% off one appetizer at the bar." },
+    ],
     positiveCopyDirection: [
       "exact item or non-alcoholic option when supplied",
       "casual meetup moment",
@@ -110,6 +139,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   fitness_wellness: {
     normalizedCategory: "fitness_wellness",
     label: "Fitness / wellness",
+    voiceAnchor: "a coach's welcome note on the studio door: encouraging, plain, no pressure",
+    voiceExamples: [
+      { headline: "Start with one class", description: "Book a session and your second visit is free." },
+      { headline: "Your reset button", description: "40% off one class pass, no strings attached." },
+    ],
     positiveCopyDirection: [
       "attainable experience",
       "clear use case",
@@ -124,6 +158,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   spa_massage: {
     normalizedCategory: "spa_massage",
     label: "Spa / massage",
+    voiceAnchor: "a calm card at the spa front desk: soothing, unhurried, simple",
+    voiceExamples: [
+      { headline: "An hour that's yours", description: "Book a massage and take 30% off one session." },
+      { headline: "Overdue, honestly", description: "Book the facial you keep postponing and save 30%." },
+    ],
     positiveCopyDirection: [
       "specific service",
       "appointment moment",
@@ -138,6 +177,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   beauty_salon: {
     normalizedCategory: "beauty_salon",
     label: "Beauty / salon",
+    voiceAnchor: "a stylist's note taped to the mirror: fresh, confident, friendly",
+    voiceExamples: [
+      { headline: "Walk out feeling new", description: "Book a gel manicure and take 30% off one service." },
+      { headline: "Bring your sister", description: "Buy one blowout and the second chair is free." },
+    ],
     positiveCopyDirection: [
       "clear service",
       "verified experience",
@@ -152,6 +196,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   local_service: {
     normalizedCategory: "local_service",
     label: "Local service",
+    voiceAnchor: "a hand-lettered sign at a trusted local counter: plain and helpful",
+    voiceExamples: [
+      { headline: "Cross it off the list", description: "Book one service visit and take 20% off the job." },
+      { headline: "Done by someone local", description: "Buy one service call and get 25% off the work." },
+    ],
     positiveCopyDirection: [
       "practical result",
       "clear service delivered",
@@ -166,6 +215,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   pet_services: {
     normalizedCategory: "pet_services",
     label: "Pet services",
+    voiceAnchor: "a groomer's front-desk note: warm, practical, written by a pet person",
+    voiceExamples: [
+      { headline: "Fresh cut, happy dog", description: "Book a grooming and take 25% off one visit." },
+      { headline: "They earned it", description: "Buy one bath and the nail trim is free." },
+    ],
     positiveCopyDirection: [
       "specific pet service or item",
       "owner convenience",
@@ -180,6 +234,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   auto_service: {
     normalizedCategory: "auto_service",
     label: "Auto service",
+    voiceAnchor: "a trusted neighborhood mechanic's board out front: plain, confident, no scare tactics",
+    voiceExamples: [
+      { headline: "One less errand", description: "Book an oil change and take 25% off the bill." },
+      { headline: "Your car noticed", description: "Buy one detail and the interior refresh is free." },
+    ],
     positiveCopyDirection: [
       "specific auto service",
       "maintenance moment",
@@ -194,6 +253,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   home_service: {
     normalizedCategory: "home_service",
     label: "Home service",
+    voiceAnchor: "a reliable local contractor's flyer: practical, direct, neighborly",
+    voiceExamples: [
+      { headline: "One call, one fix", description: "Book the repair visit and save 20% on the job." },
+      { headline: "Weekend, reclaimed", description: "Buy one lawn service and the edging is free." },
+    ],
     positiveCopyDirection: [
       "specific home task",
       "practical outcome",
@@ -208,6 +272,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   cleaning_laundry: {
     normalizedCategory: "cleaning_laundry",
     label: "Cleaning / laundry",
+    voiceAnchor: "a laundromat counter sign: practical, time-saving, friendly",
+    voiceExamples: [
+      { headline: "Laundry day, canceled", description: "Drop off one load and the second wash is free." },
+      { headline: "Come back to it folded", description: "40% off one wash-and-fold order." },
+    ],
     positiveCopyDirection: [
       "specific cleaning or laundry service",
       "time-saving benefit",
@@ -222,6 +291,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   professional_service: {
     normalizedCategory: "professional_service",
     label: "Professional service",
+    voiceAnchor: "a plainspoken note from a local pro: clear, calm, trustworthy",
+    voiceExamples: [
+      { headline: "The first step is easy", description: "Book a consult and take 25% off the first session." },
+      { headline: "Ask a real person", description: "Buy one session and the planning review is free." },
+    ],
     positiveCopyDirection: [
       "specific consultation or service",
       "simple next step",
@@ -236,6 +310,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   retail: {
     normalizedCategory: "retail",
     label: "Retail",
+    voiceAnchor: "a shopkeeper's shelf tag for a favorite item: specific, inviting, unforced",
+    voiceExamples: [
+      { headline: "Your new favorite thing", description: "Pick up one candle and the second is free." },
+      { headline: "Worth the stop", description: "40% off one of the shop's everyday staples." },
+    ],
     positiveCopyDirection: [
       "exact product",
       "practical use",
@@ -250,6 +329,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   florist_gift: {
     normalizedCategory: "florist_gift",
     label: "Florist / gifts",
+    voiceAnchor: "a florist's handwritten card by the till: warm, giftable, simple",
+    voiceExamples: [
+      { headline: "Flowers, just because", description: "Pick up one bouquet and a mini bunch is free." },
+      { headline: "Make someone's whole week", description: "40% off one arrangement, wrapped to go." },
+    ],
     positiveCopyDirection: [
       "exact product or gift category",
       "occasion when supplied",
@@ -264,6 +348,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   events_entertainment: {
     normalizedCategory: "events_entertainment",
     label: "Events / entertainment",
+    voiceAnchor: "a fun local marquee line: playful, social, easy to say yes to",
+    voiceExamples: [
+      { headline: "Plans: found", description: "Buy one entry and the second ticket is free." },
+      { headline: "Better than the couch", description: "Round up the group and take 40% off one admission." },
+    ],
     positiveCopyDirection: [
       "specific activity",
       "outing or group moment",
@@ -278,6 +367,11 @@ const PLAYBOOKS: Record<NormalizedAdCategory, CategoryAdPlaybook> = {
   general_local_business: {
     normalizedCategory: "general_local_business",
     label: "General local business",
+    voiceAnchor: "a friendly local counter sign: plain words, one clear idea",
+    voiceExamples: [
+      { headline: "Right down the street", description: "Stop in once and the second one is free." },
+      { headline: "Worth knowing about", description: "40% off one item while you look around." },
+    ],
     positiveCopyDirection: [
       "specific offer clarity",
       "plain customer action",
@@ -341,6 +435,11 @@ export function buildCategoryAdPlaybookPromptBlock(category: string | null | und
   return [
     "CATEGORY PLAYBOOK:",
     `Normalized category: ${playbook.normalizedCategory} (${playbook.label}).`,
+    `Voice anchor: write like ${playbook.voiceAnchor}.`,
+    "Voice examples (tone and rhythm only; the real offer's items, numbers, and mechanics always win):",
+    ...playbook.voiceExamples.map(
+      (example) => `- Headline "${example.headline}" with description "${example.description}"`,
+    ),
     `Positive copy direction: ${playbook.positiveCopyDirection.join("; ")}.`,
     `Natural customer moments: ${playbook.customerMoments.join("; ")}.`,
     `Natural customer language: ${playbook.naturalCustomerLanguage.join("; ")}.`,
