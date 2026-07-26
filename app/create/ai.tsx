@@ -1225,7 +1225,6 @@ export default function AiDealScreen() {
   const adReviewSectionYRef = useRef<number | null>(null);
   const draftEditorSectionYRef = useRef<number | null>(null);
   const previousEligibleRef = useRef(false);
-  const menuOfferScrollDoneRef = useRef(false);
   const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
@@ -2456,15 +2455,11 @@ export default function AiDealScreen() {
     params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
 
-  useEffect(() => {
-    const fromMenu = String(params.fromMenuOffer ?? "") === "1";
-    if (!fromMenu || menuOfferScrollDoneRef.current || scheduleSectionY == null) return;
-    menuOfferScrollDoneRef.current = true;
-    const tid = setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, scheduleSectionY - 16), animated: true });
-    }, 400);
-    return () => clearTimeout(tid);
-  }, [params.fromMenuOffer, scheduleSectionY]);
+  // No auto-scroll for the menu-promote path. It used to jump to the Schedule
+  // section 400ms after mount, which scrolled straight past Step 1 — so the
+  // merchant never saw the Standard/Poster toggle or the photo buttons and
+  // silently got the poster default. Landing at the top matches every other
+  // create entry point (approved by Dan 2026-07-25).
 
   useEffect(() => {
     const fromReuse = String(params.fromReuse ?? "") === "1";
