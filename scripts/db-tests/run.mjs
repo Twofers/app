@@ -17,6 +17,7 @@ const suites = [
   "2f-business-name-lock.mjs",
   "2h-promo-materials-authorization.mjs",
   "2i-claim-links-activated-business.mjs",
+  "2j-repeat-claim-audience.mjs",
 ];
 
 let failed = 0;
