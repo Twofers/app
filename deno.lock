@@ -56,6 +56,7 @@
         "npm:expo-apple-authentication@~8.0.8",
         "npm:expo-asset@~12.0.13",
         "npm:expo-audio@~1.1.1",
+        "npm:expo-build-properties@~1.0.10",
         "npm:expo-camera@~17.0.10",
         "npm:expo-constants@~18.0.13",
         "npm:expo-crypto@~15.0.9",
