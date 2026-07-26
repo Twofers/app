@@ -77,7 +77,7 @@ export type DealCopyPromptParams = {
   creativeFormat?: "standard_card" | "poster_v1";
 };
 
-export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V6";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V7";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -159,7 +159,7 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const AI_COPY_PROMPT_V6 = [
+export const AI_COPY_PROMPT_V7 = [
   `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
   "Write a polished mobile advertisement for Twofer, a mobile app where local businesses publish limited local deals. This is an ad, not a legal deal description or generic image caption.",
   "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
@@ -183,6 +183,13 @@ export const AI_COPY_PROMPT_V6 = [
   '- Avoid fragments such as "{item} with free {item}".',
   '- Avoid awkward phrases such as "one coffee free" when "a free coffee" is more natural.',
   '- If an exact item starts with "any", do not put a, an, the, our, or your before it. Say "Buy any large coffee drink", not "Buy an any large coffee drink" or "Try our any large coffee drink".',
+  // Live failure 2026-07-26: merchants whose item names begin with an article
+  // ("The <name>") drove the model to write "40% off one The <name>" on every
+  // candidate, so the whole batch was rejected for the count-article collision
+  // and only a repair round saved the generation. Stated pattern-level; the
+  // example name is invented, never an observed merchant item.
+  '- If an exact item name already begins with "the", "a", or "an", never put a number or another article immediately before it. Keep the item name exactly as given and drop the count instead. Say "40% off The Corner Roast" or "Save 40% on The Corner Roast", never "40% off one The Corner Roast".',
+  '- When the item customers buy and the reward item have the same name, do not print that name twice. Write it the plain buy-one-get-one way, such as "Buy one and the second is free".',
   "- Do not repeat the merchant name unnecessarily.",
   "- Do not repeat the canonical headline word-for-word in the description.",
   "- Owner-provided notes and revision feedback are instructions and context, not draft ad copy. Do not paste merchant text back verbatim unless it is an exact protected product or business name.",
@@ -254,11 +261,17 @@ export const AI_COPY_PROMPT_V6 = [
   "  Facts: item=spicy braised chicken plate, discountPercent=40, business category=restaurant_food.",
   "  Good headlineAlternative: 40% off the spicy braised chicken plate",
   "  Bad headlineAlternative: Coffee break, because this offer has nothing to do with coffee.",
+  "Item name that already starts with an article:",
+  "  Facts: itemName=The Corner Roast, discountPercent=40.",
+  "  Good headlineAlternative: 40% off The Corner Roast",
+  "  Good description: Save 40% on The Corner Roast on your next stop.",
+  "  Bad headlineAlternative: 40% off one The Corner Roast",
+  "  Bad description: Save 40% on one The Corner Roast.",
   "Missing optional information:",
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
 
-export const COPY_VOICE_RULES = AI_COPY_PROMPT_V6;
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V7;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";

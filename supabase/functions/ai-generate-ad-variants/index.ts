@@ -685,14 +685,22 @@ async function generateCopy(params: {
           // eliminated empty content when this call ran at medium effort; the ceiling
           // costs nothing unless the model actually spends it.
           maxOutputTokens: 3000,
-          timeoutMs: 18_000,
+          // ADVISORY ONLY — this value does not take effect. runWithBreaker builds the
+          // provider request as `{ ...request, timeoutMs }` using config.primaryTimeoutMs
+          // (_shared/ai-text-provider.ts), so the caller's timeoutMs is always overwritten.
+          // The real ceiling is the AI_TEXT_PRIMARY_TIMEOUT_MS secret (code default
+          // 15_000; production raised it to 25_000 on 2026-07-26 after gpt-5.5, which
+          // takes 13-16s on this call, timed out ~50% of generations against the 15s
+          // default and fell back to deterministic copy). Change the SECRET, not this
+          // line. Kept in sync with the production value so the two do not disagree if
+          // the router is ever fixed to honour per-call timeouts.
+          timeoutMs: 25_000,
           generationRunId: costContext.requestGroupId,
           promptVersion: AD_COPY_PROMPT_VERSION,
-          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call
-          // and was aborted by the previous 12s text timeout (OPENAI_FETCH_FAILED).
-          // "low" reasoning returns the same validated 5 variants in ~10.5s. 18s exists
-          // so a longer think under the raised token cap completes instead of turning
-          // token truncations into timeout aborts.
+          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call and
+          // was aborted by the old 12s ceiling; "low" returns the same validated five
+          // variants in ~10.5s. gpt-5.5 at "low" runs 13-16s, which is why the ceiling
+          // now lives at 25s in the secret above.
           reasoningLevel: "low",
         }, {
           openAiApiKey: openAiKey,

@@ -266,6 +266,13 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
       }
     }
 
+    // NOTE: this deliberately overwrites the caller's request.timeoutMs with the
+    // resolved config timeout (primaryTimeoutMs / fallbackTimeoutMs), so a per-call
+    // timeoutMs passed to generateStructuredText has NO effect. Timeouts are tuned
+    // through AI_TEXT_PRIMARY_TIMEOUT_MS / AI_TEXT_FALLBACK_TIMEOUT_MS (and
+    // AI_JUDGE_TIMEOUT_MS via the judge's config override) so they can be changed
+    // without a deploy. Callers that appear to set their own timeout are documenting
+    // intent only — see the ad-copy call in ai-generate-ad-variants/index.ts.
     const providerRequest = { ...request, timeoutMs };
     try {
       const result = await runProvider({

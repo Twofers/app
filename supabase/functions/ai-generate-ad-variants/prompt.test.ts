@@ -231,6 +231,25 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("local businesses publish limited local deals");
   });
 
+  it("teaches article-leading item names so counts stop colliding with the name", () => {
+    // Live 2026-07-26: every candidate for an item named "THE <x>" came back as
+    // "40% off one THE <x>", so the whole batch died on QUANTITY_ARTICLE_COLLISION
+    // and only the repair round produced usable copy.
+    expect(basePrompt.system).toContain(
+      'If an exact item name already begins with "the", "a", or "an", never put a number or another article immediately before it',
+    );
+    expect(basePrompt.system).toContain("Bad headlineAlternative: 40% off one The Corner Roast");
+    expect(basePrompt.system).toContain("Good headlineAlternative: 40% off The Corner Roast");
+    // Guidance must stay pattern-level: never name a real merchant item.
+    expect(basePrompt.system).not.toMatch(/spice command|green briefing|lieutenant|bravo brew|sergeant/i);
+  });
+
+  it("stops a same-name reward from printing the item twice", () => {
+    expect(basePrompt.system).toContain(
+      "When the item customers buy and the reward item have the same name, do not print that name twice",
+    );
+  });
+
   it("anchors voice to the business category with playbook voice examples", () => {
     // The V5-era global register told every business to write like a cafe ad.
     expect(basePrompt.system).not.toContain("sharp local cafe ad");

@@ -872,3 +872,112 @@ describe("article-prefixed item names", () => {
     expect(withoutArticle.reasonCodes).not.toContain("CHANGES_FREE_ITEM");
   });
 });
+
+describe("same-item reward typed as BUY_ONE_GET_SOMETHING_FREE", () => {
+  // Live 2026-07-26: a merchant built a chai deal with the SAME item as both the
+  // purchase and the reward but left the type on "get something free". The canonical
+  // line builder correctly wrote same-item phrasing ("Buy one X and get one free"),
+  // while the emitted dealType kept the raw form choice, so validateAiCopyAgainstOffer
+  // ran the different-item rulebook and rejected the app's own line as
+  // VAGUE_GET_ONE_FREE. Publish failed client-side ("We couldn't match this ad to your
+  // offer") before any server call.
+  function sameItemSomethingFree(
+    itemDescription: string,
+    requiredPurchaseQuantity = 1,
+    freeItemQuantity = 1,
+  ): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity,
+      requiredItemDescription: itemDescription,
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity,
+      freeItemDescription: itemDescription,
+      freeItemRetailValueCents: 600,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  function publishMechanicsCopy(contract: DealOfferContract) {
+    // Mirrors buildPublishMechanicsValidationCopy in lib/offer-version-publish.ts
+    // field for field (no social_caption): publish validates the LOCKED offer line,
+    // not the AI copy.
+    return {
+      headline: contract.canonicalOfferLine,
+      short_description: "Redeem at the participating location during the offer window.",
+      push_notification: contract.canonicalOfferLine,
+      terms_summary: contract.canonicalOfferLine,
+    };
+  }
+
+  it("normalizes a one-for-one same-item reward to BUY_ONE_GET_ONE_FREE", () => {
+    const contract = sameItemSomethingFree("THE SPICE COMMAND (CHAI LATTE)");
+    expect(contract.dealType).toBe("BUY_ONE_GET_ONE_FREE");
+    // Same-item AI rules: the item is named once, not twice.
+    expect(contract.aiRules.mustUseExactItemNames).toEqual(["THE SPICE COMMAND (CHAI LATTE)"]);
+  });
+
+  it("matches item names ignoring case and surrounding whitespace", () => {
+    const eligibility: DealEligibilityInput = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Latte",
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity: 1,
+      freeItemDescription: "  latte ",
+      freeItemRetailValueCents: 600,
+      freeItemDiscountPercent: 100,
+    };
+    expect(contractFor(eligibility).dealType).toBe("BUY_ONE_GET_ONE_FREE");
+  });
+
+  it("lets the publish-time mechanics validation pass for the offer line it generates", () => {
+    const contract = sameItemSomethingFree("THE SPICE COMMAND (CHAI LATTE)");
+    const result = validateAiCopyAgainstOffer(publishMechanicsCopy(contract), contract);
+    expect(result.reasonCodes).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it("leaves quantities other than one-for-one on the reward-item path", () => {
+    // validateBuyOneGetOneFree rejects "buy two" lines and reads "get two free" as a
+    // swapped reward, so only a literal buy-one-get-one may normalize.
+    expect(sameItemSomethingFree("latte", 1, 2).dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+    expect(sameItemSomethingFree("latte", 2, 1).dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+  });
+
+  it("still publishes same-item offers whose quantities keep them on the reward path", () => {
+    for (const contract of [sameItemSomethingFree("latte", 1, 2), sameItemSomethingFree("latte", 2, 1)]) {
+      const result = validateAiCopyAgainstOffer(publishMechanicsCopy(contract), contract);
+      expect(result.reasonCodes).not.toContain("VAGUE_GET_ONE_FREE");
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it("keeps genuinely different reward items on the reward-item path", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "grilled cheese sandwich",
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity: 1,
+      freeItemDescription: "fountain drink",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+    expect(contract.dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+    expect(contract.aiRules.mustUseExactItemNames).toEqual(["grilled cheese sandwich", "fountain drink"]);
+  });
+
+  it("still rejects vague get-one-free copy when the reward is a DIFFERENT item", () => {
+    // The rule's whole purpose: copy must not hide which item is free.
+    const result = validateAiCopyAgainstOffer(
+      copyText("Buy a coffee and get one free"),
+      coffeeBagelContract,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("VAGUE_GET_ONE_FREE");
+  });
+});

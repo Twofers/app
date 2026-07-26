@@ -119,6 +119,25 @@ Every code phase is implemented, validated, and **live**. Pre-deploy battery: po
 5. ⏳ **Measure (after a few days of traffic):** re-run `scripts/measure-ai-ad-baseline.mjs` — deterministic-fallback rate target **43% → <10%**, watch p95 copy latency and cost per request group — then the corpus extractor + `scripts/evaluate-ad-copy-naturalness.mjs` for the AFTER report (4.3), side-by-side vs `qa-artifacts/ai-copy-baseline-2026-07-26/`.
 6. ⏳ **Commit** when Dan asks.
 
+## Post-deploy observation #1 — 2026-07-26 ~17:39–17:53 UTC (Dan's 6 test deals)
+
+**Verified working:**
+- V6 live on `gpt-5.5`; `prompt_version=AI_COPY_PROMPT_V6` on all 6 rows.
+- **Empty-content is gone.** Successful calls used 1153/1135/1234 output tokens against the new 3000 budget, `reasoning_tokens=0`. Zero `OPENAI_EMPTY_CONTENT` — the 1.0(b) fix did its job.
+- **Judge runs and is genuinely independent:** `openai/gpt-5.4-mini` judging `gpt-5.5` output, ~5.5–5.9s, real rankings, and its feedback quotes the new voice anchors ("feels more like a local cafe chalkboard note… leans more generic promo copy than something a barista would naturally post").
+- **Voice improved:** "Sundae first, coffee free" / "Buy an ice cream sundae and the coffee is on us." (vs V5's "Save 40% on one latte, clearly and simply.")
+- **New gate fires on real defects:** three candidates rejected `QUANTITY_ARTICLE_COLLISION` on "THE GREEN BRIEFING (Matcha)" — the model was writing "40% off one THE GREEN BRIEFING".
+
+**Regression found — 3/6 fell back to template copy, all `error_class=timeout`:**
+- Root cause: **the per-call `timeoutMs` is dead code.** `ai-text-provider.ts:269` does `const providerRequest = { ...request, timeoutMs }` where `timeoutMs` is the *config's* `primaryTimeoutMs` — so the copy call's `timeoutMs: 18_000` never applied and the real ceiling stayed `AI_TEXT_PRIMARY_TIMEOUT_MS` (default **15s**). gpt-5.5 takes **13.4–15.7s** on this call, so it was a coin flip. The judge hit its own 9s `AI_JUDGE_TIMEOUT_MS` ceiling once (successful judge calls run 5.5–5.9s).
+- Latency context: copy is NOT the wall-clock driver — image ran 13–91s of the 34.8–116.9s totals.
+- **Fix applied (Dan approved, secrets only, no deploy): `AI_TEXT_PRIMARY_TIMEOUT_MS=25000`, `AI_JUDGE_TIMEOUT_MS=15000`** (both set 2026-07-26 21:32 UTC). Note `AI_TEXT_PRIMARY_TIMEOUT_MS` is shared by other text operations (research, translation, compose).
+
+**Open follow-ups (need a deploy; not yet approved):**
+1. Make the per-call `timeoutMs` actually win over `config.primaryTimeoutMs`, or delete the misleading dead parameter from the copy call.
+2. Prompt rule for article-leading item names ("THE GREEN BRIEFING", "THE LIEUTENANT'S CUP") so the model stops generating "one THE …" — the gate correctly kills those candidates, but 3 of 5 died at once, leaving a weaker survivor ("…gets the spotlight with 40% off one."). Same family as the known "The &lt;item&gt;" publish blocker.
+3. Re-verify fallback rate after the timeout change with a fresh batch, then run the AFTER corpus.
+
 ### Rollback (if the new copy misbehaves)
 
 - Judge only: set `AI_V3_INDEPENDENT_JUDGE_ENABLED=false` (instant, no deploy) — copy selection falls back to deterministic ranking.

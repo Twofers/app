@@ -711,14 +711,35 @@ export function buildDealOfferContract(
       locationName,
       quantityLimit,
     );
-    const isSameItem = dealType === "BUY_ONE_GET_ONE_FREE";
+    // A "get something free" deal whose reward is the SAME item the customer buys is a
+    // buy-one-get-one deal, whatever the merchant picked on the form.
+    // buildCanonicalHeadlineFromFacts already recognises this and writes same-item
+    // phrasing ("Buy one X and get one free"), but the emitted dealType used to keep the
+    // merchant's raw choice. validateAiCopyAgainstOffer dispatches on dealType, so it ran
+    // the different-item rulebook against that line and rejected the app's OWN canonical
+    // copy as VAGUE_GET_ONE_FREE — publish died client-side with "We couldn't match this
+    // ad to your offer", before any server call (observed live 2026-07-26 on a same-item
+    // chai BOGO). Normalising here keeps one contract self-consistent: same phrasing,
+    // same validation rulebook, same-item AI rules, and offer-definition records it as
+    // same_item_free / buy_one_get_one rather than a reward-item deal.
+    // Scope is deliberately narrow: ONLY a literal buy-one-get-one (quantities 1 and 1)
+    // normalises. validateBuyOneGetOneFree rejects any "buy two" line
+    // (REQUIRES_TWO_PURCHASES) and reads "get two free" as a swapped reward
+    // (CHANGES_FREE_ITEM), so widening this to other quantities would break same-item
+    // deals that publish fine today.
+    const isSameItem =
+      dealType === "BUY_ONE_GET_ONE_FREE" ||
+      (normalizeForSearch(requiredItem) === normalizeForSearch(freeItem) &&
+        requiredQuantity === 1 &&
+        freeQuantity === 1);
+    const effectiveDealType: DealEligibilityDealType = isSameItem ? "BUY_ONE_GET_ONE_FREE" : dealType;
 
     return {
       businessId: params.businessId,
       businessName,
       locationId,
       locationName,
-      dealType,
+      dealType: effectiveDealType,
       requiredPurchase,
       freeReward,
       customerValuePercent,
@@ -1019,7 +1040,15 @@ function validateBuyOneGetSomethingFree(
   ) {
     reasonCodes.push("FREE_ITEM_ADDED_TO_PURCHASE");
   }
-  if (/\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
+  // VAGUE_GET_ONE_FREE exists to stop copy that hides WHICH item is free. When the
+  // reward IS the purchased item there is only one item in play, so "get one free" is
+  // exact rather than vague — and it is precisely the phrasing this module's own
+  // canonical line uses for such an offer, which is how the app came to reject its own
+  // copy and block publish. Quantity-1 same-item deals now normalise to
+  // BUY_ONE_GET_ONE_FREE in buildDealOfferContract and never reach here; this covers the
+  // remaining same-item shapes, such as "Buy two lattes and get one free".
+  const rewardIsThePurchasedItem = requiredPattern.length > 0 && requiredPattern === freePattern;
+  if (!rewardIsThePurchasedItem && /\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
     reasonCodes.push("VAGUE_GET_ONE_FREE");
   }
   if (
