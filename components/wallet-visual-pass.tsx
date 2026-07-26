@@ -249,16 +249,23 @@ export function WalletVisualPassModal({
         ) : null}
 
         {/* Manual fallback for when the staff scanner can't read the QR. Always
-            visible — no delay or countdown gating its discovery. */}
-        {qrWindowActive && token ? (
+            visible — no delay or countdown gating its discovery.
+
+            The hint only makes sense while the QR is tappable, but the ERROR must
+            outlive the 30s pass window. Gating both on `qrWindowActive` meant a
+            failed redeem unmounted its own explanation the moment the countdown
+            lapsed, so the tap looked like it did nothing at all. */}
+        {(qrWindowActive && token) || manualRedeem.error ? (
           <View style={{ alignItems: "center", marginBottom: 16, gap: 4 }}>
-            <Text
-              style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "700", textAlign: "center" }}
-              numberOfLines={2}
-              maxFontSizeMultiplier={1.15}
-            >
-              {manualRedeem.busy ? t("consumerWallet.manualRedeemBusy") : manualRedeem.hintLabel}
-            </Text>
+            {qrWindowActive && token ? (
+              <Text
+                style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "700", textAlign: "center" }}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.15}
+              >
+                {manualRedeem.busy ? t("consumerWallet.manualRedeemBusy") : manualRedeem.hintLabel}
+              </Text>
+            ) : null}
             {manualRedeem.error ? (
               <Text
                 style={{ color: "#fecaca", fontSize: 12, textAlign: "center" }}
