@@ -5,6 +5,16 @@ Branch at time of audit: `qa/poster-ad-quality`
 Status: READY FOR IMPLEMENTATION — this file is the tracker; check boxes off as you go.
 Read `CLAUDE.md` hard gates before starting. Items are ordered; each is one scoped task.
 
+> **2026-07-26 update.** All five items are committed and pushed; baseline is
+> green (`vitest` 2050/2050). The "device QA owed" notes below on A, B, D and E
+> are **blocked on production test data**, not on the deploys: there is exactly
+> one real claimable deal in production, it was outside its daily window, every
+> other live deal is a demo offer, and all businesses are on
+> `repeat_claim_policy_type = NONE`. See
+> `docs/plans/claim-ux-fixes-handoff-2026-07-26.md` → "The device-QA blocker".
+> B's queries are now proven against a real schema by
+> `scripts/db-tests/2j-repeat-claim-audience.mjs` (13/13).
+
 ## Decision log (Dan, 2026-07-25)
 
 - **D trust model: ACCEPTED RISK.** Customer-device double-tap may be used away
