@@ -27,10 +27,10 @@ Written 2026-07-25 end of session, for pickup 2026-07-26.
 | Item | What it fixes | Code | Deploy | Device QA |
 | --- | --- | --- | --- | --- |
 | A | "Something went wrong" on a second claim | ✅ | none | ⛔ needs a 2nd real deal |
-| B | Pushes to repeat-blocked customers | ✅ | ⛔ 2 fns | ⛔ every business is `NONE` |
+| B | Pushes to repeat-blocked customers | ✅ | ✅ **live** | ⛔ every business is `NONE` |
 | C | Menu-promote forced poster style | ✅ | none | ✅ **passed on S10** |
-| D | Double-tap the QR to redeem manually | ✅ | ✅ **v91 live** | ✅ **passed, both surfaces** |
-| E | Google Wallet pass had no route into the app | ✅ | ⛔ 7 of 8 left | ⛔ needs a claim |
+| D | Double-tap the QR to redeem manually | ✅ | ✅ **v92 live** | ✅ **passed, both surfaces** |
+| E | Google Wallet pass had no route into the app | ✅ | ✅ **all 8 live** | ⛔ `appLinkData` unverifiable |
 | — | Imageless ad for off-menu / no-menu items | ✅ | ✅ **v204 live** | ⛔ blocked — AI quota 30/30 |
 
 Dan's deals from 2026-07-26 evening made claims possible again, which unblocked
@@ -377,7 +377,18 @@ Then release the claim from the wallet to leave prod tidy.
 
 ---
 
-### T3 — Deploy B  ⛔ GATED — low risk
+### T3 — Deploy B  ✅ DEPLOYED 2026-07-26 (Dan approved)
+
+Live: `send-deal-push` **v90**, `weekly-deal-digest` **v62**. Both boot healthy
+(`gate:edges`).
+
+**Behaviour not yet verified, and it is a no-op today either way.** The dry-run
+check below needs `CRON_SECRET`, which is not available locally, so
+`repeat_restricted_users` has not been read back. Separately, every production
+business is still on `repeat_claim_policy_type = NONE`, so the filter has nothing
+to filter until a merchant actually sets a repeat limit. Its queries are
+schema-proven by `2j` (13/13), and every failure path fails open to today's
+behaviour.
 
 Two functions. The new shared module is imported only by these two.
 
@@ -435,7 +446,43 @@ in **Ended** as redeemed with the visual-method receipt copy. Then check a
 
 ---
 
-### T5 — Decide on E  ⛔ GATED — think before running
+### T5 — Deploy E  ✅ DEPLOYED 2026-07-26 (Dan approved) — all 8 complete
+
+Live and code-consistent across the whole set:
+
+| Function | Version | Deployed (UTC) |
+| --- | --- | --- |
+| `complete-visual-redeem` | v92 | 18:27 (with T4) |
+| `send-deal-push` / `weekly-deal-digest` | — | see T3 |
+| `claim-deal` | v105 | 22:42 |
+| `redeem-token` | v106 | 22:42 |
+| `release-claim` | v62 | 22:43 |
+| `staff-redemption` | v61 | 22:43 |
+| `wallet-pass-issue` | v25 | 22:43 |
+| `wallet-pass-webservice` | v22 | 22:43 |
+| `finalize-stale-redeems` | v88 | 22:43 |
+
+`_shared/wallet-pass-{sync,content}.ts` has not changed since 18:27, so all eight
+carry identical wallet-pass code — the partial-deploy hazard is closed.
+
+Pre-checks that were run first:
+- `NATIVE_WALLET_PASS_ENABLED` is **`true`** in production (confirmed by hashing
+  the candidate values against the secret digest — the value itself was never
+  printed), so E actually does something.
+- The only commit touching those seven function directories since their last
+  deploy (07-24) was the already-deployed service-role-key migration, so this
+  shipped **only** the wallet-pass module change — nothing unintended rode along
+  on `claim-deal` / `redeem-token`.
+- `gate:edges` after deploy: `claim-deal`, `redeem-token`, `send-deal-push` and
+  the AI functions all HEALTHY.
+
+⚠️ **`appLinkData` is still the unverified assumption.** It needs a re-issued pass
+on a device to confirm, and the log line that would reveal a rejected shape
+(`retrying without it`) **cannot be read** — the Supabase CLI has no
+`functions logs` command. If Google rejects the shape the retry drops the field,
+so the cost is the button, not pass updates.
+
+### Original T5 guidance (kept for context)
 
 **This is the only deploy that touches critical paths.**
 `_shared/wallet-pass-sync.ts` and `_shared/wallet-pass-content.ts` are bundled
