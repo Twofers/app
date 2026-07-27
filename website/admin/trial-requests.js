@@ -118,10 +118,12 @@
     if (error?.name === "AbortError") {
       if (action === "session") return "The admin session refresh timed out. Sign in again if this continues.";
       if (action === "decide") return "The approval decision request timed out. Refresh the queue before trying that decision again.";
+      if (action === "resend") return "The billing-link email request timed out. Refresh the queue before trying again.";
       return "The business access request queue timed out. Refresh this page and try again.";
     }
     if (action === "session") return "Could not refresh the admin session. Sign in again if this continues.";
     if (action === "decide") return "Could not reach the approval decision service. Refresh the queue before trying that decision again.";
+    if (action === "resend") return "Could not reach the billing-link email service. Refresh the queue before trying again.";
     return "Could not reach the business access request service. Refresh this page and try again.";
   }
 
@@ -168,7 +170,11 @@
     if (!applicationsEndpoint) throw new Error("Business access request endpoint is not configured.");
     const token = await getAccessToken();
     if (!token) throw new Error("Admin session not connected.");
-    const action = body?.action === "decide" ? "decide" : "list";
+    const action = body?.action === "decide"
+      ? "decide"
+      : body?.action === "resend_billing_link"
+      ? "resend"
+      : "list";
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 20000);
     let response;
@@ -334,6 +340,18 @@
       fullAccessButton.dataset.applicationId = app.id;
       fullAccessButton.textContent = "Approve - full access";
       actions.appendChild(fullAccessButton);
+
+      if (app.billing_link_resend_eligible === true) {
+        const resendButton = document.createElement("button");
+        resendButton.type = "button";
+        resendButton.className = "button button-small button-secondary";
+        resendButton.dataset.adminAction = "resend_billing_link";
+        resendButton.dataset.applicationId = app.id;
+        resendButton.textContent = app.billing_link_email_sent
+          ? "Send new billing link"
+          : "Send billing link";
+        actions.appendChild(resendButton);
+      }
       actionsTd.appendChild(actions);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -436,6 +454,38 @@
     }
   }
 
+  async function resendBillingLink(applicationId, button) {
+    const confirmed = window.confirm(
+      "Send a new secure billing-link email? The previous email link will stop working.",
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    setTrialStatus("Sending a new billing link...");
+    try {
+      const payload = await postAdmin({
+        action: "resend_billing_link",
+        application_id: applicationId,
+      });
+      setTrialStatus(
+        payload.message || "A new billing-link email was sent. The previous link is no longer valid.",
+      );
+      try {
+        await loadApplications();
+      } catch (error) {
+        if (String(error?.message || "").includes("session")) {
+          setAdminStatus("Admin session not connected", "warning");
+        }
+        setTrialStatus(
+          "The billing-link email was sent, but the queue refresh failed. Use Load requests before sending another.",
+          "warning",
+        );
+      }
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   if (signOutButton) {
     signOutButton.addEventListener("click", () => {
       clearSession();
@@ -455,8 +505,16 @@
 
   if (tbody) {
     tbody.addEventListener("click", (event) => {
-      const button = event.target instanceof HTMLElement ? event.target.closest("button[data-decision]") : null;
+      const button = event.target instanceof HTMLElement
+        ? event.target.closest("button[data-decision], button[data-admin-action]")
+        : null;
       if (!button) return;
+      if (button.dataset.adminAction === "resend_billing_link") {
+        resendBillingLink(button.dataset.applicationId || "", button).catch((error) => {
+          setTrialStatus(error instanceof Error ? error.message : "Could not send a new billing link.", "danger");
+        });
+        return;
+      }
       decide(button.dataset.applicationId || "", button.dataset.decision || "", button).catch((error) => {
         setTrialStatus(error instanceof Error ? error.message : "Could not save decision.", "danger");
       });

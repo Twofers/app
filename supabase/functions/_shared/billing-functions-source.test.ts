@@ -23,15 +23,22 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/\/business\/billing\/cancel\//);
     expect(source).toMatch(/STRIPE_TWOFER_BUSINESS_PRICE_ID/);
     expect(source).toMatch(/mode: "subscription"/);
-    // No-card trial toggle (Dan, 2026-07-06): card is required unless the
-    // global require_card_for_trial switch is off or a valid exemption code
-    // was used -- see the dedicated describe block below for the full check.
-    expect(source).toMatch(/payment_method_collection: skipCardCollection \? "if_required" : "always"/);
+    // Live Stripe activation always requires a card. The separate admin grant
+    // path is the only way to receive no-card trial access.
+    expect(source).toMatch(/payment_method_collection: "always"/);
+    expect(source).not.toMatch(/payment_method_collection: "if_required"/);
     expect(source).toMatch(/assertBusinessCanStartTrialCheckout/);
-    expect(source).toMatch(/accessStatus: "approved_not_activated"/);
-    expect(source).toMatch(/checkout_purpose: "trial_start"/);
-    expect(source).toMatch(/trial_period_days: STANDARD_TRIAL_DAYS/);
-    expect(source).toMatch(/app_access_after: "approved_not_activated"/);
+    expect(source).toMatch(
+      /accessStatus: checkoutPurpose === "admin_trial_conversion" \? "trialing" : "approved_not_activated"/,
+    );
+    expect(source).toMatch(
+      /preserveSubscriptionState: checkoutPurpose === "admin_trial_conversion"/,
+    );
+    expect(source).toMatch(/checkout_purpose: checkoutPurpose/);
+    expect(source).toMatch(/return \{ trial_period_days: STANDARD_TRIAL_DAYS \}/);
+    expect(source).toMatch(
+      /app_access_after: checkoutPurpose === "admin_trial_conversion" \? "trialing" : "approved_not_activated"/,
+    );
     expect(source).not.toMatch(/user_owns_business_location/);
     expect(source).not.toMatch(/trial_acknowledged/);
     expect(source).not.toMatch(/trial_checkout_intents/);
@@ -118,6 +125,7 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/STRIPE_SECRET_KEY/);
     expect(source).toMatch(/stripeSecretKey\.startsWith\("sk_live_"\)/);
     expect(source).toMatch(/config\.billingEnvironment !== "production"/);
+    expect(source).toMatch(/Production billing requires a live Stripe key/);
     expect(source).not.toMatch(/user_owns_business_location/);
     expect(source).not.toMatch(/location_id/);
     // Audit F-006: same atomic RPC as checkout; no use_count read-then-update.
@@ -164,6 +172,7 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/if \(existingPeriod\?\.id\) return/);
     expect(source).toMatch(/event\.type === "customer\.subscription\.updated"/);
     expect(source).not.toMatch(/event\.type === "invoice\.payment_succeeded"\) \{\s*await grantPaidPeriod/);
+    expect(source).toMatch(/stripeSubscriptionIdFromEventObject/);
   });
 
   it("syncs business subscriptions from verified Stripe webhooks without intercepting refunds", () => {
@@ -188,6 +197,8 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/processed_at: null/);
     expect(source).toMatch(/error_message: null/);
     expect(source).toMatch(/return \{ duplicate: true, id: existingId \}/);
+    expect(source).toMatch(/providerErrorMessage\(err\)/);
+    expect(source).not.toMatch(/"failed",\s*\n\s*err instanceof Error \? err\.message : String\(err\)/);
   });
 
   it("activates card-required trials only from checkout webhooks", () => {
@@ -262,20 +273,14 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/from\("business_location_identity"\)\.upsert\(/);
   });
 
-  it("gates the no-card trial on the global switch + reuse guard, then a code as a last-resort override", () => {
+  it("requires a card for Stripe activation and keeps admin trial conversion bounded", () => {
     const source = readFunction("stripe-create-checkout-session");
-    expect(source).toMatch(/async function consumeTrialNoCardExemptionCode/);
-    expect(source).toMatch(/consume_trial_no_card_exemption_code/);
-    expect(source).toMatch(/async function isBusinessLocationTrialAlreadyUsed/);
-    expect(source).toMatch(/check_business_location_trial_reuse/);
-    // The automatic no-card grant is gated on the switch AND the per-location
-    // reuse guard...
-    expect(source).toMatch(/if \(!config\.requireCardForTrial\) \{/);
-    expect(source).toMatch(/skipCardCollection = !\(locationId && \(await isBusinessLocationTrialAlreadyUsed\(/);
-    // ...and the code is only consumed when the card would otherwise be
-    // required, so a limited-use code is never burned needlessly.
-    expect(source).toMatch(/if \(!skipCardCollection\) \{\s*\n\s*skipCardCollection = await consumeTrialNoCardExemptionCode\(/);
-    expect(source).toMatch(/trial_period_days: STANDARD_TRIAL_DAYS/);
+    expect(source).toMatch(/payment_method_collection: "always"/);
+    expect(source).not.toMatch(/trial_no_card_code|consume_trial_no_card_exemption_code|skipCardCollection/);
+    expect(source).toMatch(/checkoutPurpose: onCardFreeAdminTrial \? "admin_trial_conversion" : "trial_start"/);
+    expect(source).toMatch(/return \{ trial_period_days: STANDARD_TRIAL_DAYS \}/);
+    expect(source).toMatch(/return \{ trial_end: Math\.floor\(trialEndMs \/ 1000\) \}/);
+    expect(source).toMatch(/return \{ trial_period_days: 1 \}/);
     expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
   });
 

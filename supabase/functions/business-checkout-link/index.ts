@@ -18,9 +18,10 @@ import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 //
 // Errors are deliberately generic; internals are never exposed.
 
-// This email token is exclusively for first activation. Existing trial, paid,
-// lapsed, or suspended accounts use billing management/support instead.
-const ELIGIBLE_STATUSES = new Set(["approved_not_activated"]);
+// Standard approvals activate their first Stripe trial. An admin-granted trial
+// is already live and uses the same emailed link to attach a card for continued
+// billing without receiving another 30-day trial.
+const ELIGIBLE_STATUSES = new Set(["approved_not_activated", "trial_active"]);
 
 // Abuse guard: cap how many checkout sessions a single business can spin up in a
 // short window, so a leaked link can't hammer Stripe session creation.

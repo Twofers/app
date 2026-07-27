@@ -47,6 +47,7 @@ const ROUTES = [
   "/s/smoke-deal",
   "/admin/login/",
   "/admin/",
+  "/admin/accounts/",
   "/admin/prospects/",
   "/admin/prospects/import/",
   "/admin/prospects/11111111-1111-4111-8111-111111111111/",

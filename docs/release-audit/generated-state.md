@@ -37,13 +37,14 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `168`
-- Latest: `20260822180000_claim_deterministic_no_raise.sql`
+- Count: `171`
+- Latest: `20260823120000_admin_account_management.sql`
 
-## Edge Functions (supabase/functions, 79 local)
+## Edge Functions (supabase/functions, 80 local)
 
 - accept-business-terms
 - activate-redemption-mode
+- admin-account-management
 - admin-ai-cost-ledger-reset
 - admin-ai-operating-report
 - admin-ai-prompts

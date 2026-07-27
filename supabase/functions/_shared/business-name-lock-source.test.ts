@@ -33,8 +33,21 @@ const activationMigration = readFileSync(
   join(root, "supabase", "migrations", "20260817120000_approved_not_activated_activation_gate.sql"),
   "utf8",
 );
+const accountManagementMigration = readFileSync(
+  join(root, "supabase", "migrations", "20260823120000_admin_account_management.sql"),
+  "utf8",
+);
 
-const NON_PUBLIC = ["draft", "pending_verification", "approved_not_activated", "rejected"];
+const NON_PUBLIC = [
+  "draft",
+  "pending_verification",
+  "approved_not_activated",
+  "rejected",
+  "canceled",
+  "suspended",
+  "disabled",
+  "archived",
+];
 
 function tsListOf(source: string): string[] {
   const m = source.match(/NON_PUBLIC_BUSINESS_STATUSES = \[([^\]]+)\]/);
@@ -46,6 +59,15 @@ describe("business name lock — status list sync", () => {
   it("the latest SQL predicate also hides approved setup workspaces", () => {
     expect(activationMigration).toMatch(
       /is_public_business_status[\s\S]*?NOT IN \('draft', 'pending_verification', 'approved_not_activated', 'rejected'\)/,
+    );
+  });
+
+  it("the account lifecycle migration removes suspended and archived businesses from discovery", () => {
+    expect(accountManagementMigration).toMatch(
+      /is_public_business_status[\s\S]*?'limited_trial'[\s\S]*?'trialing'[\s\S]*?'active'[\s\S]*?'past_due'[\s\S]*?'trial_expired'/,
+    );
+    expect(accountManagementMigration).not.toMatch(
+      /is_public_business_status[\s\S]*?\b(?:suspended|archived|disabled|canceled)\b[\s\S]*?\);/,
     );
   });
 

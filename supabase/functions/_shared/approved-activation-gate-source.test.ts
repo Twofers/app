@@ -83,6 +83,8 @@ describe("approved-not-activated lifecycle", () => {
 
   it("lets a card-free admin trial still reach Stripe Checkout to convert", () => {
     const checkout = read("supabase/functions/stripe-create-checkout-session/index.ts");
+    const checkoutLink = read("supabase/functions/business-checkout-link/index.ts");
+    const webhook = read("supabase/functions/stripe-webhook/index.ts");
     expect(checkout).toMatch(/onCardFreeAdminTrial/);
     // Converting is allowed only for an admin grant with nothing billed behind
     // it; a Stripe-backed trial or an activated business is still refused.
@@ -92,6 +94,23 @@ describe("approved-not-activated lifecycle", () => {
     // The grant moves the application to trial_active, so the eligibility
     // lookup has to accept that status or comped owners can never convert.
     expect(checkout).toMatch(/"approved_not_activated", "trial_active"/);
+    expect(checkoutLink).toMatch(/"approved_not_activated", "trial_active"/);
+    // A conversion attaches Stripe to the remaining comped trial rather than
+    // invoking the initial-trial RPC or silently granting another 30 days.
+    expect(checkout).toMatch(/"admin_trial_conversion"/);
+    expect(checkout).toMatch(/trial_end: Math\.floor\(trialEndMs \/ 1000\)/);
+    expect(checkout).toMatch(
+      /preserveSubscriptionState: checkoutPurpose === "admin_trial_conversion"/,
+    );
+    expect(webhook).toMatch(/activateAdminTrialConversionCheckout/);
+    expect(webhook).toMatch(/syncBusinessSubscriptionFromStripe/);
+    const reservationMigration = read(
+      "supabase/migrations/20260822190000_admin_trial_checkout_reservation.sql",
+    );
+    expect(reservationMigration).toMatch(
+      /idx_stripe_checkout_sessions_one_open_admin_trial_conversion/,
+    );
+    expect(reservationMigration).toMatch(/status IN \('created', 'opened'\)/);
   });
 
   it("tells approve_full_access owners access is already live but still links Checkout", () => {
@@ -188,16 +207,17 @@ describe("approved-not-activated lifecycle", () => {
     );
   });
 
-  it("reserves one local activation checkout before Stripe and always requests a 30-day trial", () => {
+  it("reserves one local activation checkout before Stripe and requires a card", () => {
     const checkout = read("supabase/functions/stripe-create-checkout-session/index.ts");
     const reservation = checkout.indexOf('.from("stripe_checkout_sessions").insert');
     const providerCreate = checkout.indexOf("stripe.checkout.sessions.create");
     expect(reservation).toBeGreaterThan(-1);
     expect(providerCreate).toBeGreaterThan(reservation);
     expect(checkout).toMatch(/application_id: applicationId/);
-    expect(checkout).toMatch(/checkout_purpose: "trial_start"/);
-    expect(checkout).toMatch(/trial_period_days: STANDARD_TRIAL_DAYS/);
+    expect(checkout).toMatch(/checkout_purpose: checkoutPurpose/);
+    expect(checkout).toMatch(/return \{ trial_period_days: STANDARD_TRIAL_DAYS \}/);
     expect(checkout).toMatch(/STANDARD_TRIAL_DAYS\s*=\s*30/);
+    expect(checkout).toMatch(/payment_method_collection: "always"/);
     expect(checkout).toMatch(/session_id=\{CHECKOUT_SESSION_ID\}/);
     expect(checkout).toMatch(/APPROVED_ACTIVATION_GATE_DISABLED/);
     expect(checkout).toMatch(/Production billing requires a live Stripe key/);
@@ -247,6 +267,7 @@ describe("approved-not-activated lifecycle", () => {
     const createLayout = read("app/create/_layout.tsx");
     const tabsLayout = read("app/(tabs)/_layout.tsx");
     const statusScript = read("website/business/billing/activation-status.js");
+    const statusFunction = read("supabase/functions/business-activation-status/index.ts");
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.business_deal_drafts/);
     expect(menuOffer).toMatch(/from\("business_deal_drafts"\)/);
     expect(menuOffer).toMatch(/draft_type: "text_only"/);
@@ -258,6 +279,11 @@ describe("approved-not-activated lifecycle", () => {
     expect(statusScript).toMatch(/es: \{/);
     expect(statusScript).toMatch(/ko: \{/);
     expect(statusScript).toMatch(/twofer:localechange/);
+    expect(statusFunction).toMatch(/billing_provider_events/);
+    expect(statusFunction).toMatch(/\.eq\("processing_status", "failed"\)/);
+    expect(statusFunction).toMatch(
+      /\.contains\("payload", \{ data: \{ object: \{ id: sessionId \} \} \}\)/,
+    );
   });
 
   it("classifies legacy cohorts using paginated evidence and preserves protected access", () => {

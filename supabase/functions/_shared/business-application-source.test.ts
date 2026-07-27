@@ -162,7 +162,9 @@ describe("business application intake", () => {
 
   it("rejects an unrecognized action with a clear 400 instead of silently falling through to listApplications", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"\]\)/);
+    expect(source).toMatch(
+      /const KNOWN_ACTIONS = new Set\(\[[\s\S]*"list"[\s\S]*"resend_billing_link"[\s\S]*"quick_confirm"[\s\S]*\]\)/,
+    );
     expect(source).toMatch(/if \(!KNOWN_ACTIONS\.has\(action\)\) \{\s*\n\s*return json\(req, \{ ok: false, error: "Unknown action\.", request_id: requestId \}, 400\);/);
   });
 

@@ -66,6 +66,7 @@ type DecisionKey =
 // business_applications.trial_days check constraint.
 const MIN_FULL_ACCESS_TRIAL_DAYS = 1;
 const MAX_FULL_ACCESS_TRIAL_DAYS = 120;
+const BILLING_LINK_RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 
 type VerificationDecision = "verify" | "reject" | "needs_more_info";
 
@@ -96,7 +97,15 @@ type BusinessDecisionSyncResult = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPEN_STATUSES = ["pending_review", "pending_verification", "review_required"];
-const KNOWN_ACTIONS = new Set(["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"]);
+const KNOWN_ACTIONS = new Set([
+  "list",
+  "decide",
+  "create",
+  "verify_business",
+  "resend_billing_link",
+  "quick_preview",
+  "quick_confirm",
+]);
 const QUICK_APPROVAL_ACTIONS = new Set(["quick_preview", "quick_confirm"]);
 const QUICK_APPROVAL_TOKEN_RE = /^[A-Za-z0-9_-]{40,200}$/;
 const QUICK_APPROVAL_PROCESSING_TIMEOUT_MS = 2 * 60 * 1000;
@@ -132,6 +141,10 @@ function hasReadableAdminRole(role: unknown): role is AdminRole {
 
 function canDecideApplications(role: AdminRole): boolean {
   return role === "owner" || role === "admin" || role === "moderator" || role === "developer";
+}
+
+function canResendBillingLink(role: AdminRole): boolean {
+  return role === "owner" || role === "admin" || role === "support";
 }
 
 function riskLevel(score: unknown): "low" | "medium" | "high" | "blocked" | null {
@@ -525,7 +538,7 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   let query = ctx.supabaseAdmin
     .from("business_applications")
     .select(
-      "id,business_name,contact_name,email,phone,address,business_type,website_or_instagram,slow_hours,offer_interests,launch_area,status,access_tier,verification_status,risk_score,risk_reasons,trial_days,trial_offer_limit,trial_claim_limit,business_id,onboarding_request_id,admin_notes,reviewed_at,created_at,updated_at",
+      "id,business_name,contact_name,email,phone,address,business_type,website_or_instagram,slow_hours,offer_interests,launch_area,status,access_tier,verification_status,risk_score,risk_reasons,trial_days,trial_offer_limit,trial_claim_limit,business_id,onboarding_request_id,admin_notes,approval_email_sent_at,approval_email_decision,reviewed_at,created_at,updated_at",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -541,6 +554,45 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   const { data, error } = await query;
   if (error) throw error;
 
+  const businessIds = [...new Set(
+    (data ?? [])
+      .map((application: Record<string, unknown>) =>
+        typeof application.business_id === "string" ? application.business_id : null
+      )
+      .filter((value: string | null): value is string => Boolean(value)),
+  )];
+  const subscriptionsByBusiness = new Map<string, Record<string, unknown>>();
+  if (businessIds.length > 0) {
+    const { data: subscriptions, error: subscriptionsError } = await ctx.supabaseAdmin
+      .from("business_subscriptions")
+      .select("business_id,trial_type,trial_end,activated_at,stripe_subscription_id")
+      .in("business_id", businessIds);
+    if (subscriptionsError) throw subscriptionsError;
+    for (const subscription of subscriptions ?? []) {
+      if (typeof subscription.business_id === "string") {
+        subscriptionsByBusiness.set(subscription.business_id, subscription);
+      }
+    }
+  }
+
+  const applications = (data ?? []).map((application: Record<string, unknown>) => {
+    const businessId = typeof application.business_id === "string"
+      ? application.business_id
+      : null;
+    const subscription = businessId ? subscriptionsByBusiness.get(businessId) : null;
+    const adminTrialCanConvert = application.status === "trial_active" &&
+      subscription?.trial_type === "admin_comp" &&
+      !subscription?.activated_at &&
+      !subscription?.stripe_subscription_id;
+    return {
+      ...application,
+      billing_link_resend_eligible:
+        canResendBillingLink(ctx.adminUser.role) &&
+        (application.status === "approved_not_activated" || adminTrialCanConvert),
+      billing_link_email_sent: Boolean(application.approval_email_sent_at),
+    };
+  });
+
   await ctx.supabaseAdmin.from("admin_audit_log").insert({
     admin_user_id: ctx.user.id,
     admin_email: ctx.adminUser.email ?? ctx.user.email ?? null,
@@ -553,7 +605,119 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   return json(req, {
     ok: true,
     request_id: ctx.requestId,
-    applications: data ?? [],
+    applications,
+  });
+}
+
+async function resendBillingLink(req: Request, ctx: AdminContext, payload: Payload) {
+  if (!canResendBillingLink(ctx.adminUser.role)) {
+    return json(req, { error: "This admin role cannot send billing links." }, 403);
+  }
+
+  const applicationId = cleanString(payload.application_id, 80);
+  if (!UUID_RE.test(applicationId)) {
+    return json(req, { error: "Application is required." }, 400);
+  }
+
+  const { data: applicationData, error: applicationError } = await ctx.supabaseAdmin
+    .from("business_applications")
+    .select("*")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (applicationError) throw applicationError;
+  if (!applicationData) return json(req, { error: "Trial request not found." }, 404);
+  const application = applicationData as Record<string, unknown>;
+
+  if (
+    application.status !== "approved_not_activated" &&
+    application.status !== "trial_active"
+  ) {
+    return json(req, {
+      error: "A new billing link can only be sent for approved setup or an unconverted admin trial.",
+    }, 409);
+  }
+
+  const recentCutoff = new Date(Date.now() - BILLING_LINK_RESEND_COOLDOWN_MS).toISOString();
+  const { data: recentSends, error: recentSendError } = await ctx.supabaseAdmin
+    .from("admin_audit_log")
+    .select("id")
+    .eq("target_type", "business_application")
+    .eq("target_id", applicationId)
+    .eq("action", "admin_business_application_billing_link_resent")
+    .gte("created_at", recentCutoff)
+    .limit(1);
+  if (recentSendError) throw recentSendError;
+  if ((recentSends ?? []).length > 0) {
+    return json(req, {
+      error: "A new billing link was sent recently. Wait five minutes before sending another.",
+    }, 429);
+  }
+
+  let decision: ApprovalEmailDecision = "approve_setup";
+  let trialDays = typeof application.trial_days === "number" &&
+      Number.isInteger(application.trial_days) &&
+      application.trial_days > 0
+    ? application.trial_days
+    : 30;
+
+  if (application.status === "trial_active") {
+    const businessId = typeof application.business_id === "string"
+      ? application.business_id
+      : "";
+    if (!UUID_RE.test(businessId)) {
+      return json(req, { error: "The active trial is not linked to a business." }, 409);
+    }
+    const { data: subscription, error: subscriptionError } = await ctx.supabaseAdmin
+      .from("business_subscriptions")
+      .select("trial_type,trial_end,activated_at,stripe_subscription_id")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (subscriptionError) throw subscriptionError;
+    if (
+      subscription?.trial_type !== "admin_comp" ||
+      subscription?.activated_at ||
+      subscription?.stripe_subscription_id
+    ) {
+      return json(req, {
+        error: "Stripe billing is already active. Use the customer billing portal instead.",
+      }, 409);
+    }
+    const trialEndMs = Date.parse(String(subscription.trial_end ?? ""));
+    if (!Number.isFinite(trialEndMs) || trialEndMs <= Date.now()) {
+      return json(req, { error: "The admin trial has ended and cannot receive a conversion link." }, 409);
+    }
+    trialDays = Math.max(1, Math.min(
+      MAX_FULL_ACCESS_TRIAL_DAYS,
+      Math.ceil((trialEndMs - Date.now()) / (24 * 60 * 60 * 1000)),
+    ));
+    decision = "approve_full_access";
+  } else {
+    const previousDecision = application.approval_email_decision;
+    if (isDecision(previousDecision) && isApprovalDecision(previousDecision)) {
+      decision = previousDecision;
+    }
+  }
+
+  const emailWarning = await sendApprovalEmail({
+    supabaseAdmin: ctx.supabaseAdmin,
+    application: { ...application, trial_days: trialDays },
+    decision,
+    requestId: ctx.requestId,
+    allowResend: true,
+    adminUserId: ctx.user.id,
+    adminEmail: ctx.adminUser.email ?? ctx.user.email ?? null,
+  });
+  if (emailWarning) {
+    return json(req, {
+      error: emailWarning,
+      request_id: ctx.requestId,
+    }, 502);
+  }
+
+  return json(req, {
+    ok: true,
+    request_id: ctx.requestId,
+    message: "A new billing link was sent. The previous email link is no longer valid.",
   });
 }
 
@@ -1321,6 +1485,9 @@ Deno.serve(async (req) => {
     if (action === "verify_business") {
       return verifyBusiness(req, adminContext, payload);
     }
+    if (action === "resend_billing_link") {
+      return resendBillingLink(req, adminContext, payload);
+    }
     return listApplications(req, adminContext, payload);
   } catch (err) {
     console.error("[admin-business-applications] error:", err);
@@ -1334,6 +1501,8 @@ Deno.serve(async (req) => {
       ? "Failed to create business trial."
       : action === "verify_business"
       ? "Failed to save verification decision."
+      : action === "resend_billing_link"
+      ? "Failed to send a new billing link."
       : "Failed to load trial requests.";
     return json(req, { error, request_id: requestId }, 500);
   }

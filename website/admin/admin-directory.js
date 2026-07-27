@@ -698,6 +698,12 @@
       if (viewOffersLink) {
         viewOffersLink.href = business?.name ? `/admin/offers?q=${encodeURIComponent(business.name)}` : "/admin/offers";
       }
+      const manageAccountLink = document.querySelector("[data-manage-account-link]");
+      if (manageAccountLink) {
+        manageAccountLink.href = business?.owner_id
+          ? `/admin/accounts?userId=${encodeURIComponent(business.owner_id)}`
+          : "/admin/accounts";
+      }
     }
   }
 

@@ -9,6 +9,7 @@ import {
 } from "../_shared/business-location-entitlement-sync.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { stripeSubscriptionIdFromEventObject } from "../_shared/stripe-event-subscription.ts";
 
 type Metadata = Record<string, string>;
 
@@ -88,6 +89,14 @@ function isRealPaidSubscriptionCycleInvoice(invoice: any): boolean {
 
 function isTrialStartCheckout(metadata: Metadata): boolean {
   return safeGetString(metadata.checkout_purpose) === "trial_start";
+}
+
+function isAdminTrialConversionCheckout(metadata: Metadata): boolean {
+  return safeGetString(metadata.checkout_purpose) === "admin_trial_conversion";
+}
+
+function isBillingActivationCheckout(metadata: Metadata): boolean {
+  return isTrialStartCheckout(metadata) || isAdminTrialConversionCheckout(metadata);
 }
 
 function shouldDeferTrialSubscriptionSync(existingStatus: string | null, stripeStatus: string): boolean {
@@ -215,10 +224,23 @@ async function recordRefundWebhookDetails(params: {
 
 async function fetchSubscriptionForEvent(stripe: Stripe, eventType: string, obj: any): Promise<any | null> {
   if (eventType.startsWith("customer.subscription.")) return obj;
-  const rawSubscription = obj?.subscription;
-  const subscriptionId = typeof rawSubscription === "string" ? rawSubscription : rawSubscription?.id;
+  const subscriptionId = stripeSubscriptionIdFromEventObject(obj);
   if (!subscriptionId) return null;
   return await stripe.subscriptions.retrieve(subscriptionId);
+}
+
+function providerErrorMessage(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === "object") {
+    const error = value as { code?: unknown; message?: unknown; details?: unknown };
+    const code = safeGetString(error.code);
+    const message = safeGetString(error.message);
+    const details = safeGetString(error.details);
+    const parts = [code, message, details].filter((part): part is string => Boolean(part));
+    if (parts.length) return parts.join(": ");
+  }
+  const fallback = String(value);
+  return fallback === "[object Object]" ? "Unknown webhook processing error." : fallback;
 }
 
 async function insertProviderEvent(supabase: any, event: Stripe.Event, environment: string) {
@@ -765,12 +787,17 @@ async function syncBusinessSubscriptionFromStripe(params: {
     .maybeSingle();
   if (previousError) throw previousError;
   const previousAppAccessStatus = safeGetString(previous?.app_access_status);
-  const isCheckoutActivationEvent = event.type === "checkout.session.completed" && isTrialStartCheckout(metadata);
+  const isCheckoutActivationEvent = event.type === "checkout.session.completed" &&
+    isBillingActivationCheckout(metadata);
   const previousEventMs = previous?.last_provider_event_created_at
     ? Date.parse(previous.last_provider_event_created_at)
     : Number.NaN;
   const incomingEventMs = event.created * 1000;
-  if (Number.isFinite(previousEventMs) && incomingEventMs < previousEventMs) {
+  if (
+    Number.isFinite(previousEventMs) &&
+    incomingEventMs < previousEventMs &&
+    !isCheckoutActivationEvent
+  ) {
     await supabase.from("billing_events").upsert(
       {
         business_id: businessId,
@@ -795,11 +822,14 @@ async function syncBusinessSubscriptionFromStripe(params: {
     shouldDeferTrialSubscriptionSync(previousAppAccessStatus, status);
 
   if (event.type === "checkout.session.completed") {
-    if (!isTrialStartCheckout(metadata)) {
-      throw new Error("Checkout session is not a trial activation session.");
+    if (!isBillingActivationCheckout(metadata)) {
+      throw new Error("Checkout session is not a billing activation session.");
     }
-    if (status !== "trialing") {
+    if (isTrialStartCheckout(metadata) && status !== "trialing") {
       throw new Error("Checkout session did not create a trialing subscription.");
+    }
+    if (isAdminTrialConversionCheckout(metadata) && status !== "trialing" && status !== "active") {
+      throw new Error("Admin trial conversion did not create an active or trialing subscription.");
     }
   }
   const effectiveAccess = deferInitialTrialUnlock
@@ -1147,6 +1177,84 @@ async function activateBusinessTrialCheckout(params: {
   return data;
 }
 
+async function activateAdminTrialConversionCheckout(params: {
+  supabase: any;
+  stripe: Stripe;
+  config: RuntimeBillingConfig;
+  event: Stripe.Event;
+  eventSession: any;
+  businessId: string;
+}) {
+  const sessionId = safeGetString(params.eventSession?.id);
+  if (!sessionId) throw new Error("Checkout Session is missing its id.");
+  const checkoutSession: any = await params.stripe.checkout.sessions.retrieve(sessionId);
+  const metadata = metadataFrom(checkoutSession);
+  if (!isAdminTrialConversionCheckout(metadata)) {
+    throw new Error("Checkout session is not an admin trial conversion.");
+  }
+  if (safeGetString(checkoutSession?.mode) !== "subscription" || safeGetString(checkoutSession?.status) !== "complete") {
+    throw new Error("Checkout session is not a completed subscription Checkout.");
+  }
+  if (safeGetString(metadata.business_id) !== params.businessId) {
+    throw new Error("Checkout conversion business metadata does not match.");
+  }
+
+  const subscriptionId = stripeReferenceId(checkoutSession?.subscription);
+  if (!subscriptionId) throw new Error("Checkout Session is missing its subscription.");
+  const subscription: any = await params.stripe.subscriptions.retrieve(subscriptionId);
+  const subscriptionStatus = safeGetString(subscription?.status);
+  if (subscriptionStatus !== "trialing" && subscriptionStatus !== "active") {
+    throw new Error("Admin trial conversion did not create an active or trialing subscription.");
+  }
+  assertExpectedPrice(params.config, subscription);
+
+  const customerId = stripeCustomerIdFrom(checkoutSession, subscription);
+  const priceId = firstSubscriptionPriceId(subscription);
+  const { data: localCheckout, error: localCheckoutError } = await params.supabase
+    .from("stripe_checkout_sessions")
+    .select("business_id,status,stripe_customer_id,price_id,metadata")
+    .eq("stripe_checkout_session_id", sessionId)
+    .maybeSingle();
+  if (localCheckoutError) throw localCheckoutError;
+  if (
+    !localCheckout ||
+    localCheckout.business_id !== params.businessId ||
+    !["created", "opened", "completed"].includes(safeGetString(localCheckout.status) ?? "") ||
+    safeGetString(localCheckout.stripe_customer_id) !== customerId ||
+    safeGetString(localCheckout.price_id) !== priceId ||
+    safeGetString(localCheckout.metadata?.checkout_purpose) !== "admin_trial_conversion"
+  ) {
+    throw new Error("Local admin trial conversion session validation failed.");
+  }
+
+  const { data: existingSubscription, error: existingSubscriptionError } = await params.supabase
+    .from("business_subscriptions")
+    .select("app_access_status,trial_type,stripe_subscription_id")
+    .eq("business_id", params.businessId)
+    .maybeSingle();
+  if (existingSubscriptionError) throw existingSubscriptionError;
+  const existingProviderSubscription = safeGetString(existingSubscription?.stripe_subscription_id);
+  const validExistingState =
+    (
+      safeGetString(existingSubscription?.app_access_status) === "trialing" &&
+      safeGetString(existingSubscription?.trial_type) === "admin_comp" &&
+      !existingProviderSubscription
+    ) ||
+    existingProviderSubscription === subscriptionId;
+  if (!validExistingState) {
+    throw new Error("Business is not on an eligible admin-granted trial.");
+  }
+
+  await syncBusinessSubscriptionFromStripe({
+    supabase: params.supabase,
+    businessId: params.businessId,
+    event: params.event,
+    subscription,
+    checkoutSession,
+  });
+  return { activated: true, converted_admin_trial: true };
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -1223,14 +1331,23 @@ serve(async (req) => {
 
     if (businessId && !isRefundWebhookEvent(event.type)) {
       if (event.type === "checkout.session.completed") {
-        const activation = await activateBusinessTrialCheckout({
-          supabase,
-          stripe,
-          config,
-          event,
-          eventSession: obj,
-          businessId,
-        });
+        const activation = isAdminTrialConversionCheckout(metadataFrom(obj))
+          ? await activateAdminTrialConversionCheckout({
+              supabase,
+              stripe,
+              config,
+              event,
+              eventSession: obj,
+              businessId,
+            })
+          : await activateBusinessTrialCheckout({
+              supabase,
+              stripe,
+              config,
+              event,
+              eventSession: obj,
+              businessId,
+            });
         await markProviderEvent(supabase, providerEvent.id, "processed");
         return jsonResponse(req, { received: true, business_id: businessId, activation });
       } else if (event.type === "checkout.session.expired") {
@@ -1487,7 +1604,7 @@ serve(async (req) => {
       supabase,
       providerEvent.id,
       "failed",
-      err instanceof Error ? err.message : String(err),
+      providerErrorMessage(err),
     );
     console.error("[stripe-webhook] error:", err);
     return jsonResponse(req, { error: "Webhook handler failed" }, 500);

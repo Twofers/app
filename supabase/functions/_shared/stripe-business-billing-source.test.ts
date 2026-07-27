@@ -40,6 +40,8 @@ describe("Stripe business billing reconnection sources", () => {
     expect(helper).toMatch(/business_billing_profiles/);
     expect(helper).toMatch(/business_subscriptions/);
     expect(helper).toMatch(/billing_events/);
+    expect(helper).toMatch(/preserveSubscriptionState\?: boolean/);
+    expect(helper).toMatch(/if \(!args\.preserveSubscriptionState\)/);
 
     const context = readRepoFile("supabase/functions/get-business-onboarding-context/index.ts");
     const activationMigration = readRepoFile(

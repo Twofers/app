@@ -281,6 +281,14 @@
       "destination": "/admin/login/index.html"
     },
     {
+      "source": "/admin/accounts",
+      "destination": "/admin/accounts/index.html"
+    },
+    {
+      "source": "/admin/accounts/",
+      "destination": "/admin/accounts/index.html"
+    },
+    {
       "source": "/admin/businesses",
       "destination": "/admin/businesses/index.html"
     },

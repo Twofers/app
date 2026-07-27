@@ -18,6 +18,10 @@ export const NON_PUBLIC_BUSINESS_STATUSES = [
   "pending_verification",
   "approved_not_activated",
   "rejected",
+  "canceled",
+  "suspended",
+  "disabled",
+  "archived",
 ] as const;
 
 /** Stable error token the server returns for a locked rename attempt. */

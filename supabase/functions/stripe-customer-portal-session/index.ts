@@ -175,6 +175,9 @@ serve(async (req) => {
     if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
       return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);
     }
+    if (!stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment === "production") {
+      return jsonResponse(req, { error: "Production billing requires a live Stripe key." }, 500);
+    }
 
     const { data: billingProfile, error: billingError } = await supabaseAdmin
       .from("business_billing_profiles")

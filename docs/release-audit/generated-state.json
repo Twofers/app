@@ -36,14 +36,15 @@
     "apk": {}
   },
   "migrations": {
-    "count": 168,
-    "latest": "20260822180000_claim_deterministic_no_raise.sql"
+    "count": 171,
+    "latest": "20260823120000_admin_account_management.sql"
   },
   "edgeFunctions": {
-    "count": 79,
+    "count": 80,
     "names": [
       "accept-business-terms",
       "activate-redemption-mode",
+      "admin-account-management",
       "admin-ai-cost-ledger-reset",
       "admin-ai-operating-report",
       "admin-ai-prompts",

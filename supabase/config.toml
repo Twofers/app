@@ -800,3 +800,8 @@ entrypoint = "./functions/set-promo-materials-authorization/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-promo-authorization/index.ts"
+
+[functions.admin-account-management]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-account-management/index.ts"

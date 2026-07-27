@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cancelStripeForBusinesses } from "../_shared/account-stripe-cancellation.ts";
+import { deleteAuthUserWithRetry } from "../_shared/auth-admin-delete-retry.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
@@ -98,6 +101,38 @@ serve(async (req) => {
       .eq("owner_id", user.id);
     if (bizErr) {
       console.error("delete-user-account: business lookup failed:", bizErr);
+      return new Response(
+        JSON.stringify({
+          error: "Could not verify business billing before deletion. Please contact support.",
+          error_code: "business_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Billing is ended before any database rows are purged. If Stripe cannot
+    // confirm cancellation, keep the account intact so a deleted owner can
+    // never continue being charged without a way to sign in.
+    try {
+      const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+      const stripe = stripeSecretKey
+        ? new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" })
+        : null;
+      await cancelStripeForBusinesses({
+        supabase: supabaseAdmin,
+        stripe,
+        businessIds: (ownedBusinesses ?? []).map((business) => business.id),
+        source: "account_self_delete",
+      });
+    } catch (stripeError) {
+      console.error("delete-user-account: Stripe cancellation failed:", stripeError);
+      return new Response(
+        JSON.stringify({
+          error: "Your subscription could not be canceled, so your account was not deleted. Please contact support.",
+          error_code: "billing_cancel_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Sever counter devices BEFORE the owner delete: staff Auth users are
@@ -113,7 +148,10 @@ serve(async (req) => {
       console.error("delete-user-account: redemption device lookup failed:", devicesErr);
     }
     for (const staffUserId of staffUserIdsToSweep(staffDevices, user.id)) {
-      const { error: staffDelErr } = await supabaseAdmin.auth.admin.deleteUser(staffUserId);
+      const { error: staffDelErr } = await deleteAuthUserWithRetry(
+        supabaseAdmin,
+        staffUserId,
+      );
       if (staffDelErr) {
         console.error(`delete-user-account: staff user ${staffUserId} delete failed:`, staffDelErr);
       }
@@ -159,7 +197,8 @@ serve(async (req) => {
       }
     }
 
-    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+    const { error: delErr, attempts: deleteAttempts } =
+      await deleteAuthUserWithRetry(supabaseAdmin, user.id);
 
     if (delErr) {
       console.error("delete-user-account error:", delErr);
@@ -169,6 +208,11 @@ serve(async (req) => {
           error_code: "auth_delete_failed",
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (deleteAttempts > 1) {
+      console.warn(
+        `delete-user-account: auth delete succeeded after ${deleteAttempts} attempts`,
       );
     }
 

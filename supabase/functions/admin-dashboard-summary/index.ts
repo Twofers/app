@@ -334,7 +334,7 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
   ] = await Promise.all([
     supabaseAdmin
       .from("businesses")
-      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .select("id,owner_id,name,status,access_level,verification_status,risk_level,created_at")
       .order("created_at", { ascending: false })
       .limit(500),
     supabaseAdmin
@@ -767,7 +767,7 @@ async function loadSection(
   if (section === "businesses") {
     const { data, error } = await supabaseAdmin
       .from("businesses")
-      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .select("id,owner_id,name,status,access_level,verification_status,risk_level,created_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw error;
