@@ -1266,6 +1266,7 @@ export default function BusinessDashboard() {
             <MerchantAccessBlockedCard
               status={billingGateAccess.status}
               reason={billingGateAccess.reason}
+              businessId={businessId}
             />
           </View>
         );
@@ -1485,6 +1486,7 @@ export default function BusinessDashboard() {
       billingBlocked,
       billingGateAccess.reason,
       billingGateAccess.status,
+      businessId,
       deals.length,
       dealFilter,
       dealSort,

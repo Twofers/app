@@ -22,7 +22,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/styles.css?v=20260723-cta-cls" />
   </head>
-  <body data-activation-status-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/business-activation-status">
+  <body class="trial-page" data-activation-status-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/business-activation-status">
     <header class="site-header">
       <nav class="nav" aria-label="Primary navigation">
         <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
@@ -37,22 +37,18 @@
         </div>
       </nav>
     </header>
-    <main>
-      <section class="hero compact">
-        <div class="hero-copy">
-          <p class="eyebrow" data-i18n="billing.common.webOnly">Web-only billing</p>
-          <h1 data-i18n="billing.status.heading">Billing status is confirmed server-side.</h1>
-          <p class="lede" data-i18n="billing.status.lede">Stripe webhooks update Twofer business access after checkout, portal changes, payment failures, cancellations, or refunds. If a recent payment is still pending, the app may take a moment to reflect the server status.</p>
-          <p class="status" data-activation-status role="status" aria-live="polite">Checking activation status…</p>
-          <div class="hero-actions">
-            <a class="button" href="/support" data-i18n="trial.contactSupport">Contact support</a>
-            <a class="button button-secondary" href="/business/billing/manage" data-i18n="billing.manage.cta">Manage billing</a>
-            <a class="button button-secondary" data-activation-retry href="/business/billing/start" hidden>Retry activation</a>
-          </div>
-        </div>
-      </section>
+    <main class="trial-main">
+      <p class="trial-kicker" data-i18n="billing.common.webOnly">Business billing</p>
+      <h1 class="trial-heading" data-i18n="billing.status.heading">Checking your billing status</h1>
+      <p class="trial-lede" data-i18n="billing.status.lede">Your account updates automatically after a payment, a plan change, or a cancellation. If you just paid, give it a moment to show up in the app.</p>
+      <p class="status" data-activation-status role="status" aria-live="polite">Checking activation status…</p>
+      <div class="trial-actions">
+        <a class="button" href="/support" data-i18n="trial.contactSupport">Contact support</a>
+        <a class="button button-secondary" href="/business/billing/manage" data-i18n="billing.manage.cta">Manage billing</a>
+        <a class="button button-secondary" data-activation-retry href="/business/billing/start" hidden>Retry activation</a>
+      </div>
     </main>
-    <script src="/localization.js?v=20260725-signin-deals"></script>
+    <script src="/localization.js?v=20260726-billing-copy"></script>
     <script src="/business/billing/activation-status.js?v=20260818-activation"></script>
   </body>
 </html>

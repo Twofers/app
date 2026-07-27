@@ -7,7 +7,8 @@ import { CardShell } from "@/components/ui/card-shell";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { BUSINESS_START_TRIAL_URL, SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { useTrialActivation } from "@/hooks/use-trial-activation";
+import { SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { isNeverActivatedBillingStatus } from "@/lib/merchant-access";
 import { Spacing } from "@/lib/screen-layout";
 
@@ -19,13 +20,21 @@ type MerchantAccessBlockedCardProps = {
    */
   status?: string | null;
   reason?: string | null;
+  /**
+   * Owner's business. When present the CTA mints a Stripe Checkout URL for this
+   * signed-in owner and opens Stripe directly; without it (or if minting fails)
+   * it falls back to the website billing page, which explains the emailed
+   * activation-link path.
+   */
+  businessId?: string | null;
 };
 
-export function MerchantAccessBlockedCard({ status, reason }: MerchantAccessBlockedCardProps) {
+export function MerchantAccessBlockedCard({ status, reason, businessId }: MerchantAccessBlockedCardProps) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const { opening: openingCheckout, start: startActivation } = useTrialActivation(businessId);
 
   const email = session?.user?.email ?? null;
   const needsTrial =
@@ -65,8 +74,9 @@ export function MerchantAccessBlockedCard({ status, reason }: MerchantAccessBloc
           ) : null}
           <View style={{ marginTop: Spacing.xs, gap: Spacing.sm }}>
             <PrimaryButton
-              title={t("merchantAccess.startTrialCta")}
-              onPress={() => void openWebsiteUrl(BUSINESS_START_TRIAL_URL)}
+              title={openingCheckout ? t("merchantAccess.startTrialOpening") : t("merchantAccess.startTrialCta")}
+              onPress={() => void startActivation()}
+              disabled={openingCheckout}
               style={{ borderRadius: Radii.md }}
             />
             <SecondaryButton

@@ -1024,6 +1024,7 @@ export default function AccountScreen() {
             <MerchantAccessBlockedCard
               status={merchantAccess.status}
               reason={merchantAccess.reason}
+              businessId={businessId}
             />
           ) : null}
 

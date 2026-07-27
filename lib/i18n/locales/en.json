@@ -2292,6 +2292,7 @@
     "setupProgressMenu": "✓ Menu tools and text-only drafts are available",
     "setupProgressLocked": "Locked until activation: AI, publishing, credits, and new claims",
     "startTrialCta": "Continue on secure website",
+    "startTrialOpening": "Opening secure checkout...",
     "contactSupport": "Contact support"
   },
   "businessTerms": {
