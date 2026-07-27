@@ -44,7 +44,8 @@ import { setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { CardShell } from "@/components/ui/card-shell";
-import { BUSINESS_APPLY_URL, SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { BUSINESS_APPLY_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { openSupportEmail } from "@/lib/support-contact";
 import { readOnboardingApplication } from "@/lib/business-application";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useDeleteAccountFlow } from "@/hooks/use-delete-account-flow";
@@ -931,7 +932,7 @@ export default function BusinessSetupScreen() {
                 ) : null}
                 <SecondaryButton
                   title={t("merchantAccess.contactSupport")}
-                  onPress={() => void openWebsiteUrl(SUPPORT_URL)}
+                  onPress={() => void openSupportEmail()}
                   style={{ borderRadius: Radii.md }}
                 />
               </View>

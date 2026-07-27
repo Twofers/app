@@ -53,7 +53,7 @@ import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { deleteUserAccount } from "@/lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
-import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
+import { getSupportEmail, getSupportPhone, openSupportEmail } from "@/lib/support-contact";
 import {
   loadHiddenBusinessesWithNames,
   unhideBusiness,
@@ -812,7 +812,7 @@ export default function SettingsScreen() {
                 <>
                   <SecondaryButton
                     title={t("supportContact.contactSupportCta")}
-                    onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+                    onPress={() => void openSupportEmail()}
                     accessibilityLabel={t("supportContact.emailA11y")}
                   />
                   <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>

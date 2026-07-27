@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -49,7 +49,7 @@ import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { getPromoMaterialsAuthorization, setPromoMaterialsAuthorization } from "@/lib/promo-materials";
 import { isBusinessNameLocked } from "@/lib/business-name-change";
 import { BusinessNameChangeCard } from "@/components/business-name-change-request";
-import { getSupportEmail } from "@/lib/support-contact";
+import { getSupportEmail, openSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 import { useDeleteAccountFlow } from "@/hooks/use-delete-account-flow";
@@ -952,7 +952,7 @@ export default function AccountScreen() {
             </Text>
             <SecondaryButton
               title={t("supportContact.contactSupportCta")}
-              onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+              onPress={() => void openSupportEmail()}
               accessibilityLabel={t("supportContact.emailA11y")}
               style={{ marginTop: Spacing.xs }}
             />

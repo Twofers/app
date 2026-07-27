@@ -4136,6 +4136,19 @@ pre.admin-note {
     justify-content: flex-end;
   }
 
+  /* Put the language selector and menu in their own grid columns. Keeping
+     them inside one flex item could overflow on narrow phones or when Android
+     display/text sizing is enlarged. */
+  .nav > .nav-actions:has(> .language-set) {
+    display: contents;
+  }
+
+  .nav > .nav-actions > .language-set {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
   .nav-links {
     grid-column: 1 / -1;
     display: none;
@@ -4408,6 +4421,18 @@ pre.admin-note {
   }
 
   .admin-table[data-mobile-cards] .admin-row-detail::before {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  /* Preserve the penguin, language choices, and menu on the narrowest phones.
+     The wordmark is repeated in the page content and can yield this space. */
+  .nav:has(> .nav-actions > .language-set) {
+    gap: 10px;
+  }
+
+  .nav:has(> .nav-actions > .language-set) .brand > span:last-child {
     display: none;
   }
 }

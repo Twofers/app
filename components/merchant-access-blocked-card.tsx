@@ -8,9 +8,9 @@ import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTrialActivation } from "@/hooks/use-trial-activation";
-import { SUPPORT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { isNeverActivatedBillingStatus } from "@/lib/merchant-access";
 import { Spacing } from "@/lib/screen-layout";
+import { openSupportEmail } from "@/lib/support-contact";
 
 type MerchantAccessBlockedCardProps = {
   /**
@@ -81,7 +81,7 @@ export function MerchantAccessBlockedCard({ status, reason, businessId }: Mercha
             />
             <SecondaryButton
               title={t("merchantAccess.contactSupport")}
-              onPress={() => void openWebsiteUrl(SUPPORT_URL)}
+              onPress={() => void openSupportEmail()}
               style={{ borderRadius: Radii.md }}
             />
           </View>
@@ -102,7 +102,7 @@ export function MerchantAccessBlockedCard({ status, reason, businessId }: Mercha
         <View style={{ marginTop: Spacing.xs }}>
           <SecondaryButton
             title={t("merchantAccess.contactSupport")}
-            onPress={() => void openWebsiteUrl(SUPPORT_URL)}
+            onPress={() => void openSupportEmail()}
             style={{ borderRadius: Radii.md }}
           />
         </View>
