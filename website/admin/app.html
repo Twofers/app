@@ -28,27 +28,12 @@
       </div>
       <div class="admin-ops-header-actions">
         <form class="admin-ops-search" data-ops-search-form role="search">
-          <label class="sr-only" for="admin-ops-search">Find an account</label>
+          <label class="admin-ops-search-label" for="admin-ops-search">Search accounts</label>
           <input id="admin-ops-search" name="q" type="search" placeholder="Business, email, or user ID" maxlength="160" />
           <button class="button button-small button-secondary" type="submit">Search</button>
         </form>
         <a class="button button-small" href="/admin/businesses/new">Add business</a>
       </div>
-    </section>
-
-    <section class="admin-top-actions" aria-label="Primary admin actions">
-      <a class="admin-top-action" href="/admin/businesses/new">
-        <span class="admin-top-action-icon" aria-hidden="true">01</span>
-        <span><strong>Set up a business</strong><small>Create an approved application and guide the owner to launch.</small></span>
-      </a>
-      <a class="admin-top-action" href="#recent-deal-activity">
-        <span class="admin-top-action-icon" aria-hidden="true">02</span>
-        <span><strong>Review offers and redemptions</strong><small>See what is live, recent, or not converting.</small></span>
-      </a>
-      <a class="admin-top-action" href="/admin/accounts">
-        <span class="admin-top-action-icon" aria-hidden="true">03</span>
-        <span><strong>Fix an account</strong><small>Find a customer or owner and open the current repair tools.</small></span>
-      </a>
     </section>
 
     <section class="admin-section admin-service-alerts" data-service-alerts-section hidden aria-labelledby="service-alerts-title">
@@ -62,6 +47,24 @@
       <div class="admin-alert-list" data-service-alerts></div>
     </section>
 
+    <section class="admin-quick-actions" aria-labelledby="quick-actions-title">
+      <p class="admin-kicker" id="quick-actions-title">Quick actions</p>
+      <div class="admin-top-actions">
+        <a class="admin-top-action" href="/admin/businesses/new">
+          <span class="admin-top-action-icon" aria-hidden="true">01</span>
+          <span><strong>Set up a business</strong><small>Create an approved application and guide the owner to launch.</small></span>
+        </a>
+        <a class="admin-top-action" href="#recent-deal-activity">
+          <span class="admin-top-action-icon" aria-hidden="true">02</span>
+          <span><strong>Review offers and redemptions</strong><small>See what is live, recent, or not converting.</small></span>
+        </a>
+        <a class="admin-top-action" href="/admin/accounts">
+          <span class="admin-top-action-icon" aria-hidden="true">03</span>
+          <span><strong>Fix an account</strong><small>Find a customer or owner and open the current repair tools.</small></span>
+        </a>
+      </div>
+    </section>
+
     <section class="admin-section" aria-labelledby="ops-metrics-title">
       <div class="admin-section-header">
         <div>
@@ -71,12 +74,12 @@
       </div>
       <div class="admin-metric-grid">
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/offers" data-ops-metric-card="deals">
-          <span class="admin-metric-label">Deals created</span><strong data-ops-metric="deals">0</strong>
+          <span class="admin-metric-label">Live offers</span><strong data-ops-metric="deals">0</strong>
           <small data-ops-metric-detail="deals">Live deals now</small><i aria-hidden="true">View offers →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/offers?view=redemptions" data-ops-metric-card="redemptions">
-          <span class="admin-metric-label">Redemptions</span><strong data-ops-metric="redemptions">0</strong>
-          <small data-ops-metric-detail="redemptions">Today</small><i aria-hidden="true">Review activity →</i>
+          <span class="admin-metric-label">Redemptions · 7 days</span><strong data-ops-metric="redemptions">0</strong>
+          <small data-ops-metric-detail="redemptions">Last 7 days</small><i aria-hidden="true">Review activity →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/accounts" data-ops-metric-card="users">
           <span class="admin-metric-label">Active users</span><strong data-ops-metric="users">0</strong>
@@ -91,7 +94,10 @@
           <small data-ops-metric-detail="ai">This month</small><i aria-hidden="true">Open cost report →</i>
         </a>
       </div>
-      <p class="admin-metric-footnote" data-active-users-definition hidden></p>
+      <details class="admin-metric-definition" data-active-users-definition-wrap hidden>
+        <summary>How active users are counted</summary>
+        <p data-active-users-definition></p>
+      </details>
     </section>
 
     <section class="admin-section" data-onboarding-section hidden aria-labelledby="onboarding-title">
@@ -115,27 +121,29 @@
         </div>
         <a class="button button-small button-secondary" href="/admin/audit-log">Audit log</a>
       </div>
-      <div class="admin-queue-filters" data-queue-filters role="group" aria-label="Filter action queue">
-        <button class="admin-filter-chip is-active" type="button" data-queue-filter="all">All</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="setup">New business setup</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="offers">Offers</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="redemptions">Redemptions</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="accounts">Accounts</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="billing">Billing</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="ai">AI usage</button>
-        <button class="admin-filter-chip" type="button" data-queue-filter="reports">Customer reports</button>
+      <div class="admin-queue-toolbar">
+        <div class="admin-queue-filters" data-queue-filters role="group" aria-label="Filter action queue">
+          <button class="admin-filter-chip is-active" type="button" data-queue-filter="all"><span>All</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="setup"><span>New business setup</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="offers"><span>Offers</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="redemptions"><span>Redemptions</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="accounts"><span>Accounts</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="billing"><span>Billing</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="ai"><span>AI usage</span><b data-queue-filter-count></b></button>
+          <button class="admin-filter-chip" type="button" data-queue-filter="reports"><span>Customer reports</span><b data-queue-filter-count></b></button>
+        </div>
+        <label class="admin-queue-status-filter">Workflow status
+          <select data-queue-status-filter>
+            <option value="active">Active work</option>
+            <option value="all">All statuses</option>
+            <option value="new">New</option>
+            <option value="reviewing">Reviewing</option>
+            <option value="waiting_owner">Waiting on owner</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+        </label>
       </div>
-      <label class="admin-queue-status-filter">Workflow status
-        <select data-queue-status-filter>
-          <option value="active">Active work</option>
-          <option value="all">All statuses</option>
-          <option value="new">New</option>
-          <option value="reviewing">Reviewing</option>
-          <option value="waiting_owner">Waiting on owner</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
-      </label>
       <p class="admin-note" data-queue-count aria-live="polite">Loading queue…</p>
       <div class="admin-table-wrap">
         <table class="admin-table admin-queue-table" data-mobile-cards>
@@ -153,14 +161,14 @@
       <div class="admin-section-header">
         <div>
           <p class="admin-kicker">Activity review</p>
-          <h2 id="recent-deals-title">Recent deal activity</h2>
-          <p>Open a row for the business health, claim, redemption, trial, and AI usage drilldown.</p>
+          <h2 id="recent-deals-title">Latest offers</h2>
+          <p>The five newest offers, with claims, redemptions, and anything that needs review.</p>
         </div>
         <a class="button button-small button-secondary" href="/admin/offers">All offers</a>
       </div>
       <div class="admin-table-wrap">
-        <table class="admin-table" data-mobile-cards>
-          <thead><tr><th>Deal</th><th>Business</th><th>Status</th><th>Claims</th><th>Redemptions</th><th>Expires</th><th>Action</th></tr></thead>
+        <table class="admin-table admin-recent-deals-table" data-mobile-cards>
+          <thead><tr><th>Offer</th><th>Business</th><th>Status</th><th>Claims</th><th>Redemptions</th><th>Ends</th><th>Action</th></tr></thead>
           <tbody data-recent-deals-body>
             <tr><td class="admin-row-detail" colspan="7">Loading recent deals…</td></tr>
           </tbody>

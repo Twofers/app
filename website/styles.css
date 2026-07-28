@@ -3510,6 +3510,13 @@ main.content-page {
   gap: 9px;
 }
 
+.admin-shell .admin-ops-search-label {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .admin-shell .admin-ops-search input {
   width: min(330px, 38vw);
   min-height: 42px;
@@ -3521,25 +3528,34 @@ main.content-page {
   font: inherit;
 }
 
+.admin-shell .admin-quick-actions {
+  margin-top: 24px;
+}
+
+.admin-shell .admin-quick-actions .admin-kicker {
+  margin-bottom: 10px;
+  color: #68736f;
+}
+
 .admin-shell .admin-top-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .admin-shell .admin-top-action {
   display: grid;
-  min-height: 112px;
+  min-height: 92px;
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: flex-start;
   gap: 12px;
   border: 1px solid var(--admin-hairline);
   border-radius: 14px;
-  padding: 18px;
+  padding: 15px 16px;
   background: #fff;
   color: var(--ink);
-  box-shadow: var(--admin-card-shadow);
+  box-shadow: 0 1px 2px rgb(15 23 20 / 4%);
   text-decoration: none;
 }
 
@@ -3669,15 +3685,54 @@ main.content-page {
   line-height: 1.5;
 }
 
-.admin-shell .admin-metric-footnote::before {
-  content: "ⓘ ";
+.admin-shell .admin-metric-definition {
+  width: fit-content;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #68736f;
+  font-size: 11px;
+}
+
+.admin-shell .admin-metric-definition summary {
+  justify-content: flex-start;
+  min-height: 30px;
+  gap: 6px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-shell .admin-metric-definition summary::after {
+  content: "+";
+}
+
+.admin-shell .admin-metric-definition[open] summary::after {
+  transform: none;
+  content: "−";
+}
+
+.admin-shell .admin-metric-definition p {
+  max-width: 780px;
+  margin: 7px 0 0;
+  padding: 0;
+  line-height: 1.5;
+}
+
+.admin-shell .admin-queue-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
 }
 
 .admin-shell .admin-queue-filters {
   display: flex;
   overflow-x: auto;
   gap: 7px;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 2px 0 4px;
   scrollbar-width: thin;
 }
@@ -3695,6 +3750,25 @@ main.content-page {
   font-weight: 800;
 }
 
+.admin-shell .admin-filter-chip b {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: #53605b;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.admin-shell .admin-filter-chip.is-active b {
+  background: #fff;
+  color: var(--admin-ok);
+}
+
 .admin-shell .admin-filter-chip.is-active,
 .admin-shell .admin-filter-chip[aria-pressed="true"] {
   border-color: var(--admin-ok);
@@ -3706,7 +3780,7 @@ main.content-page {
   display: grid;
   width: min(240px, 100%);
   gap: 6px;
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
@@ -3740,6 +3814,11 @@ main.content-page {
   line-height: 1.45;
 }
 
+.admin-shell .admin-recent-deals-table td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .admin-shell .admin-onboarding-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3762,6 +3841,87 @@ main.content-page {
 
 .admin-shell .admin-ops-main .admin-onboarding-card {
   padding: 20px;
+}
+
+.admin-shell .admin-onboarding-next {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  padding: 11px 14px;
+  background: #fff7f1;
+}
+
+.admin-shell .admin-onboarding-next span {
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.admin-shell .admin-onboarding-next strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.admin-shell .admin-onboarding-details,
+.admin-shell .admin-more-actions {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #5f6c67;
+  font-size: 12px;
+}
+
+.admin-shell .admin-onboarding-details > summary,
+.admin-shell .admin-more-actions > summary {
+  width: fit-content;
+  min-height: 34px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-shell .admin-onboarding-details > summary::after {
+  content: "+";
+}
+
+.admin-shell .admin-onboarding-details[open] > summary::after {
+  transform: none;
+  content: "−";
+}
+
+.admin-shell .admin-onboarding-details[open] > summary,
+.admin-shell .admin-more-actions[open] > summary {
+  margin-bottom: 10px;
+}
+
+.admin-shell .admin-more-actions > summary {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+  list-style: none;
+}
+
+.admin-shell .admin-more-actions > summary::after {
+  content: "";
+}
+
+.admin-shell .admin-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-shell .admin-more-actions > .admin-inline-actions {
+  margin-top: 8px;
 }
 
 .admin-shell .admin-onboarding-card-heading {
@@ -5366,8 +5526,21 @@ body:not(.admin-shell) main.content-page .admin-panel {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .admin-shell .admin-ops-search-label {
+    grid-column: 1 / -1;
+  }
+
   .admin-shell .admin-ops-search input {
     width: 100%;
+  }
+
+  .admin-shell .admin-queue-toolbar {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .admin-shell .admin-queue-status-filter {
+    width: min(280px, 100%);
   }
 
   .admin-shell .admin-metric-grid {

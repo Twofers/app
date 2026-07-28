@@ -294,6 +294,15 @@
     const count = document.querySelector("[data-queue-count]");
     const section = document.querySelector("[data-action-queue-section]");
     if (!body || !count) return;
+    document.querySelectorAll("[data-queue-filter]").forEach((button) => {
+      const category = button.dataset.queueFilter;
+      const categoryCount = category === "all"
+        ? queueItems.length
+        : queueItems.filter((item) => item.category === category).length;
+      button.hidden = category !== "all" && categoryCount === 0;
+      const countNode = button.querySelector("[data-queue-filter-count]");
+      if (countNode) countNode.textContent = String(categoryCount);
+    });
     const visible = queueItems.filter((item) => {
       if (activeQueueFilter !== "all" && item.category !== activeQueueFilter) return false;
       if (activeQueueStatusFilter === "all") return true;
@@ -398,16 +407,16 @@
     const hasV2 = Boolean(summary.deals && summary.redemptions && summary.users);
     setMetric(
       "deals",
-      Number(summary.deals?.createdToday ?? summary.offers?.live ?? 0),
+      Number(summary.deals?.liveNow ?? summary.offers?.live ?? 0),
       hasV2
-        ? `${Number(summary.deals?.created7d || 0).toLocaleString()} created in 7 days • ${Number(summary.deals?.liveNow || 0).toLocaleString()} live now`
-        : "Live now • Created today and 7-day trends arrive with summary v2",
+        ? `${Number(summary.deals?.created7d || 0).toLocaleString()} created in the last 7 days`
+        : "Live offers now",
     );
     setMetric(
       "redemptions",
-      Number(summary.redemptions?.today ?? redemptions),
+      Number(summary.redemptions?.last7d ?? redemptions),
       summary.redemptions
-        ? `${Number(summary.redemptions.last7d || 0).toLocaleString()} in 7 days • ${Math.round(Number(summary.redemptions.claimToRedeemRate30d || 0) * 100)}% claim-to-redeem in 30 days`
+        ? `${Number(summary.redemptions.today || 0).toLocaleString()} today • ${Math.round(Number(summary.redemptions.claimToRedeemRate30d || 0) * 100)}% claim-to-redeem in 30 days`
         : `${rate} • 7-day total arrives with summary v2`,
     );
     setMetric(
@@ -416,12 +425,11 @@
       summary.users?.active30d === undefined ? "New customers this week" : "Active in the last 30 days",
     );
     const activeUsersDefinition = document.querySelector("[data-active-users-definition]");
+    const activeUsersDefinitionWrap = document.querySelector("[data-active-users-definition-wrap]");
     if (activeUsersDefinition) {
-      activeUsersDefinition.hidden = !summary.users?.definition;
-      activeUsersDefinition.textContent = summary.users?.definition
-        ? `Active users: ${summary.users.definition}`
-        : "";
+      activeUsersDefinition.textContent = summary.users?.definition || "";
     }
+    if (activeUsersDefinitionWrap) activeUsersDefinitionWrap.hidden = !summary.users?.definition;
     setMetric(
       "businesses",
       Number(summary.businesses?.withLiveOffer ?? summary.businesses?.active ?? 0),
@@ -458,7 +466,7 @@
     const footnote = document.querySelector("[data-recent-deals-footnote]");
     if (!body) return;
     body.textContent = "";
-    const rows = (offers || []).slice(0, 8);
+    const rows = (offers || []).slice(0, 5);
     if (footnote) {
       footnote.hidden = rows.length === 0;
       footnote.textContent = rows.length === 0
@@ -480,15 +488,18 @@
       const status = effectiveOfferStatus(offer);
       const dealCell = document.createElement("div");
       dealCell.appendChild(nodeWithText("strong", offer.title || "Untitled deal"));
-      if (Array.isArray(offer.anomaly_flags) && offer.anomaly_flags.length) {
-        dealCell.appendChild(nodeWithText("p", offer.anomaly_flags.map(humanize).join(" • "), "admin-note"));
+      const visibleFlags = Array.isArray(offer.anomaly_flags)
+        ? offer.anomaly_flags.filter((flag) => !(status === "inactive" && flag === "no_live_offer"))
+        : [];
+      if (visibleFlags.length) {
+        dealCell.appendChild(nodeWithText("p", visibleFlags.map(humanize).join(" • "), "admin-note"));
       }
-      addCell(row, "Deal", dealCell);
+      addCell(row, "Offer", dealCell);
       addCell(row, "Business", offer.business_name || "Business");
       addCell(row, "Status", badge(humanize(status), status === "live" ? "success" : status === "scheduled" ? "info" : ""));
       addCell(row, "Claims", Number(offer.claims ?? 0).toLocaleString());
       addCell(row, "Redemptions", Number(offer.redemptions ?? 0).toLocaleString());
-      addCell(row, "Expires", formatDate(offer.expires_at ?? offer.end_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+      addCell(row, "Ends", formatDate(offer.expires_at ?? offer.end_time, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
       const button = nodeWithText("button", "Open", "button button-small button-secondary");
       button.type = "button";
       button.disabled = !offer.business_id;
@@ -551,14 +562,33 @@
       repair.href = `/admin/accounts?q=${encodeURIComponent(item.owner_email || item.business_name || "")}`;
       const billing = nodeWithText("a", "Billing setup", "button button-small button-secondary");
       billing.href = `/admin/trial-requests?businessId=${encodeURIComponent(item.business_id || "")}`;
-      actions.append(continueButton, repair, billing);
-      actions.appendChild(contactOwnerButton(item.business_id, "setup_help"));
-      actions.appendChild(ownerViewButton(item.business_id));
+      const nextIncomplete = (item.checklist || []).find((step) => !step.complete);
+      const nextStep = document.createElement("div");
+      nextStep.className = "admin-onboarding-next";
+      nextStep.append(
+        nodeWithText("span", "Next step"),
+        nodeWithText("strong", nextIncomplete?.label || "Setup checklist complete"),
+      );
+      const checklistDetails = document.createElement("details");
+      checklistDetails.className = "admin-onboarding-details";
+      checklistDetails.append(
+        nodeWithText("summary", `View all ${total} setup steps`),
+        onboardingChecklist(item, true),
+      );
+      actions.append(continueButton, contactOwnerButton(item.business_id, "setup_help"));
+      const moreActions = document.createElement("details");
+      moreActions.className = "admin-more-actions";
+      const moreActionList = document.createElement("div");
+      moreActionList.className = "admin-inline-actions";
+      moreActionList.append(repair, billing, ownerViewButton(item.business_id));
+      moreActions.append(nodeWithText("summary", "More actions"), moreActionList);
+      actions.appendChild(moreActions);
       card.append(
         heading,
         nodeWithText("p", item.owner_email || "Owner email unavailable", "admin-note"),
         track,
-        onboardingChecklist(item, true),
+        nextStep,
+        checklistDetails,
         actions,
       );
       list.appendChild(card);
