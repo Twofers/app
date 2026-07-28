@@ -450,6 +450,94 @@
     }
   }
 
+  const accountGrowthPeriods = ["day", "week", "month"];
+
+  function accountGrowthTrend(currentValue, previousValue) {
+    const current = Number(currentValue || 0);
+    const previous = Number(previousValue || 0);
+    const delta = current - previous;
+    if (delta === 0) return { text: "No change", tone: "" };
+    if (delta > 0 && previous === 0) {
+      return { text: `Up +${delta.toLocaleString()} (new)`, tone: "success" };
+    }
+    const percent = Math.round((Math.abs(delta) / Math.max(previous, 1)) * 100);
+    return {
+      text: `${delta > 0 ? "Up" : "Down"} ${delta > 0 ? "+" : "-"}${Math.abs(delta).toLocaleString()} (${percent}%)`,
+      tone: delta > 0 ? "success" : "danger",
+    };
+  }
+
+  function renderAccountGrowth(accounts, errorMessage = "") {
+    const grid = document.querySelector("[data-account-growth-grid]");
+    const status = document.querySelector("[data-account-growth-status]");
+    const monthSummary = document.querySelector("[data-account-growth-month-summary]");
+    const balance = document.querySelector("[data-account-growth-balance]");
+    const definition = document.querySelector("[data-account-growth-definition]");
+    const hasData = accounts && typeof accounts === "object" && accounts.customers && accounts.businesses && accounts.combined;
+
+    if (!hasData) {
+      if (grid) grid.hidden = true;
+      if (status) {
+        status.hidden = false;
+        status.textContent = errorMessage || "Account growth is temporarily unavailable.";
+      }
+      if (monthSummary) {
+        monthSummary.textContent = "Growth unavailable";
+        monthSummary.className = "admin-badge warning";
+      }
+      if (balance) balance.hidden = true;
+      return;
+    }
+
+    if (grid) grid.hidden = false;
+    if (status) status.hidden = true;
+    if (definition && accounts.definition) definition.textContent = accounts.definition;
+
+    const combinedTotal = Number(accounts.combined.total || 0);
+    for (const segment of ["customers", "businesses"]) {
+      const metrics = accounts[segment] || {};
+      const total = Number(metrics.total || 0);
+      const totalNode = document.querySelector(`[data-account-growth-total="${segment}"]`);
+      const shareNode = document.querySelector(`[data-account-growth-share="${segment}"]`);
+      if (totalNode) totalNode.textContent = total.toLocaleString();
+      if (shareNode) {
+        const share = combinedTotal > 0 ? Math.round((total / combinedTotal) * 100) : 0;
+        shareNode.textContent = `${share}% of ${combinedTotal.toLocaleString()} registered accounts`;
+      }
+      for (const period of accountGrowthPeriods) {
+        const windowMetrics = metrics[period] || {};
+        const current = Number(windowMetrics.current || 0);
+        const previous = Number(windowMetrics.previous || 0);
+        const currentNode = document.querySelector(`[data-account-growth-current="${segment}:${period}"]`);
+        const previousNode = document.querySelector(`[data-account-growth-previous="${segment}:${period}"]`);
+        const trendNode = document.querySelector(`[data-account-growth-trend="${segment}:${period}"]`);
+        if (currentNode) currentNode.textContent = current.toLocaleString();
+        if (previousNode) previousNode.textContent = `Prior: ${previous.toLocaleString()}`;
+        if (trendNode) {
+          const trend = accountGrowthTrend(current, previous);
+          trendNode.textContent = trend.text;
+          trendNode.className = `admin-badge${trend.tone ? ` ${trend.tone}` : ""}`;
+        }
+      }
+    }
+
+    const combinedMonth = accounts.combined.month || {};
+    const monthTrend = accountGrowthTrend(combinedMonth.current, combinedMonth.previous);
+    if (monthSummary) {
+      monthSummary.textContent = `30-day signups: ${monthTrend.text}`;
+      monthSummary.className = `admin-badge${monthTrend.tone ? ` ${monthTrend.tone}` : ""}`;
+    }
+
+    if (balance) {
+      const customers = Number(accounts.customers.total || 0);
+      const businesses = Number(accounts.businesses.total || 0);
+      balance.hidden = false;
+      balance.textContent = businesses > 0
+        ? `Marketplace balance: ${(customers / businesses).toLocaleString(undefined, { maximumFractionDigits: 1 })} customer accounts per business account.`
+        : "Marketplace balance: no business accounts yet.";
+    }
+  }
+
   function effectiveOfferStatus(offer) {
     if (offer.effective_status) return offer.effective_status;
     const now = Date.now();
@@ -773,6 +861,7 @@
     queueStatusEnabled = Array.isArray(payload.queueAll);
     setStatus(`Signed in as ${payload.admin?.role || "admin"}`, "success");
     renderMetrics(summary);
+    renderAccountGrowth(summary.accounts, payload.summaryV2Errors?.accountGrowth);
     renderServiceAlerts(healthRows);
     renderOnboarding(payload.onboarding);
     businessHealthTotal = Number(payload.businessHealthTotal ?? healthRows.length);

@@ -100,6 +100,112 @@
       </details>
     </section>
 
+    <section class="admin-section" data-account-growth-section aria-labelledby="account-growth-title">
+      <div class="admin-section-header">
+        <div>
+          <p class="admin-kicker">Account growth</p>
+          <h2 id="account-growth-title">Is the marketplace growing?</h2>
+          <p>Registered accounts and signup velocity. Engagement remains in the operating cards above.</p>
+        </div>
+        <span class="admin-badge" data-account-growth-month-summary aria-live="polite">Loading 30-day trend</span>
+      </div>
+      <p class="status" data-account-growth-status aria-live="polite">Loading account growth&hellip;</p>
+      <div class="admin-grid two" data-account-growth-grid hidden>
+        <article class="admin-card" data-account-growth-card="customers">
+          <div class="admin-card-row">
+            <div>
+              <span>Customer accounts</span>
+              <strong data-account-growth-total="customers">0</strong>
+            </div>
+            <a class="button button-small button-secondary" href="/admin/accounts?role=customer">View customers</a>
+          </div>
+          <p class="admin-note" data-account-growth-share="customers"></p>
+          <div class="admin-table-wrap">
+            <table class="admin-table admin-account-growth-table" data-mobile-cards>
+              <thead>
+                <tr><th>Window</th><th>New accounts</th><th>Change vs prior</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Window">Last 24 hours</td>
+                  <td data-label="New accounts" data-account-growth-current="customers:day">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="customers:day">No change</span>
+                    <small data-account-growth-previous="customers:day">Prior: 0</small>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-label="Window">Last 7 days</td>
+                  <td data-label="New accounts" data-account-growth-current="customers:week">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="customers:week">No change</span>
+                    <small data-account-growth-previous="customers:week">Prior: 0</small>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-label="Window">Last 30 days</td>
+                  <td data-label="New accounts" data-account-growth-current="customers:month">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="customers:month">No change</span>
+                    <small data-account-growth-previous="customers:month">Prior: 0</small>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="admin-card" data-account-growth-card="businesses">
+          <div class="admin-card-row">
+            <div>
+              <span>Business accounts</span>
+              <strong data-account-growth-total="businesses">0</strong>
+            </div>
+            <a class="button button-small button-secondary" href="/admin/accounts?role=business">View businesses</a>
+          </div>
+          <p class="admin-note" data-account-growth-share="businesses"></p>
+          <div class="admin-table-wrap">
+            <table class="admin-table admin-account-growth-table" data-mobile-cards>
+              <thead>
+                <tr><th>Window</th><th>New accounts</th><th>Change vs prior</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Window">Last 24 hours</td>
+                  <td data-label="New accounts" data-account-growth-current="businesses:day">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="businesses:day">No change</span>
+                    <small data-account-growth-previous="businesses:day">Prior: 0</small>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-label="Window">Last 7 days</td>
+                  <td data-label="New accounts" data-account-growth-current="businesses:week">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="businesses:week">No change</span>
+                    <small data-account-growth-previous="businesses:week">Prior: 0</small>
+                  </td>
+                </tr>
+                <tr>
+                  <td data-label="Window">Last 30 days</td>
+                  <td data-label="New accounts" data-account-growth-current="businesses:month">0</td>
+                  <td data-label="Change vs prior">
+                    <span class="admin-badge" data-account-growth-trend="businesses:month">No change</span>
+                    <small data-account-growth-previous="businesses:month">Prior: 0</small>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+      <p class="admin-section-footnote" data-account-growth-balance hidden></p>
+      <details class="admin-metric-definition">
+        <summary>How account growth is counted</summary>
+        <p data-account-growth-definition>Current customer and business accounts, excluding admins and redemption-only staff. Each signup window is compared with the immediately preceding equal-length window.</p>
+      </details>
+    </section>
+
     <section class="admin-section" data-onboarding-section hidden aria-labelledby="onboarding-title">
       <div class="admin-section-header">
         <div>

@@ -254,6 +254,43 @@ describe("admin dashboard foundation", () => {
     expect(source).toMatch(/summaryV2Errors/);
   });
 
+  it("reports service-role-only customer and business account growth from auth creation time", () => {
+    const migration = read("supabase/migrations/20260824122000_admin_account_growth_summary.sql");
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+    const page = read("website/admin/app.html");
+    const script = read("website/admin/admin.js");
+    const accountsScript = read("website/admin/accounts.js");
+
+    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.admin_account_growth_summary/i);
+    expect(migration).toMatch(/FROM auth\.users u/i);
+    expect(migration).toMatch(/u\.created_at/i);
+    expect(migration).toMatch(/p\.role = 'business'/i);
+    expect(migration).toMatch(/p\.role = 'customer'/i);
+    expect(migration).toMatch(/NOT EXISTS \([\s\S]*FROM public\.admin_users/i);
+    expect(migration).toMatch(/raw_app_meta_data ->> 'app_role'.*<> 'redeemer'/i);
+    expect(migration).toMatch(/interval '24 hours'/i);
+    expect(migration).toMatch(/interval '7 days'/i);
+    expect(migration).toMatch(/interval '30 days'/i);
+    expect(migration).toMatch(/SECURITY DEFINER/i);
+    expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_account_growth_summary\(timestamptz\)[\s\S]*TO service_role/i);
+    expect(source).toMatch(/rpc\("admin_account_growth_summary"/);
+    expect(source).toMatch(/accounts: accountGrowth/);
+    expect(source).toMatch(/accountGrowth: accountGrowthError/);
+    expect(page).toMatch(/data-account-growth-section/);
+    expect(page).toMatch(/Customer accounts/);
+    expect(page).toMatch(/Business accounts/);
+    expect(page).toMatch(/Last 24 hours/);
+    expect(page).toMatch(/Last 7 days/);
+    expect(page).toMatch(/Last 30 days/);
+    expect(script).toMatch(/function renderAccountGrowth/);
+    expect(script).toMatch(/30-day signups/);
+    expect(script).toMatch(/Marketplace balance/);
+    expect(page).toMatch(/\/admin\/accounts\?role=customer/);
+    expect(page).toMatch(/\/admin\/accounts\?role=business/);
+    expect(accountsScript).toMatch(/queryParams\.get\("role"\)/);
+    expect(accountsScript).toMatch(/requestedRole === "customer" \|\| requestedRole === "business"/);
+  });
+
   it("stores queue workflow state behind service-role-only RLS and audits updates", () => {
     const migration = read("supabase/migrations/20260824120000_admin_queue_item_status.sql");
     const source = read("supabase/functions/admin-dashboard-summary/index.ts");

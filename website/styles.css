@@ -4688,6 +4688,31 @@ main.content-page {
   border-collapse: collapse;
 }
 
+.admin-shell .admin-account-growth-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.admin-shell .admin-account-growth-table th:first-child {
+  width: 38%;
+}
+
+.admin-shell .admin-account-growth-table th:nth-child(2) {
+  width: 24%;
+}
+
+.admin-shell .admin-account-growth-table th:nth-child(3) {
+  width: 38%;
+}
+
+.admin-shell .admin-account-growth-table td small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .admin-table th,
 .admin-table td {
   border-bottom: 1px solid var(--line);
@@ -5465,6 +5490,10 @@ body:not(.admin-shell) main.content-page .admin-panel {
     font-weight: 900;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+  }
+
+  .admin-account-growth-table[data-mobile-cards] td small {
+    grid-column: 2;
   }
 
   .admin-table[data-mobile-cards] .admin-row-detail {

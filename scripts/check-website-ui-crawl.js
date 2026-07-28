@@ -441,6 +441,28 @@ function mockPayload(pathname, requestBody) {
           active30d: 24,
           definition: "Distinct consumer with an app_opened, deal_viewed, deal_claimed, or deal_redeemed event in app_analytics_events in the last 30 days, excluding business-role users.",
         },
+        accounts: {
+          as_of: "2026-07-02T12:00:00.000Z",
+          definition: "Mock account-growth definition.",
+          customers: {
+            total: 240,
+            day: { current: 8, previous: 5 },
+            week: { current: 34, previous: 28 },
+            month: { current: 110, previous: 92 },
+          },
+          businesses: {
+            total: 24,
+            day: { current: 1, previous: 2 },
+            week: { current: 5, previous: 3 },
+            month: { current: 12, previous: 8 },
+          },
+          combined: {
+            total: 264,
+            day: { current: 9, previous: 7 },
+            week: { current: 39, previous: 31 },
+            month: { current: 122, previous: 100 },
+          },
+        },
         apiSpend: { currentMonthUsd: 1.25, priorMonthUsd: 7.32, perGeneratedDealUsd: 0.14, updatedAt: "2026-07-02T12:30:00.000Z" },
         activity: { claimsToday: 2, redemptionsToday: 1, newConsumersThisWeek: 6 },
         billing: { pastDueLocations: 0, pastDueBusinesses: 0, missingStripeCustomers: 1, stripeWebhookErrors: 1 },
@@ -529,7 +551,7 @@ function mockPayload(pathname, requestBody) {
           anomaly_flags: [],
         },
       ],
-      summaryV2Errors: { activeUsers: null, businessesWithLiveOffer: null, recentDeals: null },
+      summaryV2Errors: { activeUsers: null, accountGrowth: null, businessesWithLiveOffer: null, recentDeals: null },
       recentApplications: [
         {
           business_name: "Sample Coffee",

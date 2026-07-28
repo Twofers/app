@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 174,
-    "latest": "20260824121000_admin_owner_communications.sql"
+    "count": 175,
+    "latest": "20260824122000_admin_account_growth_summary.sql"
   },
   "edgeFunctions": {
     "count": 81,

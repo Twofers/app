@@ -245,6 +245,20 @@ async function loadActiveConsumerCount(
   return activeConsumers;
 }
 
+async function loadAccountGrowth(
+  supabaseAdmin: any,
+  asOfIso: string,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabaseAdmin.rpc("admin_account_growth_summary", {
+    p_as_of: asOfIso,
+  });
+  if (error) throw error;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Account growth summary returned an invalid payload.");
+  }
+  return data as Record<string, unknown>;
+}
+
 async function loadDistinctLiveBusinessCount(
   supabaseAdmin: any,
   nowIso: string,
@@ -2280,6 +2294,15 @@ serve(async (req) => {
       console.warn("[admin-dashboard-summary] active users error:", activeErr);
     }
 
+    let accountGrowth: Record<string, unknown> | null = null;
+    let accountGrowthError: string | null = null;
+    try {
+      accountGrowth = await loadAccountGrowth(supabaseAdmin, nowIso);
+    } catch (accountGrowthErr) {
+      accountGrowthError = "Account growth could not be loaded.";
+      console.warn("[admin-dashboard-summary] account growth error:", accountGrowthErr);
+    }
+
     let businessesWithLiveOffer = 0;
     let liveBusinessCountError: string | null = null;
     try {
@@ -2376,6 +2399,7 @@ serve(async (req) => {
           active30d: activeUsers30d,
           definition: ACTIVE_USER_DEFINITION,
         },
+        accounts: accountGrowth,
         activity: {
           claimsToday,
           redemptionsToday,
@@ -2422,6 +2446,7 @@ serve(async (req) => {
       onboarding,
       summaryV2Errors: {
         activeUsers: activeUsersError,
+        accountGrowth: accountGrowthError,
         businessesWithLiveOffer: liveBusinessCountError,
         recentDeals: recentDealsError,
         queueStatuses: queueOverlay.error,

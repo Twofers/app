@@ -1,7 +1,10 @@
 (() => {
   const Shell = window.TwoferAdminShell;
-  const userId = new URLSearchParams(window.location.search).get("userId");
-  const initialQuery = new URLSearchParams(window.location.search).get("q") || "";
+  const queryParams = new URLSearchParams(window.location.search);
+  const userId = queryParams.get("userId");
+  const initialQuery = queryParams.get("q") || "";
+  const requestedRole = queryParams.get("role") || "";
+  const initialRole = requestedRole === "customer" || requestedRole === "business" ? requestedRole : "";
   let currentPage = 1;
   let total = 0;
   let perPage = 50;
@@ -10,7 +13,9 @@
   const $ = (selector) => document.querySelector(selector);
   const statusEl = $("[data-admin-status]");
   const searchInput = $("[data-search]");
+  const roleFilter = $("[data-role-filter]");
   if (searchInput && initialQuery) searchInput.value = initialQuery;
+  if (roleFilter && initialRole) roleFilter.value = initialRole;
 
   async function post(body) {
     return Shell.adminPost("admin-account-management", body);
