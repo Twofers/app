@@ -58,6 +58,7 @@ describe("admin dashboard foundation", () => {
     // the signed-out /admin shell.
     const adminPage = read("website/admin/app.html");
     const adminScript = read("website/admin/admin.js");
+    const adminShell = read("website/admin/admin-shell.js");
     const config = read("supabase/config.toml");
 
     expect(summarySource).toMatch(/ai_generation_cost_daily/);
@@ -81,11 +82,10 @@ describe("admin dashboard foundation", () => {
     expect(emailRpcMigration).toMatch(
       /grant execute on function public\.admin_user_id_by_email\(text\) to service_role/i,
     );
-    expect(adminPage).toMatch(/data-admin-ai-usage-endpoint/);
-    expect(adminPage).toMatch(/AI Spend & Quotas/);
-    expect(adminPage).toMatch(/data-ai-reset-button disabled/);
-    expect(adminScript).toMatch(/reset_quota/);
-    expect(adminScript).toMatch(/syncAiResetState/);
+    expect(adminShell).toMatch(/adminAiUsageEndpoint: "admin-ai-usage"/);
+    expect(adminPage).toMatch(/data-ops-metric="ai"/);
+    expect(adminPage).not.toMatch(/data-ai-reset-button/);
+    expect(adminScript).toMatch(/perGeneratedDealUsd/);
     expect(config).toMatch(
       /\[functions\.admin-ai-usage\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/admin-ai-usage\/index\.ts"/,
     );
@@ -113,19 +113,23 @@ describe("admin dashboard foundation", () => {
       expect(shell, `signed-out shell must not contain ${leaked}`).not.toMatch(leaked);
     }
 
-    // The dashboard fragment carries the IA + endpoint config instead, and is
-    // fetched only when a stored admin token exists.
+    // The dashboard fragment carries the IA, while endpoint config lives in
+    // the shared external shell and is fetched only after the token gate.
     const fragment = read("website/admin/app.html");
-    expect(fragment).toMatch(/data-admin-app[\s\S]*data-admin-auth-endpoint[\s\S]*data-admin-summary-endpoint[\s\S]*data-admin-ai-usage-endpoint/);
-    expect(fragment).toMatch(/Admin Command Center/);
+    expect(fragment).toMatch(/data-admin-app/);
+    expect(fragment).not.toMatch(/data-admin-[a-z0-9-]+-endpoint/);
+    expect(fragment).toMatch(/Twofer Admin/);
     expect(fragment).not.toMatch(/<script/i);
+    const sharedShell = read("website/admin/admin-shell.js");
+    expect(sharedShell).toMatch(/SUPABASE_FN_BASE/);
+    expect(sharedShell).toMatch(/adminSummaryEndpoint: "admin-dashboard-summary"/);
 
     const script = read("website/admin/admin.js");
     const tokenGate = script.indexOf("hasStoredToken()");
     const fragmentFetch = script.indexOf('fetch("/admin/app.html"');
     expect(tokenGate).toBeGreaterThan(-1);
     expect(fragmentFetch).toBeGreaterThan(-1);
-    expect(script).toMatch(/if \(!hasStoredToken\(\)\) return/);
+    expect(script).toMatch(/if \(!Shell\.hasStoredToken\(\)\) return/);
 
     // Robots/CSP headers for /admin(.*) must persist so the fragment inherits
     // noindex and inline scripts stay blocked.
@@ -173,7 +177,7 @@ describe("admin dashboard foundation", () => {
 
   it("serves audited per-tab reads for every admin directory page", () => {
     const source = read("supabase/functions/admin-dashboard-summary/index.ts");
-    expect(source).toMatch(/SECTION_NAMES = \[[\s\S]*"businesses"[\s\S]*"offers"[\s\S]*"billing_events"[\s\S]*"audit_log"[\s\S]*"settings"[\s\S]*"business_detail"[\s\S]*"prospects"[\s\S]*"prospect_detail"[\s\S]*\]/);
+    expect(source).toMatch(/SECTION_NAMES = \[[\s\S]*"businesses"[\s\S]*"offers"[\s\S]*"billing_events"[\s\S]*"audit_log"[\s\S]*"settings"[\s\S]*"business_detail"[\s\S]*"owner_view"[\s\S]*"prospects"[\s\S]*"prospect_detail"[\s\S]*\]/);
     expect(source).toMatch(/isSectionName\(payload\.section\)/);
     // Section reads must be audited the same way as the summary view.
     expect(source).toMatch(/admin_\$\{payload\.section\}_viewed/);
@@ -191,7 +195,8 @@ describe("admin dashboard foundation", () => {
       ["website/admin/businesses/detail/index.html", null],
     ] as const) {
       const html = read(page);
-      expect(html, `${page} must post to the admin summary endpoint`).toMatch(/data-admin-summary-endpoint/);
+      expect(html, `${page} must load shared endpoint configuration`).toMatch(/\/admin\/admin-shell\.js/);
+      expect(html, `${page} must not duplicate endpoint configuration`).not.toMatch(/data-admin-[a-z0-9-]+-endpoint/);
       expect(html, `${page} must declare its section`).toMatch(/data-admin-section=/);
       expect(html, `${page} must load the shared directory script`).toMatch(/\/admin\/admin-directory\.js/);
       void script;
@@ -233,6 +238,40 @@ describe("admin dashboard foundation", () => {
     expect(directoryScript).not.toMatch(/r\.is_active \? "Live" : "Inactive"/);
   });
 
+  it("returns additive operations v2 metrics, active-user definition, normalized queue, and recent deals", () => {
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+    expect(source).toMatch(/ACTIVE_USER_EVENT_NAMES[\s\S]*"app_opened"[\s\S]*"deal_viewed"[\s\S]*"deal_claimed"[\s\S]*"deal_redeemed"/);
+    expect(source).toMatch(/from\("app_analytics_events"\)[\s\S]*\.in\("event_name"/);
+    expect(source).toMatch(/from\("profiles"\)[\s\S]*select\("id,role"\)/);
+    expect(source).toMatch(/profile\.role === "customer"/);
+    expect(source).toMatch(/deals:\s*\{[\s\S]*createdToday[\s\S]*created7d[\s\S]*liveNow/);
+    expect(source).toMatch(/redemptions:\s*\{[\s\S]*today[\s\S]*last7d[\s\S]*claimToRedeemRate30d/);
+    expect(source).toMatch(/withLiveOffer: businessesWithLiveOffer/);
+    expect(source).toMatch(/perGeneratedDealUsd/);
+    expect(source).toMatch(/function normalizeQueue\(/);
+    expect(source).toMatch(/businessHealthTotal/);
+    expect(source).toMatch(/recentDeals/);
+    expect(source).toMatch(/summaryV2Errors/);
+  });
+
+  it("stores queue workflow state behind service-role-only RLS and audits updates", () => {
+    const migration = read("supabase/migrations/20260824120000_admin_queue_item_status.sql");
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+    const adminScript = read("website/admin/admin.js");
+    expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.admin_queue_item_status/i);
+    expect(migration).toMatch(/new'.*reviewing'.*waiting_owner'.*resolved'.*dismissed'/s);
+    expect(migration).toMatch(/ENABLE ROW LEVEL SECURITY/i);
+    expect(migration).toMatch(/AS RESTRICTIVE/i);
+    expect(migration).toMatch(/COALESCE\(false, false\)/i);
+    expect(migration).toMatch(/REVOKE ALL ON TABLE public\.admin_queue_item_status FROM PUBLIC, anon, authenticated/i);
+    expect(source).toMatch(/payload\.section === "queue_status"/);
+    expect(source).toMatch(/admin_queue_status_set/);
+    expect(source).toMatch(/function overlayQueueStatuses/);
+    expect(source).toMatch(/queueAll/);
+    expect(adminScript).toMatch(/admin-queue-status-select/);
+    expect(adminScript).toMatch(/updateQueueStatus/);
+  });
+
   it("treats current app access as canonical and flags stale trial-request records on the business detail page", () => {
     const source = read("supabase/functions/admin-dashboard-summary/index.ts");
 
@@ -266,5 +305,18 @@ describe("admin dashboard foundation", () => {
     expect(directoryScript).toMatch(/label: "Approved trial days"/);
     expect(directoryScript).toMatch(/data-access-mismatch-warning/);
     expect(directoryScript).toMatch(/access_mismatch_note/);
+  });
+
+  it("provides an audited read-only owner picture without minting owner sessions", () => {
+    const source = read("supabase/functions/admin-dashboard-summary/index.ts");
+    const view = read("website/admin/owner-view.js");
+    expect(source).toMatch(/"owner_view"/);
+    expect(source).toMatch(/admin_owner_view_opened/);
+    expect(source).toMatch(/read_only: true/);
+    expect(source).toMatch(/impersonation: false/);
+    expect(source).not.toMatch(/generateLink[\s\S]+owner_view|signInWithPassword[\s\S]+owner_view/);
+    expect(view).toMatch(/Viewing as \$\{business\.name\} — read-only/);
+    expect(view).toMatch(/is-owner-viewing/);
+    expect(view).toMatch(/Exit owner view/);
   });
 });

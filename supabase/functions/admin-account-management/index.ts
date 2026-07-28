@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { cancelStripeForBusinesses } from "../_shared/account-stripe-cancellation.ts";
+import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 import { deleteAuthUserWithRetry } from "../_shared/auth-admin-delete-retry.ts";
 import { isAal2 } from "../_shared/admin-mfa.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
@@ -12,13 +13,32 @@ import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type AdminRole = "owner" | "admin" | "support" | "sales" | "finance" | "moderator" | "developer" | "read_only";
-type AccountAction = "list" | "detail" | "update_profile" | "suspend" | "reactivate" | "archive" | "permanent_delete";
+type AccountAction =
+  | "list"
+  | "detail"
+  | "update_profile"
+  | "send_password_reset"
+  | "resend_verification"
+  | "reset_mfa"
+  | "correct_email"
+  | "extend_trial"
+  | "unlock"
+  | "suspend"
+  | "reactivate"
+  | "archive"
+  | "permanent_delete";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIONS = new Set<AccountAction>([
   "list",
   "detail",
   "update_profile",
+  "send_password_reset",
+  "resend_verification",
+  "reset_mfa",
+  "correct_email",
+  "extend_trial",
+  "unlock",
   "suspend",
   "reactivate",
   "archive",
@@ -27,6 +47,9 @@ const ACTIONS = new Set<AccountAction>([
 const READ_ROLES = new Set<AdminRole>(["owner", "admin", "support", "sales", "finance", "moderator", "developer", "read_only"]);
 const EDIT_ROLES = new Set<AdminRole>(["owner", "admin", "support"]);
 const LIFECYCLE_ROLES = new Set<AdminRole>(["owner", "admin", "moderator"]);
+const REPAIR_ROLES = new Set<AdminRole>(["owner", "admin", "support"]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const STAFF_LOCKOUT_WINDOW_MS = 5 * 60 * 1000;
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -138,7 +161,7 @@ async function accountDetail(supabase: any, targetUserId: string) {
   if (consumerResult.error) throw consumerResult.error;
 
   const businessIds = businesses.map((business: { id: string }) => business.id);
-  const [subscriptions, dealCount, claimCount, favoriteCount, auditRows] = await Promise.all([
+  const [subscriptions, dealCount, claimCount, favoriteCount, auditRows, lockoutRows] = await Promise.all([
     businessIds.length
       ? supabase
         .from("business_subscriptions")
@@ -158,11 +181,23 @@ async function accountDetail(supabase: any, targetUserId: string) {
       .eq("target_id", targetUserId)
       .order("created_at", { ascending: false })
       .limit(50),
+    businessIds.length
+      ? supabase
+        .from("failed_redeem_attempts")
+        .select("id,business_id,redemption_device_id,attempted_at")
+        .in("business_id", businessIds)
+        .gte("attempted_at", new Date(Date.now() - STAFF_LOCKOUT_WINDOW_MS).toISOString())
+        .limit(500)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (subscriptions.error) throw subscriptions.error;
   if (auditRows.error) throw auditRows.error;
+  if (lockoutRows.error) throw lockoutRows.error;
 
   const authUser = authResult.data.user;
+  const factors = Array.isArray((authUser as { factors?: unknown }).factors)
+    ? ((authUser as { factors?: Array<Record<string, unknown>> }).factors ?? [])
+    : [];
   const role = profileResult.data?.role ?? (businesses.length ? "business" : "customer");
   return {
     account: {
@@ -180,6 +215,11 @@ async function accountDetail(supabase: any, targetUserId: string) {
       suspension_reason: profileResult.data?.suspension_reason ?? null,
       archived_at: profileResult.data?.archived_at ?? null,
       archive_reason: profileResult.data?.archive_reason ?? null,
+      mfa_factors: factors.map((factor) => ({
+        factor_type: factor.factor_type ?? null,
+        status: factor.status ?? null,
+        created_at: factor.created_at ?? null,
+      })),
     },
     consumer_profile: consumerResult.data ?? null,
     businesses,
@@ -192,6 +232,8 @@ async function accountDetail(supabase: any, targetUserId: string) {
       stripe_subscriptions: (subscriptions.data ?? []).filter((row: { stripe_subscription_id?: unknown }) =>
         typeof row.stripe_subscription_id === "string" && row.stripe_subscription_id.startsWith("sub_")
       ).length,
+      recent_redemption_failures: (lockoutRows.data ?? []).length,
+      redemption_lockout_active: (lockoutRows.data ?? []).length >= 10,
     },
     audit_log: auditRows.data ?? [],
   };
@@ -454,8 +496,7 @@ async function updateProfile(supabase: any, targetUserId: string, payload: Recor
   const before = await accountDetail(supabase, targetUserId);
   const email = cleanText(payload.email, 320).toLowerCase();
   if (email && email !== before.account.email) {
-    const result = await supabase.auth.admin.updateUserById(targetUserId, { email, email_confirm: true });
-    if (result.error) throw result.error;
+    throw Object.assign(new Error("Use Account Repair to correct a login email."), { status: 409 });
   }
 
   if (before.account.role === "business") {
@@ -518,6 +559,188 @@ async function updateProfile(supabase: any, targetUserId: string, payload: Recor
   return { before, after: await accountDetail(supabase, targetUserId) };
 }
 
+async function listAccounts(
+  supabase: any,
+  payload: Record<string, unknown>,
+  page: number,
+  perPage: number,
+) {
+  const query = cleanText(payload.query, 160);
+  const base = await supabase.rpc("admin_account_directory", {
+    p_query: nullableText(query, 160),
+    p_role: nullableText(payload.role, 20),
+    p_status: nullableText(payload.status, 20),
+    p_limit: perPage,
+    p_offset: (page - 1) * perPage,
+  });
+  if (base.error) throw base.error;
+  if (!query) return base.data ?? [];
+
+  const matchedUserIds = new Set<string>();
+  const normalizedCode = query.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  const businessQuery = supabase
+    .from("businesses")
+    .select("id,owner_id")
+    .or(`phone.ilike.%${query.replace(/[,%()]/g, "")}%,id.eq.${UUID_RE.test(query) ? query : "00000000-0000-0000-0000-000000000000"}`)
+    .limit(50);
+  const codeQuery = normalizedCode.length >= 4 && normalizedCode.length <= 24
+    ? supabase.from("deal_claims").select("user_id").eq("short_code", normalizedCode).limit(20)
+    : Promise.resolve({ data: [], error: null });
+  const [businessMatches, codeMatches] = await Promise.all([businessQuery, codeQuery]);
+  if (businessMatches.error) throw businessMatches.error;
+  if (codeMatches.error) throw codeMatches.error;
+  for (const row of businessMatches.data ?? []) {
+    if (UUID_RE.test(String(row.owner_id || ""))) matchedUserIds.add(String(row.owner_id));
+  }
+  for (const row of codeMatches.data ?? []) {
+    if (UUID_RE.test(String(row.user_id || ""))) matchedUserIds.add(String(row.user_id));
+  }
+
+  const rowsById = new Map<string, Record<string, unknown>>();
+  for (const row of base.data ?? []) rowsById.set(String(row.user_id), row);
+  for (const userId of [...matchedUserIds].slice(0, 50)) {
+    if (rowsById.has(userId)) continue;
+    const result = await supabase.rpc("admin_account_directory", {
+      p_query: userId,
+      p_role: nullableText(payload.role, 20),
+      p_status: nullableText(payload.status, 20),
+      p_limit: 1,
+      p_offset: 0,
+    });
+    if (result.error) throw result.error;
+    for (const row of result.data ?? []) rowsById.set(String(row.user_id), row);
+  }
+  return [...rowsById.values()].slice(0, perPage);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function sendAuthLinkEmail(params: {
+  supabase: any;
+  userId: string;
+  kind: "recovery" | "verification";
+}) {
+  const userResult = await params.supabase.auth.admin.getUserById(params.userId);
+  if (userResult.error || !userResult.data.user?.email) {
+    throw Object.assign(new Error("The account does not have a deliverable email address."), { status: 409 });
+  }
+  const email = userResult.data.user.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) throw Object.assign(new Error("The account email is invalid."), { status: 409 });
+  const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
+  const linkResult = await params.supabase.auth.admin.generateLink(
+    params.kind === "recovery"
+      ? { type: "recovery", email, options: { redirectTo: `${siteUrl}/reset-password` } }
+      : { type: "magiclink", email, options: { redirectTo: `${siteUrl}/business` } },
+  );
+  if (linkResult.error) throw linkResult.error;
+  const actionLink = linkResult.data?.properties?.action_link;
+  if (!actionLink) throw new Error("The secure account link could not be generated.");
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) throw Object.assign(new Error("Account email delivery is not configured."), { status: 503 });
+  const passwordReset = params.kind === "recovery";
+  const subject = passwordReset ? "Reset your Twofer password" : "Verify your Twofer email";
+  const intro = passwordReset
+    ? "Use the secure link below to reset your Twofer password."
+    : "Use the secure link below to verify your email and continue setting up Twofer.";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Twofer <support@twoferapp.com>",
+      to: [email],
+      subject,
+      text: `${intro}\n\n${actionLink}\n\nIf you did not request this, contact support@twoferapp.com.`,
+      html: `<p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(actionLink)}">${passwordReset ? "Reset password" : "Verify email"}</a></p><p>If you did not request this, contact support@twoferapp.com.</p>`,
+    }),
+  });
+  if (!response.ok) {
+    throw Object.assign(new Error("The secure account email could not be delivered."), { status: 502 });
+  }
+}
+
+async function resetMfa(supabase: any, userId: string) {
+  const result = await supabase.auth.admin.getUserById(userId);
+  if (result.error || !result.data.user) throw result.error ?? new Error("Account not found.");
+  const factors = Array.isArray((result.data.user as { factors?: unknown }).factors)
+    ? ((result.data.user as { factors?: Array<{ id?: string; factor_type?: string }> }).factors ?? [])
+    : [];
+  let deleted = 0;
+  for (const factor of factors) {
+    if (!factor.id || factor.factor_type !== "totp") continue;
+    const removal = await supabase.auth.admin.mfa.deleteFactor({ id: factor.id, userId });
+    if (removal.error) throw removal.error;
+    deleted += 1;
+  }
+  return deleted;
+}
+
+async function extendTrial(supabase: any, userId: string, days: number) {
+  const businesses = await ownedBusinesses(supabase, userId);
+  const businessId = String(businesses[0]?.id || "");
+  if (!businessId) throw Object.assign(new Error("This account does not own a business."), { status: 409 });
+  const current = await supabase
+    .from("business_subscriptions")
+    .select("trial_type,trial_start,trial_end,app_access_status,current_period_start,current_period_end,cancel_at_period_end")
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (current.error) throw current.error;
+  if (current.data?.trial_type !== "admin_comp" || !["trialing", "trial_limited"].includes(String(current.data?.app_access_status))) {
+    throw Object.assign(new Error("Only an active admin-granted trial can be extended here."), { status: 409 });
+  }
+  const base = Math.max(Date.now(), Date.parse(String(current.data.trial_end || "")) || 0);
+  const trialEnd = new Date(base + days * 86400000).toISOString();
+  const update = await supabase.from("business_subscriptions").update({
+    trial_end: trialEnd,
+    updated_at: new Date().toISOString(),
+  }).eq("business_id", businessId);
+  if (update.error) throw update.error;
+  await applyBusinessBillingAccessState({
+    supabase,
+    businessId,
+    provider: "admin",
+    appAccessStatus: current.data.app_access_status,
+    trialType: "admin_comp",
+    trialStart: current.data.trial_start,
+    trialEnd,
+    currentPeriodStart: current.data.current_period_start,
+    currentPeriodEnd: current.data.current_period_end,
+    cancelAtPeriodEnd: current.data.cancel_at_period_end === true,
+  });
+  return { businessId, trialEnd };
+}
+
+async function unlockRedemptionAttempts(supabase: any, userId: string) {
+  const businesses = await ownedBusinesses(supabase, userId);
+  const businessIds = businesses.map((row: { id: string }) => row.id);
+  if (!businessIds.length) throw Object.assign(new Error("This account does not own a business."), { status: 409 });
+  const before = await supabase
+    .from("failed_redeem_attempts")
+    .select("id", { count: "exact", head: true })
+    .in("business_id", businessIds)
+    .gte("attempted_at", new Date(Date.now() - STAFF_LOCKOUT_WINDOW_MS).toISOString());
+  if (before.error) throw before.error;
+  if ((before.count ?? 0) < 10) {
+    throw Object.assign(new Error("No active staff redemption lockout exists for this account."), { status: 409 });
+  }
+  const cleared = await supabase
+    .from("failed_redeem_attempts")
+    .delete()
+    .in("business_id", businessIds)
+    .gte("attempted_at", new Date(Date.now() - STAFF_LOCKOUT_WINDOW_MS).toISOString());
+  if (cleared.error) throw cleared.error;
+  return before.count ?? 0;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -567,21 +790,14 @@ serve(async (req) => {
     if (action === "list") {
       const page = Math.max(1, Number(payload.page) || 1);
       const perPage = Math.max(1, Math.min(100, Number(payload.per_page) || 50));
-      const { data, error } = await supabaseAdmin.rpc("admin_account_directory", {
-        p_query: nullableText(payload.query, 160),
-        p_role: nullableText(payload.role, 20),
-        p_status: nullableText(payload.status, 20),
-        p_limit: perPage,
-        p_offset: (page - 1) * perPage,
-      });
-      if (error) throw error;
+      const data = await listAccounts(supabaseAdmin, payload, page, perPage);
       await audit(supabaseAdmin, req, adminUser, "admin_accounts_listed", null, null, requestId);
       return json(req, {
         ok: true,
-        accounts: data ?? [],
+        accounts: data,
         page,
         per_page: perPage,
-        total: Number(data?.[0]?.total_count ?? 0),
+        total: Number(data?.[0]?.total_count ?? data.length),
         admin: { role: adminUser.role },
       });
     }
@@ -600,6 +816,7 @@ serve(async (req) => {
           can_edit: EDIT_ROLES.has(adminUser.role as AdminRole),
           can_manage_lifecycle: LIFECYCLE_ROLES.has(adminUser.role as AdminRole),
           can_permanently_delete: adminUser.role === "owner",
+          can_repair: REPAIR_ROLES.has(adminUser.role as AdminRole),
         },
       });
     }
@@ -609,7 +826,18 @@ serve(async (req) => {
     if (action === "update_profile" && !EDIT_ROLES.has(adminUser.role as AdminRole)) {
       return json(req, { error: "Your admin role cannot edit account profiles." }, 403);
     }
-    if (action !== "update_profile" && !LIFECYCLE_ROLES.has(adminUser.role as AdminRole)) {
+    const repairActions = new Set<AccountAction>([
+      "send_password_reset",
+      "resend_verification",
+      "reset_mfa",
+      "correct_email",
+      "extend_trial",
+      "unlock",
+    ]);
+    if (repairActions.has(action) && !REPAIR_ROLES.has(adminUser.role as AdminRole)) {
+      return json(req, { error: "Your admin role cannot repair accounts." }, 403);
+    }
+    if (action !== "update_profile" && !repairActions.has(action) && !LIFECYCLE_ROLES.has(adminUser.role as AdminRole)) {
       return json(req, { error: "Your admin role cannot change account lifecycle." }, 403);
     }
     if (action === "permanent_delete" && adminUser.role !== "owner") {
@@ -621,6 +849,15 @@ serve(async (req) => {
     if (action === "archive" && payload.confirmation !== "ARCHIVE") {
       return json(req, { error: "Type ARCHIVE to confirm account archival." }, 400);
     }
+    if (action === "suspend" && payload.confirmation !== "SUSPEND") {
+      return json(req, { error: "Type SUSPEND to confirm account suspension." }, 400);
+    }
+    if (action === "reset_mfa" && payload.confirmation !== "RESET MFA") {
+      return json(req, { error: "Type RESET MFA to confirm factor removal." }, 400);
+    }
+    if (action === "correct_email" && payload.confirmation !== "CONFIRM EMAIL") {
+      return json(req, { error: "Type CONFIRM EMAIL to confirm the login-email correction." }, 400);
+    }
 
     let result: any;
     if (action === "update_profile") result = await updateProfile(supabaseAdmin, targetUserId, payload);
@@ -628,6 +865,37 @@ serve(async (req) => {
     if (action === "reactivate") result = await reactivateAccount(supabaseAdmin, targetUserId);
     if (action === "archive") result = await archiveAccount(supabaseAdmin, targetUserId, adminUser.id, reason);
     if (action === "permanent_delete") result = await permanentlyDeleteAccount(supabaseAdmin, targetUserId);
+    if (repairActions.has(action)) {
+      const before = await accountDetail(supabaseAdmin, targetUserId);
+      let repairResult: Record<string, unknown> = {};
+      if (action === "send_password_reset") {
+        await sendAuthLinkEmail({ supabase: supabaseAdmin, userId: targetUserId, kind: "recovery" });
+        repairResult = { delivered: true };
+      }
+      if (action === "resend_verification") {
+        await sendAuthLinkEmail({ supabase: supabaseAdmin, userId: targetUserId, kind: "verification" });
+        repairResult = { delivered: true };
+      }
+      if (action === "reset_mfa") repairResult = { factors_removed: await resetMfa(supabaseAdmin, targetUserId) };
+      if (action === "correct_email") {
+        const email = cleanText(payload.email, 320).toLowerCase();
+        if (!EMAIL_RE.test(email)) throw Object.assign(new Error("Enter a valid replacement email."), { status: 400 });
+        const update = await supabaseAdmin.auth.admin.updateUserById(targetUserId, { email, email_confirm: true });
+        if (update.error) throw update.error;
+        repairResult = { email_corrected: true };
+      }
+      if (action === "extend_trial") {
+        const days = Math.max(1, Math.min(30, Number(payload.days) || 0));
+        if (!Number.isInteger(days)) throw Object.assign(new Error("Trial extension days must be a whole number."), { status: 400 });
+        repairResult = await extendTrial(supabaseAdmin, targetUserId, days);
+      }
+      if (action === "unlock") repairResult = { attempts_cleared: await unlockRedemptionAttempts(supabaseAdmin, targetUserId) };
+      result = {
+        before,
+        after: await accountDetail(supabaseAdmin, targetUserId),
+        repair: repairResult,
+      };
+    }
 
     await audit(
       supabaseAdmin,
@@ -649,6 +917,7 @@ serve(async (req) => {
       ok: true,
       action,
       account: result?.after?.account ?? null,
+      repair: result?.repair ?? null,
       stripe: result?.stripe ?? null,
       permanently_deleted: action === "permanent_delete",
       request_id: requestId,

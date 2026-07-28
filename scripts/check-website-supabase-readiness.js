@@ -192,7 +192,7 @@ if (failures.length === 0) {
   }
   assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
   assertIncludes("website/styles.css", styles, ".nav-menu-button", "shared stylesheet must support the mobile navigation menu");
-  assertIncludes("website/styles.css", styles, ".admin-shell .nav-links", "shared stylesheet must keep admin navigation available on mobile");
+  assertIncludes("website/styles.css", styles, ".admin-shell .admin-bottom-nav", "shared stylesheet must keep admin navigation available on mobile");
   assertIncludes("website/styles.css", styles, "data-mobile-cards", "shared stylesheet must support mobile admin table cards");
   assertIncludes("website/styles.css", styles, ".skip-link", "shared stylesheet must expose a keyboard skip link");
   assertIncludes("website/styles.css", styles, "--accent-dark: #b85020", "interactive orange must meet normal-text contrast");
@@ -530,10 +530,13 @@ if (failures.length === 0) {
   const adminDashboardPage = read("website/admin/app.html");
   const adminDashboardJs = read("website/admin/admin.js");
   const adminLoginPage = read("website/admin/login/index.html");
+  const adminShellJs = read("website/admin/admin-shell.js");
   assertIncludes("website/admin/app.html", adminDashboardPage, "data-mobile-cards", "admin dashboard tables must render as labeled cards on phones");
   assertIncludes("website/admin/admin.js", adminDashboardJs, "dataset.label", "admin dashboard dynamic rows must provide mobile table labels");
   assertIncludes("website/admin/login/index.html", adminLoginPage, "data:image/gif;base64", "admin MFA QR image must use a non-broken placeholder before setup");
-  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must point at the admin application endpoint");
+  assertIncludes("website/admin/admin-shell.js", adminShellJs, 'adminBusinessApplicationsEndpoint: "admin-business-applications"', "shared admin shell must own the admin application endpoint");
+  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "/admin/admin-shell.js", "trial requests page must load shared endpoint and session configuration");
+  assertNotIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must not duplicate the shared admin application endpoint");
   assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "/admin/trial-requests.js", "trial requests page must load the live admin workflow script");
   assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-mobile-cards", "trial requests table must render as labeled cards on phones");
 

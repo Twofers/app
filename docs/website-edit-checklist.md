@@ -38,10 +38,11 @@ Current inventory (re-count with the grep below if in doubt):
 
 | File | Included by |
 |---|---|
-| `styles.css` | 40 pages |
+| `styles.css` | 44 pages |
 | `localization.js` | 22 pages |
 | `store-links.js` | 5 pages (`/`, `/s`, `/support`, `/business/thanks`, `/business/billing/checkout`) |
 | `launch-signup.js` | 1 page (`/`) |
+| `admin/admin-shell.js` | 22 admin entry pages (`app.html` is an injected fragment) |
 
 - [ ] Bump the `?v=` to `YYYYMMDD-shortslug` on **all** including pages, for
       **every** versioned file you edited — not just the obvious one.

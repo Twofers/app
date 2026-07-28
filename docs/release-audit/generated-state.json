@@ -36,11 +36,11 @@
     "apk": {}
   },
   "migrations": {
-    "count": 171,
-    "latest": "20260823120000_admin_account_management.sql"
+    "count": 174,
+    "latest": "20260824121000_admin_owner_communications.sql"
   },
   "edgeFunctions": {
-    "count": 80,
+    "count": 81,
     "names": [
       "accept-business-terms",
       "activate-redemption-mode",
@@ -57,6 +57,7 @@
       "admin-dashboard-summary",
       "admin-demand-proof",
       "admin-onboarding-review-ai",
+      "admin-owner-email",
       "admin-promo-authorization",
       "admin-prospect-enrich",
       "admin-prospect-import",

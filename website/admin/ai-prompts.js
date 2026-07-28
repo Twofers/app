@@ -1,9 +1,5 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const promptsEndpoint = document.body.dataset.adminAiPromptsEndpoint;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const Shell = window.TwoferAdminShell;
   const statusEl = document.querySelector("[data-admin-status]");
   const promptStatusEl = document.querySelector("[data-prompt-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
@@ -13,60 +9,15 @@
   let prompts = [];
   let defaults = {};
 
-  function storageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
   function syncNav() {
-    const hasToken = Boolean(storageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNav();
-  }
-
-  function storeSession(session, storage) {
-    storage.setItem(tokenKey, session.access_token);
-    if (session.refresh_token) storage.setItem(refreshTokenKey, session.refresh_token);
-    if (session.expires_in) storage.setItem(expiresAtKey, String(Date.now() + Number(session.expires_in) * 1000));
-  }
-
-  async function readJson(response) {
-    try {
-      return await response.json();
-    } catch {
-      return {};
-    }
-  }
-
-  async function refreshSession(refreshToken, storage) {
-    const response = await fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    const payload = await readJson(response);
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storeSession(payload.session, storage);
-    return payload.session.access_token;
-  }
-
-  async function getToken() {
-    const storage = storageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
   }
 
   function setStatus(message, tone = "info") {
@@ -82,20 +33,7 @@
   }
 
   async function adminPost(body) {
-    const token = await getToken();
-    if (!token) throw new Error("Admin session not connected.");
-    const response = await fetch(promptsEndpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const payload = await readJson(response);
-    if (response.status === 401 || response.status === 403) {
-      clearSession();
-      throw new Error(payload.error || "Admin session expired.");
-    }
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
-    return payload;
+    return Shell.adminPost("admin-ai-prompts", body);
   }
 
   function formatDateTime(value) {

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Account Repair | Twofer Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-admin-ops" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
+  </head>
+  <body class="admin-shell">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span>Twofer Admin</span></a>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Support</p>
+          <h1>Account Repair</h1>
+          <p class="lede">Find a business or customer, confirm the account state, and use only the repair that matches the issue.</p>
+        </div>
+        <span class="admin-badge" data-admin-status>Checking session</span>
+      </div>
+
+      <section class="admin-section">
+        <form class="admin-form" data-repair-search-form>
+          <label class="full">Find an account
+            <input name="query" type="search" required maxlength="160" placeholder="Business, email, phone, business/user ID, or redemption code" />
+          </label>
+          <div class="admin-inline-actions">
+            <button class="button" type="submit">Search</button>
+            <a class="button button-secondary" href="/admin/accounts">Open customer directory</a>
+          </div>
+        </form>
+        <p class="status" data-repair-search-status role="status" aria-live="polite"></p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Business</th><th>Action</th></tr></thead>
+            <tbody data-repair-results><tr><td colspan="5" class="admin-row-detail">Search to find an account.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-section" data-repair-detail hidden>
+        <div class="admin-section-header">
+          <div>
+            <p class="admin-kicker">Verified account state</p>
+            <h2 data-repair-title>Account</h2>
+            <p data-repair-meta></p>
+          </div>
+          <a class="button button-small button-secondary" data-open-directory-account href="/admin/accounts">Full account record</a>
+        </div>
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Email confirmed</span><strong data-repair-email-confirmed>&mdash;</strong></article>
+          <article class="admin-card"><span>Last sign-in</span><strong data-repair-last-sign-in>&mdash;</strong></article>
+          <article class="admin-card"><span>MFA factors</span><strong data-repair-mfa>&mdash;</strong></article>
+          <article class="admin-card"><span>Suspension</span><strong data-repair-suspension>&mdash;</strong></article>
+          <article class="admin-card"><span>Trial / subscription</span><strong data-repair-subscription>&mdash;</strong></article>
+          <article class="admin-card"><span>Redemption lockout</span><strong data-repair-lockout>&mdash;</strong></article>
+        </div>
+
+        <form class="admin-form admin-repair-actions" data-repair-actions>
+          <label class="full">Reason for repair
+            <textarea name="reason" required minlength="5" maxlength="500"></textarea>
+          </label>
+          <label>Corrected login email
+            <input name="email" type="email" maxlength="320" />
+          </label>
+          <label>Trial extension
+            <select name="days"><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select>
+          </label>
+          <div class="full admin-account-repair-buttons">
+            <button class="button button-small" type="button" data-repair-action="send_password_reset">Send password reset</button>
+            <button class="button button-small button-secondary" type="button" data-repair-owner-email>Draft owner email</button>
+            <button class="button button-small button-secondary" type="button" data-repair-owner-view>View as owner</button>
+            <button class="button button-small button-secondary" type="button" data-repair-action="resend_verification">Resend verification</button>
+            <button class="button button-small button-secondary" type="button" data-repair-action="extend_trial">Extend eligible trial</button>
+            <button class="button button-small button-secondary" type="button" data-repair-action="unlock" hidden>Clear redemption lockout</button>
+            <button class="button button-small button-danger" type="button" data-repair-action="reset_mfa">Reset MFA</button>
+            <button class="button button-small button-danger" type="button" data-repair-action="correct_email">Correct login email</button>
+            <button class="button button-small button-danger" type="button" data-repair-action="suspend">Suspend account</button>
+            <button class="button button-small" type="button" data-repair-action="reactivate" hidden>Reactivate account</button>
+          </div>
+          <p class="admin-note full"><strong>Email correction warning:</strong> a merchant can claim a business only when the login email matches the approved application email. Correcting the Auth email does not rewrite that approval record.</p>
+        </form>
+        <p class="status" data-repair-action-status role="status" aria-live="polite"></p>
+
+        <h3>Recent account audit</h3>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Action</th><th>Admin</th><th>Reason</th><th>Created</th></tr></thead>
+            <tbody data-repair-audit><tr><td colspan="4" class="admin-row-detail">Choose an account.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/admin-shell.js?v=20260728-admin-ops"></script>
+    <script src="/admin/owner-email.js?v=20260728-admin-ops"></script>
+    <script src="/admin/owner-view.js?v=20260728-admin-ops"></script>
+    <script src="/admin/account-repair.js?v=20260728-admin-ops"></script>
+  </body>
+</html>

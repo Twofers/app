@@ -129,8 +129,10 @@ describe("business application intake", () => {
   it("wires the admin trial request page to live list and decision actions", () => {
     const page = read("website/admin/trial-requests/index.html");
     const script = read("website/admin/trial-requests.js");
-    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-business-applications-endpoint/);
     expect(page).toMatch(/\/admin\/trial-requests\.js/);
+    expect(script).toMatch(/Shell\.endpoint\("admin-business-applications"\)/);
     expect(script).toMatch(/action: "list"/);
     expect(script).toMatch(/action: "decide"/);
     expect(script).toMatch(/approve_setup/);
@@ -171,10 +173,12 @@ describe("business application intake", () => {
   it("wires the founder field-invite page to the create action", () => {
     const page = read("website/admin/businesses/new/index.html");
     const script = read("website/admin/admin-new-trial.js");
-    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-business-applications-endpoint/);
     expect(page).toMatch(/data-new-trial-form/);
     expect(page).toMatch(/name="business_name"/);
     expect(page).toMatch(/name="email"/);
+    expect(script).toMatch(/Shell\.endpoint\("admin-business-applications"\)/);
     expect(script).toMatch(/action: "create"/);
     expect(script).toMatch(/fields/);
     expect(script).toMatch(/billing_sync_warning/);

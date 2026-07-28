@@ -1,10 +1,7 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const applicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
-  const onboardingReviewAiEndpoint = document.body.dataset.adminOnboardingReviewAiEndpoint;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const Shell = window.TwoferAdminShell;
+  const applicationsEndpoint = Shell.endpoint("admin-business-applications");
+  const onboardingReviewAiEndpoint = Shell.endpoint("admin-onboarding-review-ai");
   const statusEl = document.querySelector("[data-admin-status]");
   const trialStatus = document.querySelector("[data-trial-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
@@ -30,31 +27,15 @@
     if ([...select.options].some((option) => option.value === requested)) select.value = requested;
   }
 
-  function sessionStorageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
   function syncNavForSession() {
-    const hasToken = Boolean(sessionStorageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNavForSession();
-  }
-
-  function storeSession(session, storage) {
-    storage.setItem(tokenKey, session.access_token);
-    if (session.refresh_token) storage.setItem(refreshTokenKey, session.refresh_token);
-    if (session.expires_in) {
-      storage.setItem(expiresAtKey, String(Date.now() + Number(session.expires_in) * 1000));
-    }
   }
 
   async function readJson(response) {
@@ -65,41 +46,8 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20000);
-    let response;
-    try {
-      response = await fetch(authEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      throw new Error(networkFailureMessage("session", error));
-    } finally {
-      window.clearTimeout(timeout);
-    }
-    const payload = await readJson(response);
-    if (response.status === 401 || response.status === 403) {
-      clearSession();
-      throw new Error("Admin session expired. Sign in again.");
-    }
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storeSession(payload.session, storage);
-    return payload.session.access_token;
-  }
-
   async function getAccessToken() {
-    const storage = sessionStorageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return Shell.getAccessToken();
   }
 
   function setAdminStatus(message, tone = "info") {

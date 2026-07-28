@@ -82,4 +82,26 @@ describe("admin account management", () => {
       /\[functions\.admin-account-management\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/admin-account-management\/index\.ts"/,
     );
   });
+
+  it("ships the audited account-repair actions without exposing generated links", () => {
+    const source = read("supabase/functions/admin-account-management/index.ts");
+    const page = read("website/admin/account-repair/index.html");
+    const script = read("website/admin/account-repair.js");
+    expect(source).toMatch(/"send_password_reset"/);
+    expect(source).toMatch(/"resend_verification"/);
+    expect(source).toMatch(/"reset_mfa"/);
+    expect(source).toMatch(/"correct_email"/);
+    expect(source).toMatch(/"extend_trial"/);
+    expect(source).toMatch(/"unlock"/);
+    expect(source).toMatch(/auth\.admin\.generateLink/);
+    expect(source).toMatch(/auth\.admin\.mfa\.deleteFactor/);
+    expect(source).toMatch(/applyBusinessBillingAccessState/);
+    expect(source).toMatch(/failed_redeem_attempts/);
+    expect(source).not.toMatch(/action_link:\s*actionLink/);
+    expect(page).toMatch(/Account Repair/);
+    expect(page).toMatch(/merchant can claim a business only when the login email matches/i);
+    expect(script).toMatch(/RESET MFA/);
+    expect(script).toMatch(/CONFIRM EMAIL/);
+    expect(script).toMatch(/SUSPEND/);
+  });
 });

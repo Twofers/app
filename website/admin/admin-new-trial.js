@@ -1,31 +1,20 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const applicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const Shell = window.TwoferAdminShell;
+  const applicationsEndpoint = Shell.endpoint("admin-business-applications");
   const form = document.querySelector("[data-new-trial-form]");
   const statusEl = document.querySelector("[data-form-status]");
   const submitButton = document.querySelector("[data-new-trial-submit]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
   const loginLink = document.querySelector("[data-admin-login-link]");
 
-  function sessionStorageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
   function syncNavForSession() {
-    const hasToken = Boolean(sessionStorageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNavForSession();
   }
 
@@ -37,31 +26,8 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    const response = await fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    const payload = await readJson(response);
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storage.setItem(tokenKey, payload.session.access_token);
-    if (payload.session.refresh_token) storage.setItem(refreshTokenKey, payload.session.refresh_token);
-    if (payload.session.expires_in) {
-      storage.setItem(expiresAtKey, String(Date.now() + Number(payload.session.expires_in) * 1000));
-    }
-    return payload.session.access_token;
-  }
-
   async function getAccessToken() {
-    const storage = sessionStorageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return Shell.getAccessToken();
   }
 
   function setStatus(message, tone = "info") {

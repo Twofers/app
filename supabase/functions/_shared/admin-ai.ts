@@ -42,6 +42,7 @@ export type AdminAiFeature =
   | "onboarding_review"
   | "claim_link_assistant"
   | "trial_conversion_assistant"
+  | "owner_email"
   | "operating_report";
 
 export const ADMIN_AI_PROMPT_VERSIONS: Record<AdminAiFeature, string> = {
@@ -52,6 +53,7 @@ export const ADMIN_AI_PROMPT_VERSIONS: Record<AdminAiFeature, string> = {
   onboarding_review: "admin-onboarding-review-v1",
   claim_link_assistant: "admin-claim-link-assistant-v1",
   trial_conversion_assistant: "admin-trial-conversion-assistant-v1",
+  owner_email: "admin-owner-email-v1",
   operating_report: "admin-operating-report-v1",
 };
 

@@ -1,10 +1,7 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const accountEndpoint = document.body.dataset.adminAccountEndpoint;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const Shell = window.TwoferAdminShell;
   const userId = new URLSearchParams(window.location.search).get("userId");
+  const initialQuery = new URLSearchParams(window.location.search).get("q") || "";
   let currentPage = 1;
   let total = 0;
   let perPage = 50;
@@ -12,63 +9,11 @@
 
   const $ = (selector) => document.querySelector(selector);
   const statusEl = $("[data-admin-status]");
-
-  function storage() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
-  function clearSession() {
-    for (const source of [window.localStorage, window.sessionStorage]) {
-      source.removeItem(tokenKey);
-      source.removeItem(refreshTokenKey);
-      source.removeItem(expiresAtKey);
-    }
-  }
-
-  async function readJson(response) {
-    try {
-      return await response.json();
-    } catch {
-      return {};
-    }
-  }
-
-  async function accessToken() {
-    const source = storage();
-    const token = source.getItem(tokenKey);
-    const refreshToken = source.getItem(refreshTokenKey);
-    const expiresAt = Number(source.getItem(expiresAtKey) || 0);
-    if (!token) return null;
-    if (!refreshToken || !expiresAt || expiresAt - Date.now() > 60000) return token;
-    const response = await fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    const payload = await readJson(response);
-    if (!response.ok || !payload.session?.access_token) throw new Error("Admin session expired.");
-    source.setItem(tokenKey, payload.session.access_token);
-    if (payload.session.refresh_token) source.setItem(refreshTokenKey, payload.session.refresh_token);
-    source.setItem(expiresAtKey, String(Date.now() + Number(payload.session.expires_in || 3600) * 1000));
-    return payload.session.access_token;
-  }
+  const searchInput = $("[data-search]");
+  if (searchInput && initialQuery) searchInput.value = initialQuery;
 
   async function post(body) {
-    const token = await accessToken();
-    if (!token) throw new Error("Admin session not connected.");
-    const response = await fetch(accountEndpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const payload = await readJson(response);
-    if (response.status === 401 || response.status === 403) {
-      clearSession();
-      window.location.assign("/admin/login");
-      throw new Error("Admin session expired.");
-    }
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
-    return payload;
+    return Shell.adminPost("admin-account-management", body);
   }
 
   function setStatus(message, tone = "") {
@@ -260,7 +205,10 @@
       confirmation = window.prompt("This cannot be undone. Type DELETE to cancel Stripe and permanently erase this account.");
       if (confirmation !== "DELETE") return;
     }
-    if (action === "suspend" && !window.confirm("Suspend this account? Login will be blocked and any business will be hidden. Stripe billing will continue.")) return;
+    if (action === "suspend") {
+      confirmation = window.prompt("Suspend this account? Login will be blocked and any business will be hidden. Stripe billing will continue. Type SUSPEND to continue.");
+      if (confirmation !== "SUSPEND") return;
+    }
     if (action === "reactivate" && !window.confirm("Reactivate this account and restore its eligible pre-suspension state?")) return;
     output.textContent = "Working…";
     output.className = "status";
@@ -286,8 +234,7 @@
   }
 
   $("[data-admin-sign-out]")?.addEventListener("click", () => {
-    clearSession();
-    window.location.assign("/admin/login");
+    Shell.signOut();
   });
 
   if (userId) {

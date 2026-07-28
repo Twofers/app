@@ -805,3 +805,8 @@ entrypoint = "./functions/admin-promo-authorization/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-account-management/index.ts"
+
+[functions.admin-owner-email]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-owner-email/index.ts"

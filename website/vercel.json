@@ -289,6 +289,30 @@
       "destination": "/admin/accounts/index.html"
     },
     {
+      "source": "/admin/account-repair",
+      "destination": "/admin/account-repair/index.html"
+    },
+    {
+      "source": "/admin/account-repair/",
+      "destination": "/admin/account-repair/index.html"
+    },
+    {
+      "source": "/admin/communications",
+      "destination": "/admin/communications/index.html"
+    },
+    {
+      "source": "/admin/communications/",
+      "destination": "/admin/communications/index.html"
+    },
+    {
+      "source": "/admin/ai-usage",
+      "destination": "/admin/ai-usage/index.html"
+    },
+    {
+      "source": "/admin/ai-usage/",
+      "destination": "/admin/ai-usage/index.html"
+    },
+    {
       "source": "/admin/businesses",
       "destination": "/admin/businesses/index.html"
     },

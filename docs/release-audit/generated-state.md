@@ -37,10 +37,10 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `171`
-- Latest: `20260823120000_admin_account_management.sql`
+- Count: `174`
+- Latest: `20260824121000_admin_owner_communications.sql`
 
-## Edge Functions (supabase/functions, 80 local)
+## Edge Functions (supabase/functions, 81 local)
 
 - accept-business-terms
 - activate-redemption-mode
@@ -57,6 +57,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - admin-dashboard-summary
 - admin-demand-proof
 - admin-onboarding-review-ai
+- admin-owner-email
 - admin-promo-authorization
 - admin-prospect-enrich
 - admin-prospect-import

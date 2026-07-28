@@ -17,6 +17,7 @@ const FEATURES = new Set<AdminAiFeature>([
   "onboarding_review",
   "claim_link_assistant",
   "trial_conversion_assistant",
+  "owner_email",
   "operating_report",
 ]);
 
