@@ -3459,16 +3459,16 @@ main.content-page {
 
 .admin-shell .admin-ops-main {
   --admin-card-shadow: 0 1px 2px rgb(15 23 20 / 5%), 0 12px 30px rgb(15 23 20 / 5%);
-  padding-top: 30px;
+  padding-top: 24px;
 }
 
 .admin-shell .admin-ops-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
   border-bottom: 1px solid var(--admin-hairline);
-  padding-bottom: 24px;
+  padding-bottom: 20px;
 }
 
 .admin-shell .admin-ops-header h1 {
@@ -3518,7 +3518,7 @@ main.content-page {
 }
 
 .admin-shell .admin-ops-search input {
-  width: min(330px, 38vw);
+  width: min(380px, 40vw);
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -3529,7 +3529,19 @@ main.content-page {
 }
 
 .admin-shell .admin-quick-actions {
+  margin-top: 20px;
+}
+
+.admin-shell .admin-ops-main > .admin-section {
   margin-top: 24px;
+}
+
+.admin-shell .admin-ops-main > .admin-section > .admin-section-header {
+  margin-bottom: 12px;
+}
+
+.admin-shell .admin-ops-main > .admin-section > .admin-section-header h2 {
+  font-size: 22px;
 }
 
 .admin-shell .admin-quick-actions .admin-kicker {
@@ -3546,13 +3558,13 @@ main.content-page {
 
 .admin-shell .admin-top-action {
   display: grid;
-  min-height: 92px;
-  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 80px;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: flex-start;
   gap: 12px;
   border: 1px solid var(--admin-hairline);
   border-radius: 14px;
-  padding: 15px 16px;
+  padding: 13px 14px;
   background: #fff;
   color: var(--ink);
   box-shadow: 0 1px 2px rgb(15 23 20 / 4%);
@@ -3586,8 +3598,8 @@ main.content-page {
 
 .admin-shell .admin-top-action-icon {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
@@ -3607,8 +3619,9 @@ main.content-page {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   border: 1px solid #f0b88e;
+  border-left: 4px solid var(--accent);
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 16px 18px;
   background: #fff9f4;
 }
 
@@ -3641,15 +3654,15 @@ main.content-page {
 
 .admin-shell .admin-ops-metric {
   display: flex;
-  min-height: 178px;
+  min-height: 158px;
   flex-direction: column;
   overflow: hidden;
   border-top: 3px solid var(--admin-ok);
-  padding-top: 16px;
+  padding-top: 14px;
 }
 
 .admin-shell .admin-ops-metric strong {
-  margin: 16px 0 9px;
+  margin: 10px 0 7px;
   font-size: clamp(30px, 2.7vw, 40px);
 }
 
@@ -3663,7 +3676,7 @@ main.content-page {
 
 .admin-shell .admin-ops-metric i {
   margin-top: auto;
-  padding-top: 18px;
+  padding-top: 12px;
   color: var(--accent-dark);
   font-size: 11px;
   font-style: normal;
@@ -3723,7 +3736,7 @@ main.content-page {
 
 .admin-shell .admin-queue-toolbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
@@ -3777,13 +3790,15 @@ main.content-page {
 }
 
 .admin-shell .admin-queue-status-filter {
-  display: grid;
-  width: min(240px, 100%);
-  gap: 6px;
+  display: flex;
+  width: auto;
+  align-items: center;
+  gap: 9px;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .admin-shell .admin-queue-status-filter select,
@@ -3799,9 +3814,38 @@ main.content-page {
   font-weight: 750;
 }
 
+.admin-shell .admin-queue-status-filter select {
+  width: 180px;
+}
+
+.admin-shell .admin-queue-status-select {
+  width: auto;
+  max-width: 112px;
+}
+
 .admin-shell .admin-queue-table td:nth-child(3) {
   min-width: 240px;
   white-space: normal;
+}
+
+.admin-shell .admin-queue-table th:nth-child(2),
+.admin-shell .admin-queue-table td:nth-child(2),
+.admin-shell .admin-queue-table th:nth-child(4),
+.admin-shell .admin-queue-table td:nth-child(4),
+.admin-shell .admin-queue-table th:nth-child(5),
+.admin-shell .admin-queue-table td:nth-child(5),
+.admin-shell .admin-queue-table th:nth-child(6),
+.admin-shell .admin-queue-table td:nth-child(6) {
+  white-space: nowrap;
+}
+
+.admin-shell .admin-queue-table td {
+  vertical-align: top;
+}
+
+.admin-shell .admin-queue-table .admin-inline-actions {
+  min-width: 0;
+  gap: 6px;
 }
 
 .admin-shell .admin-queue-table .admin-note {
@@ -3817,6 +3861,20 @@ main.content-page {
 .admin-shell .admin-recent-deals-table td {
   padding-top: 12px;
   padding-bottom: 12px;
+}
+
+.admin-shell .admin-recent-deals-table th:first-child,
+.admin-shell .admin-recent-deals-table td:first-child {
+  width: 34%;
+}
+
+.admin-shell .admin-recent-deals-table th:nth-child(3),
+.admin-shell .admin-recent-deals-table td:nth-child(3),
+.admin-shell .admin-recent-deals-table th:nth-child(4),
+.admin-shell .admin-recent-deals-table td:nth-child(4),
+.admin-shell .admin-recent-deals-table th:nth-child(5),
+.admin-shell .admin-recent-deals-table td:nth-child(5) {
+  white-space: nowrap;
 }
 
 .admin-shell .admin-onboarding-grid {
@@ -3840,7 +3898,38 @@ main.content-page {
 }
 
 .admin-shell .admin-ops-main .admin-onboarding-card {
-  padding: 20px;
+  grid-template-columns: minmax(0, 1fr) 164px;
+  gap: 12px 22px;
+  padding: 18px;
+}
+
+.admin-shell .admin-ops-main .admin-onboarding-card-heading {
+  grid-column: 1 / -1;
+}
+
+.admin-shell .admin-onboarding-summary {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.admin-shell .admin-onboarding-summary > .admin-note {
+  margin: 0;
+}
+
+.admin-shell .admin-onboarding-actions {
+  min-width: 0;
+  align-content: start;
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.admin-shell .admin-onboarding-actions > .button,
+.admin-shell .admin-onboarding-actions > .admin-more-actions > summary {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
 }
 
 .admin-shell .admin-onboarding-next {
@@ -3850,7 +3939,7 @@ main.content-page {
   gap: 10px;
   border-left: 4px solid var(--accent);
   border-radius: 0 10px 10px 0;
-  padding: 11px 14px;
+  padding: 9px 12px;
   background: #fff7f1;
 }
 
@@ -5568,6 +5657,20 @@ body:not(.admin-shell) main.content-page .admin-panel {
     grid-template-columns: 1fr;
   }
 
+  .admin-shell .admin-ops-main .admin-onboarding-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-onboarding-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .admin-shell .admin-onboarding-actions > .button,
+  .admin-shell .admin-onboarding-actions > .admin-more-actions > summary {
+    width: auto;
+  }
+
   .admin-shell .admin-panel-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5582,7 +5685,20 @@ body:not(.admin-shell) main.content-page .admin-panel {
 
 @media (max-width: 520px) {
   .admin-shell .admin-metric-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .admin-shell .admin-ops-metric {
+    padding: 13px;
+  }
+
+  .admin-shell .admin-ops-metric strong {
+    font-size: 30px;
+  }
+
+  .admin-shell .admin-ops-metric:last-child {
+    grid-column: 1 / -1;
   }
 
   .admin-shell .admin-ops-search {
@@ -5591,6 +5707,16 @@ body:not(.admin-shell) main.content-page .admin-panel {
 
   .admin-shell .admin-ops-header-actions > .button {
     width: 100%;
+  }
+}
+
+@media (max-width: 359px) {
+  .admin-shell .admin-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-ops-metric:last-child {
+    grid-column: auto;
   }
 }
 

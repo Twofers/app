@@ -466,14 +466,14 @@
     const footnote = document.querySelector("[data-recent-deals-footnote]");
     if (!body) return;
     body.textContent = "";
-    const rows = (offers || []).slice(0, 5);
+    const rows = (offers || []).slice(0, 3);
     if (footnote) {
       footnote.hidden = rows.length === 0;
       footnote.textContent = rows.length === 0
         ? ""
         : (offers || []).length > rows.length
-          ? `Showing the ${rows.length} most recent deals. Use All offers for complete history and filters.`
-          : `Showing ${rows.length.toLocaleString()} recent deal${rows.length === 1 ? "" : "s"}. Use All offers for complete history and filters.`;
+          ? `Showing the ${rows.length} newest offers. Use All offers for complete history and filters.`
+          : `Showing ${rows.length.toLocaleString()} recent offer${rows.length === 1 ? "" : "s"}. Use All offers for complete history and filters.`;
     }
     if (!rows.length) {
       const row = document.createElement("tr");
@@ -554,7 +554,7 @@
       fill.style.width = `${progress}%`;
       track.appendChild(fill);
       const actions = document.createElement("div");
-      actions.className = "admin-inline-actions";
+      actions.className = "admin-inline-actions admin-onboarding-actions";
       const continueButton = nodeWithText("button", "Continue setup", "button button-small");
       continueButton.type = "button";
       continueButton.addEventListener("click", () => openBusinessPanel(item.business_id, item.business_name));
@@ -583,12 +583,17 @@
       moreActionList.append(repair, billing, ownerViewButton(item.business_id));
       moreActions.append(nodeWithText("summary", "More actions"), moreActionList);
       actions.appendChild(moreActions);
-      card.append(
-        heading,
+      const progressSummary = document.createElement("div");
+      progressSummary.className = "admin-onboarding-summary";
+      progressSummary.append(
         nodeWithText("p", item.owner_email || "Owner email unavailable", "admin-note"),
         track,
         nextStep,
         checklistDetails,
+      );
+      card.append(
+        heading,
+        progressSummary,
         actions,
       );
       list.appendChild(card);

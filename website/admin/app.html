@@ -28,8 +28,8 @@
       </div>
       <div class="admin-ops-header-actions">
         <form class="admin-ops-search" data-ops-search-form role="search">
-          <label class="admin-ops-search-label" for="admin-ops-search">Search accounts</label>
-          <input id="admin-ops-search" name="q" type="search" placeholder="Business, email, or user ID" maxlength="160" />
+          <label class="admin-ops-search-label visually-hidden" for="admin-ops-search">Search accounts</label>
+          <input id="admin-ops-search" name="q" type="search" placeholder="Search business, email, or user ID" maxlength="160" />
           <button class="button button-small button-secondary" type="submit">Search</button>
         </form>
         <a class="button button-small" href="/admin/businesses/new">Add business</a>
@@ -41,7 +41,7 @@
         <div>
           <p class="admin-kicker">Service alerts</p>
           <h2 id="service-alerts-title">Needs attention now</h2>
-          <p>Rules-based signals only. Each alert explains the issue, why it matters, and the recommended next step.</p>
+          <p>Prioritized signals with a clear recommended next step.</p>
         </div>
       </div>
       <div class="admin-alert-list" data-service-alerts></div>
@@ -69,7 +69,7 @@
       <div class="admin-section-header">
         <div>
           <h2 id="ops-metrics-title">How the service is working</h2>
-          <p>Open any card to review the related operating detail.</p>
+          <p>Live operating health at a glance. Open a card for detail.</p>
         </div>
       </div>
       <div class="admin-metric-grid">
@@ -78,7 +78,7 @@
           <small data-ops-metric-detail="deals">Live deals now</small><i aria-hidden="true">View offers →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/offers?view=redemptions" data-ops-metric-card="redemptions">
-          <span class="admin-metric-label">Redemptions · 7 days</span><strong data-ops-metric="redemptions">0</strong>
+          <span class="admin-metric-label">7-day redemptions</span><strong data-ops-metric="redemptions">0</strong>
           <small data-ops-metric-detail="redemptions">Last 7 days</small><i aria-hidden="true">Review activity →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/accounts" data-ops-metric-card="users">
@@ -117,7 +117,7 @@
         <div>
           <p class="admin-kicker">Daily work</p>
           <h2 id="action-queue-title">Action queue</h2>
-          <p>Business health and count-based operating queues in one prioritized list.</p>
+          <p>Highest-priority operating work, ordered for review.</p>
         </div>
         <a class="button button-small button-secondary" href="/admin/audit-log">Audit log</a>
       </div>
@@ -162,7 +162,7 @@
         <div>
           <p class="admin-kicker">Activity review</p>
           <h2 id="recent-deals-title">Latest offers</h2>
-          <p>The five newest offers, with claims, redemptions, and anything that needs review.</p>
+          <p>The three newest offers and their current outcomes.</p>
         </div>
         <a class="button button-small button-secondary" href="/admin/offers">All offers</a>
       </div>
