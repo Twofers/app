@@ -3458,12 +3458,13 @@ main.content-page {
 }
 
 .admin-shell .admin-ops-main {
+  --admin-card-shadow: 0 1px 2px rgb(15 23 20 / 5%), 0 12px 30px rgb(15 23 20 / 5%);
   padding-top: 30px;
 }
 
 .admin-shell .admin-ops-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid var(--admin-hairline);
@@ -3472,12 +3473,34 @@ main.content-page {
 
 .admin-shell .admin-ops-header h1 {
   margin: 0;
+  color: var(--ink);
   font-size: clamp(30px, 3.2vw, 42px);
+  line-height: 1.02;
   letter-spacing: -0.025em;
 }
 
 .admin-shell .admin-ops-header .lede {
   margin: 7px 0 0;
+  color: var(--muted);
+}
+
+.admin-shell .admin-ops-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 11px 0 0;
+  color: #5f6c67;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-shell .admin-ops-refresh::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--admin-ok);
+  box-shadow: 0 0 0 4px var(--admin-ok-bg);
+  content: "";
 }
 
 .admin-shell .admin-ops-header-actions,
@@ -3512,8 +3535,8 @@ main.content-page {
   align-items: flex-start;
   gap: 12px;
   border: 1px solid var(--admin-hairline);
-  border-radius: 12px;
-  padding: 17px;
+  border-radius: 14px;
+  padding: 18px;
   background: #fff;
   color: var(--ink);
   box-shadow: var(--admin-card-shadow);
@@ -3523,6 +3546,8 @@ main.content-page {
 .admin-shell .admin-top-action:hover,
 .admin-shell .admin-top-action:focus-visible {
   border-color: var(--accent);
+  box-shadow: 0 1px 2px rgb(15 23 20 / 5%), 0 16px 34px rgb(15 23 20 / 8%);
+  transform: translateY(-2px);
   text-decoration: none;
 }
 
@@ -3567,8 +3592,14 @@ main.content-page {
   gap: 16px;
   border: 1px solid #f0b88e;
   border-radius: 12px;
-  padding: 17px 18px;
+  padding: 18px 20px;
   background: #fff9f4;
+}
+
+.admin-shell .admin-service-alert .admin-inline-actions {
+  min-width: 0;
+  align-content: center;
+  justify-content: flex-end;
 }
 
 .admin-shell .admin-service-alert h3 {
@@ -3593,16 +3624,53 @@ main.content-page {
 }
 
 .admin-shell .admin-ops-metric {
-  min-height: 150px;
+  display: flex;
+  min-height: 178px;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 3px solid var(--admin-ok);
+  padding-top: 16px;
 }
 
 .admin-shell .admin-ops-metric strong {
-  margin: 18px 0 10px;
+  margin: 16px 0 9px;
+  font-size: clamp(30px, 2.7vw, 40px);
+}
+
+.admin-shell .admin-ops-metric .admin-metric-label {
+  color: #53605b;
+}
+
+.admin-shell .admin-ops-metric small {
+  display: block;
+}
+
+.admin-shell .admin-ops-metric i {
+  margin-top: auto;
+  padding-top: 18px;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.02em;
 }
 
 .admin-shell .admin-ops-metric.is-zero {
   background: #fafbf9;
   box-shadow: none;
+  border-top-color: #b9c2bc;
+}
+
+.admin-shell .admin-metric-footnote,
+.admin-shell .admin-section-footnote {
+  margin: 11px 0 0;
+  color: #68736f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-shell .admin-metric-footnote::before {
+  content: "ⓘ ";
 }
 
 .admin-shell .admin-queue-filters {
@@ -3662,10 +3730,24 @@ main.content-page {
   white-space: normal;
 }
 
+.admin-shell .admin-queue-table .admin-note {
+  margin: 7px 0 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #68736f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .admin-shell .admin-onboarding-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.admin-shell .admin-ops-main .admin-onboarding-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(430px, 100%), 1fr));
 }
 
 .admin-shell .admin-onboarding-card {
@@ -3676,6 +3758,10 @@ main.content-page {
   padding: 18px;
   background: #fff;
   box-shadow: var(--admin-card-shadow);
+}
+
+.admin-shell .admin-ops-main .admin-onboarding-card {
+  padding: 20px;
 }
 
 .admin-shell .admin-onboarding-card-heading {
@@ -3717,6 +3803,10 @@ main.content-page {
 .admin-shell .admin-onboarding-checklist.compact {
   grid-template-columns: 1fr;
   margin: 2px 0;
+}
+
+.admin-shell .admin-ops-main .admin-onboarding-checklist.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .admin-shell .admin-onboarding-checklist li {
@@ -4376,6 +4466,14 @@ main.content-page {
   word-break: break-word;
 }
 
+.admin-shell .admin-ops-main .admin-table .button,
+.admin-shell .admin-ops-main .admin-table .admin-badge,
+.admin-shell .admin-ops-main .admin-table .admin-priority {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .admin-table tbody tr {
   transition: background 0.12s ease;
 }
@@ -4635,6 +4733,10 @@ main.content-page {
 .admin-inline-actions .button-small {
   min-height: 34px;
   padding: 8px 10px;
+}
+
+.admin-shell .admin-ops-main .admin-inline-actions .button-small {
+  white-space: nowrap;
 }
 
 .admin-row-detail {
@@ -5138,6 +5240,21 @@ body:not(.admin-shell) main.content-page .admin-panel {
   }
 }
 
+@media (max-width: 1200px) and (min-width: 801px) {
+  .admin-shell .admin-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-shell .admin-ops-header {
+    align-items: flex-start;
+  }
+
+  .admin-shell .admin-ops-header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 800px) {
   .admin-shell .admin-layout {
     display: block;
@@ -5253,8 +5370,11 @@ body:not(.admin-shell) main.content-page .admin-panel {
     width: 100%;
   }
 
-  .admin-shell .admin-top-actions,
   .admin-shell .admin-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-shell .admin-top-actions {
     grid-template-columns: 1fr;
   }
 
@@ -5271,6 +5391,10 @@ body:not(.admin-shell) main.content-page .admin-panel {
     justify-self: start;
   }
 
+  .admin-shell .admin-ops-main .admin-onboarding-checklist.compact {
+    grid-template-columns: 1fr;
+  }
+
   .admin-shell .admin-panel-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5280,6 +5404,20 @@ body:not(.admin-shell) main.content-page .admin-panel {
     width: 100%;
     border-left: 0;
     padding: 20px 16px 92px;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-shell .admin-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-ops-search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-ops-header-actions > .button {
+    width: 100%;
   }
 }
 

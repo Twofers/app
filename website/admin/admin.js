@@ -413,8 +413,15 @@
     setMetric(
       "users",
       Number(summary.users?.active30d ?? activity.newConsumersThisWeek ?? 0),
-      summary.users?.definition || "Interim: new customers this week; active-30d arrives with summary v2",
+      summary.users?.active30d === undefined ? "New customers this week" : "Active in the last 30 days",
     );
+    const activeUsersDefinition = document.querySelector("[data-active-users-definition]");
+    if (activeUsersDefinition) {
+      activeUsersDefinition.hidden = !summary.users?.definition;
+      activeUsersDefinition.textContent = summary.users?.definition
+        ? `Active users: ${summary.users.definition}`
+        : "";
+    }
     setMetric(
       "businesses",
       Number(summary.businesses?.withLiveOffer ?? summary.businesses?.active ?? 0),
@@ -448,9 +455,18 @@
 
   function renderRecentDeals(offers) {
     const body = document.querySelector("[data-recent-deals-body]");
+    const footnote = document.querySelector("[data-recent-deals-footnote]");
     if (!body) return;
     body.textContent = "";
-    const rows = (offers || []).slice(0, 12);
+    const rows = (offers || []).slice(0, 8);
+    if (footnote) {
+      footnote.hidden = rows.length === 0;
+      footnote.textContent = rows.length === 0
+        ? ""
+        : (offers || []).length > rows.length
+          ? `Showing the ${rows.length} most recent deals. Use All offers for complete history and filters.`
+          : `Showing ${rows.length.toLocaleString()} recent deal${rows.length === 1 ? "" : "s"}. Use All offers for complete history and filters.`;
+    }
     if (!rows.length) {
       const row = document.createElement("tr");
       const cell = nodeWithText("td", "No recent deals are available.", "admin-row-detail");
@@ -742,6 +758,13 @@
           ? offersResult.value.offers
           : [],
     );
+    const updated = document.querySelector("[data-dashboard-updated]");
+    if (updated) {
+      updated.textContent = `Updated ${new Date().toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`;
+    }
   }
 
   async function boot() {

@@ -24,6 +24,7 @@
         <p class="admin-kicker">Service and operations console</p>
         <h1 id="admin-ops-title">Twofer Admin</h1>
         <p class="lede">Operations overview for <span data-ops-date>today</span></p>
+        <p class="admin-ops-refresh" data-dashboard-updated aria-live="polite">Loading the latest service data…</p>
       </div>
       <div class="admin-ops-header-actions">
         <form class="admin-ops-search" data-ops-search-form role="search">
@@ -70,26 +71,27 @@
       </div>
       <div class="admin-metric-grid">
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/offers" data-ops-metric-card="deals">
-          <span>Deals created</span><strong data-ops-metric="deals">0</strong>
-          <small data-ops-metric-detail="deals">Live deals now</small>
+          <span class="admin-metric-label">Deals created</span><strong data-ops-metric="deals">0</strong>
+          <small data-ops-metric-detail="deals">Live deals now</small><i aria-hidden="true">View offers →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/offers?view=redemptions" data-ops-metric-card="redemptions">
-          <span>Redemptions</span><strong data-ops-metric="redemptions">0</strong>
-          <small data-ops-metric-detail="redemptions">Today</small>
+          <span class="admin-metric-label">Redemptions</span><strong data-ops-metric="redemptions">0</strong>
+          <small data-ops-metric-detail="redemptions">Today</small><i aria-hidden="true">Review activity →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/accounts" data-ops-metric-card="users">
-          <span>Active users</span><strong data-ops-metric="users">0</strong>
-          <small data-ops-metric-detail="users">Interim: new customers this week</small>
+          <span class="admin-metric-label">Active users</span><strong data-ops-metric="users">0</strong>
+          <small data-ops-metric-detail="users">Active in the last 30 days</small><i aria-hidden="true">View customers →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/businesses" data-ops-metric-card="businesses">
-          <span>Active businesses</span><strong data-ops-metric="businesses">0</strong>
-          <small data-ops-metric-detail="businesses">Active total</small>
+          <span class="admin-metric-label">Active businesses</span><strong data-ops-metric="businesses">0</strong>
+          <small data-ops-metric-detail="businesses">Active total</small><i aria-hidden="true">View businesses →</i>
         </a>
         <a class="admin-card admin-card-link admin-ops-metric" href="/admin/ai-operating-report" data-ops-metric-card="ai">
-          <span>AI spend</span><strong data-ops-metric="ai">$0.00</strong>
-          <small data-ops-metric-detail="ai">This month</small>
+          <span class="admin-metric-label">AI spend</span><strong data-ops-metric="ai">$0.00</strong>
+          <small data-ops-metric-detail="ai">This month</small><i aria-hidden="true">Open cost report →</i>
         </a>
       </div>
+      <p class="admin-metric-footnote" data-active-users-definition hidden></p>
     </section>
 
     <section class="admin-section" data-onboarding-section hidden aria-labelledby="onboarding-title">
@@ -164,6 +166,7 @@
           </tbody>
         </table>
       </div>
+      <p class="admin-section-footnote" data-recent-deals-footnote hidden></p>
     </section>
   </main>
 
