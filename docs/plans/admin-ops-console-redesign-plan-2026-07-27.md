@@ -1,6 +1,6 @@
 # Admin operations console redesign — implementation plan (2026-07-27)
 
-Status: COMPLETE LOCALLY — Phases 0–8 implemented and checked off; no deploys or hosted migrations applied. Local and automated validation is recorded below, with hosted admin-session QA still required before deployment.
+Status: DEPLOYED TO PRODUCTION — Phases 0–8 implemented and checked off. The three migrations, four affected Edge Functions, and Vercel website were deployed on 2026-07-28. Hosted admin-session QA and the credential-blocked RLS probe remain follow-up checks.
 
 Goal (from Dan's design brief): rebuild the admin web pages as a **service and
 operations console for one owner** — "show what needs attention, let me fix it
@@ -382,9 +382,18 @@ the new path).
 - Verified cache-bust coverage: 44 HTML pages reference the current shared
   stylesheet version and all 22 admin HTML pages reference the current shared
   shell version.
-- Not run: hosted migration/function checks, real admin-session QA, email
-  delivery, and owner-view verification against hosted data. Those require
-  approved hosted changes or Dan-controlled accounts.
+- Production deployment completed 2026-07-28: migrations
+  `20260824120000`, `20260824120500`, and `20260824121000`; Edge Functions
+  `admin-dashboard-summary`, `admin-account-management`, `admin-ai-prompts`,
+  and `admin-owner-email`; website aliased to `https://www.twoferapp.com`.
+- Hosted unauthenticated smoke passed: all four Edge endpoints reject missing
+  credentials with HTTP 401, and the new website routes return HTTP 200 with
+  `noindex` protection.
+- Follow-up required: `node scripts/probe-rls-smoke.mjs` could not authenticate
+  because its configured smoke-test credentials were rejected. Real
+  admin-session QA, email delivery, and owner-view verification against hosted
+  data were not performed to avoid sending merchant email or changing account
+  state during deployment verification.
 
 ## 14. Risks / watch-outs
 
