@@ -52,8 +52,10 @@ RPCs.
   enforcement is currently false and network restrictions permit
   `0.0.0.0/0` plus `::/0`; the physical-backup list is empty and PITR is false.
 - Backups/PITR: inspect the Dashboard Backups page. The 2026-07-29 bootstrap
-  decision defers paid PITR while a 24-hour recovery point is acceptable; use
-  the free-tier immutable path in `backup-and-restore-runbook.md`.
+  review confirmed the project is on the Free plan and has no scheduled
+  backups. The bootstrap decision defers paid PITR while a 24-hour recovery
+  point is acceptable; use the free-tier immutable path in
+  `backup-and-restore-runbook.md`.
 - Enable SSL enforcement in a test project, validate every database client, then
   separately approve production:
   https://supabase.com/docs/guides/platform/ssl-enforcement
@@ -63,7 +65,14 @@ RPCs.
 - Rotate the database password only after allowed clients pass. Revoke old
   personal access tokens and remove persistent production CLI authentication
   from the daily-use machine.
-- Run Security Advisor and the deep catalog grant probe. Verify migration
+- The 2026-07-29 signed-in Security Advisor/CLI scan is recorded in
+  `supabase-security-advisor-snapshot-2026-07-29.json`: 2 errors and 171
+  warnings. An anonymous probe could read 14 per-deal metric rows through the
+  untracked `public.deal_stats` SECURITY DEFINER view. Only after a separate
+  approval, apply `20260824131000_harden_legacy_reporting_views.sql`, rerun
+  Advisor, and prove both endpoints reject anon/authenticated before closing
+  the two errors. Triage the remaining warnings by function reachability
+  before changing grants. Run the deep catalog grant probe and verify migration
   parity and that anon/authenticated have no unexpected DDL-style privileges.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.

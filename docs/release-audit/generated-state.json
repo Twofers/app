@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 179,
-    "latest": "20260824130000_atomic_submission_rate_limit.sql"
+    "count": 180,
+    "latest": "20260824131000_harden_legacy_reporting_views.sql"
   },
   "edgeFunctions": {
     "count": 81,

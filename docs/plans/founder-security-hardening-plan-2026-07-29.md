@@ -30,6 +30,12 @@ Bootstrap security alerts will use the separately controlled
   secret/config inventory, and live-checked all five Storage buckets.
 - Applied the four separately approved migrations through `20260824130000` and
   confirmed local/production migration parity.
+- Completed the signed-in, read-only Supabase dashboard review. The Free plan
+  has no scheduled backups. Security Advisor reports 2 errors and 171 warnings;
+  the two error-level views were absent from source control, and an anonymous
+  probe confirmed that `deal_stats` exposed 14 metric rows. A zero-cost
+  service-role-only remediation is staged as `20260824131000`, but it is not
+  applied without a new explicit production-migration approval.
 - Deployed the separately approved 28-function activation batch. All targets
   advanced one version and remained active; `admin-business-name-requests` and
   `admin-reports` retained `verify_jwt = true`, while the other 26 retained
@@ -250,8 +256,17 @@ blast radius and were missing:
 - [ ] Rotate the DB password after restrictions verified.
 - [ ] Inventory + revoke old Supabase personal access tokens; remove persistent prod CLI
       access from the daily-use machine when maintenance ends.
-- [ ] Run Security Advisor + the deep catalog grant gate; verify live DB grants match
-      `20260820122000` (no TRUNCATE/TRIGGER/REFERENCES for anon/authenticated).
+- [ ] Close the Security Advisor/deep catalog gate. The signed-in review and
+      CLI advisor scan are complete: 2 errors and 171 warnings are recorded in
+      `docs/security/supabase-security-advisor-snapshot-2026-07-29.json`.
+      `public.deal_stats` was anonymously readable (14 rows) and both
+      error-level views were untracked production drift. Migration
+      `20260824131000_harden_legacy_reporting_views.sql` recreates both as
+      security-invoker/service-role-only views at $0, but remains unapplied
+      pending separate approval. After that, rerun Advisor and triage the 171
+      warnings by reachability before changing grants or Auth/Storage settings.
+      The deep grant check must still confirm `20260820122000` leaves no
+      unexpected TRUNCATE/TRIGGER/REFERENCES privileges.
 - [ ] **GoTrue hardening** (new in v2): leaked-password protection, auth rate limits,
       OTP expiry, captcha decision, SMTP sender review.
 - [ ] Refresh throwaway QA credentials; rerun the authenticated RLS, cross-tenant, and
@@ -356,9 +371,9 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 301 files / 2,131 tests passed, including the
+- `npm test -- --run` — all 302 files / 2,134 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
-  deletions.
+  deletions and the three reporting-view migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The four separately approved migrations applied successfully; linked
@@ -375,7 +390,13 @@ purchase.
   exposed a pre-existing ambiguous `ON CONFLICT` reference in
   `check_business_location_trial_reuse`; neither was changed or applied as an
   unapproved fifth migration.
-- Control-plane snapshots now record: no physical backup/PITR, SSL enforcement
+- The read-only dashboard/CLI Advisor review recorded 2 errors and 171
+  warnings. Both errors were untracked SECURITY DEFINER reporting views; anon
+  could read 14 rows from `deal_stats`. The three-test static gate for the
+  staged `20260824131000` service-role-only remediation passed. That migration
+  has not been applied.
+- Control-plane snapshots now record: the Free plan supplies no scheduled
+  database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
   names present, public GitHub visibility with no protection/ruleset and live
   Dependabot security updates disabled, no DNSSEC delegation, and DMARC

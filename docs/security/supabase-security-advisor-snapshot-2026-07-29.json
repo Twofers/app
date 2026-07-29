@@ -1,0 +1,58 @@
+{
+  "captured_at_local": "2026-07-29",
+  "project_ref": "kvodhiqhdqnptqovovia",
+  "read_only": true,
+  "dashboard": {
+    "project_status": "Healthy",
+    "plan": "Free",
+    "scheduled_backups": false,
+    "scheduled_backups_message": "Free Plan does not include project backups."
+  },
+  "security_advisor": {
+    "total_error_and_warning_findings": 173,
+    "errors": 2,
+    "warnings": 171,
+    "rules": {
+      "security_definer_view": 2,
+      "authenticated_security_definer_function_executable": 76,
+      "anon_security_definer_function_executable": 66,
+      "function_search_path_mutable": 25,
+      "public_bucket_allows_listing": 2,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "critical_views": [
+      "public.business_performance_hourly",
+      "public.deal_stats"
+    ]
+  },
+  "anonymous_view_probe": {
+    "public.business_performance_hourly": {
+      "http_status": 200,
+      "visible_rows": 0
+    },
+    "public.deal_stats": {
+      "http_status": 206,
+      "visible_rows": 14,
+      "exposed_columns": [
+        "deal_id",
+        "business_id",
+        "claims_count",
+        "redeemed_count",
+        "expired_count",
+        "active_claims_count"
+      ]
+    }
+  },
+  "repository_drift": {
+    "views_previously_tracked": false,
+    "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",
+    "production_applied": false,
+    "production_approval_required": true
+  },
+  "cost": {
+    "local_remediation": "$0",
+    "production_migration": "$0",
+    "paid_backup_upgrade": "deferred"
+  }
+}
