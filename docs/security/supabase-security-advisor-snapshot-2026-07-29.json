@@ -75,6 +75,29 @@
       "security_definer_view_findings": 0
     }
   },
+  "post_bucket_listing_migration_verification": {
+    "migration": "20260824132000_remove_public_bucket_listing_policies.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "broad_listing_policy_count": 0,
+    "buckets_remain_public": [
+      "business-logos",
+      "deal-photos"
+    ],
+    "anonymous_listing_visible_entries": {
+      "business-logos": 0,
+      "deal-photos": 0
+    },
+    "public_asset_http_status": {
+      "business-logos": 200,
+      "deal-photos": 200
+    },
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 169,
+      "public_bucket_allows_listing_findings": 0
+    }
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",

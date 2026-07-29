@@ -3,7 +3,7 @@
 **Status: REPOSITORY IMPLEMENTATION AND APPROVED EDGE ACTIVATION COMPLETE;
 FOUNDER/PROVIDER ACTIONS PENDING.**
 
-The three explicitly approved zero-cost production secrets and five separately
+The three explicitly approved zero-cost production secrets and six separately
 approved migrations were configured/applied on 2026-07-29. The separately
 approved 28-function founder/rate-limit activation was deployed and smoke-probed
 on the same date. Secret values were not recorded. No website, DNS, paid add-on,
@@ -28,7 +28,7 @@ Bootstrap security alerts will use the separately controlled
   `docs/security/july-13-audit-disposition-2026-07-29.md`.
 - Generated the current 78-function public-surface inventory, 103-name
   secret/config inventory, and live-checked all five Storage buckets.
-- Applied the five separately approved migrations through `20260824131000` and
+- Applied the six separately approved migrations through `20260824132000` and
   confirmed local/production migration parity.
 - Completed the signed-in, read-only Supabase dashboard review. The Free plan
   has no scheduled backups. Security Advisor initially reported 2 errors and
@@ -37,7 +37,10 @@ Bootstrap security alerts will use the separately controlled
   probe confirmed that `deal_stats` exposed 14 metric rows. The separately
   approved zero-cost `20260824131000` remediation is now live: both views are
   security-invoker/service-role-only, both return 401 to anon, and Security
-  Advisor reports 0 errors and 171 warnings.
+  Advisor reports 0 errors. The separately approved `20260824132000` migration
+  also removed two redundant public-bucket listing policies: anon enumeration
+  now returns zero entries, real logo/poster objects still return HTTP 200, and
+  Advisor now reports 0 errors and 169 warnings.
 - Deployed the separately approved 28-function activation batch. All targets
   advanced one version and remained active; `admin-business-name-requests` and
   `admin-reports` retained `verify_jwt = true`, while the other 26 retained
@@ -267,11 +270,13 @@ blast radius and were missing:
       approved `20260824131000_harden_legacy_reporting_views.sql` now recreates
       both as security-invoker/service-role-only views at $0. Post-apply probes
       return 401 for both anon endpoints and Advisor reports 0 errors. Triage
-      the remaining 171 warnings by reachability before changing grants or
+      the remaining 169 warnings by reachability before changing grants or
       Auth/Storage settings. The first triage is recorded in
       `docs/security/supabase-security-advisor-warning-triage-2026-07-29.md`.
-      Two redundant public-bucket listing policies have a $0 removal staged as
-      migration `20260824132000`, pending separate production approval.
+      The separately approved $0 migration `20260824132000` removed the two
+      redundant public-bucket listing policies. Anon listings now expose zero
+      entries, public object delivery remains HTTP 200, and the related Advisor
+      warnings are closed.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -380,13 +385,14 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 302 files / 2,134 tests passed, including the
+- `npm test -- --run` — all 303 files / 2,138 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
-  deletions and the three reporting-view migration checks.
+  deletions, the reporting-view checks, and the four bucket-listing migration
+  checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
-- The five separately approved migrations applied successfully; linked
-  migration parity now matches through `20260824131000`.
+- The six separately approved migrations applied successfully; linked
+  migration parity now matches through `20260824132000`.
 - The separately approved 28 Edge Functions deployed successfully. Every
   version advanced, all 28 report `ACTIVE`, the two JWT-enforced functions
   retained `verify_jwt = true`, and anonymous endpoint smoke checks passed.
@@ -397,8 +403,8 @@ purchase.
 - Linked database lint reported no error in the four new migrations. It
   repeated the intentional optional-table warning inside `purge_user_data` and
   exposed a pre-existing ambiguous `ON CONFLICT` reference in
-  `check_business_location_trial_reuse`; neither was changed or applied as an
-  unapproved fifth migration.
+  `check_business_location_trial_reuse`; neither received an additional
+  unapproved fix migration.
 - The read-only dashboard/CLI Advisor review initially recorded 2 errors and 171
   warnings. Both errors were untracked SECURITY DEFINER reporting views; anon
   could read 14 rows from `deal_stats`. The three-test static gate for the
@@ -407,6 +413,10 @@ purchase.
   return 401, and Advisor reports 0 errors. The deep catalog grant probe found
   zero unexpected TRUNCATE, REFERENCES, or TRIGGER grants for `PUBLIC`, anon,
   or `authenticated`.
+- The separately approved `20260824132000` migration removed both broad
+  Storage listing policies. Anon list calls return zero entries for
+  `business-logos` and `deal-photos`; sampled public objects from both buckets
+  still return HTTP 200 with non-empty bodies. Advisor dropped to 169 warnings.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
@@ -416,5 +426,5 @@ purchase.
 - `git diff --check` — passed (line-ending notices only).
 - No website/DNS deploy, unrelated provider-console change, paid-plan
   activation, merge, or app release was performed. Production mutations were
-  limited to the separately approved three-secret configuration, five
+  limited to the separately approved three-secret configuration, six
   migrations, and 28 Edge Function deployments.
