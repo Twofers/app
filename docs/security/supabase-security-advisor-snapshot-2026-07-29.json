@@ -98,6 +98,28 @@
       "public_bucket_allows_listing_findings": 0
     }
   },
+  "post_function_search_path_migration_verification": {
+    "migration": "20260824133000_pin_remaining_function_search_paths.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 182,
+    "mutable_search_path_findings": 0,
+    "representative_rpc_smoke": {
+      "service_role_http_200": true,
+      "anon_http_200": true,
+      "expected_results": true
+    },
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 144,
+      "authenticated_security_definer_function_executable": 76,
+      "anon_security_definer_function_executable": 66,
+      "function_search_path_mutable": 0,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",

@@ -71,7 +71,7 @@ RPCs.
   the untracked `public.deal_stats` SECURITY DEFINER view. The separately
   approved `20260824131000_harden_legacy_reporting_views.sql` is now live;
   both views return 401 to anon and Advisor reports 0 errors. Triage the
-  remaining 169 warnings by function reachability before changing grants; the
+  remaining 144 warnings by function reachability before changing grants; the
   first-pass ledger is
   `supabase-security-advisor-warning-triage-2026-07-29.md`. Migration
   `20260824132000_remove_public_bucket_listing_policies.sql` was separately
@@ -80,13 +80,12 @@ RPCs.
   catalog grant probe passed:
   `PUBLIC`, anon, and authenticated have no TRUNCATE, REFERENCES, or TRIGGER
   privileges on public-schema relations.
-- Migration `20260824133000_pin_remaining_function_search_paths.sql` is staged
-  but not applied. It pins the 25 live mutable-search-path findings to
-  `pg_catalog, public` without replacing function bodies or changing grants.
-  Added recurring cost is $0 and production application requires separate
-  founder approval. After approval, confirm migration parity, rerun Security
-  Advisor (expected warning count: 144), and smoke-test representative public,
-  authenticated, trigger, and service-role function paths.
+- Migration `20260824133000_pin_remaining_function_search_paths.sql` was
+  separately approved/applied at $0 added recurring cost. Migration parity is
+  exact through `20260824133000`; Advisor reports 0 errors, 144 warnings, and
+  zero mutable-search-path findings. Representative pure, read-only RPCs
+  returned HTTP 200 with expected results under both service-role and current
+  anon credentials.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,
