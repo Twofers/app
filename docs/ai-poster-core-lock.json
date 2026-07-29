@@ -6,22 +6,6 @@
   "initialApprovalRef": "2026-07-03 chat request: lock AI poster/ad-generation feature and require individual approval before changes",
   "files": [
     {
-      "path": "AGENTS.md",
-      "sha256": "558aa62460da502116ddace4564eb187bcad4bf3056480ad34eea9835572a911",
-      "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Codex agent instructions must preserve the owner-approval gate for AI poster/ad-generation changes.",
-      "latestApprovalRef": "2026-07-24 Dan explicit approval (in-session, recorded as pre-approved Phase 0 of docs/plans/google-apple-sign-in-plan-2026-07-24.md) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Reverses one locked product decision line: 'Email/password sign-in only. No Sign in with Apple, social login, guest browsing, or anonymous browsing.' becomes 'Email/password sign-in plus native Google sign-in (iOS/Android) and Sign in with Apple (iOS), for both roles, approved by Dan 2026-07-24. No other social providers, no guest or anonymous browsing. Merchant claim still requires the auth email to match the approved application email; Apple private-relay emails cannot claim a business.' Guest and anonymous browsing stay banned and the hard Shopper/Business role split is unchanged. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-24 Dan explicit approval (chat: \"2 approved\", answering the F-07 doc-conflict finding) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Corrects one stale bullet: the file claimed PILOT_DISABLE_BILLING_GATE = true while lib/billing/access.ts:16 has it false (bypass turned off 2026-07-06 after billing enforcement was verified), and adds that in-app mobile billing UI is disabled so activation is website-only. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-03 initial AI poster core lock"
-    },
-    {
-      "path": "CLAUDE.md",
-      "sha256": "558aa62460da502116ddace4564eb187bcad4bf3056480ad34eea9835572a911",
-      "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Claude agent instructions must match AGENTS.md and preserve the same approval gate.",
-      "latestApprovalRef": "2026-07-24 Dan explicit approval (in-session, recorded as pre-approved Phase 0 of docs/plans/google-apple-sign-in-plan-2026-07-24.md) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Reverses one locked product decision line: 'Email/password sign-in only. No Sign in with Apple, social login, guest browsing, or anonymous browsing.' becomes 'Email/password sign-in plus native Google sign-in (iOS/Android) and Sign in with Apple (iOS), for both roles, approved by Dan 2026-07-24. No other social providers, no guest or anonymous browsing. Merchant claim still requires the auth email to match the approved application email; Apple private-relay emails cannot claim a business.' Guest and anonymous browsing stay banned and the hard Shopper/Business role split is unchanged. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-24 Dan explicit approval (chat: \"2 approved\", answering the F-07 doc-conflict finding) — DOCUMENTATION ONLY, no AI poster/ad behavior, prompt, layout, validation or deploy impact. Corrects one stale bullet: the file claimed PILOT_DISABLE_BILLING_GATE = true while lib/billing/access.ts:16 has it false (bypass turned off 2026-07-06 after billing enforcement was verified), and adds that in-app mobile billing UI is disabled so activation is website-only. Both files edited identically to preserve the CLAUDE.md/AGENTS.md parity rule. Prior ref: 2026-07-03 initial AI poster core lock"
-    },
-    {
       "path": "app/create/ai.tsx",
       "sha256": "c3750e3dd5297078e4ea86f1defe255ec1b943e410465e8254f66640c2e385e0",
       "approvedBy": "Dan",
