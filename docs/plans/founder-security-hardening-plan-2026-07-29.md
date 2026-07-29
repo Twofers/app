@@ -265,8 +265,8 @@ blast radius and were missing:
       security-invoker/service-role-only views at $0, but remains unapplied
       pending separate approval. After that, rerun Advisor and triage the 171
       warnings by reachability before changing grants or Auth/Storage settings.
-      The deep grant check must still confirm `20260820122000` leaves no
-      unexpected TRUNCATE/TRIGGER/REFERENCES privileges.
+      The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
+      TRUNCATE/TRIGGER/REFERENCES privileges on public-schema relations.
 - [ ] **GoTrue hardening** (new in v2): leaked-password protection, auth rate limits,
       OTP expiry, captcha decision, SMTP sender review.
 - [ ] Refresh throwaway QA credentials; rerun the authenticated RLS, cross-tenant, and
@@ -394,7 +394,9 @@ purchase.
   warnings. Both errors were untracked SECURITY DEFINER reporting views; anon
   could read 14 rows from `deal_stats`. The three-test static gate for the
   staged `20260824131000` service-role-only remediation passed. That migration
-  has not been applied.
+  has not been applied. The deep catalog grant probe found zero unexpected
+  TRUNCATE, REFERENCES, or TRIGGER grants for `PUBLIC`, `anon`, or
+  `authenticated`.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret

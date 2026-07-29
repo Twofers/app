@@ -72,8 +72,9 @@ RPCs.
   approval, apply `20260824131000_harden_legacy_reporting_views.sql`, rerun
   Advisor, and prove both endpoints reject anon/authenticated before closing
   the two errors. Triage the remaining warnings by function reachability
-  before changing grants. Run the deep catalog grant probe and verify migration
-  parity and that anon/authenticated have no unexpected DDL-style privileges.
+  before changing grants. The 2026-07-29 deep catalog grant probe passed:
+  `PUBLIC`, anon, and authenticated have no TRUNCATE, REFERENCES, or TRIGGER
+  privileges on public-schema relations.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,

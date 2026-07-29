@@ -44,6 +44,19 @@
       ]
     }
   },
+  "deep_catalog_grant_probe": {
+    "client_roles_checked": [
+      "PUBLIC",
+      "anon",
+      "authenticated"
+    ],
+    "privileges_checked": [
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "unexpected_grants": 0
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",
