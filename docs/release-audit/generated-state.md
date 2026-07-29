@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `175`
-- Latest: `20260824122000_admin_account_growth_summary.sql`
+- Count: `179`
+- Latest: `20260824130000_atomic_submission_rate_limit.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 
