@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 180,
-    "latest": "20260824131000_harden_legacy_reporting_views.sql"
+    "count": 181,
+    "latest": "20260824132000_remove_public_bucket_listing_policies.sql"
   },
   "edgeFunctions": {
     "count": 81,

@@ -268,7 +268,12 @@ blast radius and were missing:
       both as security-invoker/service-role-only views at $0. Post-apply probes
       return 401 for both anon endpoints and Advisor reports 0 errors. Triage
       the remaining 171 warnings by reachability before changing grants or
-      Auth/Storage settings.
+      Auth/Storage settings. The first triage is recorded in
+      `docs/security/supabase-security-advisor-warning-triage-2026-07-29.md`.
+      Two redundant public-bucket listing policies have a $0 removal staged as
+      migration `20260824132000`, pending separate production approval.
+      Leaked-password protection is explicitly deferred because it requires
+      Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
       TRUNCATE/TRIGGER/REFERENCES privileges on public-schema relations.
 - [ ] **GoTrue hardening** (new in v2): leaked-password protection, auth rate limits,

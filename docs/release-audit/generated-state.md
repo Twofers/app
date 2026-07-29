@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `180`
-- Latest: `20260824131000_harden_legacy_reporting_views.sql`
+- Count: `181`
+- Latest: `20260824132000_remove_public_bucket_listing_policies.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 

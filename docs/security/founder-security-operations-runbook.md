@@ -71,8 +71,13 @@ RPCs.
   the untracked `public.deal_stats` SECURITY DEFINER view. The separately
   approved `20260824131000_harden_legacy_reporting_views.sql` is now live;
   both views return 401 to anon and Advisor reports 0 errors. Triage the
-  remaining 171 warnings by function reachability before changing grants. The
-  2026-07-29 deep catalog grant probe passed:
+  remaining 171 warnings by function reachability before changing grants; the
+  first-pass ledger is
+  `supabase-security-advisor-warning-triage-2026-07-29.md`. Migration
+  `20260824132000_remove_public_bucket_listing_policies.sql` is the next
+  separately approval-gated $0 fix. It removes metadata/path enumeration
+  without changing public asset URLs or owner writes. The 2026-07-29 deep
+  catalog grant probe passed:
   `PUBLIC`, anon, and authenticated have no TRUNCATE, REFERENCES, or TRIGGER
   privileges on public-schema relations.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
