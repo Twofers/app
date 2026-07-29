@@ -80,6 +80,13 @@ RPCs.
   catalog grant probe passed:
   `PUBLIC`, anon, and authenticated have no TRUNCATE, REFERENCES, or TRIGGER
   privileges on public-schema relations.
+- Migration `20260824133000_pin_remaining_function_search_paths.sql` is staged
+  but not applied. It pins the 25 live mutable-search-path findings to
+  `pg_catalog, public` without replacing function bodies or changing grants.
+  Added recurring cost is $0 and production application requires separate
+  founder approval. After approval, confirm migration parity, rerun Security
+  Advisor (expected warning count: 144), and smoke-test representative public,
+  authenticated, trigger, and service-role function paths.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,

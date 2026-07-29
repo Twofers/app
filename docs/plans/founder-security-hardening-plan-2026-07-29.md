@@ -277,6 +277,13 @@ blast radius and were missing:
       redundant public-bucket listing policies. Anon listings now expose zero
       entries, public object delivery remains HTTP 200, and the related Advisor
       warnings are closed.
+      All 25 functions reported for mutable `search_path` were then audited
+      against their live definitions and exact signatures. Zero-cost migration
+      `20260824133000_pin_remaining_function_search_paths.sql` is staged with a
+      two-test static gate. It only pins existing function name resolution to
+      `pg_catalog, public`; it does not change function bodies, signatures,
+      ownership, grants, or data. Production application remains separately
+      approval-gated and is expected to reduce Advisor warnings from 169 to 144.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -385,10 +392,10 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 303 files / 2,138 tests passed, including the
+- `npm test -- --run` — all 304 files / 2,140 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
   deletions, the reporting-view checks, and the four bucket-listing migration
-  checks.
+  checks, plus the two function search-path migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The six separately approved migrations applied successfully; linked

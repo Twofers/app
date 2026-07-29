@@ -11,7 +11,7 @@ any further production change.
 |---|---:|---|
 | Authenticated users can execute SECURITY DEFINER function | 76 | Reachability review required. Sixty-six are also callable by anon; ten are authenticated-only. Many are intentional client RPCs or self-authorizing helpers, so a blanket revoke would break production. |
 | Public can execute SECURITY DEFINER function | 66 | Reachability review required. Default EXECUTE grants are broader than ideal, but each function must be classified as public, client-authenticated, service-role-only, or trigger/internal before revocation. |
-| Function search path mutable | 25 | Zero-cost candidate. Twenty-two definitions are migration-tracked; three legacy functions (`get_best_time_day`, `get_business_dashboard`, and `rate_limit_hit`) are production drift. Pinning requires a definition/dependency audit first. |
+| Function search path mutable | 25 | All 25 live definitions and signatures were audited. Each uses only `pg_catalog`, `public`, or explicitly qualified `auth` objects. Zero-cost migration `20260824133000` is staged with a two-test static gate; applying it to production requires separate founder approval. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
 | Leaked password protection disabled | 1 | Deferred under the $0 bootstrap policy. Supabase documents this as Pro-only; Pro currently starts at $25/month. Revisit after revenue or a broader Pro-plan need justifies the subscription. |
 | Extension in public | 1 | `pg_net` is actively used by four scheduled Edge jobs. Do not move it until extension relocation support and every scheduled job are tested in a disposable project. |
@@ -39,6 +39,23 @@ change bucket visibility, objects, or owner-scoped upload/update/delete
 policies. It was separately approved/applied and verified on 2026-07-29. Added
 recurring cost is $0. Anon list calls return zero entries for both buckets, and
 sampled public logo/poster URLs return HTTP 200 with non-empty files.
+
+## Function search-path evidence
+
+The live definitions and exact signatures for all 25 Advisor findings were
+audited before staging migration
+`20260824133000_pin_remaining_function_search_paths.sql`. Twenty-two functions
+are migration-tracked; `get_best_time_day`, `get_business_dashboard`, and
+`rate_limit_hit` are production drift. The migration only sets
+`search_path = pg_catalog, public` on the existing functions. It does not
+replace bodies, change signatures, ownership, grants, or data.
+
+The static migration gate verifies all 25 exact pins and rejects body
+replacement, grant changes, or data mutation. Added recurring cost is $0. If
+separately approved and applied, the expected Advisor result is 0 errors and
+144 warnings, down from 169. Compatibility risk is low: a function would have
+to depend on caller-injected or temporary-schema name resolution, and the live
+definitions show no such dependency.
 
 ## Paid warning disposition
 
