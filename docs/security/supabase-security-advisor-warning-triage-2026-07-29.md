@@ -8,8 +8,8 @@ analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
-| Authenticated users can execute SECURITY DEFINER function | 76 | Reachability review required. Sixty-six are also callable by anon; ten are authenticated-only. Many are intentional client RPCs or self-authorizing helpers, so a blanket revoke would break production. |
-| Public can execute SECURITY DEFINER function | 66 | Reachability review required. Default EXECUTE grants are broader than ideal, but each function must be classified as public, client-authenticated, service-role-only, or trigger/internal before revocation. |
+| Authenticated users can execute SECURITY DEFINER function | 76 | Reachability review in progress. Thirteen are trigger-only and migration `20260824134000` is staged to revoke their direct client execution; if separately approved, this count should fall to 63. Many remaining findings are intentional authenticated RPCs or self-authorizing helpers, so a blanket revoke would break production. |
+| Public can execute SECURITY DEFINER function | 66 | Reachability review in progress. The same 13 trigger-only functions are anonymously executable despite having live trigger bindings and no direct application callers; migration `20260824134000` is staged to close them. If separately approved, this count should fall to 53. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
 | Leaked password protection disabled | 1 | Deferred under the $0 bootstrap policy. Supabase documents this as Pro-only; Pro currently starts at $25/month. Revisit after revenue or a broader Pro-plan need justifies the subscription. |
@@ -56,6 +56,22 @@ parity is exact through `20260824133000`; the live Advisor now reports 0 errors,
 144 warnings, and zero mutable-search-path findings. Representative pure,
 read-only RPCs returned HTTP 200 with the expected results under both
 service-role and current anon credentials.
+
+## Trigger-only function execution evidence
+
+The live catalog contains 15 `SECURITY DEFINER` functions bound to triggers.
+Thirteen are still directly executable by both `anon` and `authenticated`.
+Every one returns `trigger`, has exactly one live non-internal trigger binding,
+and has no direct application RPC caller. Trigger execution does not depend on
+client-role function grants.
+
+Zero-cost migration
+`20260824134000_revoke_trigger_function_client_execute.sql` is staged with a
+two-test static gate. It only revokes direct `EXECUTE` from `PUBLIC`, `anon`,
+and `authenticated` on those 13 functions. It does not change trigger
+bindings, function bodies, service-role access, or data. Production remains
+separately approval-gated. Expected Advisor result after application is 0
+errors and 118 warnings, down from 144.
 
 ## Paid warning disposition
 

@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `182`
-- Latest: `20260824133000_pin_remaining_function_search_paths.sql`
+- Count: `183`
+- Latest: `20260824134000_revoke_trigger_function_client_execute.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 

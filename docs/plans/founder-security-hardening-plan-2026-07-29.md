@@ -289,6 +289,13 @@ blast radius and were missing:
       data. Parity and representative service-role/anon RPC smoke tests passed;
       Advisor now reports 0 errors, 144 warnings, and zero mutable-search-path
       findings.
+      Live catalog triage then identified 13 `SECURITY DEFINER` functions that
+      return `trigger`, each has one live trigger binding, and none has a direct
+      application RPC caller. Zero-cost migration `20260824134000` is staged
+      with a two-test gate to revoke only their direct `PUBLIC`, `anon`, and
+      `authenticated` execution. It does not alter triggers, bodies,
+      service-role access, or data. Production remains separately
+      approval-gated; the expected Advisor result is 0 errors and 118 warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -397,10 +404,10 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 304 files / 2,140 tests passed, including the
+- `npm test -- --run` — all 305 files / 2,142 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
   deletions, the reporting-view checks, and the four bucket-listing migration
-  checks, plus the two function search-path migration checks.
+  checks, plus the function search-path and trigger-execution migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The seven separately approved migrations applied successfully; linked

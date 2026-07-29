@@ -86,6 +86,13 @@ RPCs.
   zero mutable-search-path findings. Representative pure, read-only RPCs
   returned HTTP 200 with expected results under both service-role and current
   anon credentials.
+- Migration `20260824134000_revoke_trigger_function_client_execute.sql` is
+  staged but not applied. It revokes direct client execution from 13
+  trigger-only `SECURITY DEFINER` functions while leaving their live trigger
+  bindings and service-role access intact. Added recurring cost is $0 and
+  production application requires separate founder approval. After approval,
+  confirm parity, all 13 trigger bindings, representative guarded writes, and
+  an expected Advisor count of 118 warnings.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,
