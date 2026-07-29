@@ -298,6 +298,13 @@ blast radius and were missing:
       roles have zero catalog execution privileges, and all 13 anon RPC routes
       return HTTP 404. Parity is exact and Advisor now reports 0 errors and 118
       warnings.
+      Twenty-two remaining functions have explicit service-role-only
+      repository grant contracts and only trusted Edge/cron/internal callers,
+      but the live catalog still grants both client roles. Zero-cost migration
+      `20260824135000` is staged with a two-test gate to remove only that client
+      execution drift. It preserves service-role execution, bodies,
+      signatures, and data. Production remains separately approval-gated; the
+      expected Advisor result is 0 errors and 74 warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -406,10 +413,11 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 305 files / 2,142 tests passed, including the
+- `npm test -- --run` — all 306 files / 2,144 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
   deletions, the reporting-view checks, and the four bucket-listing migration
-  checks, plus the function search-path and trigger-execution migration checks.
+  checks, plus the function search-path, trigger-execution, and
+  service-role-only execution migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The eight separately approved migrations applied successfully; linked
