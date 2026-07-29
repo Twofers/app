@@ -1,12 +1,14 @@
 # Founder Security Hardening Plan — 2026-07-29 (v2, post-verification)
 
-**Status: DEVELOPER IMPLEMENTATION COMPLETE; FOUNDER/PRODUCTION APPROVALS PENDING.**
+**Status: REPOSITORY IMPLEMENTATION AND APPROVED EDGE ACTIVATION COMPLETE;
+FOUNDER/PROVIDER ACTIONS PENDING.**
 
 The three explicitly approved zero-cost production secrets and four separately
-approved migrations were configured/applied on 2026-07-29. Secret values were
-not recorded. No Edge Function, website, DNS, paid add-on, provider account, or
-release was changed. Remaining staged controls await their separately approved
-reviewed commit and deployments.
+approved migrations were configured/applied on 2026-07-29. The separately
+approved 28-function founder/rate-limit activation was deployed and smoke-probed
+on the same date. Secret values were not recorded. No website, DNS, paid add-on,
+provider account, or merge was changed. Remaining controls require their
+separately approved provider actions.
 
 **Bootstrap budget decision — approved 2026-07-29:** added recurring cost must
 remain $0 while the business has no customers. PITR, the Supabase custom
@@ -28,6 +30,11 @@ Bootstrap security alerts will use the separately controlled
   secret/config inventory, and live-checked all five Storage buckets.
 - Applied the four separately approved migrations through `20260824130000` and
   confirmed local/production migration parity.
+- Deployed the separately approved 28-function activation batch. All targets
+  advanced one version and remained active; `admin-business-name-requests` and
+  `admin-reports` retained `verify_jwt = true`, while the other 26 retained
+  `verify_jwt = false`. Anonymous smoke probes returned only expected 4xx
+  responses, and all six private rate-limit table/RPC probes returned 401.
 - Found two active owner rows; one has MFA disabled. Dan selected
   `unvmex2@gmail.com` as the sole founder identity on 2026-07-29. Its verified
   production UUID will be configured only as a hosted secret, not hard-coded.
@@ -218,9 +225,9 @@ blast radius and were missing:
 - [x] Production rule staged in the shared guard: caller UUID == configured founder UUID **and** active
       `admin_users.role = 'owner'` **and** aal2. Non-owner roles → 403 regardless of UI.
 - [x] Mandatory MFA migration applied: every `admin_users` row now has
-      `require_mfa = true`. The staged `admin-auth-session` login flow will
-      force TOTP enrollment after its separately approved deployment (replaces
-      the draft's stale "fix login throttling" item — throttling already exists).
+      `require_mfa = true`. The approved `admin-auth-session` deployment now
+      forces TOTP enrollment/verification at login (replaces the draft's stale
+      "fix login throttling" item — throttling already exists).
 - [x] Founder account cannot be disabled, demoted, MFA-reset, or deleted via dashboard
       (deletion guard already exists — extend to the other three).
 - [x] Remove immediate permanent deletion from the dashboard. Keep archive + suspension
@@ -349,14 +356,16 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npx --no-install vitest run --exclude lib/ai-poster-core-lock.test.ts` — 300 files,
-  2,129 tests passed. The excluded repository-lock test is blocked only by the pre-existing
-  user deletions of `AGENTS.md`, `CLAUDE.md`, and `website/CLAUDE.md`; this pass did not
-  restore or alter those deletions.
+- `npm test -- --run` — all 301 files / 2,131 tests passed, including the
+  updated AI-poster lock after the explicitly approved instruction-file
+  deletions.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The four separately approved migrations applied successfully; linked
   migration parity now matches through `20260824130000`.
+- The separately approved 28 Edge Functions deployed successfully. Every
+  version advanced, all 28 report `ACTIVE`, the two JWT-enforced functions
+  retained `verify_jwt = true`, and anonymous endpoint smoke checks passed.
 - The authenticated RLS smoke probe could not sign in because the saved
   throwaway shopper credentials are stale. The new anonymous live probe proved
   all three limiter tables and all three service-role RPCs exist and reject
@@ -372,6 +381,7 @@ purchase.
   Dependabot security updates disabled, no DNSSEC delegation, and DMARC
   `p=none`.
 - `git diff --check` — passed (line-ending notices only).
-- No deploy, unrelated provider-console change, paid-plan activation, commit,
-  push, or release was performed. Production mutations were limited to the
-  separately approved three-secret configuration and four migrations.
+- No website/DNS deploy, unrelated provider-console change, paid-plan
+  activation, merge, or app release was performed. Production mutations were
+  limited to the separately approved three-secret configuration, four
+  migrations, and 28 Edge Function deployments.

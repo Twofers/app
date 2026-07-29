@@ -23,10 +23,12 @@ configuration is absent.
    account-deletion rate limiting, anonymous analytics rate limiting, and
    atomic public-submission rate limiting. Linked parity was confirmed through
    `20260824130000`; all admin rows now require MFA.
-4. Deploy `admin-auth-session`, every admin function that imports
-   `_shared/admin-prospects.ts`, `delete-user-account`,
+4. Completed 2026-07-29: deployed `admin-auth-session`, every admin function
+   importing `_shared/admin-prospects.ts`, `delete-user-account`,
    `ingest-analytics-event`, `submit-business-application`, and
-   `submit-launch-signup`.
+   `submit-launch-signup` (28 total). All versions advanced, all remained
+   active, the two JWT-enforced functions retained their mode, and all
+   anonymous smoke/rate-limit probes passed.
 5. In Vercel, set a 32-random-byte base64url
    `ADMIN_SESSION_ENCRYPTION_KEY`, `SUPABASE_URL`, and the optional
    `SUPABASE_FUNCTIONS_BASE_URL`. Deploy the exact reviewed commit by manual
