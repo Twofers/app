@@ -3,7 +3,7 @@
 **Status: REPOSITORY IMPLEMENTATION AND APPROVED EDGE ACTIVATION COMPLETE;
 FOUNDER/PROVIDER ACTIONS PENDING.**
 
-The three explicitly approved zero-cost production secrets and seven separately
+The three explicitly approved zero-cost production secrets and eight separately
 approved migrations were configured/applied on 2026-07-29. The separately
 approved 28-function founder/rate-limit activation was deployed and smoke-probed
 on the same date. Secret values were not recorded. No website, DNS, paid add-on,
@@ -28,7 +28,7 @@ Bootstrap security alerts will use the separately controlled
   `docs/security/july-13-audit-disposition-2026-07-29.md`.
 - Generated the current 78-function public-surface inventory, 103-name
   secret/config inventory, and live-checked all five Storage buckets.
-- Applied the seven separately approved migrations through `20260824133000` and
+- Applied the eight separately approved migrations through `20260824134000` and
   confirmed local/production migration parity.
 - Completed the signed-in, read-only Supabase dashboard review. The Free plan
   has no scheduled backups. Security Advisor initially reported 2 errors and
@@ -291,11 +291,13 @@ blast radius and were missing:
       findings.
       Live catalog triage then identified 13 `SECURITY DEFINER` functions that
       return `trigger`, each has one live trigger binding, and none has a direct
-      application RPC caller. Zero-cost migration `20260824134000` is staged
-      with a two-test gate to revoke only their direct `PUBLIC`, `anon`, and
-      `authenticated` execution. It does not alter triggers, bodies,
-      service-role access, or data. Production remains separately
-      approval-gated; the expected Advisor result is 0 errors and 118 warnings.
+      application RPC caller. The separately approved zero-cost migration
+      `20260824134000` revoked only their direct `PUBLIC`, `anon`, and
+      `authenticated` execution. Post-apply checks confirmed all 13 trigger
+      bindings remain enabled, service-role execution remains, both client
+      roles have zero catalog execution privileges, and all 13 anon RPC routes
+      return HTTP 404. Parity is exact and Advisor now reports 0 errors and 118
+      warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -410,8 +412,8 @@ purchase.
   checks, plus the function search-path and trigger-execution migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
-- The seven separately approved migrations applied successfully; linked
-  migration parity now matches through `20260824133000`.
+- The eight separately approved migrations applied successfully; linked
+  migration parity now matches through `20260824134000`.
 - The separately approved 28 Edge Functions deployed successfully. Every
   version advanced, all 28 report `ACTIVE`, the two JWT-enforced functions
   retained `verify_jwt = true`, and anonymous endpoint smoke checks passed.
@@ -440,6 +442,10 @@ purchase.
   function search-path findings. Service-role and current-anon read-only RPC
   smoke tests returned HTTP 200 with expected results; Advisor dropped to
   144 warnings with 0 errors.
+- The separately approved `20260824134000` migration removed direct client
+  execution from 13 trigger-only `SECURITY DEFINER` functions. All 13 live
+  trigger bindings and service-role execution remain; all 13 anon RPC routes
+  return HTTP 404. Advisor dropped to 118 warnings with 0 errors.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
