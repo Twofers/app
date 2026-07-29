@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-07-29T19:16:28.482Z",
+  "source": "linked production project, read-only Storage API",
+  "buckets": [
+    { "name": "deal-ads", "public": true, "file_size_limit": null, "allowed_mime_types": null },
+    { "name": "business-assets", "public": true, "file_size_limit": null, "allowed_mime_types": null },
+    { "name": "deal-photos", "public": true, "file_size_limit": null, "allowed_mime_types": null },
+    {
+      "name": "ai-deal-assets",
+      "public": false,
+      "file_size_limit": 52428800,
+      "allowed_mime_types": ["image/png", "image/jpeg", "image/webp"]
+    },
+    { "name": "business-logos", "public": true, "file_size_limit": null, "allowed_mime_types": null }
+  ]
+}

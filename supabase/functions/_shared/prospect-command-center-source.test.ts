@@ -97,7 +97,9 @@ describe("website prospect command center", () => {
     const helper = read("supabase/functions/_shared/admin-prospects.ts");
     expect(helper).toMatch(/from\("admin_users"\)/);
     expect(helper).toMatch(/isRedeemerUser/);
-    expect(helper).toMatch(/adminUser\.require_mfa && !isAal2/);
+    expect(helper).toMatch(/adminUser\.require_mfa !== true/);
+    expect(helper).toMatch(/if \(!isAal2\(bearerToken\)\)/);
+    expect(helper).toMatch(/isFounderAdminUser\(user\.id, adminUser\.role\)/);
     expect(helper).toMatch(/admin_prospect_permission_denied/);
   });
 

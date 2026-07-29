@@ -1,10 +1,8 @@
 (() => {
   const SUPABASE_FN_BASE = "https://kvodhiqhdqnptqovovia.supabase.co/functions/v1";
-  const TOKEN_KEYS = {
-    access: "twofer_admin_access_token",
-    refresh: "twofer_admin_refresh_token",
-    expiresAt: "twofer_admin_expires_at",
-  };
+  const ADMIN_PROXY_ENDPOINT = "/api/admin/proxy";
+  const SESSION_ENDPOINT = "/api/admin/session";
+  const TOKEN_KEYS = Object.freeze({});
   const REQUEST_TIMEOUT_MS = 20000;
 
   // Dataset key -> Edge Function name. Existing page scripts may continue to
@@ -92,44 +90,32 @@
     { href: "/admin/account-repair", label: "Fix Account", icon: "+" },
   ];
 
-  let refreshPromise = null;
+  let sessionAvailable = false;
+  let sessionCheckPromise = null;
 
   function endpoint(name) {
-    return `${SUPABASE_FN_BASE}/${String(name || "").replace(/^\/+/, "")}`;
+    return `${ADMIN_PROXY_ENDPOINT}?function=${encodeURIComponent(String(name || "").replace(/^\/+/, ""))}`;
   }
 
   function storageSource() {
-    return window.localStorage.getItem(TOKEN_KEYS.access)
-      ? window.localStorage
-      : window.sessionStorage;
+    return window.sessionStorage;
   }
 
   function hasStoredToken() {
-    return Boolean(
-      window.localStorage.getItem(TOKEN_KEYS.access)
-      || window.sessionStorage.getItem(TOKEN_KEYS.access),
-    );
+    return sessionAvailable;
   }
 
-  function storeSession(session, storage = storageSource()) {
-    if (!session?.access_token) return;
-    storage.setItem(TOKEN_KEYS.access, session.access_token);
-    if (session.refresh_token) storage.setItem(TOKEN_KEYS.refresh, session.refresh_token);
-    if (session.expires_in) {
-      storage.setItem(
-        TOKEN_KEYS.expiresAt,
-        String(Date.now() + Number(session.expires_in) * 1000),
-      );
-    }
+  function storeSession() {
+    sessionAvailable = true;
     syncSessionActions();
   }
 
-  function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(TOKEN_KEYS.access);
-      storage.removeItem(TOKEN_KEYS.refresh);
-      storage.removeItem(TOKEN_KEYS.expiresAt);
-    }
+  async function clearSession() {
+    sessionAvailable = false;
+    await fetch(SESSION_ENDPOINT, {
+      method: "DELETE",
+      credentials: "same-origin",
+    }).catch(() => {});
     syncSessionActions();
   }
 
@@ -160,52 +146,29 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    if (refreshPromise) return refreshPromise;
-    refreshPromise = (async () => {
-      let response;
-      try {
-        response = await fetchWithTimeout(endpoint("admin-auth-session"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-      } catch (error) {
-        if (error?.name === "AbortError") {
-          throw new Error("The admin session refresh timed out. Try again.");
-        }
-        throw new Error("Could not refresh the admin session.");
-      }
+  async function ensureSession() {
+    if (sessionAvailable) return true;
+    if (sessionCheckPromise) return sessionCheckPromise;
+    sessionCheckPromise = (async () => {
+      const response = await fetchWithTimeout(SESSION_ENDPOINT, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
       const payload = await readJson(response);
-      if (
-        response.status === 401
-        || response.status === 403
-        || !response.ok
-        || !payload.ok
-        || !payload.session?.access_token
-      ) {
-        clearSession();
-        redirectToLogin();
-        throw new Error(payload.error || "Admin session expired.");
-      }
-      storeSession(payload.session, storage);
-      return payload.session.access_token;
+      sessionAvailable = response.ok && payload.authenticated === true;
+      syncSessionActions();
+      return sessionAvailable;
     })();
     try {
-      return await refreshPromise;
+      return await sessionCheckPromise;
     } finally {
-      refreshPromise = null;
+      sessionCheckPromise = null;
     }
   }
 
   async function getAccessToken() {
-    const storage = storageSource();
-    const token = storage.getItem(TOKEN_KEYS.access);
-    const refreshToken = storage.getItem(TOKEN_KEYS.refresh);
-    const expiresAt = Number(storage.getItem(TOKEN_KEYS.expiresAt) || 0);
-    if (!token) return null;
-    if (!refreshToken || !expiresAt || expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return await ensureSession() ? "cookie-session" : null;
   }
 
   async function adminPost(fnName, body = {}, options = {}) {
@@ -214,15 +177,18 @@
       if (options.redirect !== false) redirectToLogin();
       throw new Error("Admin session not connected.");
     }
-    const url = /^https?:\/\//i.test(fnName) ? fnName : endpoint(fnName);
+    const url = /^https?:\/\//i.test(fnName) || String(fnName).startsWith("/")
+      ? fnName
+      : endpoint(fnName);
     let response;
     try {
       response = await fetchWithTimeout(
         url,
         {
           method: "POST",
+          credentials: "same-origin",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: "Bearer cookie-session",
             "Content-Type": "application/json",
             ...(options.headers || {}),
           },
@@ -237,10 +203,13 @@
       throw new Error(options.networkMessage || "Could not reach the admin service.");
     }
     const payload = await readJson(response);
-    if (response.status === 401 || response.status === 403) {
-      clearSession();
+    if (response.status === 401) {
+      await clearSession();
       if (options.redirect !== false) redirectToLogin();
       throw new Error(payload.error || "Admin session expired.");
+    }
+    if (response.status === 403) {
+      throw new Error(payload.error || "Admin authorization was denied.");
     }
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.error || options.errorMessage || "Admin request failed.");
@@ -390,8 +359,8 @@
       node.hidden = !hasToken;
       if (!node.dataset.adminShellBound) {
         node.dataset.adminShellBound = "true";
-        node.addEventListener("click", () => {
-          clearSession();
+        node.addEventListener("click", async () => {
+          await clearSession();
           window.location.assign("/admin/login");
         });
       }
@@ -445,14 +414,19 @@
     renderNav,
     syncSessionActions,
     hydrate,
-    signOut() {
-      clearSession();
+    async signOut() {
+      await clearSession();
       window.location.assign("/admin/login");
     },
   };
 
   bindShellActions();
   hydrate();
+  if (normalizedPath(window.location.pathname) !== "/admin/login") {
+    ensureSession().then((available) => {
+      if (!available) redirectToLogin();
+    }).catch(() => redirectToLogin());
+  }
   const observer = new MutationObserver((mutations) => {
     if (mutations.some((mutation) => mutation.addedNodes.length)) hydrate();
   });

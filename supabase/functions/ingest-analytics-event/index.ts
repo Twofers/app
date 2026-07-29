@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { anonymousRequestActorHash } from "../_shared/anonymous-request-hash.ts";
 
 const ALLOWED = new Set([
   "app_opened",
@@ -104,14 +105,17 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    });
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabaseUser.auth.getUser();
 
     if ((userError || !user) && !PRE_AUTH_ALLOWED.has(eventName)) {
       return new Response(JSON.stringify({ error: "Unauthorized. Please log in." }), {
@@ -123,9 +127,42 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
+    if (!user) {
+      const actorHash = await anonymousRequestActorHash(req);
+      if (!actorHash) {
+        return new Response(JSON.stringify({ error: "Anonymous analytics is not configured" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: allowed, error: rateError } = await supabaseAdmin.rpc(
+        "consume_anonymous_endpoint_attempt",
+        {
+          p_surface: "ingest-analytics-event",
+          p_actor_hash: actorHash,
+          p_actor_limit: 60,
+          p_global_limit: 5000,
+          p_window_seconds: 900,
+        },
+      );
+      if (rateError) {
+        console.error("[ingest-analytics-event] anonymous rate limit failed:", rateError.code ?? "", rateError.message ?? "");
+        return new Response(JSON.stringify({ error: "Anonymous analytics is temporarily unavailable" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (allowed !== true) {
+        return new Response(JSON.stringify({ error: "Too many analytics events" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const ctx = sanitizeContext(body.context);
 
-    const { error: insErr } = await supabase.from("app_analytics_events").insert({
+    const { error: insErr } = await supabaseAdmin.from("app_analytics_events").insert({
       event_name: eventName,
       user_id: user?.id ?? null,
       business_id: body.business_id ?? null,

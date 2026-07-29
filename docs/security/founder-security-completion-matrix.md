@@ -1,0 +1,29 @@
+# Founder security completion matrix
+
+This is the requirement-by-requirement evidence ledger for the unchecked items
+in `docs/plans/founder-security-hardening-plan-2026-07-29.md`. It does not turn
+an approval-gated task into a developer task and does not authorize production
+or provider mutations.
+
+| Plan requirement | Evidence already present | Evidence still required for completion | Owner / gate |
+|---|---|---|---|
+| Supabase Backups page and 7-day PITR decision | Timestamped CLI output reports `backups: null`, empty physical-backup data, and `pitr_enabled: false`; independent backup tooling exists; founder approved a zero-added-cost posture on 2026-07-29 | Dashboard confirmation; PITR remains explicitly deferred until a 24-hour RPO becomes unacceptable | Founder decision recorded; no paid activation |
+| Separate immutable backup account | S3-compatible Object Lock Compliance upload, re-read verification, encryption, checksum, heartbeat, failure hook, 900 MB per-archive ceiling, 9.5 GB aggregate ceiling, and 7-daily/3-monthly bootstrap retention | Separate free-tier Backblaze B2 account/bucket/application keys, lifecycle rules, and first successful locked upload | Founder creates account; developer can observe approved run |
+| Secret values recovery | 103-name generated inventory; outside-Git encrypted vault creator/verifier; provider re-issue guidance | Founder populates real values/instructions without sharing them; verifies two offline copies | Founder credentials; joint drill |
+| EAS/App signing recovery | Local filename inventory and signing-credential runbook | Interactive EAS export, fingerprint validation, encrypted offline copies | Founder interactive provider access |
+| Quarterly restore drill and RPO/RTO | Structural database verifier; opt-in disposable DB restore; restored Storage/Auth/Function verifier; report output | Disposable project, backup object, throwaway credentials, re-minted test secret, measured first drill | Founder provisions/approves disposable resources; joint execution |
+| Stripe root-of-trust controls | Signature and livemode checks; dispute event implementation; restricted read-key backup option | Founder MFA/recovery, payout alerts, restricted production keys, signing-secret rotation, Radar review | Founder/provider mutation |
+| Apple Developer, Google Play/Cloud, Expo/EAS, founder Google, OpenAI/Gemini, Resend, Supabase/Vercel/registrar/Cloudflare controls | Per-provider checklist and recovery guidance | Interactive MFA, membership/session/token audits, recovery and spend/key-control evidence from each console | Founder/provider mutations |
+| Supabase SSL/network/password/token controls | Migration parity and timestamped CLI snapshot proving SSL disabled plus `0.0.0.0/0` and `::/0` database access; activation sequence documented | Test-project validation and separate approvals for SSL, network restrictions, password/token rotation | Founder/production control plane |
+| Security Advisor and deep authenticated isolation probes | Static guards, anon probe, existing RLS/grant scripts and release gates | Current Security Advisor result plus fresh throwaway-user authenticated cross-tenant/normal-business probe output | Founder supplies fresh QA identities/approved access |
+| GoTrue hardening and demo account | Current login throttling and mandatory admin MFA code | Console review/changes for leaked-password protection, CAPTCHA/OTP/SMTP/OAuth; founder decision on demo account | Founder/auth production config |
+| `admin.twoferapp.com` behind Cloudflare Access | Sealed same-origin cookie backend, strict CSP, no-store, proxy allowlist | DNS/Access policy, Vercel origin variables, production deployment and founder/non-founder tests | Founder DNS/provider approval |
+| Repository visibility and `main` protection | Pinned Actions, staged CodeQL/Dependabot, full-history secret scan, encrypted all-refs mirror tooling; timestamped GitHub snapshot shows PUBLIC, no protection/rulesets, and live Dependabot security updates disabled | Visibility decision; approved merge; enable live Dependabot security updates; ruleset including admins; required checks; separate mirror activation | Founder/GitHub mutation |
+| GitHub token, Vercel promotion, DNSSEC/DMARC | Detailed operations checklist; timestamped DNS result shows no DS/DNSKEY and DMARC `p=none` | Token replacement, promotion/alert settings, registrar/DNSSEC activation evidence, staged DMARC observations | Founder/provider mutations |
+| Developer machine | Filename-only secret inventory; elevated BitLocker command documented | Elevated BitLocker result; founder classification/vaulting of local secret/signing files; password-manager policy | Founder/local interactive access |
+| `api.twoferapp.com` portability | Migration/deployment procedure documented | Explicitly deferred under the zero-cost bootstrap decision; reconsider only after revenue/data-loss risk justifies the add-on | Future founder cost decision |
+| Simulated takeover exercise | Incident order, backup/restore and provider recovery runbooks | Scheduled exercise with founder-controlled vault/providers; measured timeline and corrective-action record | Joint, after backup/provider activation |
+
+No unchecked item is a repository-only implementation task that can be
+truthfully completed without one of the external resources, identities,
+provider-console decisions, or explicit production approvals listed above.

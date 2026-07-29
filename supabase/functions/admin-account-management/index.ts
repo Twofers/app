@@ -1,16 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { cancelStripeForBusinesses } from "../_shared/account-stripe-cancellation.ts";
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
-import { deleteAuthUserWithRetry } from "../_shared/auth-admin-delete-retry.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import { isFreshTotp } from "../_shared/admin-mfa.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
-import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { requireAdmin } from "../_shared/admin-prospects.ts";
+import { sendAdminSecurityAlert } from "../_shared/admin-security-alert.ts";
 
 type AdminRole = "owner" | "admin" | "support" | "sales" | "finance" | "moderator" | "developer" | "read_only";
 type AccountAction =
@@ -25,8 +22,7 @@ type AccountAction =
   | "unlock"
   | "suspend"
   | "reactivate"
-  | "archive"
-  | "permanent_delete";
+  | "archive";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIONS = new Set<AccountAction>([
@@ -42,9 +38,7 @@ const ACTIONS = new Set<AccountAction>([
   "suspend",
   "reactivate",
   "archive",
-  "permanent_delete",
 ]);
-const READ_ROLES = new Set<AdminRole>(["owner", "admin", "support", "sales", "finance", "moderator", "developer", "read_only"]);
 const EDIT_ROLES = new Set<AdminRole>(["owner", "admin", "support"]);
 const LIFECYCLE_ROLES = new Set<AdminRole>(["owner", "admin", "moderator"]);
 const REPAIR_ROLES = new Set<AdminRole>(["owner", "admin", "support"]);
@@ -454,44 +448,6 @@ async function archiveAccount(supabase: any, targetUserId: string, adminId: stri
   return { before, after: await accountDetail(supabase, targetUserId), stripe };
 }
 
-async function permanentlyDeleteAccount(supabase: any, targetUserId: string) {
-  const before = await accountDetail(supabase, targetUserId);
-  const businesses = await ownedBusinesses(supabase, targetUserId);
-  const businessIds = businesses.map((business: { id: string }) => business.id);
-  const authProbe = await supabase.auth.admin.getUserById(targetUserId);
-  if (authProbe.error) throw authProbe.error;
-  const stripe = await cancelStripeForBusinesses({
-    supabase,
-    stripe: await stripeClientForAccount(supabase, businessIds),
-    businessIds,
-    source: "admin_account_delete",
-  });
-
-  const { data: devices, error: devicesError } = await supabase
-    .from("redemption_devices")
-    .select("staff_user_id")
-    .eq("owner_id", targetUserId);
-  if (devicesError) console.error("[admin-account-management] staff device lookup failed:", devicesError);
-  for (const staffUserId of staffUserIdsToSweep(devices, targetUserId)) {
-    const result = await deleteAuthUserWithRetry(supabase, staffUserId);
-    if (result.error) console.error("[admin-account-management] staff auth delete failed:", result.error);
-  }
-
-  const purge = await supabase.rpc("purge_user_data", { p_user_id: targetUserId });
-  if (purge.error) throw purge.error;
-  for (const businessId of businessIds) {
-    for (const bucket of ["business-logos", "deal-photos"]) {
-      const listed = await supabase.storage.from(bucket).list(businessId, { limit: 1000 });
-      if (listed.error) continue;
-      const paths = (listed.data ?? []).map((object: { name: string }) => `${businessId}/${object.name}`);
-      if (paths.length) await supabase.storage.from(bucket).remove(paths);
-    }
-  }
-  const deleted = await deleteAuthUserWithRetry(supabase, targetUserId);
-  if (deleted.error) throw deleted.error;
-  return { before, stripe, auth_delete_attempts: deleted.attempts };
-}
-
 async function updateProfile(supabase: any, targetUserId: string, payload: Record<string, unknown>) {
   const before = await accountDetail(supabase, targetUserId);
   const email = cleanText(payload.email, 320).toLowerCase();
@@ -748,35 +704,10 @@ serve(async (req) => {
   const requestId = crypto.randomUUID();
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = tryGetServiceRoleKey();
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!supabaseUrl || !serviceRoleKey) return json(req, { error: "Account management is not configured." }, 500);
-
-    const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const userResult = await supabaseUser.auth.getUser();
-    const user = userResult.data.user;
-    if (userResult.error || !user) return json(req, { error: "Unauthorized." }, 401);
-    if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
-
-    const { data: adminUser, error: adminError } = await supabaseAdmin
-      .from("admin_users")
-      .select("id,email,role,is_active,require_mfa")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (adminError) throw adminError;
-    if (!adminUser?.is_active || !READ_ROLES.has(adminUser.role as AdminRole)) {
-      return json(req, { error: "Forbidden." }, 403);
-    }
-    if (adminUser.require_mfa && !isAal2(bearerToken)) {
-      return json(req, { error: "MFA verification required." }, 403);
-    }
+    const ctx = await requireAdmin(req, requestId, "prospect.read");
+    if (ctx instanceof Response) return ctx;
+    const { adminUser, supabaseAdmin } = ctx;
+    const bearerToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
 
     let payload: Record<string, unknown>;
     try {
@@ -815,7 +746,6 @@ serve(async (req) => {
         permissions: {
           can_edit: EDIT_ROLES.has(adminUser.role as AdminRole),
           can_manage_lifecycle: LIFECYCLE_ROLES.has(adminUser.role as AdminRole),
-          can_permanently_delete: adminUser.role === "owner",
           can_repair: REPAIR_ROLES.has(adminUser.role as AdminRole),
         },
       });
@@ -840,11 +770,18 @@ serve(async (req) => {
     if (action !== "update_profile" && !repairActions.has(action) && !LIFECYCLE_ROLES.has(adminUser.role as AdminRole)) {
       return json(req, { error: "Your admin role cannot change account lifecycle." }, 403);
     }
-    if (action === "permanent_delete" && adminUser.role !== "owner") {
-      return json(req, { error: "Only the owner admin can permanently delete accounts." }, 403);
-    }
-    if (action === "permanent_delete" && payload.confirmation !== "DELETE") {
-      return json(req, { error: "Type DELETE to confirm permanent deletion." }, 400);
+    const freshTotpActions = new Set<AccountAction>([
+      "reset_mfa",
+      "correct_email",
+      "suspend",
+      "reactivate",
+      "archive",
+    ]);
+    if (freshTotpActions.has(action) && !isFreshTotp(bearerToken)) {
+      return json(req, {
+        error: "Re-verify with your authenticator before this security-sensitive action.",
+        error_code: "fresh_totp_required",
+      }, 403);
     }
     if (action === "archive" && payload.confirmation !== "ARCHIVE") {
       return json(req, { error: "Type ARCHIVE to confirm account archival." }, 400);
@@ -864,7 +801,6 @@ serve(async (req) => {
     if (action === "suspend") result = await suspendAccount(supabaseAdmin, targetUserId, adminUser.id, reason);
     if (action === "reactivate") result = await reactivateAccount(supabaseAdmin, targetUserId);
     if (action === "archive") result = await archiveAccount(supabaseAdmin, targetUserId, adminUser.id, reason);
-    if (action === "permanent_delete") result = await permanentlyDeleteAccount(supabaseAdmin, targetUserId);
     if (repairActions.has(action)) {
       const before = await accountDetail(supabaseAdmin, targetUserId);
       let repairResult: Record<string, unknown> = {};
@@ -910,16 +846,23 @@ serve(async (req) => {
         : null,
       result?.after
         ? { account: result.after.account, impact: result.after.impact }
-        : { permanently_deleted: true, stripe: result?.stripe ?? null },
-      action === "permanent_delete" ? null : result?.before?.businesses?.[0]?.id ?? null,
+        : null,
+      result?.before?.businesses?.[0]?.id ?? null,
     );
+    if (freshTotpActions.has(action)) {
+      await sendAdminSecurityAlert({
+        event: `admin_account_${action}`,
+        adminEmail: adminUser.email,
+        targetId: targetUserId,
+        requestId,
+      });
+    }
     return json(req, {
       ok: true,
       action,
       account: result?.after?.account ?? null,
       repair: result?.repair ?? null,
       stripe: result?.stripe ?? null,
-      permanently_deleted: action === "permanent_delete",
       request_id: requestId,
     });
   } catch (error) {

@@ -1,45 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import { requireAdmin } from "../_shared/admin-prospects.ts";
 import {
   AI_QUOTA_SCOPES,
   countAiQuotaUsage,
   type AiQuotaScope,
 } from "../_shared/ai-quota-resets.ts";
 import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
-import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
-
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support"
-  | "sales"
-  | "finance"
-  | "moderator"
-  | "developer"
-  | "read_only";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
-}
-
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
 }
 
 async function countRows(query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> {
@@ -1915,53 +1889,9 @@ serve(async (req) => {
   const requestId = crypto.randomUUID();
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = tryGetServiceRoleKey();
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json(req, { error: "Admin dashboard is not configured." }, 500);
-    }
-
-    const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser();
-
-    if (userError || !user) {
-      return json(req, { error: "Unauthorized." }, 401);
-    }
-    if (isRedeemerUser(user)) {
-      return forbiddenForRedeemerResponse(corsHeaders);
-    }
-
-    const { data: adminUser, error: adminError } = await supabaseAdmin
-      .from("admin_users")
-      .select("id,email,role,is_active,require_mfa,display_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (adminError) throw adminError;
-    if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
-      await supabaseAdmin.from("admin_audit_log").insert({
-        admin_user_id: user.id,
-        admin_email: user.email ?? null,
-        action: "admin_dashboard_denied",
-        target_type: "admin_dashboard",
-        reason: "not_active_admin",
-        request_id: requestId,
-      });
-      return json(req, { error: "Forbidden." }, 403);
-    }
-    if (adminUser.require_mfa && !isAal2(bearerToken)) {
-      return json(req, { error: "MFA verification required." }, 403);
-    }
+    const ctx = await requireAdmin(req, requestId, "prospect.read");
+    if (ctx instanceof Response) return ctx;
+    const { user, adminUser, supabaseAdmin } = ctx;
 
     const payload = req.method === "POST" ? await readPayload(req) : {};
     if (payload.section === "queue_status") {

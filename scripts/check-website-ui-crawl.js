@@ -23,7 +23,7 @@ const MIME = new Map([
   [".webp", "image/webp"],
 ]);
 
-const ROUTES = [
+const DEFAULT_ROUTES = [
   "/",
   "/404.html",
   "/business/",
@@ -67,6 +67,9 @@ const ROUTES = [
   "/admin/ai-operating-report/",
   "/admin/ai-prompts/",
 ];
+const ROUTES = process.env.WEBSITE_UI_ROUTES
+  ? process.env.WEBSITE_UI_ROUTES.split(",").map((route) => route.trim()).filter(Boolean)
+  : DEFAULT_ROUTES;
 
 const VIEWPORTS = [
   { name: "desktop", width: 1366, height: 900 },
@@ -821,6 +824,31 @@ function mockPayload(pathname, requestBody) {
 }
 
 async function installMocks(page) {
+  await page.route("**/api/admin/session", async (route) => {
+    const method = route.request().method();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(method === "GET"
+        ? { ok: true, authenticated: true, pending_mfa: false }
+        : { ok: true, authenticated: true }),
+    });
+  });
+  await page.route("**/api/admin/proxy?function=*", async (route) => {
+    let body = {};
+    try {
+      body = JSON.parse(route.request().postData() || "{}");
+    } catch {
+      body = {};
+    }
+    const url = new URL(route.request().url());
+    const functionName = url.searchParams.get("function") || "";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(mockPayload(`/${functionName}`, body)),
+    });
+  });
   await page.route(SUPABASE_FUNCTIONS_HOST, async (route) => {
     let body = {};
     try {
@@ -838,15 +866,10 @@ async function installMocks(page) {
 }
 
 async function prepareStorage(context, route) {
-  await context.addInitScript((currentRoute) => {
+  await context.addInitScript(() => {
     localStorage.clear();
     sessionStorage.clear();
-    if (currentRoute.startsWith("/admin/") && currentRoute !== "/admin/login/") {
-      localStorage.setItem("twofer_admin_access_token", "mock-token");
-      localStorage.setItem("twofer_admin_refresh_token", "mock-refresh");
-      localStorage.setItem("twofer_admin_expires_at", String(Date.now() + 3600 * 1000));
-    }
-  }, route);
+  });
 }
 
 function isPublicRoute(route) {

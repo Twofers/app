@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "./cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "./redemption-role.ts";
 import { isAal2 } from "./admin-mfa.ts";
+import { founderAdminUserId, isFounderAdminUser } from "./admin-founder.ts";
 import { tryGetServiceRoleKey } from "./service-role-key.ts";
 
 export type AdminRole =
@@ -37,7 +38,8 @@ export type AdminContext = {
     id: string;
     email?: string | null;
     role: AdminRole;
-    require_mfa?: boolean;
+    require_mfa: boolean;
+    display_name?: string | null;
   };
   supabaseAdmin: any;
   requestId: string;
@@ -146,9 +148,10 @@ export async function requireAdmin(
   const serviceRoleKey = tryGetServiceRoleKey();
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const founderId = founderAdminUserId();
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Admin prospect services are not configured." }, 500);
+  if (!supabaseUrl || !serviceRoleKey || !founderId) {
+    return json(req, { error: "Founder admin access is not configured." }, 500);
   }
 
   const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
@@ -170,7 +173,7 @@ export async function requireAdmin(
 
   const { data: adminUser, error: adminError } = await supabaseAdmin
     .from("admin_users")
-    .select("id,email,role,is_active,require_mfa")
+    .select("id,email,role,is_active,require_mfa,display_name")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -187,7 +190,23 @@ export async function requireAdmin(
     return json(req, { error: "Forbidden." }, 403);
   }
 
-  if (adminUser.require_mfa && !isAal2(bearerToken)) {
+  if (!isFounderAdminUser(user.id, adminUser.role)) {
+    await supabaseAdmin.from("admin_audit_log").insert({
+      admin_user_id: user.id,
+      admin_email: adminUser.email ?? user.email ?? null,
+      action: "admin_founder_access_denied",
+      target_type: "admin_security",
+      reason: "founder_owner_required",
+      request_id: requestId,
+    });
+    return json(req, { error: "Founder owner access is required." }, 403);
+  }
+
+  if (adminUser.require_mfa !== true) {
+    return json(req, { error: "Founder MFA enrollment is required." }, 403);
+  }
+
+  if (!isAal2(bearerToken)) {
     return json(req, { error: "MFA verification required." }, 403);
   }
 
@@ -210,6 +229,7 @@ export async function requireAdmin(
       email: adminUser.email,
       role: adminUser.role,
       require_mfa: adminUser.require_mfa,
+      display_name: adminUser.display_name,
     },
     supabaseAdmin,
     requestId,

@@ -1,0 +1,41 @@
+{
+  "observed_at": "2026-07-29T21:47:20.5388908Z",
+  "project_ref": "kvodhiqhdqnptqovovia",
+  "read_only_commands": [
+    "supabase ssl-enforcement get --project-ref kvodhiqhdqnptqovovia --output json --experimental",
+    "supabase network-restrictions get --project-ref kvodhiqhdqnptqovovia --output json",
+    "supabase backups list --project-ref kvodhiqhdqnptqovovia --output json",
+    "supabase secrets list --project-ref kvodhiqhdqnptqovovia --output json (names/digests read in memory; only required-name presence recorded)"
+  ],
+  "ssl_enforcement": {
+    "database": false,
+    "applied_successfully": true
+  },
+  "network_restrictions": {
+    "status": "applied",
+    "entitlement": "allowed",
+    "db_allowed_cidrs": [
+      "0.0.0.0/0"
+    ],
+    "db_allowed_cidrs_v6": [
+      "::/0"
+    ]
+  },
+  "backups": {
+    "backups": null,
+    "physical_backup_data": {},
+    "pitr_enabled": false,
+    "region": "us-west-2",
+    "walg_enabled": true
+  },
+  "edge_secret_posture": {
+    "deployed_secret_name_count": 77,
+    "required_staged_names": {
+      "FOUNDER_ADMIN_USER_ID": "present",
+      "ADMIN_SECURITY_ALERT_EMAIL": "present",
+      "ANON_ABUSE_IP_HASH_SECRET": "present"
+    },
+    "secret_values_recorded": false
+  },
+  "interpretation": "The three approved founder/alert/abuse-hash secret names are present without recording their values. Production database SSL enforcement is disabled, direct database routes allow every IPv4 and IPv6 address, no physical backup is listed, and PITR is disabled. Remaining remediation remains separately approval-gated."
+}

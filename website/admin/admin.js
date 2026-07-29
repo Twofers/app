@@ -892,8 +892,8 @@
   }
 
   async function boot() {
+    if (!(await Shell.getAccessToken())) return;
     Shell.syncSessionActions();
-    if (!Shell.hasStoredToken()) return;
     const root = document.querySelector("[data-admin-app-root]");
     if (!root) return;
     try {

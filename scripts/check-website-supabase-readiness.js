@@ -481,7 +481,7 @@ if (failures.length === 0) {
   }
 
   const adminFn = read("supabase/functions/admin-dashboard-summary/index.ts");
-  assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, 'from("admin_users")', "admin summary must check admin_users");
+  assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "requireAdmin(", "admin summary must use the centralized admin guard");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "admin_dashboard_summary_viewed", "admin summary must write audit log");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "location_entitlements", "admin summary must use current entitlement source of truth");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "business_subscriptions", "admin summary must include business subscription risk counts");
@@ -496,13 +496,13 @@ if (failures.length === 0) {
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_success", "admin auth must audit successful logins");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_denied", "admin auth must audit denied logins");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=password", "admin auth must perform password grant server-side");
-  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support persistent browser sessions");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support server-managed session refresh");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminAuthFn)) {
     failures.push("supabase/functions/admin-auth-session/index.ts: admin auth must not depend on payment or AI secrets");
   }
 
   const adminAiFn = read("supabase/functions/admin-ai-usage/index.ts");
-  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, 'from("admin_users")', "admin AI usage must check admin_users");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, 'requireAdmin(req, requestId, "prospect.read")', "admin AI usage must use the centralized founder guard");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_reset", "admin AI usage must audit quota resets");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_resets", "admin AI usage must write reset ledger rows");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "countAiQuotaUsage", "admin AI usage must use shared reset-aware quota counts");
@@ -511,7 +511,7 @@ if (failures.length === 0) {
   }
 
   const adminApplicationsFn = read("supabase/functions/admin-business-applications/index.ts");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("admin_users")', "admin business applications must check admin_users");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'requireAdmin(req, requestId, "prospect.read")', "admin business applications must use the centralized founder guard");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("business_applications")', "admin business applications must read and update trial requests");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_for_setup", "admin business applications must audit setup approvals");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "approved_not_activated", "admin business applications must leave approved businesses setup-only until activation");

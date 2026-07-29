@@ -161,10 +161,7 @@
     }
     $("[data-save-profile]").disabled = payload.permissions?.can_edit !== true;
     for (const button of document.querySelectorAll("[data-action]")) {
-      const action = button.dataset.action;
-      button.disabled = action === "permanent_delete"
-        ? payload.permissions?.can_permanently_delete !== true
-        : payload.permissions?.can_manage_lifecycle !== true;
+      button.disabled = payload.permissions?.can_manage_lifecycle !== true;
     }
     $("[data-action='suspend']").hidden = account.account_status !== "active";
     $("[data-action='reactivate']").hidden = account.account_status !== "suspended";
@@ -192,7 +189,7 @@
   }
 
   async function runAction(action) {
-    const destructive = action === "archive" || action === "permanent_delete";
+    const destructive = action === "archive";
     const reasonEl = destructive ? $("[data-delete-reason]") : $("[data-lifecycle-reason]");
     const output = destructive ? $("[data-delete-status]") : $("[data-lifecycle-status]");
     const reason = reasonEl.value.trim();
@@ -206,10 +203,6 @@
       confirmation = window.prompt("Type ARCHIVE to cancel Stripe, block login, hide the account, and retain its records.");
       if (confirmation !== "ARCHIVE") return;
     }
-    if (action === "permanent_delete") {
-      confirmation = window.prompt("This cannot be undone. Type DELETE to cancel Stripe and permanently erase this account.");
-      if (confirmation !== "DELETE") return;
-    }
     if (action === "suspend") {
       confirmation = window.prompt("Suspend this account? Login will be blocked and any business will be hidden. Stripe billing will continue. Type SUSPEND to continue.");
       if (confirmation !== "SUSPEND") return;
@@ -220,10 +213,6 @@
     for (const button of document.querySelectorAll("[data-action]")) button.disabled = true;
     try {
       await post({ action, user_id: userId, reason, confirmation });
-      if (action === "permanent_delete") {
-        window.location.assign("/admin/accounts");
-        return;
-      }
       output.textContent = action === "archive"
         ? "Account archived and Stripe billing canceled."
         : action === "suspend"

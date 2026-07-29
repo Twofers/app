@@ -27,7 +27,7 @@
         <div>
           <p class="admin-kicker">Identity &amp; safety</p>
           <h1>Accounts</h1>
-          <p class="lede">Search, edit, suspend, archive, or permanently delete business and customer accounts.</p>
+          <p class="lede">Search, edit, suspend, or archive business and customer accounts. Permanent deletion is intentionally unavailable here.</p>
         </div>
         <span class="admin-badge" data-admin-status>Checking session</span>
       </div>
@@ -183,12 +183,11 @@
         </section>
 
         <section class="admin-section">
-          <h2>Delete or archive</h2>
-          <p class="admin-note"><strong>Archive</strong> is the recommended admin delete: Stripe is canceled immediately, login is blocked, the business disappears from the app, and records are retained. <strong>Permanent delete</strong> also cancels Stripe, then irreversibly removes the Auth account and personal/business data.</p>
+          <h2>Archive account</h2>
+          <p class="admin-note"><strong>Archive</strong> cancels Stripe immediately, blocks login, removes the business from the app, and retains records so the action remains recoverable. Permanent deletion is not available from the admin dashboard.</p>
           <label class="admin-form full">Reason<textarea data-delete-reason minlength="5" maxlength="500"></textarea></label>
           <div class="admin-inline-actions">
             <button class="button button-small button-secondary" type="button" data-action="archive">Archive &amp; cancel Stripe</button>
-            <button class="button button-small button-danger" type="button" data-action="permanent_delete">Permanently delete</button>
           </div>
           <p class="status" data-delete-status role="status" aria-live="polite"></p>
         </section>

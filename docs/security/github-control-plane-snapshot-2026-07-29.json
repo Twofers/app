@@ -1,0 +1,22 @@
+{
+  "observed_at": "2026-07-29",
+  "repository": "Twofers/app",
+  "read_only_commands": [
+    "gh repo view --json nameWithOwner,visibility,defaultBranchRef,isPrivate",
+    "gh api repos/Twofers/app/branches/main/protection",
+    "gh api repos/Twofers/app/rulesets",
+    "gh api repos/Twofers/app (selected security_and_analysis fields only)"
+  ],
+  "visibility": "public",
+  "default_branch": "main",
+  "main_branch_protection": "absent",
+  "repository_ruleset_count": 0,
+  "security_and_analysis": {
+    "secret_scanning": "enabled",
+    "secret_scanning_push_protection": "enabled",
+    "dependabot_security_updates": "disabled",
+    "secret_scanning_non_provider_patterns": "disabled",
+    "secret_scanning_validity_checks": "disabled"
+  },
+  "interpretation": "Repository workflows and Dependabot configuration are staged only. Live main protection/rulesets are absent and live Dependabot security updates are disabled. Provider changes remain approval-gated."
+}

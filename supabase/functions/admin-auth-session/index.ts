@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { decodeJwtAal, verifiedTotpFactor } from "../_shared/admin-mfa.ts";
+import { founderAdminUserId, isFounderAdminUser } from "../_shared/admin-founder.ts";
+import { sendAdminSecurityAlert } from "../_shared/admin-security-alert.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
@@ -40,19 +42,6 @@ function json(req: Request, body: Record<string, unknown>, status = 200) {
     status,
     headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
-}
-
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
 }
 
 function cleanString(value: unknown): string {
@@ -172,7 +161,11 @@ async function resolveActiveAdmin(
     .eq("id", userId)
     .maybeSingle();
   if (error) throw error;
-  if (!data?.is_active || !hasReadableAdminRole(data.role)) return null;
+  if (
+    !data?.is_active ||
+    data.require_mfa !== true ||
+    !isFounderAdminUser(userId, data.role)
+  ) return null;
   return data as AdminRow;
 }
 
@@ -212,9 +205,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = tryGetServiceRoleKey();
+    const founderId = founderAdminUserId();
 
-    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-      return json(req, { error: "Admin login is not configured." }, 500);
+    if (!supabaseUrl || !anonKey || !serviceRoleKey || !founderId) {
+      return json(req, { error: "Founder admin login is not configured." }, 500);
     }
 
     const payload = await readJson(req);
@@ -307,6 +301,12 @@ Deno.serve(async (req) => {
         target_type: "admin_login",
         request_id: requestId,
       });
+      await sendAdminSecurityAlert({
+        event: "admin_mfa_verified",
+        adminEmail: admin.email,
+        targetId: admin.id,
+        requestId,
+      });
 
       return json(req, successBody(admin, verified));
     }
@@ -377,7 +377,7 @@ Deno.serve(async (req) => {
       return json(req, { error: "This account is not active in the admin allowlist." }, 403);
     }
 
-    if (adminUser.require_mfa && decodeJwtAal(session.access_token) !== "aal2") {
+    if (decodeJwtAal(session.access_token) !== "aal2") {
       const factor = verifiedTotpFactor((user as { factors?: unknown }).factors);
       await supabaseAdmin.from("admin_audit_log").insert({
         admin_user_id: adminUser.id,
@@ -406,6 +406,14 @@ Deno.serve(async (req) => {
       target_type: "admin_login",
       request_id: requestId,
     });
+    if (!isRefresh) {
+      await sendAdminSecurityAlert({
+        event: "admin_login_success",
+        adminEmail: adminUser.email ?? user.email,
+        targetId: adminUser.id,
+        requestId,
+      });
+    }
 
     return json(req, successBody(adminUser, session));
   } catch (err) {

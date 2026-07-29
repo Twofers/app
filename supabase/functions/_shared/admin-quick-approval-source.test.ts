@@ -37,6 +37,11 @@ describe("admin email quick approval", () => {
   it("previews without mutation and confirms through the audited setup-only decision", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     expect(source).toMatch(/QUICK_APPROVAL_ACTIONS/);
+    expect(source).toMatch(/requireAdmin\(req, requestId, "prospect\.read"\)/);
+    expect(source.indexOf("const adminContext = await requireAdmin")).toBeLessThan(
+      source.indexOf("if (QUICK_APPROVAL_ACTIONS.has(action))"),
+    );
+    expect(source).toMatch(/issuedTo !== adminContext\.user\.id/);
     expect(source).toMatch(/quick_preview/);
     expect(source).toMatch(/quick_confirm/);
     expect(source).toMatch(/quickApprovalTokenHash\(rawToken\)/);
@@ -54,9 +59,11 @@ describe("admin email quick approval", () => {
     const script = read("website/quick-approve-trial/quick-approve.js");
     const vercel = read("website/vercel.json");
     expect(page).toMatch(/data-quick-approval-endpoint/);
+    expect(page).toMatch(/\/api\/admin\/proxy\?function=admin-business-applications/);
     expect(page).toMatch(/data-confirm-quick-approval/);
     expect(page).toMatch(/Opening this page has not approved anything/);
     expect(script).toMatch(/window\.history\.replaceState/);
+    expect(script).toMatch(/founder admin console with MFA/);
     expect(script).toMatch(/post\("quick_preview"\)/);
     expect(script).toMatch(/addEventListener\("click"[\s\S]*post\("quick_confirm"\)/);
     expect(script.indexOf('post("quick_preview")')).toBeLessThan(script.indexOf('post("quick_confirm")'));

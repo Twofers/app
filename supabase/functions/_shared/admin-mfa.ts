@@ -49,3 +49,30 @@ export function verifiedTotpFactor(
 export function isAal2(accessToken: string): boolean {
   return decodeJwtAal(accessToken) === "aal2";
 }
+
+type AuthenticationMethod = {
+  method?: unknown;
+  timestamp?: unknown;
+};
+
+export function isFreshTotp(accessToken: string, maxAgeSeconds = 300): boolean {
+  if (!isAal2(accessToken) || !Number.isFinite(maxAgeSeconds) || maxAgeSeconds <= 0) {
+    return false;
+  }
+  try {
+    const payloadSegment = accessToken.split(".")[1];
+    if (!payloadSegment) return false;
+    const payload = JSON.parse(atob(base64UrlToBase64(payloadSegment)));
+    const methods = Array.isArray(payload?.amr) ? payload.amr as AuthenticationMethod[] : [];
+    const totpTimestamps = methods
+      .filter((method) => method?.method === "totp")
+      .map((method) => Number(method.timestamp))
+      .filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0);
+    if (!totpTimestamps.length) return false;
+    const latest = Math.max(...totpTimestamps);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return latest <= nowSeconds && nowSeconds - latest <= maxAgeSeconds;
+  } catch {
+    return false;
+  }
+}

@@ -49,6 +49,32 @@ serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const { data: deletionAttemptAllowed, error: deletionRateError } = await supabaseAdmin
+      .rpc("consume_account_deletion_attempt", {
+        p_user_id: user.id,
+        p_max_attempts: 3,
+        p_global_max: 50,
+      });
+    if (deletionRateError) {
+      console.error("delete-user-account: deletion rate-limit check failed:", deletionRateError);
+      return new Response(
+        JSON.stringify({
+          error: "Could not safely start account deletion. Please contact support.",
+          error_code: "deletion_rate_limit_unavailable",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (deletionAttemptAllowed !== true) {
+      return new Response(
+        JSON.stringify({
+          error: "Too many account-deletion attempts. Please contact support.",
+          error_code: "deletion_rate_limited",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     /**
      * Prove the Auth admin API is reachable BEFORE anything destructive runs.
      *

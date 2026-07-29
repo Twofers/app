@@ -40,7 +40,9 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) {
-        const message = response.status === 410
+        const message = response.status === 401
+          ? "Sign in to the founder admin console with MFA, then reopen this link."
+          : response.status === 410
           ? t("quickApproval.unavailable", "This quick-approval link is invalid, expired, already used, or no longer eligible.")
           : response.status === 409
           ? t("quickApproval.processing", "This approval is already being processed. Please wait a moment.")

@@ -28,28 +28,27 @@ describe("admin account management", () => {
     expect(migration).toMatch(/CREATE POLICY "deals_public_read"[\s\S]+is_publicly_visible_business\(business_id\)/);
   });
 
-  it("requires active admin auth, MFA, role gates, reasons, and typed destructive confirmations", () => {
+  it("requires the centralized founder guard, role gates, reasons, and typed reversible confirmations", () => {
     const source = read("supabase/functions/admin-account-management/index.ts");
-    expect(source).toMatch(/from\("admin_users"\)/);
-    expect(source).toMatch(/adminUser\.require_mfa && !isAal2\(bearerToken\)/);
+    expect(source).toMatch(/requireAdmin\(req, requestId, "prospect\.read"\)/);
     expect(source).toMatch(/LIFECYCLE_ROLES/);
-    expect(source).toMatch(/adminUser\.role !== "owner"/);
     expect(source).toMatch(/reason\.length < 5/);
     expect(source).toMatch(/payload\.confirmation !== "ARCHIVE"/);
-    expect(source).toMatch(/payload\.confirmation !== "DELETE"/);
+    expect(source).toMatch(/isFreshTotp\(bearerToken\)/);
     expect(source).toMatch(/admin_account_protected/);
+    expect(source).not.toMatch(/permanent_delete/);
     expect(source).not.toMatch(/auth\.admin\.listUsers/);
   });
 
-  it("makes suspension reversible and keeps permanent deletion Stripe-first", () => {
+  it("makes suspension and archival reversible and removes admin deletion", () => {
     const source = read("supabase/functions/admin-account-management/index.ts");
     expect(source).toMatch(/ban_duration: "876000h"/);
     expect(source).toMatch(/ban_duration: "none"/);
     expect(source).toMatch(/account_lifecycle_state/);
     expect(source).toMatch(/previous_active_deal_ids/);
     expect(source).toMatch(/cancelStripeForBusinesses/);
-    expect(source.indexOf("cancelStripeForBusinesses")).toBeLessThan(source.lastIndexOf("purge_user_data"));
-    expect(source).toMatch(/deleteAuthUserWithRetry\(supabase, targetUserId\)/);
+    expect(source).not.toMatch(/purge_user_data/);
+    expect(source).not.toMatch(/deleteAuthUserWithRetry/);
   });
 
   it("ties self-service deletion to Stripe before purge", () => {
@@ -59,6 +58,9 @@ describe("admin account management", () => {
     expect(cancel).toBeGreaterThan(-1);
     expect(purge).toBeGreaterThan(cancel);
     expect(source).toMatch(/error_code: "billing_cancel_failed"/);
+    expect(source).toMatch(/consume_account_deletion_attempt/);
+    expect(source).toMatch(/p_global_max: 50/);
+    expect(source).toMatch(/error_code: "deletion_rate_limited"/);
   });
 
   it("ships one searchable UI for both roles with safe lifecycle wording", () => {
@@ -66,13 +68,13 @@ describe("admin account management", () => {
     const script = read("website/admin/accounts.js");
     expect(page).toMatch(/Business and customer directory/);
     expect(page).toMatch(/Archive &amp; cancel Stripe/);
-    expect(page).toMatch(/Permanently delete/);
+    expect(page).toMatch(/Permanent deletion is not available/);
     expect(page).toMatch(/Reason for edit/);
     expect(script).toMatch(/action: "list"/);
     expect(script).toMatch(/action: "detail"/);
     expect(script).toMatch(/action: "update_profile"/);
     expect(script).toMatch(/Type ARCHIVE/);
-    expect(script).toMatch(/Type DELETE/);
+    expect(script).not.toMatch(/permanent_delete|Type DELETE/);
     expect(script).not.toMatch(/STRIPE_SECRET_KEY|service_role/i);
   });
 

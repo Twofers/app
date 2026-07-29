@@ -1,6 +1,7 @@
 <!--
   Signed-in admin operations fragment (audit F-015).
-  /admin/admin.js fetches this markup only after a stored admin token exists.
+  /admin/admin.js fetches this markup only after a server-sealed admin session
+  is verified.
   The fragment is static and public, but every data request remains protected
   by the server-side admin allowlist and MFA policy.
 -->

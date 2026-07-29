@@ -1,8 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import {
+  requireAdmin,
+  type AdminContext,
+  type AdminRole,
+} from "../_shared/admin-prospects.ts";
 import {
   cleanString as cleanBusinessString,
   createOnboardingRequest,
@@ -15,27 +16,6 @@ import {
 import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 import { grantFullAccessTrial } from "../_shared/admin-full-access-grant.ts";
-import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
-
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support"
-  | "sales"
-  | "finance"
-  | "moderator"
-  | "developer"
-  | "read_only";
-
-type AdminContext = {
-  user: { id: string; email?: string | null };
-  adminUser: {
-    email?: string | null;
-    role: AdminRole;
-  };
-  supabaseAdmin: any;
-  requestId: string;
-};
 
 type Payload = {
   action?: unknown;
@@ -124,19 +104,6 @@ function json(req: Request, body: Record<string, unknown>, status = 200) {
 
 function cleanString(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
 }
 
 function canDecideApplications(role: AdminRole): boolean {
@@ -398,66 +365,6 @@ async function readPayload(req: Request): Promise<Payload> {
   } catch {
     return {};
   }
-}
-
-async function requireAdmin(req: Request, requestId: string): Promise<AdminContext | Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = tryGetServiceRoleKey();
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Admin business applications are not configured." }, 500);
-  }
-
-  const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabaseUser.auth.getUser();
-
-  if (userError || !user) {
-    return json(req, { error: "Unauthorized." }, 401);
-  }
-  if (isRedeemerUser(user)) {
-    return forbiddenForRedeemerResponse(getCorsHeaders(req));
-  }
-
-  const { data: adminUser, error: adminError } = await supabaseAdmin
-    .from("admin_users")
-    .select("id,email,role,is_active,require_mfa")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (adminError) throw adminError;
-  if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
-    await supabaseAdmin.from("admin_audit_log").insert({
-      admin_user_id: user.id,
-      admin_email: user.email ?? null,
-      action: "admin_business_applications_denied",
-      target_type: "business_application",
-      reason: "not_active_admin",
-      request_id: requestId,
-    });
-    return json(req, { error: "Forbidden." }, 403);
-  }
-  if (adminUser.require_mfa && !isAal2(bearerToken)) {
-    return json(req, { error: "MFA verification required." }, 403);
-  }
-
-  return {
-    user: { id: user.id, email: user.email },
-    adminUser: {
-      email: adminUser.email,
-      role: adminUser.role,
-    },
-    supabaseAdmin,
-    requestId,
-  };
 }
 
 function normalizedFromApplication(row: Record<string, unknown>): NormalizedBusinessOnboarding {
@@ -1035,7 +942,7 @@ async function applyDecision(
 type QuickApprovalContext = {
   rawTokenHash: string;
   application: Record<string, unknown>;
-  adminUser: { id: string; email: string | null; role: AdminRole };
+  adminContext: AdminContext;
   supabaseAdmin: any;
 };
 
@@ -1060,17 +967,12 @@ function quickApprovalApplicationIsEligible(application: Record<string, unknown>
 async function loadQuickApprovalContext(
   req: Request,
   payload: Payload,
+  adminContext: AdminContext,
 ): Promise<QuickApprovalContext | Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = tryGetServiceRoleKey();
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Quick approval is not configured." }, 500);
-  }
-
   const rawToken = cleanString(payload.token, 240);
   if (!QUICK_APPROVAL_TOKEN_RE.test(rawToken)) return quickApprovalUnavailable(req);
   const tokenHash = await quickApprovalTokenHash(rawToken);
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  const supabaseAdmin = adminContext.supabaseAdmin;
   const { data: applicationData, error: applicationError } = await supabaseAdmin
     .from("business_applications")
     .select("*")
@@ -1098,31 +1000,28 @@ async function loadQuickApprovalContext(
   const issuedTo = typeof application.quick_approval_token_issued_to === "string"
     ? application.quick_approval_token_issued_to
     : "";
-  if (!UUID_RE.test(issuedTo)) return quickApprovalUnavailable(req);
-  const { data: adminData, error: adminError } = await supabaseAdmin
-    .from("admin_users")
-    .select("id,email,role,is_active")
-    .eq("id", issuedTo)
-    .maybeSingle();
-  if (adminError) throw adminError;
-  if (!adminData?.is_active || !hasReadableAdminRole(adminData.role) || !canDecideApplications(adminData.role)) {
+  if (
+    !UUID_RE.test(issuedTo) ||
+    issuedTo !== adminContext.user.id ||
+    !canDecideApplications(adminContext.adminUser.role)
+  ) {
     return quickApprovalUnavailable(req);
   }
 
   return {
     rawTokenHash: tokenHash,
     application,
-    adminUser: {
-      id: adminData.id,
-      email: typeof adminData.email === "string" ? adminData.email : null,
-      role: adminData.role,
-    },
+    adminContext,
     supabaseAdmin,
   };
 }
 
-async function previewQuickApproval(req: Request, payload: Payload, requestId: string) {
-  const context = await loadQuickApprovalContext(req, payload);
+async function previewQuickApproval(
+  req: Request,
+  payload: Payload,
+  adminContext: AdminContext,
+) {
+  const context = await loadQuickApprovalContext(req, payload, adminContext);
   if (context instanceof Response) return context;
   const application = context.application;
 
@@ -1130,13 +1029,13 @@ async function previewQuickApproval(req: Request, payload: Payload, requestId: s
   // reachable without an admin session, so record who/when it was viewed — attributed
   // to the issued-to admin the token is bound to.
   await context.supabaseAdmin.from("admin_audit_log").insert({
-    admin_user_id: context.adminUser.id,
-    admin_email: context.adminUser.email,
+    admin_user_id: context.adminContext.user.id,
+    admin_email: context.adminContext.adminUser.email,
     action: "admin_business_application_quick_previewed",
     target_type: "business_application",
     target_id: String(application.id),
     reason: "quick_approval_email_preview",
-    request_id: requestId,
+    request_id: context.adminContext.requestId,
   });
 
   return json(req, {
@@ -1158,10 +1057,15 @@ async function previewQuickApproval(req: Request, payload: Payload, requestId: s
   });
 }
 
-async function confirmQuickApproval(req: Request, payload: Payload, requestId: string) {
-  const context = await loadQuickApprovalContext(req, payload);
+async function confirmQuickApproval(
+  req: Request,
+  payload: Payload,
+  adminContext: AdminContext,
+) {
+  const context = await loadQuickApprovalContext(req, payload, adminContext);
   if (context instanceof Response) return context;
   const applicationId = String(context.application.id);
+  const requestId = context.adminContext.requestId;
   const processingStartedAt = new Date().toISOString();
   const staleBefore = new Date(Date.now() - QUICK_APPROVAL_PROCESSING_TIMEOUT_MS).toISOString();
 
@@ -1216,15 +1120,9 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
       return quickApprovalUnavailable(req);
     }
 
-    const adminContext: AdminContext = {
-      user: { id: context.adminUser.id, email: context.adminUser.email },
-      adminUser: { email: context.adminUser.email, role: context.adminUser.role },
-      supabaseAdmin: context.supabaseAdmin,
-      requestId,
-    };
     const decisionResponse = await applyDecision(
       req,
-      adminContext,
+      context.adminContext,
       claimedData as Record<string, unknown>,
       "approve_setup",
       "Approved for setup; 30-day trial starts only after verified Stripe activation.",
@@ -1245,7 +1143,7 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
       .from("business_applications")
       .update({
         quick_approval_token_used_at: usedAt,
-        quick_approval_token_used_by: context.adminUser.id,
+        quick_approval_token_used_by: context.adminContext.user.id,
         quick_approval_processing_started_at: null,
         quick_approval_processing_request_id: null,
       })
@@ -1468,14 +1366,13 @@ Deno.serve(async (req) => {
     if (!KNOWN_ACTIONS.has(action)) {
       return json(req, { ok: false, error: "Unknown action.", request_id: requestId }, 400);
     }
+    const adminContext = await requireAdmin(req, requestId, "prospect.read");
+    if (adminContext instanceof Response) return adminContext;
     if (QUICK_APPROVAL_ACTIONS.has(action)) {
       return action === "quick_confirm"
-        ? confirmQuickApproval(req, payload, requestId)
-        : previewQuickApproval(req, payload, requestId);
+        ? confirmQuickApproval(req, payload, adminContext)
+        : previewQuickApproval(req, payload, adminContext);
     }
-
-    const adminContext = await requireAdmin(req, requestId);
-    if (adminContext instanceof Response) return adminContext;
     if (action === "decide") {
       return decideApplication(req, adminContext, payload);
     }

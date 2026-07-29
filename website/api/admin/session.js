@@ -1,0 +1,102 @@
+const {
+  activeState,
+  clearState,
+  edgeFunction,
+  readState,
+  sameOrigin,
+  sessionState,
+  setState,
+} = require("../../server/admin-session");
+
+function send(res, status, body) {
+  res.setHeader("Cache-Control", "no-store");
+  res.status(status).json(body);
+}
+
+module.exports = async function handler(req, res) {
+  if (req.method === "GET") {
+    const state = await activeState(req, res);
+    return send(res, 200, {
+      ok: true,
+      authenticated: Boolean(state),
+      pending_mfa: Boolean(readState(req)?.pending),
+    });
+  }
+
+  if (req.method === "DELETE") {
+    if (!sameOrigin(req)) return send(res, 403, { error: "Invalid request origin." });
+    clearState(res);
+    return send(res, 200, { ok: true });
+  }
+
+  if (req.method !== "POST") return send(res, 405, { error: "Method not allowed." });
+  if (!sameOrigin(req)) return send(res, 403, { error: "Invalid request origin." });
+
+  const action = String(req.body?.action || "password");
+  if (action === "password") {
+    const { response, payload } = await edgeFunction("admin-auth-session", {
+      email: req.body?.email,
+      password: req.body?.password,
+    });
+    if (!response.ok || !payload?.ok) {
+      return send(res, response.status, { error: payload?.error || "Sign in failed." });
+    }
+    if (payload.mfa_enrollment_required || payload.mfa_required) {
+      setState(res, sessionState(payload.session, {
+        pending: true,
+        factor_id: payload.factor_id || null,
+      }));
+      return send(res, 200, {
+        ok: true,
+        mfa_enrollment_required: payload.mfa_enrollment_required === true,
+        mfa_required: payload.mfa_required === true,
+        factor_id: payload.factor_id || null,
+      });
+    }
+    setState(res, sessionState(payload.session, {
+      issued_at: pending.issued_at,
+      absolute_expires_at: pending.absolute_expires_at,
+    }));
+    return send(res, 200, { ok: true, authenticated: true });
+  }
+
+  const pending = readState(req);
+  if (!pending?.pending || !pending?.session?.access_token) {
+    clearState(res);
+    return send(res, 401, { error: "Restart admin sign-in." });
+  }
+
+  if (action === "mfa_enroll") {
+    const { response, payload } = await edgeFunction("admin-auth-session", {
+      action,
+      access_token: pending.session.access_token,
+    });
+    if (!response.ok || !payload?.ok) {
+      return send(res, response.status, { error: payload?.error || "Could not start MFA enrollment." });
+    }
+    pending.factor_id = payload.factor_id;
+    setState(res, pending);
+    return send(res, 200, {
+      ok: true,
+      factor_id: payload.factor_id,
+      totp: payload.totp,
+    });
+  }
+
+  if (action === "mfa_verify") {
+    const factorId = String(pending.factor_id || req.body?.factor_id || "");
+    const { response, payload } = await edgeFunction("admin-auth-session", {
+      action,
+      access_token: pending.session.access_token,
+      factor_id: factorId,
+      code: req.body?.code,
+    });
+    if (!response.ok || !payload?.ok || !payload?.session?.access_token) {
+      return send(res, response.status, { error: payload?.error || "Incorrect verification code." });
+    }
+    setState(res, sessionState(payload.session));
+    return send(res, 200, { ok: true, authenticated: true });
+  }
+
+  return send(res, 400, { error: "Unknown admin session action." });
+};

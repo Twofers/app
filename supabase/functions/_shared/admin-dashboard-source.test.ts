@@ -23,11 +23,13 @@ describe("admin dashboard foundation", () => {
 
   it("requires an active admin user and writes audit logs in the summary function", () => {
     const source = read("supabase/functions/admin-dashboard-summary/index.ts");
-    expect(source).toMatch(/auth\.getUser/);
-    expect(source).toMatch(/from\("admin_users"\)/);
-    expect(source).toMatch(/!adminUser\?\.is_active/);
-    expect(source).toMatch(/hasReadableAdminRole/);
-    expect(source).toMatch(/admin_dashboard_denied/);
+    const guard = read("supabase/functions/_shared/admin-prospects.ts");
+    expect(source).toMatch(/requireAdmin\(req, requestId, "prospect\.read"\)/);
+    expect(guard).toMatch(/auth\.getUser/);
+    expect(guard).toMatch(/from\("admin_users"\)/);
+    expect(guard).toMatch(/!adminUser\?\.is_active/);
+    expect(guard).toMatch(/isFounderAdminUser/);
+    expect(guard).toMatch(/admin_founder_access_denied/);
     expect(source).toMatch(/admin_dashboard_summary_viewed/);
     expect(source).toMatch(/from\("admin_audit_log"\)\.insert/);
     expect(source).toMatch(/location_entitlements/);
@@ -125,11 +127,11 @@ describe("admin dashboard foundation", () => {
     expect(sharedShell).toMatch(/adminSummaryEndpoint: "admin-dashboard-summary"/);
 
     const script = read("website/admin/admin.js");
-    const tokenGate = script.indexOf("hasStoredToken()");
+    const tokenGate = script.indexOf("await Shell.getAccessToken()");
     const fragmentFetch = script.indexOf('fetch("/admin/app.html"');
     expect(tokenGate).toBeGreaterThan(-1);
     expect(fragmentFetch).toBeGreaterThan(-1);
-    expect(script).toMatch(/if \(!Shell\.hasStoredToken\(\)\) return/);
+    expect(script).toMatch(/if \(!\(await Shell\.getAccessToken\(\)\)\) return/);
 
     // Robots/CSP headers for /admin(.*) must persist so the fragment inherits
     // noindex and inline scripts stay blocked.
@@ -138,7 +140,7 @@ describe("admin dashboard foundation", () => {
     expect(vercel).toMatch(/script-src 'self'/);
   });
 
-  it("enforces admin_users.require_mfa (aal2) at every admin endpoint, not just login", () => {
+  it("enforces founder-only mandatory MFA through the shared guard", () => {
     const mfaHelper = read("supabase/functions/_shared/admin-mfa.ts");
     expect(mfaHelper).toMatch(/export function decodeJwtAal/);
     expect(mfaHelper).toMatch(/export function isAal2/);
@@ -151,24 +153,44 @@ describe("admin dashboard foundation", () => {
     expect(authSession).toMatch(/mfa_enrollment_required/);
     expect(authSession).toMatch(/decodeJwtAal/);
 
+    const sharedGuard = read("supabase/functions/_shared/admin-prospects.ts");
+    expect(sharedGuard).toMatch(/isFounderAdminUser/);
+    expect(sharedGuard).toMatch(/adminUser\.require_mfa !== true/);
+    expect(sharedGuard).toMatch(/!isAal2\(bearerToken\)/);
+
     for (const fn of [
       "supabase/functions/admin-dashboard-summary/index.ts",
       "supabase/functions/admin-ai-usage/index.ts",
       "supabase/functions/admin-business-applications/index.ts",
     ]) {
       const source = read(fn);
-      expect(source, `${fn} must import isAal2`).toMatch(/isAal2/);
-      expect(source, `${fn} must select require_mfa`).toMatch(/require_mfa/);
-      expect(source, `${fn} must reject aal1 sessions for require_mfa admins`).toMatch(
-        /adminUser\.require_mfa\s*&&\s*!isAal2\(/,
-      );
+      expect(source, `${fn} must use the centralized guard`).toMatch(/requireAdmin\(/);
     }
 
     const loginPage = read("website/admin/login/index.html");
     expect(loginPage).toMatch(/data-mfa-panel/);
     expect(loginPage).toMatch(/data-mfa-code/);
+    expect(loginPage).not.toMatch(/name="remember"/);
+
+    const browserSession = read("website/server/admin-session.js");
+    expect(browserSession).toMatch(/__Host-twofer_admin_session/);
+    expect(browserSession).toMatch(/HttpOnly/);
+    expect(browserSession).toMatch(/Secure/);
+    expect(browserSession).toMatch(/SameSite=Strict/);
+    expect(browserSession).toMatch(/aes-256-gcm/);
+    expect(browserSession).toMatch(/MAX_COOKIE_AGE_SECONDS = 60 \* 60 \* 8/);
+    expect(browserSession).toMatch(/absolute_expires_at/);
+    expect(browserSession).not.toMatch(/Domain=/);
+
+    const sessionEndpoint = read("website/api/admin/session.js");
+    expect(sessionEndpoint).toMatch(/issued_at: pending\.issued_at/);
+    expect(sessionEndpoint).toMatch(/absolute_expires_at: pending\.absolute_expires_at/);
 
     const loginScript = read("website/admin/admin-login.js");
+    const shellScript = read("website/admin/admin-shell.js");
+    expect(loginScript).not.toMatch(/localStorage|sessionStorage|access_token|refresh_token/);
+    expect(shellScript).not.toMatch(/localStorage|twofer_admin_access_token|twofer_admin_refresh_token/);
+
     expect(loginScript).toMatch(/mfa_enroll/);
     expect(loginScript).toMatch(/mfa_verify/);
     expect(loginScript).toMatch(/beginEnrollment/);
