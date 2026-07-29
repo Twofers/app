@@ -26,10 +26,14 @@ const { data, error } = await client
 if (error) throw error;
 
 const rows = data ?? [];
-console.log(JSON.stringify({
-  checked_at: new Date().toISOString(),
-  total: rows.length,
-  require_mfa_false_count: rows.filter((row) => row.require_mfa !== true).length,
-  active_owner_count: rows.filter((row) => row.role === "owner" && row.is_active === true).length,
-  active_admin_count: rows.filter((row) => row.role === "admin" && row.is_active === true).length,
-}, null, 2));
+if (rows.length === 0) {
+  throw new Error("Admin posture check failed: no admin rows exist.");
+}
+if (rows.some((row) => row.require_mfa !== true)) {
+  throw new Error("Admin posture check failed: at least one admin row does not require MFA.");
+}
+if (!rows.some((row) => row.role === "owner" && row.is_active === true)) {
+  throw new Error("Admin posture check failed: no active owner exists.");
+}
+
+console.log("Admin posture check passed.");
