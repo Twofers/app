@@ -21,9 +21,7 @@ const client = createClient(supabaseUrl, serviceRoleKey, {
 });
 const { data, error } = await client
   .from("admin_users")
-  .select("id,email,role,is_active,require_mfa")
-  .order("role")
-  .order("email");
+  .select("role,is_active,require_mfa");
 
 if (error) throw error;
 
@@ -31,6 +29,7 @@ const rows = data ?? [];
 console.log(JSON.stringify({
   checked_at: new Date().toISOString(),
   total: rows.length,
-  require_mfa_false: rows.filter((row) => row.require_mfa !== true),
-  privileged_roles: rows.filter((row) => row.role === "owner" || row.role === "admin"),
+  require_mfa_false_count: rows.filter((row) => row.require_mfa !== true).length,
+  active_owner_count: rows.filter((row) => row.role === "owner" && row.is_active === true).length,
+  active_admin_count: rows.filter((row) => row.role === "admin" && row.is_active === true).length,
 }, null, 2));

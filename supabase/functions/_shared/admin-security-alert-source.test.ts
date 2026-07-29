@@ -9,7 +9,7 @@ describe("external admin security alerts", () => {
     const source = read("supabase/functions/_shared/admin-security-alert.ts");
     expect(source).toMatch(/ADMIN_SECURITY_ALERT_EMAIL/);
     expect(source).toMatch(/RESEND_API_KEY/);
-    expect(source).toMatch(/https:\/\/api\.resend\.com\/emails/);
+    expect(source).toContain("https://api.resend.com/emails");
     expect(source).not.toMatch(/response\.(?:json|text)\(/);
   });
 
