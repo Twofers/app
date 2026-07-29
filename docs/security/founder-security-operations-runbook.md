@@ -66,13 +66,13 @@ RPCs.
   personal access tokens and remove persistent production CLI authentication
   from the daily-use machine.
 - The 2026-07-29 signed-in Security Advisor/CLI scan is recorded in
-  `supabase-security-advisor-snapshot-2026-07-29.json`: 2 errors and 171
-  warnings. An anonymous probe could read 14 per-deal metric rows through the
-  untracked `public.deal_stats` SECURITY DEFINER view. Only after a separate
-  approval, apply `20260824131000_harden_legacy_reporting_views.sql`, rerun
-  Advisor, and prove both endpoints reject anon/authenticated before closing
-  the two errors. Triage the remaining warnings by function reachability
-  before changing grants. The 2026-07-29 deep catalog grant probe passed:
+  `supabase-security-advisor-snapshot-2026-07-29.json`: the initial scan found
+  2 errors and 171 warnings, and anon could read 14 per-deal metric rows through
+  the untracked `public.deal_stats` SECURITY DEFINER view. The separately
+  approved `20260824131000_harden_legacy_reporting_views.sql` is now live;
+  both views return 401 to anon and Advisor reports 0 errors. Triage the
+  remaining 171 warnings by function reachability before changing grants. The
+  2026-07-29 deep catalog grant probe passed:
   `PUBLIC`, anon, and authenticated have no TRUNCATE, REFERENCES, or TRIGGER
   privileges on public-schema relations.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,

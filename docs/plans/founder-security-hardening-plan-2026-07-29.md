@@ -3,7 +3,7 @@
 **Status: REPOSITORY IMPLEMENTATION AND APPROVED EDGE ACTIVATION COMPLETE;
 FOUNDER/PROVIDER ACTIONS PENDING.**
 
-The three explicitly approved zero-cost production secrets and four separately
+The three explicitly approved zero-cost production secrets and five separately
 approved migrations were configured/applied on 2026-07-29. The separately
 approved 28-function founder/rate-limit activation was deployed and smoke-probed
 on the same date. Secret values were not recorded. No website, DNS, paid add-on,
@@ -28,14 +28,16 @@ Bootstrap security alerts will use the separately controlled
   `docs/security/july-13-audit-disposition-2026-07-29.md`.
 - Generated the current 78-function public-surface inventory, 103-name
   secret/config inventory, and live-checked all five Storage buckets.
-- Applied the four separately approved migrations through `20260824130000` and
+- Applied the five separately approved migrations through `20260824131000` and
   confirmed local/production migration parity.
 - Completed the signed-in, read-only Supabase dashboard review. The Free plan
-  has no scheduled backups. Security Advisor reports 2 errors and 171 warnings;
+  has no scheduled backups. Security Advisor initially reported 2 errors and
+  171 warnings;
   the two error-level views were absent from source control, and an anonymous
-  probe confirmed that `deal_stats` exposed 14 metric rows. A zero-cost
-  service-role-only remediation is staged as `20260824131000`, but it is not
-  applied without a new explicit production-migration approval.
+  probe confirmed that `deal_stats` exposed 14 metric rows. The separately
+  approved zero-cost `20260824131000` remediation is now live: both views are
+  security-invoker/service-role-only, both return 401 to anon, and Security
+  Advisor reports 0 errors and 171 warnings.
 - Deployed the separately approved 28-function activation batch. All targets
   advanced one version and remained active; `admin-business-name-requests` and
   `admin-reports` retained `verify_jwt = true`, while the other 26 retained
@@ -257,14 +259,16 @@ blast radius and were missing:
 - [ ] Inventory + revoke old Supabase personal access tokens; remove persistent prod CLI
       access from the daily-use machine when maintenance ends.
 - [ ] Close the Security Advisor/deep catalog gate. The signed-in review and
-      CLI advisor scan are complete: 2 errors and 171 warnings are recorded in
+      CLI advisor scan are complete: the initial 2 errors and 171 warnings are
+      recorded in
       `docs/security/supabase-security-advisor-snapshot-2026-07-29.json`.
       `public.deal_stats` was anonymously readable (14 rows) and both
-      error-level views were untracked production drift. Migration
-      `20260824131000_harden_legacy_reporting_views.sql` recreates both as
-      security-invoker/service-role-only views at $0, but remains unapplied
-      pending separate approval. After that, rerun Advisor and triage the 171
-      warnings by reachability before changing grants or Auth/Storage settings.
+      error-level views were untracked production drift. The separately
+      approved `20260824131000_harden_legacy_reporting_views.sql` now recreates
+      both as security-invoker/service-role-only views at $0. Post-apply probes
+      return 401 for both anon endpoints and Advisor reports 0 errors. Triage
+      the remaining 171 warnings by reachability before changing grants or
+      Auth/Storage settings.
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
       TRUNCATE/TRIGGER/REFERENCES privileges on public-schema relations.
 - [ ] **GoTrue hardening** (new in v2): leaked-password protection, auth rate limits,
@@ -376,8 +380,8 @@ purchase.
   deletions and the three reporting-view migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
-- The four separately approved migrations applied successfully; linked
-  migration parity now matches through `20260824130000`.
+- The five separately approved migrations applied successfully; linked
+  migration parity now matches through `20260824131000`.
 - The separately approved 28 Edge Functions deployed successfully. Every
   version advanced, all 28 report `ACTIVE`, the two JWT-enforced functions
   retained `verify_jwt = true`, and anonymous endpoint smoke checks passed.
@@ -390,13 +394,14 @@ purchase.
   exposed a pre-existing ambiguous `ON CONFLICT` reference in
   `check_business_location_trial_reuse`; neither was changed or applied as an
   unapproved fifth migration.
-- The read-only dashboard/CLI Advisor review recorded 2 errors and 171
+- The read-only dashboard/CLI Advisor review initially recorded 2 errors and 171
   warnings. Both errors were untracked SECURITY DEFINER reporting views; anon
   could read 14 rows from `deal_stats`. The three-test static gate for the
-  staged `20260824131000` service-role-only remediation passed. That migration
-  has not been applied. The deep catalog grant probe found zero unexpected
-  TRUNCATE, REFERENCES, or TRIGGER grants for `PUBLIC`, `anon`, or
-  `authenticated`.
+  `20260824131000` service-role-only remediation passed. The separately
+  approved migration is now applied, parity is confirmed, both anon probes
+  return 401, and Advisor reports 0 errors. The deep catalog grant probe found
+  zero unexpected TRUNCATE, REFERENCES, or TRIGGER grants for `PUBLIC`, anon,
+  or `authenticated`.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
@@ -406,5 +411,5 @@ purchase.
 - `git diff --check` — passed (line-ending notices only).
 - No website/DNS deploy, unrelated provider-console change, paid-plan
   activation, merge, or app release was performed. Production mutations were
-  limited to the separately approved three-secret configuration, four
+  limited to the separately approved three-secret configuration, five
   migrations, and 28 Edge Function deployments.
