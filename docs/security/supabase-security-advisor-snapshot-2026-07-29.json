@@ -164,15 +164,20 @@
     },
     "added_recurring_cost": "$0"
   },
-  "staged_nonpublic_function_anon_execute_migration": {
+  "post_nonpublic_function_anon_execute_migration_verification": {
     "migration": "20260824140000_revoke_nonpublic_function_anon_execute.sql",
-    "production_applied": false,
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 185,
     "functions_checked": 24,
-    "live_anon_catalog_executable": 24,
-    "preserves_authenticated_execute": true,
-    "preserves_service_role_execute": true,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 24,
+    "service_role_catalog_executable": 24,
+    "removed_anonymous_rpc_http_401": 24,
     "intentional_anonymous_functions_excluded": 7,
-    "expected_security_advisor": {
+    "intentional_anonymous_rpc_http_200": 7,
+    "trusted_read_only_rpc_http_200": 15,
+    "security_advisor": {
       "errors": 0,
       "warnings": 50,
       "authenticated_security_definer_function_executable": 41,
@@ -180,8 +185,7 @@
       "auth_leaked_password_protection": 1,
       "extension_in_public": 1
     },
-    "added_recurring_cost": "$0",
-    "requires_separate_production_approval": true
+    "added_recurring_cost": "$0"
   },
   "repository_drift": {
     "views_previously_tracked": false,

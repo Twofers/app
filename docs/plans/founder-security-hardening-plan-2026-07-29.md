@@ -3,7 +3,7 @@
 **Status: REPOSITORY IMPLEMENTATION AND APPROVED EDGE ACTIVATION COMPLETE;
 FOUNDER/PROVIDER ACTIONS PENDING.**
 
-The three explicitly approved zero-cost production secrets and nine separately
+The three explicitly approved zero-cost production secrets and ten separately
 approved migrations were configured/applied on 2026-07-29. The separately
 approved 28-function founder/rate-limit activation was deployed and smoke-probed
 on the same date. Secret values were not recorded. No website, DNS, paid add-on,
@@ -28,7 +28,7 @@ Bootstrap security alerts will use the separately controlled
   `docs/security/july-13-audit-disposition-2026-07-29.md`.
 - Generated the current 78-function public-surface inventory, 103-name
   secret/config inventory, and live-checked all five Storage buckets.
-- Applied the nine separately approved migrations through `20260824135000` and
+- Applied the ten separately approved migrations through `20260824140000` and
   confirmed local/production migration parity.
 - Completed the signed-in, read-only Supabase dashboard review. The Free plan
   has no scheduled backups. Security Advisor initially reported 2 errors and
@@ -308,12 +308,14 @@ blast radius and were missing:
       exact and Advisor now reports 0 errors and 74 warnings.
       The next live-catalog and policy audit classified 24 more functions as
       non-public while preserving authenticated/service-role use. Seven
-      functions required by anonymous policies or product flows are explicitly
-      excluded. Zero-cost migration `20260824140000` is staged with a
-      three-test gate to revoke only `PUBLIC`/`anon` execution. It changes no
-      bodies, signatures, data, or authenticated/service-role grants.
-      Production remains separately approval-gated; the expected Advisor
-      result is 0 errors and 50 warnings.
+      functions required by anonymous policies or product flows were explicitly
+      excluded. The separately approved zero-cost migration `20260824140000`
+      revoked only `PUBLIC`/`anon` execution. Catalog verification shows zero
+      anonymous execution and retained authenticated/service-role execution for
+      all 24; all 24 removed anon routes return HTTP 401, all seven intentional
+      public RPCs return HTTP 200, and 15 representative trusted read-only RPCs
+      return HTTP 200. Parity is exact and Advisor now reports 0 errors and 50
+      warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -429,8 +431,8 @@ purchase.
   service-role-only and non-public anonymous-execution migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
-- The nine separately approved migrations applied successfully; linked
-  migration parity now matches through `20260824135000`.
+- The ten separately approved migrations applied successfully; linked
+  migration parity now matches through `20260824140000`.
 - The separately approved 28 Edge Functions deployed successfully. Every
   version advanced, all 28 report `ACTIVE`, the two JWT-enforced functions
   retained `verify_jwt = true`, and anonymous endpoint smoke checks passed.
@@ -467,6 +469,11 @@ purchase.
   from 22 service-role-only functions. Catalog access is correct, all anon
   routes are denied, and 11 representative trusted read-only RPCs return HTTP
   200. Advisor dropped to 74 warnings with 0 errors.
+- The separately approved `20260824140000` migration removed anonymous
+  execution from 24 non-public functions while preserving authenticated and
+  service-role access. All 24 removed anon routes return HTTP 401, all seven
+  intentional public RPCs and 15 representative trusted read-only RPCs return
+  HTTP 200. Advisor dropped to 50 warnings with 0 errors.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret

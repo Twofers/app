@@ -2,14 +2,14 @@
 
 The initial production scan after migration `20260824131000` reported zero
 errors and 171 warnings. The separately approved migrations `20260824132000`
-through `20260824135000` reduced that to zero errors and 74 warnings. This
+through `20260824140000` reduced that to zero errors and 50 warnings. This
 ledger separates completed zero-cost fixes from warnings that need reachability
 analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
 | Authenticated users can execute SECURITY DEFINER function | 41 (was 76) | Thirteen trigger-only and 22 service-role-only findings were closed by separately approved migrations `20260824134000` and `20260824135000`. Remaining findings require individual classification because many are intentional authenticated RPCs or self-authorizing helpers. |
-| Public can execute SECURITY DEFINER function | 31 (was 66) | The same 35 inappropriate anonymous execution findings are closed. Twenty-four more functions are now classified as non-public; migration `20260824140000` is staged to revoke only their `PUBLIC`/`anon` grants. Seven required anonymous functions are excluded. If approved, this count should fall to 7. |
+| Public can execute SECURITY DEFINER function | 7 (was 66) | Fifty-nine inappropriate anonymous execution findings are closed. The separately approved `20260824140000` migration removed 24 non-public grants while preserving seven functions required by anonymous policies/product flows. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
 | Leaked password protection disabled | 1 | Deferred under the $0 bootstrap policy. Supabase documents this as Pro-only; Pro currently starts at $25/month. Revisit after revenue or a broader Pro-plan need justifies the subscription. |
@@ -100,13 +100,12 @@ intentionally anonymous because they support public deal content/share/search,
 public-business visibility, or the current public businesses policy.
 
 Zero-cost migration
-`20260824140000_revoke_nonpublic_function_anon_execute.sql` is staged with a
-three-test static gate. It revokes only `PUBLIC`/`anon` execution from the 24
-non-public functions and preserves authenticated/service-role execution,
-function bodies, signatures, and data. The production-baseline-only
-`location_cap_for_current_user()` ACL is corrected conditionally so clean
-environments without that drift remain deployable. Production application
-requires separate approval. Expected Advisor result is 0 errors and 50
+`20260824140000_revoke_nonpublic_function_anon_execute.sql` was separately
+approved/applied on 2026-07-29. Parity is exact through `20260824140000`.
+Catalog checks show zero anonymous execution and retained
+authenticated/service-role execution for all 24 functions. All 24 removed anon
+routes return HTTP 401; all seven intentional public RPCs and 15 representative
+trusted read-only RPCs return HTTP 200. Advisor reports 0 errors and 50
 warnings. Added recurring cost is $0.
 
 ## Paid warning disposition
