@@ -15,6 +15,44 @@ and that PITR supplies finer recovery granularity. Independent copies therefore
 remain required even if PITR is enabled:
 https://supabase.com/docs/guides/platform/backups
 
+## Current configuration — verified 2026-07-30
+
+Re-check any time with:
+
+```bash
+node scripts/security/verify-backup-destination.mjs            # read-only
+node scripts/security/verify-backup-destination.mjs --prove-lock  # writes a test object
+```
+
+| Setting | Value | Status |
+| --- | --- | --- |
+| `BACKUP_S3_BUCKET` | `Twofer` (private) | Object Lock **enabled**, no bucket default retention |
+| `BACKUP_S3_ENDPOINT_URL` | `https://s3.eu-central-003.backblazeb2.com` | |
+| `BACKUP_S3_REGION` | `eu-central-003` | |
+| `BACKUP_S3_ACCESS_KEY_ID` / `..._SECRET_ACCESS_KEY` | bucket-scoped B2 key | all six required capabilities present |
+| `BACKUP_AGE_RECIPIENT` | `age14h87sed9kx36vk2ufpyh6jr9uwflqvqnzr37f4u47pafncvfryxstt9qqz` | round-trip verified |
+| Lifecycle | `daily/` 10d, `monthly/` 100d, `verification/` 2d (each +1 to delete) | each window outlasts its own lock retention |
+
+**Immutability is proven, not assumed.** An object uploaded with COMPLIANCE
+retention read back as `mode: "compliance"` and could not be deleted, while a
+control object uploaded *without* retention deleted cleanly using the same key.
+The control is the point: B2 answers `access_denied` for permission failures
+too, so a bare refusal would prove nothing.
+
+The age identity (private key) lives outside this repository at
+`%USERPROFILE%\Documents\twofer-backup-age-identity.txt`, restricted to the
+owning user. **It exists in one place only until a second copy is made offline.**
+If it is lost, every backup encrypted to the recipient above is permanently
+unreadable — there is no recovery path by design.
+
+Still outstanding before the first run: the Supabase secrets
+(`BACKUP_SUPABASE_DB_URL`, `BACKUP_SUPABASE_SERVICE_ROLE_KEY`,
+`SUPABASE_URL`, `SUPABASE_PROJECT_REF`) and the
+`INDEPENDENT_BACKUP_ENABLED` repository variable.
+
+Two loose ends from setup: an unused second bucket `twoferapp`, and the first B2
+key, which lacked retention capabilities and should be revoked.
+
 ## Founder activation checklist
 
 1. Bootstrap budget decision (approved 2026-07-29): do not enable PITR while
@@ -27,12 +65,30 @@ https://supabase.com/docs/guides/platform/backups
    https://www.backblaze.com/cloud-storage/pricing
    https://www.backblaze.com/docs/cloud-storage-object-lock
 3. Create a backup-only B2 application key scoped only to the backup bucket.
-   It needs upload plus list/metadata-read access so the job can prove bucket
-   size and retention, but no delete, retention-management, or account-admin
-   capability. Create a separate content-read key for restore drills.
+   It needs exactly six capabilities:
+
+       listBuckets  listFiles  readFiles  writeFiles
+       readFileRetentions  writeFileRetentions
+
+   **The two retention capabilities are required, not forbidden.** An earlier
+   version of this checklist said the key should have no retention-management
+   capability; that is wrong and it produces a key that silently uploads
+   *unlocked* backups. `run-independent-backup.sh` calls
+   `put-object --object-lock-mode COMPLIANCE`, which needs
+   `writeFileRetentions`, and its `head-object` verification needs
+   `readFileRetentions`. Without them the upload is unprotected and the job
+   exits 4.
+
+   Ordering trap: B2 only grants retention capabilities for a bucket that
+   *already* has Object Lock enabled. Enable Object Lock on the bucket first,
+   then mint the key — a key created beforehand cannot be upgraded, because B2
+   keys are immutable.
+
+   `deleteFiles` is not needed; lifecycle rules delete server-side.
 4. Generate an age identity offline. Put only the public recipient in CI; keep
    the private identity in the founder vault and a second offline recovery
-   location.
+   location. Verify the pair round-trips (encrypt to the recipient, decrypt
+   with the identity) before any backup depends on it.
 5. Configure the workflow secrets named in
    `.github/workflows/independent-backup.yml`. Use credentials dedicated to
    backup. The backup and restore tools force libpq `PGSSLMODE=require`, so a
