@@ -22,7 +22,7 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 35 completed / 32 remaining (recounted directly from the
+**Checklist progress: 36 completed / 31 remaining (recounted directly from the
 checkboxes, 2026-07-30; earlier "29/35" and "34/32" figures in this file's history
 were estimates and were wrong).** Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
@@ -273,10 +273,38 @@ Cheap, do first; later phases depend on these lists being true.
       whose credentials a stolen Supabase account cannot revoke retroactively.
 - [x] `[DEV]` Back up every Storage bucket separately (DB backups exclude file bytes):
       all five live buckets are enumerated dynamically and checksummed.
-- [ ] `[DAN]` Create the **separate-provider, separate-account** free-tier
+- [x] `[DAN]` Create the **separate-provider, separate-account** free-tier
       Backblaze B2 destination with Compliance Object Lock and lifecycle
       expiry. Bootstrap retention is 7 daily / approximately 3 monthly, with a
       900 MB archive ceiling to stay below the free 10 GB allowance.
+      **Created and verified 2026-07-30.** Bucket `Twofer`, private, endpoint
+      `s3.eu-central-003.backblazeb2.com`. Verified with the new
+      `scripts/security/verify-backup-destination.mjs`:
+      - Object Lock **enabled**, no bucket default retention (the script sets
+        per-object retention itself).
+      - A bucket-scoped key holds all six capabilities the backup needs,
+        including `readFileRetentions` / `writeFileRetentions`.
+      - Lifecycle rules applied: `daily/` hide at 10 days, `monthly/` at 100,
+        `verification/` at 2, each +1 day to delete. Every window outlasts its
+        own lock retention (7 and 90 days), or lifecycle could not remove a
+        still-locked file.
+      - **Immutability proven, not assumed**: an object uploaded with
+        COMPLIANCE retention read back as `mode: "compliance"`, and deleting it
+        was refused. A control upload *without* retention deleted cleanly using
+        the same key, so the refusal is attributable to the lock rather than to
+        permissions.
+      Two follow-ups, neither blocking:
+      - The key still carries the console's broad preset (`deleteFiles`,
+        `writeBuckets`, `bypassGovernance`, `writeBucketLifecycleRules`). Not
+        fatal — COMPLIANCE retention cannot be bypassed by anyone, so a stolen
+        key still cannot destroy a locked backup. Trimming to the six needed
+        capabilities requires minting the key through the API.
+      - **"Separate-account" is only partly satisfied.** It is a separate
+        provider, but the B2 account is `unvmex2`. If its login, password, or
+        recovery address overlaps the founder Google/Supabase identity, a single
+        identity compromise still reaches the backups, which is the isolation
+        this item exists to create. Confirm the account has its own password and
+        MFA and a recovery address that is not `twoferapp.com`.
 - [x] `[DEV]` Config inventory backup tooling: Auth settings, bucket config,
       cron jobs, webhooks, DNS zone export, deployed function versions, **and** the
       Phase-0 secrets inventory.
