@@ -316,6 +316,14 @@ blast radius and were missing:
       public RPCs return HTTP 200, and 15 representative trusted read-only RPCs
       return HTTP 200. Parity is exact and Advisor now reports 0 errors and 50
       warnings.
+      Six remaining authenticated findings are internal helpers reached only by
+      one `pg_cron` job, trusted service-role Edge code, or internal
+      `SECURITY DEFINER` trigger functions. They have no authenticated policy
+      dependency or mobile/website caller. Zero-cost migration
+      `20260824141000` is staged with a three-test gate to remove direct client
+      execution while preserving service-role/internal paths, bodies,
+      signatures, jobs, triggers, and data. Production remains separately
+      approval-gated; the expected Advisor result is 0 errors and 44 warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -424,11 +432,12 @@ purchase.
 - `npm run check:website-supabase` — passed.
 - `npm run check:website-ui` — passed after updating the dashboard bootstrap and crawler
   mocks for the sealed-cookie admin session.
-- `npm test -- --run` — all 307 files / 2,147 tests passed, including the
+- `npm test -- --run` — all 308 files / 2,150 tests passed, including the
   updated AI-poster lock after the explicitly approved instruction-file
   deletions, the reporting-view checks, and the four bucket-listing migration
   checks, plus the function search-path, trigger-execution, and
-  service-role-only and non-public anonymous-execution migration checks.
+  service-role-only, non-public anonymous-execution, and internal-helper
+  execution migration checks.
 - Workflow and Dependabot YAML parsed successfully; no GitHub Action uses a floating
   `v*`, `main`, `master`, or `latest` reference.
 - The ten separately approved migrations applied successfully; linked

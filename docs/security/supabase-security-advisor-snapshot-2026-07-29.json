@@ -187,6 +187,31 @@
     },
     "added_recurring_cost": "$0"
   },
+  "staged_internal_helper_client_execute_migration": {
+    "migration": "20260824141000_revoke_internal_helper_client_execute.sql",
+    "production_applied": false,
+    "functions_checked": 6,
+    "live_anon_catalog_executable": 0,
+    "live_authenticated_catalog_executable": 6,
+    "live_service_role_catalog_executable": 6,
+    "authenticated_policy_dependencies": 0,
+    "mobile_or_website_callers": 0,
+    "trusted_dependency_types": [
+      "pg_cron",
+      "service_role_edge",
+      "internal_security_definer_function"
+    ],
+    "expected_security_advisor": {
+      "errors": 0,
+      "warnings": 44,
+      "authenticated_security_definer_function_executable": 35,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0",
+    "requires_separate_production_approval": true
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",

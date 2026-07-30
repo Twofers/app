@@ -8,7 +8,7 @@ analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
-| Authenticated users can execute SECURITY DEFINER function | 41 (was 76) | Thirteen trigger-only and 22 service-role-only findings were closed by separately approved migrations `20260824134000` and `20260824135000`. Remaining findings require individual classification because many are intentional authenticated RPCs or self-authorizing helpers. |
+| Authenticated users can execute SECURITY DEFINER function | 41 (was 76) | Thirteen trigger-only and 22 service-role-only findings were closed by separately approved migrations `20260824134000` and `20260824135000`. Six more are internal helpers with only cron, service-role Edge, or internal trigger callers; migration `20260824141000` is staged to remove their direct client grants. If approved, this count should fall to 35. |
 | Public can execute SECURITY DEFINER function | 7 (was 66) | Fifty-nine inappropriate anonymous execution findings are closed. The separately approved `20260824140000` migration removed 24 non-public grants while preserving seven functions required by anonymous policies/product flows. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
@@ -107,6 +107,23 @@ authenticated/service-role execution for all 24 functions. All 24 removed anon
 routes return HTTP 401; all seven intentional public RPCs and 15 representative
 trusted read-only RPCs return HTTP 200. Advisor reports 0 errors and 50
 warnings. Added recurring cost is $0.
+
+## Internal helper authenticated execution evidence
+
+Six remaining authenticated findings have no authenticated policy dependency
+or mobile/website caller. Live dependencies are limited to the
+`cleanup_stale_push_tokens_weekly` cron job, trusted service-role use from
+`ai-generate-ad-variants`, and internal SECURITY DEFINER trigger functions.
+All six retain service-role execution in the live catalog.
+
+Zero-cost migration
+`20260824141000_revoke_internal_helper_client_execute.sql` is staged with a
+three-test static gate. It removes direct `PUBLIC`, `anon`, and
+`authenticated` execution from only those six helpers while preserving
+service-role/internal execution, function bodies, signatures, cron jobs,
+trigger bindings, and data. Production application requires separate approval.
+Expected Advisor result is 0 errors and 44 warnings. Added recurring cost is
+$0.
 
 ## Paid warning disposition
 

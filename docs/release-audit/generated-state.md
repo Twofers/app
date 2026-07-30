@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `185`
-- Latest: `20260824140000_revoke_nonpublic_function_anon_execute.sql`
+- Count: `186`
+- Latest: `20260824141000_revoke_internal_helper_client_execute.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 
