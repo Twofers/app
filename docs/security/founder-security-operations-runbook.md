@@ -56,8 +56,10 @@ RPCs.
   backups. The bootstrap decision defers paid PITR while a 24-hour recovery
   point is acceptable; use the free-tier immutable path in
   `backup-and-restore-runbook.md`.
-- Enable SSL enforcement in a test project, validate every database client, then
-  separately approve production:
+- SSL enforcement is enabled on the separate `twofer testing` project
+  (`zsuzrerdailvylccqtds`) and it returned to `ACTIVE_HEALTHY`. Validate every
+  direct test-database client, then separately approve production; production
+  was inspected after the test change and remains unchanged:
   https://supabase.com/docs/guides/platform/ssl-enforcement
 - Restrict direct Postgres and pooler routes to the static VPN/admin and backup
   runner IP/CIDR set. Include both IPv4 and IPv6 where applicable:

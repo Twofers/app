@@ -258,7 +258,11 @@ blast radius and were missing:
 
 ## Phase 4 — Supabase control plane `[DEV builds, DAN approves each prod change]`
 
-- [ ] Enable SSL enforcement (test project first).
+- [x] Enable SSL enforcement on the separate `twofer testing` project
+      (`zsuzrerdailvylccqtds`). The dashboard confirms the setting is checked
+      and the project returned to `ACTIVE_HEALTHY`; production was not changed.
+- [ ] Validate every direct test-database client, then separately approve
+      production SSL enforcement.
 - [ ] Restrict direct Postgres/pooler access to a trusted static VPN/IP + the backup
       runner. (HTTPS APIs and Edge Functions are unaffected.)
 - [ ] Rotate the DB password after restrictions verified.
@@ -505,15 +509,16 @@ purchase.
   execution from `user_owns_business_location`. Its anon RPC route returns
   HTTP 401 while the service-role RPC returns HTTP 200. Advisor dropped to 43
   warnings with 0 errors.
-- Before hosted SSL enforcement is tested, the independent backup, disposable
-  restore, and release-catalog tools now force libpq `PGSSLMODE=require`.
+- Before hosted SSL enforcement was tested, the independent backup, disposable
+  restore, and release-catalog tools were changed to force libpq `PGSSLMODE=require`.
   Their focused source test passed, the release-gate workflow parsed, and both
-  shell scripts passed syntax validation. This changes no Supabase project
-  setting; test-project enforcement remains an explicit approval point.
+  shell scripts passed syntax validation.
 - Read-only dashboard inspection of the separate `twofer testing` project
-  (`zsuzrerdailvylccqtds`) confirms SSL enforcement is currently off and its
-  direct database access is open to all IP addresses. It is healthy and not
-  the linked production project; the SSL test can therefore be isolated there.
+  (`zsuzrerdailvylccqtds`) first confirmed SSL enforcement was off and its
+  direct database access open to all IP addresses. After the separately
+  approved test-only restart, the dashboard confirms SSL enforcement is on and
+  the project is `ACTIVE_HEALTHY`. The linked production project was inspected
+  separately and no production setting was modified.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
