@@ -22,13 +22,14 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 34 completed / 33 remaining (recounted directly from the
-checkboxes, 2026-07-29 second pass; earlier "29/35" and "34/32" figures in this
-file's history were estimates and were wrong).** See "Why this plan cannot reach
-100% from the repository" below for the item-by-item gate audit: 20 of the 33 need
-a founder provider credential, and the rest need a provider account that does not
-exist yet, a production write approval, a founder decision, or a deferred cost
-approval. The database migrations, Edge Function activation, admin-session code
+**Checklist progress: 35 completed / 32 remaining (recounted directly from the
+checkboxes, 2026-07-30; earlier "29/35" and "34/32" figures in this file's history
+were estimates and were wrong).** Both staged migrations were applied to
+production on 2026-07-30, closing the `business_locations` item. See "Why this
+plan cannot reach 100% from the repository" below for the item-by-item gate audit:
+20 of the remaining 32 need a founder provider credential, and the rest need a
+provider account that does not exist yet, a production approval, a founder
+decision, or a deferred cost approval. The database migrations, Edge Function activation, admin-session code
 hardening, test-project SSL enforcement, direct-client TLS validation,
 authenticated RLS/cross-tenant probes, the named Advisor reachability triage, the
 GoTrue change specification, and the takeover-exercise worksheet are complete.
@@ -55,7 +56,7 @@ exactly one of five gates, none of which a developer can open:
 | --- | ---: | --- |
 | Founder provider credential or console change | 20 | Phase 2's nine provider MFA/recovery/spend items; the admin subdomain behind Cloudflare Access; `main` protection, the staged GitHub controls, the GitHub token, Vercel promotion/alerts, DNS/DNSSEC/DMARC; Supabase PAT revocation; BitLocker, local secret vaulting, password manager; diagnosing the founder hotmail identity. The developer must never hold these credentials. |
 | A provider resource that does not exist yet | 6 | The separate free-tier B2 account, the populated secrets-values vault, the EAS credential export, and the disposable Supabase project. Without them there is no backup object to verify and no restore target, so the drill, the RPO/RTO targets, and the takeover exercise cannot run — only their tooling and worksheets exist. |
-| Production write approval | 3 | `supabase db push` for the two staged migrations (which also closes the Advisor gate at 40 warnings), plus DB password rotation. |
+| Production write approval | 2 | DB password rotation, and the Advisor gate's remaining sub-parts. The two staged migrations were **applied 2026-07-30**. |
 | Founder decision, not work | 3 | Repo public/private; `demo@demo.com`'s fate; whether to accept option 2 for IP restriction. (`validate_business_invite` is a sub-decision inside the Advisor gate.) |
 | Deferred on cost, by standing policy | 1 | Pointing the app/website at `api.twoferapp.com`, which was never purchased. PITR, leaked-password protection, and static egress are recorded as deferrals inside other items rather than as separate boxes. |
 
@@ -71,36 +72,33 @@ Two consequences worth stating plainly rather than leaving implicit:
   because the custom hostname was deliberately not purchased. It should read as
   deferred, not pending.
 
-### Do not push this branch before the `business_locations` migration is applied
+### The push hold is now released — 2026-07-30
 
-`Twofers/app` is **public** (reconfirmed from
-`docs/security/github-control-plane-snapshot-2026-07-29.json`: `visibility:
-public`, no `main` protection, no rulesets). The commits on
-`codex/founder-security-hardening` name a confirmed, currently unpatched
-cross-tenant exposure, its exact policy name, and how to reproduce it. Pushing
-them to a public repository before `20260824143000` is applied would publish a
-working description of a live vulnerability.
+`Twofers/app` is **public** with no `main` protection
+(`docs/security/github-control-plane-snapshot-2026-07-29.json`), so this branch
+was deliberately held unpushed while it described an unpatched exposure. Both
+migrations are now applied, so the hold no longer applies and the Phase-0
+invariant *deployed == committed == pushed* should be restored by pushing
+`codex/founder-security-hardening`.
 
-This collides with the Phase-0 invariant *deployed == committed == pushed*. The
-invariant exists so that work cannot be lost, and it is right — but responsible
-sequencing wins here, so the order is:
+Until it is pushed, this work exists only on the founder machine and is not
+protected against disk loss. Note the residual disclosure consideration: the
+branch still documents the exposure in detail, and while the fix is applied, the
+production-side confirmation above is inference rather than measurement. Making
+the repository private — a Phase 6 decision that is already outstanding — removes
+the question entirely.
 
-1. Apply `20260824143000` (and `20260824144000`) to production.
-2. Verify the exposure is closed.
-3. Then push the branch.
+### Applied to production — 2026-07-30
 
-Until step 1 happens, this work exists only on the founder machine and is
-therefore **not protected against disk loss**. That is a real, accepted,
-temporary risk — not an oversight. Making the repository private (a Phase 6
-decision that is already outstanding) would remove the conflict entirely and let
-the invariant hold immediately.
-
-### Staged and waiting on a single approval each
-
-| Migration | Effect | Cost |
+| Change | Effect | Verified |
 | --- | --- | --- |
-| `20260824143000_remove_pilot_business_location_read_policy.sql` | Closes a confirmed cross-tenant read exposure by dropping one untracked pilot policy | $0 |
-| `20260824144000_revoke_nested_definer_helper_client_execute.sql` | Removes client EXECUTE from three definer-only helpers; 43 Advisor warnings → 40 | $0 |
+| `20260824143000_remove_pilot_business_location_read_policy.sql` | Drops the untracked pilot policy behind the cross-tenant read exposure | Parity exact; anon reads still `[]`; public catalog intact. **Whether the policy was present in production is still unconfirmed** — the drop was `IF EXISTS` |
+| `20260824144000_revoke_nested_definer_helper_client_execute.sql` | Removes client EXECUTE from three definer-only helpers | All three now 401/`42501` to anon; wrappers and public RPCs still 200; edge functions healthy. The `authenticated` half and the 40-warning Advisor count remain unverified |
+
+### Still staged, waiting on approval
+
+| Change | Effect | Cost |
+| --- | --- | --- |
 | `BACKUP_DB_ROOT_CERT_PEM` repository secret | Moves direct database connections from encrypted-only to authenticated | $0 |
 
 ### Important cost deferrals
@@ -485,6 +483,24 @@ blast radius and were missing:
       service-role execution; the anonymous RPC route returns HTTP 401 and the
       service-role RPC returns HTTP 200. Parity is exact and Advisor now
       reports 0 errors and 43 warnings.
+      **Migration `20260824144000` applied to production 2026-07-30**, removing
+      client execution from `admin_role()`, `business_member_role(uuid)`, and
+      `get_runtime_billing_config()`. Post-apply verification: all three return
+      HTTP 401 / `42501 permission denied for function` to anon, while the
+      client-facing wrappers and public RPCs still return HTTP 200
+      (`is_publicly_visible_business`, `public_local_businesses`,
+      `customer_deal_poster_specs`, `customer_deal_localizations`), `gate:rls`
+      reports no exposure, and all seven probed Edge Functions are healthy.
+      Two verification gaps stay open, both needing something founder-held:
+      (a) the `authenticated`-role half of the revoke is untested, because anon
+      execution on these three was already removed by `20260824140000` and there
+      is no working authenticated production identity to test with; and (b) the
+      Advisor count is expected to read 40 warnings but that requires a signed-in
+      dashboard to confirm.
+      Still open inside this gate: the two unnamed function findings (they belong
+      to functions the test project has not received), the
+      `validate_business_invite` product decision, and leaked-password
+      protection.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
@@ -528,7 +544,23 @@ blast radius and were missing:
       `businesses` column-grant model (`20260820121000`) and on a fixture that
       predated the profile-edit capability gate (`20260817120000`), not on
       security defects. **One real defect confirmed — see the next item.**
-- [ ] **Cross-tenant read exposure on `business_locations`** (found 2026-07-29):
+- [x] **Cross-tenant read exposure on `business_locations`** (found 2026-07-29;
+      migration **applied to production 2026-07-30**). Post-apply verification:
+      migration parity is exact through `20260824144000`; anon reads of
+      `business_locations` still return `[]`; the public `businesses` catalog
+      still returns rows; `gate:rls` reports no anon data exposure; all seven
+      probed Edge Functions are healthy.
+      **One thing remains genuinely unverified, and it is the important one.**
+      The migration is `DROP POLICY IF EXISTS`, so it either dropped the pilot
+      policy or was a no-op — and there is still no way from here to tell which,
+      because confirming it needs production SQL access (founder-held password)
+      or a working authenticated production identity. The exposure was proved in
+      the test project, and the fix is proved correct there by construction, but
+      "production is now clean" is inference, not measurement. Close it during the
+      next founder dashboard session by running, in the SQL editor:
+      `select policyname from pg_policies where schemaname='public' and tablename='business_locations';`
+      and confirming `Auth users can read business locations (pilot)` is absent.
+      Original finding follows.
       an untracked pilot-era policy `"Auth users can read business locations
       (pilot)"` — `FOR SELECT TO public USING (auth.uid() IS NOT NULL)` — exists
       in the live catalog and in no migration in this repository. Permissive
