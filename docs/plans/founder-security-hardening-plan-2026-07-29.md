@@ -327,6 +327,14 @@ blast radius and were missing:
       active, all four dependent triggers remain enabled, all six anon routes
       are denied, and four representative trusted read-only RPCs return HTTP
       200. Parity is exact and Advisor now reports 0 errors and 44 warnings.
+      One remaining authenticated finding, `user_owns_business_location`,
+      accepts an explicit user ID but has no direct mobile/website or RLS-policy
+      caller. Its only callers are four trusted service-role billing Edge
+      functions and `get_location_billing_summary`. Zero-cost migration
+      `20260824142000` is staged with a two-test gate to remove direct client
+      execution while preserving service-role and nested-definer use, bodies,
+      signatures, and data. Production remains separately approval-gated; the
+      expected Advisor result is 0 errors and 43 warnings.
       Leaked-password protection is explicitly deferred because it requires
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no

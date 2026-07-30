@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 186,
-    "latest": "20260824141000_revoke_internal_helper_client_execute.sql"
+    "count": 187,
+    "latest": "20260824142000_revoke_location_ownership_helper_client_execute.sql"
   },
   "edgeFunctions": {
     "count": 81,

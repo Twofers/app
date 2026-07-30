@@ -210,6 +210,28 @@
     },
     "added_recurring_cost": "$0"
   },
+  "staged_location_ownership_helper_client_execute_migration": {
+    "migration": "20260824142000_revoke_location_ownership_helper_client_execute.sql",
+    "production_applied": false,
+    "functions_checked": 1,
+    "live_anon_catalog_executable": 0,
+    "live_authenticated_catalog_executable": 1,
+    "live_service_role_catalog_executable": 1,
+    "authenticated_policy_dependencies": 0,
+    "mobile_or_website_callers": 0,
+    "trusted_service_role_edge_callers": 4,
+    "nested_definer_callers": 1,
+    "expected_security_advisor": {
+      "errors": 0,
+      "warnings": 43,
+      "authenticated_security_definer_function_executable": 34,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0",
+    "requires_separate_production_approval": true
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",

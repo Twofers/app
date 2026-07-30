@@ -112,6 +112,14 @@ RPCs.
   four dependent triggers remain enabled, all six anon routes are denied, four
   representative trusted read-only RPCs return HTTP 200, and Advisor reports
   0 errors and 44 warnings.
+- Migration `20260824142000_revoke_location_ownership_helper_client_execute.sql`
+  is staged but not applied. It removes direct client execution from
+  `user_owns_business_location(uuid, uuid)`, which accepts an explicit user ID
+  and is otherwise reached only by trusted service-role billing flows or
+  `get_location_billing_summary`. It preserves service-role/nested-definer
+  execution, function behavior, signatures, and data. Added recurring cost is
+  $0 and production application requires separate founder approval. Expected
+  Advisor result: 0 errors and 43 warnings.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,

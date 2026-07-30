@@ -8,7 +8,7 @@ analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
-| Authenticated users can execute SECURITY DEFINER function | 35 (was 76) | Thirteen trigger-only, 22 service-role-only, and six internal-helper findings are closed by separately approved migrations `20260824134000`, `20260824135000`, and `20260824141000`. Remaining findings require individual classification because many are intentional authenticated RPCs or self-authorizing helpers. |
+| Authenticated users can execute SECURITY DEFINER function | 35 (was 76) | Thirteen trigger-only, 22 service-role-only, and six internal-helper findings are closed by separately approved migrations `20260824134000`, `20260824135000`, and `20260824141000`. The remaining `user_owns_business_location` helper has only service-role/nested-definer callers; migration `20260824142000` is staged to remove its direct client grant. If approved, this count should fall to 34. |
 | Public can execute SECURITY DEFINER function | 7 (was 66) | Fifty-nine inappropriate anonymous execution findings are closed. The separately approved `20260824140000` migration removed 24 non-public grants while preserving seven functions required by anonymous policies/product flows. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
@@ -124,6 +124,24 @@ for all six helpers. The cleanup cron job remains active, all four dependent
 triggers remain enabled, all six anon routes are denied, and four
 representative trusted read-only RPCs return HTTP 200. Advisor reports 0
 errors and 44 warnings. Added recurring cost is $0.
+
+## Location ownership helper execution evidence
+
+`user_owns_business_location(uuid, uuid)` accepts an explicit user ID, so a
+direct authenticated call could reveal whether a user owns a location. Live
+policy inspection found no RLS dependency; repository search found no
+mobile/website caller. Its only callers are four authenticated Edge billing
+flows that use a separate service-role client and the nested
+`get_location_billing_summary` helper. The live catalog confirms service-role
+execution.
+
+Zero-cost migration
+`20260824142000_revoke_location_ownership_helper_client_execute.sql` is staged
+with a two-test static gate. It removes only `PUBLIC`, `anon`, and
+`authenticated` execution while preserving service-role/nested-definer use,
+the function body, signature, and data. Production application requires
+separate approval. Expected Advisor result is 0 errors and 43 warnings. Added
+recurring cost is $0.
 
 ## Paid warning disposition
 
