@@ -2,13 +2,13 @@
 
 The initial production scan after migration `20260824131000` reported zero
 errors and 171 warnings. The separately approved migrations `20260824132000`
-through `20260824141000` reduced that to zero errors and 44 warnings. This
+through `20260824142000` reduced that to zero errors and 43 warnings. This
 ledger separates completed zero-cost fixes from warnings that need reachability
 analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
-| Authenticated users can execute SECURITY DEFINER function | 35 (was 76) | Thirteen trigger-only, 22 service-role-only, and six internal-helper findings are closed by separately approved migrations `20260824134000`, `20260824135000`, and `20260824141000`. The remaining `user_owns_business_location` helper has only service-role/nested-definer callers; migration `20260824142000` is staged to remove its direct client grant. If approved, this count should fall to 34. |
+| Authenticated users can execute SECURITY DEFINER function | 34 (was 76) | Thirteen trigger-only, 22 service-role-only, six internal-helper, and one location-ownership-helper finding are closed by separately approved migrations `20260824134000`, `20260824135000`, `20260824141000`, and `20260824142000`. Remaining findings are intentional authenticated RPCs, public-flow helpers, or self-authorizing policy functions. |
 | Public can execute SECURITY DEFINER function | 7 (was 66) | Fifty-nine inappropriate anonymous execution findings are closed. The separately approved `20260824140000` migration removed 24 non-public grants while preserving seven functions required by anonymous policies/product flows. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
@@ -136,11 +136,11 @@ flows that use a separate service-role client and the nested
 execution.
 
 Zero-cost migration
-`20260824142000_revoke_location_ownership_helper_client_execute.sql` is staged
-with a two-test static gate. It removes only `PUBLIC`, `anon`, and
-`authenticated` execution while preserving service-role/nested-definer use,
-the function body, signature, and data. Production application requires
-separate approval. Expected Advisor result is 0 errors and 43 warnings. Added
+`20260824142000_revoke_location_ownership_helper_client_execute.sql` was
+separately approved/applied on 2026-07-29. Parity is exact through
+`20260824142000`. Catalog checks show zero client execution and retained
+service-role execution. Its anon RPC route returns HTTP 401, its service-role
+RPC returns HTTP 200, and Advisor reports 0 errors and 43 warnings. Added
 recurring cost is $0.
 
 ## Paid warning disposition
