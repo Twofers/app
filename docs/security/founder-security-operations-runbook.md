@@ -106,12 +106,12 @@ RPCs.
   representative trusted read-only RPCs return HTTP 200, and Advisor reports
   0 errors and 50 warnings.
 - Migration `20260824141000_revoke_internal_helper_client_execute.sql` is
-  staged but not applied. It removes direct client execution from six helpers
-  reached only by one scheduled cleanup job, trusted service-role Edge code,
-  or internal trigger functions. It preserves service-role/internal execution,
-  jobs, triggers, bodies, signatures, and data. Added recurring cost is $0 and
-  production application requires separate founder approval. Expected Advisor
-  result: 0 errors and 44 warnings.
+  separately approved/applied at $0 added recurring cost. Parity is exact
+  through `20260824141000`; all six helpers have zero client execution and
+  retained service-role execution. The cleanup cron job remains active, all
+  four dependent triggers remain enabled, all six anon routes are denied, four
+  representative trusted read-only RPCs return HTTP 200, and Advisor reports
+  0 errors and 44 warnings.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,
