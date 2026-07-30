@@ -505,6 +505,11 @@ purchase.
   execution from `user_owns_business_location`. Its anon RPC route returns
   HTTP 401 while the service-role RPC returns HTTP 200. Advisor dropped to 43
   warnings with 0 errors.
+- Before hosted SSL enforcement is tested, the independent backup, disposable
+  restore, and release-catalog tools now force libpq `PGSSLMODE=require`.
+  Their focused source test passed, the release-gate workflow parsed, and both
+  shell scripts passed syntax validation. This changes no Supabase project
+  setting; test-project enforcement remains an explicit approval point.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
