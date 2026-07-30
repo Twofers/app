@@ -93,12 +93,11 @@ RPCs.
   zero, all 13 anon RPC routes return HTTP 404, and Advisor reports 0 errors
   and 118 warnings.
 - Migration `20260824135000_revoke_service_role_function_client_execute.sql`
-  is staged but not applied. It revokes direct client execution from 22
-  functions whose repository contracts and callers are service-role-only.
-  Added recurring cost is $0 and production application requires separate
-  founder approval. After approval, confirm parity, zero client execution,
-  retained service-role execution, trusted Edge/cron path health, and an
-  expected Advisor count of 74 warnings.
+  was separately approved/applied at $0 added recurring cost. Parity is exact
+  through `20260824135000`; all 22 functions have zero client execution and
+  retained service-role execution. All 22 anon routes are denied, 11
+  representative trusted read-only RPCs return HTTP 200, and Advisor reports
+  0 errors and 74 warnings.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,

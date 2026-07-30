@@ -1,16 +1,15 @@
 # Supabase Security Advisor warning triage — 2026-07-29
 
 The initial production scan after migration `20260824131000` reported zero
-errors and 171 warnings. The separately approved migrations `20260824132000`,
-`20260824133000`, and `20260824134000` reduced that to zero errors and 118
-warnings. This ledger separates completed zero-cost fixes from warnings that
-need reachability analysis or a paid plan. It does not authorize any further
-production change.
+errors and 171 warnings. The separately approved migrations `20260824132000`
+through `20260824135000` reduced that to zero errors and 74 warnings. This
+ledger separates completed zero-cost fixes from warnings that need reachability
+analysis or a paid plan. It does not authorize any further production change.
 
 | Rule | Count | Current disposition |
 |---|---:|---|
-| Authenticated users can execute SECURITY DEFINER function | 63 (was 76) | Thirteen trigger-only findings were closed by separately approved migration `20260824134000`. Twenty-two more functions have explicit service-role-only repository contracts; migration `20260824135000` is staged to remove their live client-grant drift. If approved, this count should fall to 41. |
-| Public can execute SECURITY DEFINER function | 53 (was 66) | The same 22 service-role-only functions are anonymously executable in production despite trusted-only callers and repository grant tests. Migration `20260824135000` is staged to close them. If approved, this count should fall to 31. |
+| Authenticated users can execute SECURITY DEFINER function | 41 (was 76) | Thirteen trigger-only and 22 service-role-only findings were closed by separately approved migrations `20260824134000` and `20260824135000`. Remaining findings require individual classification because many are intentional authenticated RPCs or self-authorizing helpers. |
+| Public can execute SECURITY DEFINER function | 31 (was 66) | The same 35 inappropriate anonymous execution findings are closed. Remaining functions require individual public-RPC versus authenticated/internal classification. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
 | Leaked password protection disabled | 1 | Deferred under the $0 bootstrap policy. Supabase documents this as Pro-only; Pro currently starts at $25/month. Revisit after revenue or a broader Pro-plan need justifies the subscription. |
@@ -85,12 +84,12 @@ no direct mobile/website client caller. The live catalog nevertheless grants
 both `anon` and `authenticated` execution on every one.
 
 Zero-cost migration
-`20260824135000_revoke_service_role_function_client_execute.sql` is staged
-with a two-test static gate. It only revokes `PUBLIC`, `anon`, and
-`authenticated` execution while preserving service-role access, function
-bodies, signatures, and data. Production remains separately approval-gated.
-Expected Advisor result after application is 0 errors and 74 warnings, down
-from 118.
+`20260824135000_revoke_service_role_function_client_execute.sql` was separately
+approved/applied on 2026-07-29. Parity is exact through `20260824135000`.
+Catalog checks show zero `anon`/`authenticated` execution and retained
+service-role execution for all 22 functions. All 22 anon routes are denied
+(HTTP 401 or 404), while 11 representative read-only trusted RPCs return HTTP
+200. Advisor reports 0 errors and 74 warnings. Added recurring cost is $0.
 
 ## Paid warning disposition
 
