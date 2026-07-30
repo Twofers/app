@@ -92,7 +92,7 @@ the question entirely.
 
 | Change | Effect | Verified |
 | --- | --- | --- |
-| `20260824143000_remove_pilot_business_location_read_policy.sql` | Drops the untracked pilot policy behind the cross-tenant read exposure | Parity exact; anon reads still `[]`; public catalog intact. **Whether the policy was present in production is still unconfirmed** — the drop was `IF EXISTS` |
+| `20260824143000_remove_pilot_business_location_read_policy.sql` | Drops the untracked pilot policy behind the cross-tenant read exposure | **Confirmed closed.** Founder's `pg_policies` query returns exactly the five expected owner/redeemer policies; the pilot policy is absent. Parity exact; anon reads still `[]`; public catalog intact |
 | `20260824144000_revoke_nested_definer_helper_client_execute.sql` | Removes client EXECUTE from three definer-only helpers | All three now 401/`42501` to anon; wrappers and public RPCs still 200; edge functions healthy. The `authenticated` half and the 40-warning Advisor count remain unverified |
 
 ### Still staged, waiting on approval
@@ -550,16 +550,19 @@ blast radius and were missing:
       `business_locations` still return `[]`; the public `businesses` catalog
       still returns rows; `gate:rls` reports no anon data exposure; all seven
       probed Edge Functions are healthy.
-      **One thing remains genuinely unverified, and it is the important one.**
-      The migration is `DROP POLICY IF EXISTS`, so it either dropped the pilot
-      policy or was a no-op — and there is still no way from here to tell which,
-      because confirming it needs production SQL access (founder-held password)
-      or a working authenticated production identity. The exposure was proved in
-      the test project, and the fix is proved correct there by construction, but
-      "production is now clean" is inference, not measurement. Close it during the
-      next founder dashboard session by running, in the SQL editor:
-      `select policyname from pg_policies where schemaname='public' and tablename='business_locations';`
-      and confirming `Auth users can read business locations (pilot)` is absent.
+      **Production confirmed clean 2026-07-30** (founder ran the check in the
+      dashboard SQL editor). `pg_policies` for `public.business_locations` now
+      returns exactly five policies — `Owners can read/insert/update/delete their
+      business locations` and `redeemer_business_locations_block_all`. The pilot
+      policy `Auth users can read business locations (pilot)` is **absent**, and
+      the owner-scoped set is intact, so nothing was collaterally dropped. The
+      cross-tenant read path is closed.
+      One epistemic footnote, since the drop was `IF EXISTS`: this measurement is
+      post-drop, so it proves production is clean now but cannot retroactively
+      prove the policy was present before. The exposure was measured directly in
+      the test project; production carried the same untracked lineage. Treat the
+      production exposure as having been real and now fixed, while noting the
+      pre-state was never captured.
       Original finding follows.
       an untracked pilot-era policy `"Auth users can read business locations
       (pilot)"` — `FOR SELECT TO public USING (auth.uid() IS NOT NULL)` — exists
