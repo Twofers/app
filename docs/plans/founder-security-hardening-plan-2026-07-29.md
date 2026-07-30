@@ -71,6 +71,30 @@ Two consequences worth stating plainly rather than leaving implicit:
   because the custom hostname was deliberately not purchased. It should read as
   deferred, not pending.
 
+### Do not push this branch before the `business_locations` migration is applied
+
+`Twofers/app` is **public** (reconfirmed from
+`docs/security/github-control-plane-snapshot-2026-07-29.json`: `visibility:
+public`, no `main` protection, no rulesets). The commits on
+`codex/founder-security-hardening` name a confirmed, currently unpatched
+cross-tenant exposure, its exact policy name, and how to reproduce it. Pushing
+them to a public repository before `20260824143000` is applied would publish a
+working description of a live vulnerability.
+
+This collides with the Phase-0 invariant *deployed == committed == pushed*. The
+invariant exists so that work cannot be lost, and it is right — but responsible
+sequencing wins here, so the order is:
+
+1. Apply `20260824143000` (and `20260824144000`) to production.
+2. Verify the exposure is closed.
+3. Then push the branch.
+
+Until step 1 happens, this work exists only on the founder machine and is
+therefore **not protected against disk loss**. That is a real, accepted,
+temporary risk — not an oversight. Making the repository private (a Phase 6
+decision that is already outstanding) would remove the conflict entirely and let
+the invariant hold immediately.
+
 ### Staged and waiting on a single approval each
 
 | Migration | Effect | Cost |
