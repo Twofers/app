@@ -20,6 +20,32 @@ be enabled without a new explicit cost approval.
 Bootstrap security alerts will use the separately controlled
 `unvmex2@hotmail.com` mailbox, as selected by Dan.
 
+## What remains (plain-English status, updated 2026-07-29)
+
+**Checklist progress: 29 completed / 35 remaining.** The database migrations,
+Edge Function activation, admin-session code hardening, and test-project SSL
+enforcement are complete. The remaining work is primarily founder-controlled
+provider setup rather than more application code or migrations.
+
+| Remaining group | Items left | Who must act | Added recurring cost |
+| --- | ---: | --- | --- |
+| Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
+| Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
+| Supabase production control plane | 8 | Validate direct test DB clients, then founder approves each production setting | $0, except the already-deferred leaked-password add-on |
+| Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
+| Founder machine and recovery exercise | 4 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
+| Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
+
+### Important cost deferrals
+
+- Supabase PITR (about $100/month), leaked-password protection ($25/month),
+  and the Supabase custom hostname are **not** part of the zero-cost bootstrap
+  completion path. They stay off unless separately approved.
+- No remaining database migration is waiting for approval.
+- The next technical gate is to validate each direct database client against
+  the SSL-enabled test project. Production SSL, IP restrictions, password
+  rotation, and token revocation each remain separate approvals.
+
 ## 2026-07-29 execution reconciliation
 
 - The remaining-item evidence and authority ledger is maintained in
