@@ -72,6 +72,28 @@ describe("independent backup and restore controls", () => {
     expect(workflow).toMatch(/PGSSLMODE: require/);
   });
 
+  it("upgrades direct database connections to verify-full when the CA is supplied", () => {
+    const backup = read("scripts/security/run-independent-backup.sh");
+    const restore = read("scripts/security/verify-independent-backup.sh");
+    const workflow = read(".github/workflows/independent-backup.yml");
+
+    for (const script of [backup, restore]) {
+      // Fail closed on a configured-but-unusable CA rather than downgrading.
+      expect(script).toMatch(/BACKUP_DB_ROOT_CERT is set but is not a readable non-empty file/);
+      expect(script).toMatch(/export PGSSLROOTCERT="\$BACKUP_DB_ROOT_CERT"/);
+      expect(script).toMatch(/export PGSSLMODE=verify-full/);
+      // The verify-full upgrade must come after the require baseline so the
+      // baseline can never overwrite it.
+      expect(script.indexOf("export PGSSLMODE=require")).toBeLessThan(
+        script.indexOf("export PGSSLMODE=verify-full"),
+      );
+    }
+
+    expect(backup).toMatch(/BACKUP_DB_ROOT_CERT is unset/);
+    expect(workflow).toMatch(/BACKUP_DB_ROOT_CERT_PEM/);
+    expect(workflow).toMatch(/BACKUP_DB_ROOT_CERT=\$RUNNER_TEMP\/supabase-db-ca\.crt/);
+  });
+
   it("creates the secret-values vault only outside Git and verifies checksums", () => {
     const creator = read("scripts/security/create-secrets-recovery-vault.sh");
     const verifier = read("scripts/security/verify-secrets-recovery-vault.sh");

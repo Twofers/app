@@ -153,3 +153,104 @@ and above:
 
 The approved bootstrap policy forbids enabling it now. Basic MFA remains
 available on Free and is already mandatory for the founder admin path.
+
+## Named reachability triage of the remaining function warnings — 2026-07-29
+
+The prior sections closed warnings in bulk. This section does what the plan's
+Phase 4 gate actually asks for: name every remaining function finding and give
+each one a caller-based disposition, rather than describing the residue as
+"intentional".
+
+### How the list was derived
+
+Production has no direct read-only SQL path from the developer machine (the
+IPv6-only `db.<ref>` endpoint is unreachable, and the production database
+password is founder-held). The residual set was therefore reconstructed:
+
+1. Enumerated the live catalog of the approved test project through the pooler
+   with `scripts/security/pg-read.mjs`: 74 `public` SECURITY DEFINER functions
+   currently hold `anon` and/or `authenticated` EXECUTE.
+2. Applied the 66 `REVOKE EXECUTE` statements from the five separately approved
+   revoke migrations (`20260824134000`, `135000`, `140000`, `141000`, `142000`),
+   matching on normalized type-only signatures.
+
+Result: **33 functions remain client-executable → 33 authenticated + 6 anon = 39
+Advisor findings.** Advisor reports 41 function findings (43 total minus the
+leaked-password and extension-in-public entries). The 2-finding gap is functions
+created by migrations that the test project has not received — the parser flagged
+`admin_account_directory(text,text,text,integer,integer)` as one such case — so
+the named list below covers 39 of 41. Closing the last two requires either the
+test project caught up on its 19 missing migrations or production SQL access.
+
+### Anonymous execution — all 6 are required (no action)
+
+These are the anon-facing product surfaces `20260824140000` deliberately
+preserved. `public_local_businesses` is confirmed to genuinely need it:
+`supabase/functions/public-local-businesses/index.ts` builds its client with
+`SUPABASE_ANON_KEY`, not the service role.
+
+| Function | Why anon execution is required |
+| --- | --- |
+| `public_local_businesses(text,text,integer)` | Edge function calls it on an anon-key client |
+| `lookup_deal_share(text)` | Logged-out share/QR landing (`app/s/[code].tsx`, `deal-share-lookup`) |
+| `is_publicly_visible_business(uuid)` | Referenced by live RLS policies evaluated for anon |
+| `deal_claim_visible_to_business_owner(uuid)` | Referenced by live RLS policies |
+| `customer_deal_localizations(uuid[],text)` | Logged-out deal card translation (`lib/customer-deal-localizations.ts`) |
+| `customer_deal_poster_specs(uuid[])` | Logged-out poster rendering (`lib/customer-deal-poster-specs.ts`) |
+
+### Authenticated execution — 10 are RLS policy dependencies (no action)
+
+Live `pg_policies` inspection confirms each of these appears in a policy
+`qual`/`with_check`. A policy predicate is evaluated as the calling role, so
+revoking EXECUTE would break the policy, not harden it:
+
+`admin_can`, `is_admin`, `is_owner_admin`, `is_business_owner`,
+`is_business_member`, `is_active_redeemer_for_business`, `user_owns_business`,
+`can_business_publish`, `get_business_capabilities`, `business_location_count`,
+`location_cap_for_current_user`.
+
+### Authenticated execution — 13 are intentional signed-in RPCs (no action)
+
+Each has a direct app caller and is scoped internally to the caller's own
+business or claim:
+
+| Function | Caller |
+| --- | --- |
+| `get_my_business()` | `lib/owner-business.ts` |
+| `merchant_business_insights(uuid)` | `app/(tabs)/dashboard.tsx` |
+| `merchant_deal_insights(uuid)` | `app/deal-analytics/[id].tsx` |
+| `business_repeat_visit_stats(uuid)` | `app/(tabs)/dashboard.tsx` |
+| `business_saved_customers_count(uuid)` | `app/(tabs)/dashboard.tsx` |
+| `deal_claim_counts(uuid[])` | `app/(tabs)/index.tsx`, `app/deal/[id].tsx` |
+| `ai_compose_quota_status(uuid)` | `lib/ai-compose-offer.ts` |
+| `get_location_billing_summary(uuid)` | `hooks/use-location-billing-summary.ts` |
+| `report_business(uuid,text,text,uuid)` | `lib/reports.ts` |
+| `report_user(uuid,text,text)` | `lib/reports.ts` |
+| `preview_staff_redemption(text,text)` | `supabase/functions/staff-redemption` — forwards the caller's `Authorization` header, so the RPC runs as `authenticated` |
+| `confirm_staff_redemption(text,text)` | same |
+
+### Authenticated execution — 3 are closable, staged for approval
+
+Live evidence: every caller is `prosecdef = true`, no RLS policy references
+them, and no app/website/anon caller exists.
+
+| Function | Callers (all SECURITY DEFINER) |
+| --- | --- |
+| `admin_role()` | `admin_can`, `is_admin`, `is_owner_admin` |
+| `business_member_role(uuid)` | `is_business_member` |
+| `get_runtime_billing_config()` | `activate_business_trial_from_checkout`, `admin_grant_location_trial`, `get_location_billing_summary`, `reserve_location_deal_credit`; plus `_shared/deal-translate-limit.ts` on the **service-role** client |
+
+Staged, **not applied**:
+`supabase/migrations/20260824144000_revoke_nested_definer_helper_client_execute.sql`,
+with a source test at
+`supabase/functions/_shared/nested-definer-helper-execute-migration.test.ts`.
+Applying it is a separate approval. Expected effect: 43 warnings → 40.
+
+### One open question, deliberately not closed
+
+`validate_business_invite(text)` holds authenticated EXECUTE and **no caller was
+found anywhere** — not in the app, website, Edge functions, other SQL function
+bodies, or any RLS policy. "No caller found" is weaker evidence than "reached
+only through definers", so it was excluded from `20260824144000`. It needs a
+product decision on the invite gate (`20260706120000`): if the flow is dead, drop
+the function; if it is dormant, revoke client execute and call it server-side.

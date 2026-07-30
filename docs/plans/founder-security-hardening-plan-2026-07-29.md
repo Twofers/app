@@ -22,29 +22,42 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 29 completed / 35 remaining.** The database migrations,
-Edge Function activation, admin-session code hardening, and test-project SSL
-enforcement are complete. The remaining work is primarily founder-controlled
-provider setup rather than more application code or migrations.
+**Checklist progress: 34 completed / 32 remaining (updated 2026-07-29, second
+pass).** The database migrations, Edge Function activation, admin-session code
+hardening, test-project SSL enforcement, direct-client TLS validation,
+authenticated RLS/cross-tenant probes, the named Advisor reachability triage, the
+GoTrue change specification, and the takeover-exercise worksheet are complete.
+**No developer-only item remains open.** Everything left needs a founder
+credential, a provider console, or an explicit production approval — plus the two
+new findings below, which are staged and waiting on approval rather than on work.
 
 | Remaining group | Items left | Who must act | Added recurring cost |
 | --- | ---: | --- | --- |
 | Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
 | Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
-| Supabase production control plane | 8 | Validate direct test DB clients, then founder approves each production setting | $0, except the already-deferred leaked-password add-on |
+| Supabase production control plane | 5 | Founder approves each production setting; direct-client validation is now done | $0, except the already-deferred leaked-password add-on |
+| **New findings awaiting approval** | 2 | Apply the staged `business_locations` policy fix; diagnose the founder hotmail identity | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
-| Founder machine and recovery exercise | 4 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
+| Founder machine and recovery exercise | 3 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
+
+### Staged and waiting on a single approval each
+
+| Migration | Effect | Cost |
+| --- | --- | --- |
+| `20260824143000_remove_pilot_business_location_read_policy.sql` | Closes a confirmed cross-tenant read exposure by dropping one untracked pilot policy | $0 |
+| `20260824144000_revoke_nested_definer_helper_client_execute.sql` | Removes client EXECUTE from three definer-only helpers; 43 Advisor warnings → 40 | $0 |
+| `BACKUP_DB_ROOT_CERT_PEM` repository secret | Moves direct database connections from encrypted-only to authenticated | $0 |
 
 ### Important cost deferrals
 
 - Supabase PITR (about $100/month), leaked-password protection ($25/month),
   and the Supabase custom hostname are **not** part of the zero-cost bootstrap
   completion path. They stay off unless separately approved.
-- No remaining database migration is waiting for approval.
-- The next technical gate is to validate each direct database client against
-  the SSL-enabled test project. Production SSL, IP restrictions, password
-  rotation, and token revocation each remain separate approvals.
+- Two zero-cost migrations are now staged and waiting for approval
+  (`20260824143000`, `20260824144000`). Both are drop/revoke-only.
+- The direct-client validation gate is closed. Production SSL, IP restrictions,
+  password rotation, and token revocation each remain separate approvals.
 
 ## 2026-07-29 execution reconciliation
 
@@ -287,8 +300,26 @@ blast radius and were missing:
 - [x] Enable SSL enforcement on the separate `twofer testing` project
       (`zsuzrerdailvylccqtds`). The dashboard confirms the setting is checked
       and the project returned to `ACTIVE_HEALTHY`; production was not changed.
-- [ ] Validate every direct test-database client, then separately approve
-      production SSL enforcement.
+- [x] Validated every direct test-database client against the SSL-enforced test
+      project. Evidence:
+      `docs/security/direct-database-client-tls-validation-2026-07-29.md`.
+      Two read-only tools were added (`scripts/security/verify-database-tls.mjs`,
+      `scripts/security/pg-read.mjs`). Findings: the `db.<ref>` endpoints are
+      IPv6-only and unreachable from the founder machine, so every direct client
+      uses the IPv4 pooler; the pooler refuses every cleartext Postgres startup
+      on both projects and both ports, so no reachable client can be using
+      cleartext today; the Supabase CLI and a raw libpq-style client both
+      complete authenticated round trips against the enforced test project. Two
+      cautions are recorded rather than glossed: those cleartext refusals are the
+      pooler's own behavior and do not by themselves prove a per-project setting,
+      and the CLI ignores `sslmode` entirely — even `verify-full` succeeds
+      against a certificate the trust store rejects. **Production SSL enforcement
+      is now unblocked and remains a separate founder approval.**
+- [x] `[DEV]` Direct-client TLS upgraded from encrypted-only to authenticated
+      where possible: the backup and restore scripts now switch to
+      `PGSSLMODE=verify-full` with `PGSSLROOTCERT` when `BACKUP_DB_ROOT_CERT`
+      is supplied, and fail closed if it is set but unusable. Founder step:
+      store the Supabase database CA as the `BACKUP_DB_ROOT_CERT_PEM` secret.
 - [ ] Restrict direct Postgres/pooler access to a trusted static VPN/IP + the backup
       runner. (HTTPS APIs and Edge Functions are unaffected.)
 - [ ] Rotate the DB password after restrictions verified.
@@ -371,11 +402,66 @@ blast radius and were missing:
       Supabase Pro (currently starting at $25/month).
       The deep grant check passed: `PUBLIC`, `anon`, and `authenticated` hold no
       TRUNCATE/TRIGGER/REFERENCES privileges on public-schema relations.
-- [ ] **GoTrue hardening** (new in v2): leaked-password protection, auth rate limits,
-      OTP expiry, captcha decision, SMTP sender review.
-- [ ] Refresh throwaway QA credentials; rerun the authenticated RLS, cross-tenant, and
-      normal-business-rejection probes (currently blocked by stale creds — the anon-only
-      probe is backstopped by the static guard check but must be closed properly).
+      **Named reachability triage completed 2026-07-29** (appended to
+      `docs/security/supabase-security-advisor-warning-triage-2026-07-29.md`).
+      The residual set was reconstructed by enumerating the live catalog through
+      the pooler and subtracting the 66 revoke statements already applied: 33
+      functions remain client-executable, i.e. 33 authenticated + 6 anon = 39 of
+      the 41 remaining function findings, each now named with a caller-based
+      disposition. Six anon findings are required product surfaces (confirmed:
+      `public-local-businesses` builds its client with the anon key). Eleven are
+      live RLS policy dependencies, where revoking EXECUTE would break the policy
+      rather than harden it. Twelve are intentional signed-in RPCs with named app
+      callers. Three are closable — `admin_role`, `business_member_role`, and
+      `get_runtime_billing_config` are reached only through SECURITY DEFINER
+      callers, appear in no policy, and have only a service-role Edge caller;
+      staged as `20260824144000` with a source test, expected to take 43 warnings
+      to 40. One is deliberately left open: `validate_business_invite` has no
+      caller anywhere, and "no caller found" is weaker evidence than "definer-only",
+      so it needs a product decision instead of a revoke. The last two findings
+      belong to functions created by migrations the test project has not received.
+- [x] **GoTrue hardening** specification built (the `[DEV]` half):
+      `docs/security/gotrue-hardening-specification-2026-07-29.md` gives an
+      11-row proposed-value table with rationale, cost, and failure mode for OTP
+      expiry, session timebox/inactivity, anonymous sign-in, manual linking,
+      CAPTCHA, password requirements, SMTP sender, and rate limits.
+      Leaked-password protection stays deferred (Pro-only). Two things it pins
+      down: `supabase config push` must **not** be used (the repo's `[auth]`
+      block is localhost-shaped and would break every redirect), and CAPTCHA is
+      not a toggle — no `captchaToken` exists anywhere in the client, so
+      enabling it server-side first would break sign-up, sign-in, and password
+      reset. Each dashboard change remains a separate founder approval.
+- [x] Reran the authenticated RLS, cross-tenant, and normal-business-rejection
+      probes: `docs/security/database-probe-results-2026-07-29.md`. The "stale
+      creds" blocker did not apply — `scripts/db-tests/*` mints its own throwaway
+      users through the service role. All nine suites ran against the
+      SSL-enforced test project, which also re-proves HTTPS clients are
+      unaffected by SSL enforcement. Two stale suites were repaired to match
+      intentional hardening (2e now 13/13, 2f now 9/9): they were failing on the
+      `businesses` column-grant model (`20260820121000`) and on a fixture that
+      predated the profile-edit capability gate (`20260817120000`), not on
+      security defects. **One real defect confirmed — see the next item.**
+- [ ] **Cross-tenant read exposure on `business_locations`** (found 2026-07-29):
+      an untracked pilot-era policy `"Auth users can read business locations
+      (pilot)"` — `FOR SELECT TO public USING (auth.uid() IS NOT NULL)` — exists
+      in the live catalog and in no migration in this repository. Permissive
+      policies are OR'd, so it defeats the owner-scoped policy beside it: owner A
+      reads owner B's row. Anonymous callers are unaffected. The exposed columns
+      are merchant premises data, but the policy bypasses the public-status
+      predicate, hidden-business, and suspension rules, so any signed-in account
+      can enumerate the address and phone of pre-approval, hidden, or suspended
+      merchants. A sweep found no second instance. Remediation is staged, not
+      applied: `20260824143000_remove_pilot_business_location_read_policy.sql`
+      (+ source test). Production presence is inferred, not verified — that needs
+      the founder-held production database password or a throwaway authenticated
+      production identity. **Applying it is a separate approval.**
+- [ ] **Founder `unvmex2@hotmail.com` cannot obtain a production token**
+      (found 2026-07-29): the password grant returns HTTP 500 `Database error
+      querying schema` while other addresses return the normal 400, so
+      production auth is working in general and this is account-scoped, not an
+      outage. It matters because that mailbox is the chosen security-alert
+      destination and one of the two active `admin_users` owner rows. Diagnosing
+      it needs an admin read of that user's `auth` rows, which is founder-gated.
 - [ ] Decide `demo@demo.com`'s fate (reviewer account with known creds in prod; teardown
       is currently sequenced behind the reviewer-account build).
 - [x] Earlier RLS defects were stale: promo owner-read was fixed/applied by
@@ -439,8 +525,14 @@ blast radius and were missing:
 - [x] `[DEV]` Triage npm audit (measured 1 critical / 63 high / 9 moderate before the safe fix) without forcing an
       unsafe Expo major upgrade; separately review Deno/esm.sh imports in Edge Functions
       (npm audit does not see them).
-- [ ] `[DAN+DEV]` Simulated takeover + recovery exercise; write the incident runbook from
-      what it teaches (revocation order: sessions → keys → tokens → DNS).
+- [ ] `[DAN+DEV]` Simulated takeover + recovery exercise. The `[DEV]` half is
+      done: `docs/security/takeover-recovery-exercise-2026-07-29.md` is an
+      executable worksheet — preconditions with a tabletop fallback, a scenario
+      chosen because it is the only single compromise that reaches data
+      destruction, the release pipeline, and the recovery channel at once, six
+      phases with the commands that exist today, timing and RPO/RTO fields, and a
+      corrective-action log. Executing it still needs the founder-provisioned
+      backup object, vault, and disposable project.
 
 ---
 
@@ -553,6 +645,35 @@ purchase.
   names present, public GitHub visibility with no protection/ruleset and live
   Dependabot security updates disabled, no DNSSEC delegation, and DMARC
   `p=none`.
+## Local verification record — 2026-07-29 (second pass)
+
+- `npm run test:db` — all nine remote suites against the SSL-enforced test
+  project. 2a 12/0/2, 2b 15/0/0, 2c 8/1/1 (the confirmed `business_locations`
+  defect), 2d 14/0/0, 2e **13/0/0** and 2f **9/0/0** after the stale-suite
+  repairs, 2h 21/0/0, 2i 19/0/0, 2j 13/0/0.
+- `scripts/assert-test-db.mjs` re-proved fail-closed with no environment and
+  pass-only for the allowlisted test ref.
+- `node scripts/security/verify-database-tls.mjs` against four endpoints —
+  TLSv1.3/AES-256-GCM everywhere, cleartext refused everywhere.
+- `supabase migration list --db-url` against the enforced test project — full
+  195-row table returned; the same command across `sslmode=disable|prefer|
+  require|verify-full` succeeded in all four cases, which is how the CLI's
+  `sslmode` indifference was established.
+- `scripts/security/pg-read.mjs` — authenticated via SCRAM over TLS and ran the
+  `pg_policies`, `information_schema`, and `pg_proc` catalog reads behind the
+  `business_locations` and Advisor findings. Measured caveat recorded in the
+  file: Supavisor does not forward `default_transaction_read_only`, so the
+  single-read-statement guard is the control that is actually enforced.
+- New focused tests pass: the `20260824143000` migration gate (3 tests), the
+  `20260824144000` migration gate (3 tests), and the extended
+  `lib/independent-backup-source.test.ts` (6 tests) covering the verify-full
+  upgrade and its fail-closed behavior.
+- `bash -n` passed for both backup shell scripts; `independent-backup.yml`
+  parsed.
+- No production mutation of any kind was performed in this pass. Test-project
+  access was read-only apart from the throwaway users the db-test suites create
+  and delete themselves.
+
 - `git diff --check` — passed (line-ending notices only).
 - No website/DNS deploy, unrelated provider-console change, paid-plan
   activation, merge, or app release was performed. Production mutations were

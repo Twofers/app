@@ -32,6 +32,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y age postgresql-client awscli
+      - name: Materialize the Supabase database CA, when provided
+        env:
+          BACKUP_DB_ROOT_CERT_PEM: ${{ secrets.BACKUP_DB_ROOT_CERT_PEM }}
+        run: |
+          if [ -n "$BACKUP_DB_ROOT_CERT_PEM" ]; then
+            umask 077
+            printf '%s\n' "$BACKUP_DB_ROOT_CERT_PEM" > "$RUNNER_TEMP/supabase-db-ca.crt"
+            echo "BACKUP_DB_ROOT_CERT=$RUNNER_TEMP/supabase-db-ca.crt" >> "$GITHUB_ENV"
+          else
+            echo "::warning::BACKUP_DB_ROOT_CERT_PEM is not configured — pg_dump will use sslmode=require without certificate verification."
+          fi
+
       - name: Create, encrypt, and upload immutable backup
         env:
           SUPABASE_DB_URL: ${{ secrets.BACKUP_SUPABASE_DB_URL }}

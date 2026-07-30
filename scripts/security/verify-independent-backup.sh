@@ -7,8 +7,18 @@ identity="${2:?Usage: verify-independent-backup.sh <backup.tar.age> <age-identit
 restore_db_url="${3:-}"
 
 # A restore can include production data. Require transport encryption for the
-# explicitly approved disposable target as well.
+# explicitly approved disposable target as well, and authenticate the server
+# too when the Supabase CA is supplied (see run-independent-backup.sh for why
+# `require` alone leaves the certificate unverified).
 export PGSSLMODE=require
+if [[ -n "${BACKUP_DB_ROOT_CERT:-}" ]]; then
+  if [[ ! -s "$BACKUP_DB_ROOT_CERT" ]]; then
+    echo "BACKUP_DB_ROOT_CERT is set but is not a readable non-empty file: $BACKUP_DB_ROOT_CERT" >&2
+    exit 2
+  fi
+  export PGSSLROOTCERT="$BACKUP_DB_ROOT_CERT"
+  export PGSSLMODE=verify-full
+fi
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf -- "$work_dir"' EXIT

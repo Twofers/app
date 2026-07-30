@@ -193,9 +193,14 @@ async function main() {
     },
   );
 
+  // return=minimal: `businesses` is on a COLUMN-level SELECT grant for
+  // `authenticated` (20260820121000), so echoing the full row back would fail
+  // with 42501 for reasons unrelated to the pre-activation edit being tested.
+  // App writes narrow the same way.
   const profileEdit = await rest(ctx, "anon", `businesses?id=eq.${businessId}`, {
     token: ownerJwt,
     method: "PATCH",
+    prefer: "return=minimal",
     body: { short_description: "Prepared before activation" },
   });
   R.check("setup-only owner can edit business information", profileEdit.ok, {

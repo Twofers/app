@@ -18,7 +18,26 @@ done
 
 # The backup credential crosses the public network. Do not permit libpq to
 # negotiate an unencrypted fallback, even before project-wide enforcement is on.
+#
+# `require` encrypts but does NOT authenticate the server: libpq accepts any
+# certificate. Supabase presents a chain from its own "Supabase Root 2021 CA",
+# which is absent from the distro trust store, so verify-full only works with
+# that CA pinned. When the founder supplies it (Supabase dashboard ->
+# Settings -> Database -> SSL configuration -> download certificate, stored as a
+# CI secret and materialized at BACKUP_DB_ROOT_CERT), upgrade to verify-full so
+# the connection is authenticated as well as encrypted. Fail closed if the path
+# is set but unusable rather than silently downgrading.
 export PGSSLMODE=require
+if [[ -n "${BACKUP_DB_ROOT_CERT:-}" ]]; then
+  if [[ ! -s "$BACKUP_DB_ROOT_CERT" ]]; then
+    echo "BACKUP_DB_ROOT_CERT is set but is not a readable non-empty file: $BACKUP_DB_ROOT_CERT" >&2
+    exit 2
+  fi
+  export PGSSLROOTCERT="$BACKUP_DB_ROOT_CERT"
+  export PGSSLMODE=verify-full
+else
+  echo "::warning::BACKUP_DB_ROOT_CERT is unset — the database connection is encrypted (sslmode=require) but the server certificate is not verified." >&2
+fi
 
 daily_retention_days="${BACKUP_DAILY_RETENTION_DAYS:-7}"
 monthly_retention_days="${BACKUP_MONTHLY_RETENTION_DAYS:-90}"
