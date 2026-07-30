@@ -98,6 +98,13 @@ RPCs.
   retained service-role execution. All 22 anon routes are denied, 11
   representative trusted read-only RPCs return HTTP 200, and Advisor reports
   0 errors and 74 warnings.
+- Migration `20260824140000_revoke_nonpublic_function_anon_execute.sql` is
+  staged but not applied. It removes only `PUBLIC`/`anon` execution from 24
+  audited non-public functions while preserving authenticated and service-role
+  execution. Seven functions required by anonymous policies/product flows are
+  excluded. Added recurring cost is $0 and production application requires
+  separate founder approval. Expected Advisor result: 0 errors and 50
+  warnings.
 - Review leaked-password protection, Auth rate limits, OTP expiry, CAPTCHA,
   SMTP sender/domain, and OAuth callbacks.
 - Create fresh throwaway QA users and run authenticated cross-tenant,

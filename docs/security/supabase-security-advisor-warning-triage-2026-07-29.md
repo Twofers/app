@@ -9,7 +9,7 @@ analysis or a paid plan. It does not authorize any further production change.
 | Rule | Count | Current disposition |
 |---|---:|---|
 | Authenticated users can execute SECURITY DEFINER function | 41 (was 76) | Thirteen trigger-only and 22 service-role-only findings were closed by separately approved migrations `20260824134000` and `20260824135000`. Remaining findings require individual classification because many are intentional authenticated RPCs or self-authorizing helpers. |
-| Public can execute SECURITY DEFINER function | 31 (was 66) | The same 35 inappropriate anonymous execution findings are closed. Remaining functions require individual public-RPC versus authenticated/internal classification. |
+| Public can execute SECURITY DEFINER function | 31 (was 66) | The same 35 inappropriate anonymous execution findings are closed. Twenty-four more functions are now classified as non-public; migration `20260824140000` is staged to revoke only their `PUBLIC`/`anon` grants. Seven required anonymous functions are excluded. If approved, this count should fall to 7. |
 | Function search path mutable | 0 (was 25) | Closed by separately approved zero-cost migration `20260824133000`. All 25 live definitions and signatures were audited first; the migration only pinned name resolution to `pg_catalog, public`. Production parity, live Advisor results, and representative service-role and anon RPC smoke tests passed. |
 | Public bucket allows listing | 0 (was 2) | Closed by separately approved zero-cost migration `20260824132000`. Both buckets remain public, owner write policies remain intact, anon listings expose zero entries, and sampled public assets from both buckets return HTTP 200. |
 | Leaked password protection disabled | 1 | Deferred under the $0 bootstrap policy. Supabase documents this as Pro-only; Pro currently starts at $25/month. Revisit after revenue or a broader Pro-plan need justifies the subscription. |
@@ -90,6 +90,24 @@ Catalog checks show zero `anon`/`authenticated` execution and retained
 service-role execution for all 22 functions. All 22 anon routes are denied
 (HTTP 401 or 404), while 11 representative read-only trusted RPCs return HTTP
 200. Advisor reports 0 errors and 74 warnings. Added recurring cost is $0.
+
+## Non-public anonymous execution evidence
+
+The remaining 31 anonymous findings were checked against live ACLs, live policy
+roles, repository grant contracts, application callers, and function purpose.
+Twenty-four functions are not required by anonymous users. Seven remain
+intentionally anonymous because they support public deal content/share/search,
+public-business visibility, or the current public businesses policy.
+
+Zero-cost migration
+`20260824140000_revoke_nonpublic_function_anon_execute.sql` is staged with a
+three-test static gate. It revokes only `PUBLIC`/`anon` execution from the 24
+non-public functions and preserves authenticated/service-role execution,
+function bodies, signatures, and data. The production-baseline-only
+`location_cap_for_current_user()` ACL is corrected conditionally so clean
+environments without that drift remain deployable. Production application
+requires separate approval. Expected Advisor result is 0 errors and 50
+warnings. Added recurring cost is $0.
 
 ## Paid warning disposition
 

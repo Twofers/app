@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 184,
-    "latest": "20260824135000_revoke_service_role_function_client_execute.sql"
+    "count": 185,
+    "latest": "20260824140000_revoke_nonpublic_function_anon_execute.sql"
   },
   "edgeFunctions": {
     "count": 81,

@@ -164,6 +164,25 @@
     },
     "added_recurring_cost": "$0"
   },
+  "staged_nonpublic_function_anon_execute_migration": {
+    "migration": "20260824140000_revoke_nonpublic_function_anon_execute.sql",
+    "production_applied": false,
+    "functions_checked": 24,
+    "live_anon_catalog_executable": 24,
+    "preserves_authenticated_execute": true,
+    "preserves_service_role_execute": true,
+    "intentional_anonymous_functions_excluded": 7,
+    "expected_security_advisor": {
+      "errors": 0,
+      "warnings": 50,
+      "authenticated_security_definer_function_executable": 41,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0",
+    "requires_separate_production_approval": true
+  },
   "repository_drift": {
     "views_previously_tracked": false,
     "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",
