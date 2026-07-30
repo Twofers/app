@@ -510,6 +510,10 @@ purchase.
   Their focused source test passed, the release-gate workflow parsed, and both
   shell scripts passed syntax validation. This changes no Supabase project
   setting; test-project enforcement remains an explicit approval point.
+- Read-only dashboard inspection of the separate `twofer testing` project
+  (`zsuzrerdailvylccqtds`) confirms SSL enforcement is currently off and its
+  direct database access is open to all IP addresses. It is healthy and not
+  the linked production project; the SSL test can therefore be isolated there.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
