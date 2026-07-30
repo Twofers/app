@@ -8,6 +8,7 @@ describe("independent backup and restore controls", () => {
   it("encrypts database, Storage, and configuration before immutable upload", () => {
     const backup = read("scripts/security/run-independent-backup.sh");
     expect(backup).toMatch(/pg_dump "\$SUPABASE_DB_URL"/);
+    expect(backup).toMatch(/export PGSSLMODE=require/);
     expect(backup).toMatch(/cron-jobs\.jsonl/);
     expect(backup).toMatch(/database-extensions\.csv/);
     expect(backup).toMatch(/export-storage\.mjs/);
@@ -57,12 +58,18 @@ describe("independent backup and restore controls", () => {
     expect(databaseVerifier).toMatch(/DISPOSABLE_SUPABASE_PROJECT_REF/);
     expect(databaseVerifier).toMatch(/identity\.includes\(disposableRef\)/);
     expect(databaseVerifier).toMatch(/--clean/);
+    expect(databaseVerifier).toMatch(/export PGSSLMODE=require/);
     expect(projectVerifier).toMatch(/disposableRef === productionRef/);
     expect(projectVerifier).toMatch(/RESTORE_SUPABASE_URL does not match/);
     expect(projectVerifier).toMatch(/refuses to target the configured primary Supabase URL/);
     expect(projectVerifier).toMatch(/Restored Auth login did not produce a session/);
     expect(projectVerifier).toMatch(/Restored Storage sample mismatch/);
     expect(projectVerifier).toMatch(/RESTORE_TEST_FUNCTION_ALLOWED_STATUSES/);
+  });
+
+  it("requires TLS for the catalog gate's direct database connection", () => {
+    const workflow = read(".github/workflows/release-gate.yml");
+    expect(workflow).toMatch(/PGSSLMODE: require/);
   });
 
   it("creates the secret-values vault only outside Git and verifies checksums", () => {

@@ -16,6 +16,10 @@ for name in "${required[@]}"; do
   fi
 done
 
+# The backup credential crosses the public network. Do not permit libpq to
+# negotiate an unencrypted fallback, even before project-wide enforcement is on.
+export PGSSLMODE=require
+
 daily_retention_days="${BACKUP_DAILY_RETENTION_DAYS:-7}"
 monthly_retention_days="${BACKUP_MONTHLY_RETENTION_DAYS:-90}"
 max_archive_bytes="${BACKUP_MAX_ARCHIVE_BYTES:-900000000}"

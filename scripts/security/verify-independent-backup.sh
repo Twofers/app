@@ -6,6 +6,10 @@ encrypted="${1:?Usage: verify-independent-backup.sh <backup.tar.age> <age-identi
 identity="${2:?Usage: verify-independent-backup.sh <backup.tar.age> <age-identity> [disposable-db-url]}"
 restore_db_url="${3:-}"
 
+# A restore can include production data. Require transport encryption for the
+# explicitly approved disposable target as well.
+export PGSSLMODE=require
+
 work_dir="$(mktemp -d)"
 trap 'rm -rf -- "$work_dir"' EXIT
 archive="$work_dir/backup.tar"

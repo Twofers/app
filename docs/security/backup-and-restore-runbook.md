@@ -34,8 +34,10 @@ https://supabase.com/docs/guides/platform/backups
    the private identity in the founder vault and a second offline recovery
    location.
 5. Configure the workflow secrets named in
-   `.github/workflows/independent-backup.yml`. Use a database URL that requires
-   SSL and credentials dedicated to backup. A management token is optional and
+   `.github/workflows/independent-backup.yml`. Use credentials dedicated to
+   backup. The backup and restore tools force libpq `PGSSLMODE=require`, so a
+   direct database connection cannot silently fall back to plaintext. A
+   management token is optional and
    should be read-scoped where supported. Configure the success heartbeat and
    failure webhook in a monitor controlled outside GitHub/Supabase; alert when
    no successful heartbeat arrives within 26 hours. Leave the repository
