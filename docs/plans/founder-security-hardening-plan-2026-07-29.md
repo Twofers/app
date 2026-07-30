@@ -518,7 +518,9 @@ purchase.
   direct database access open to all IP addresses. After the separately
   approved test-only restart, the dashboard confirms SSL enforcement is on and
   the project is `ACTIVE_HEALTHY`. The linked production project was inspected
-  separately and no production setting was modified.
+  separately and no production setting was modified. The unauthenticated test
+  REST root responds with the expected HTTP 401 (no API key), confirming its
+  public HTTPS endpoint is reachable after the restart.
 - Control-plane snapshots now record: the Free plan supplies no scheduled
   database backups, no physical backup/PITR exists, SSL enforcement
   false, database CIDRs open to all IPv4/IPv6, the three approved Edge secret
