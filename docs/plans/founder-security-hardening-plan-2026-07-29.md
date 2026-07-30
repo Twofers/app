@@ -22,8 +22,13 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 34 completed / 32 remaining (updated 2026-07-29, second
-pass).** The database migrations, Edge Function activation, admin-session code
+**Checklist progress: 34 completed / 33 remaining (recounted directly from the
+checkboxes, 2026-07-29 second pass; earlier "29/35" and "34/32" figures in this
+file's history were estimates and were wrong).** See "Why this plan cannot reach
+100% from the repository" below for the item-by-item gate audit: 20 of the 33 need
+a founder provider credential, and the rest need a provider account that does not
+exist yet, a production write approval, a founder decision, or a deferred cost
+approval. The database migrations, Edge Function activation, admin-session code
 hardening, test-project SSL enforcement, direct-client TLS validation,
 authenticated RLS/cross-tenant probes, the named Advisor reachability triage, the
 GoTrue change specification, and the takeover-exercise worksheet are complete.
@@ -40,6 +45,31 @@ new findings below, which are staged and waiting on approval rather than on work
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
 | Founder machine and recovery exercise | 3 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
+
+### Why this plan cannot reach 100% from the repository
+
+Audited item by item on 2026-07-29 (second pass). Every remaining box falls into
+exactly one of five gates, none of which a developer can open:
+
+| Gate | Items | What specifically is missing |
+| --- | ---: | --- |
+| Founder provider credential or console change | 20 | Phase 2's nine provider MFA/recovery/spend items; the admin subdomain behind Cloudflare Access; `main` protection, the staged GitHub controls, the GitHub token, Vercel promotion/alerts, DNS/DNSSEC/DMARC; Supabase PAT revocation; BitLocker, local secret vaulting, password manager; diagnosing the founder hotmail identity. The developer must never hold these credentials. |
+| A provider resource that does not exist yet | 6 | The separate free-tier B2 account, the populated secrets-values vault, the EAS credential export, and the disposable Supabase project. Without them there is no backup object to verify and no restore target, so the drill, the RPO/RTO targets, and the takeover exercise cannot run — only their tooling and worksheets exist. |
+| Production write approval | 3 | `supabase db push` for the two staged migrations (which also closes the Advisor gate at 40 warnings), plus DB password rotation. |
+| Founder decision, not work | 3 | Repo public/private; `demo@demo.com`'s fate; whether to accept option 2 for IP restriction. (`validate_business_invite` is a sub-decision inside the Advisor gate.) |
+| Deferred on cost, by standing policy | 1 | Pointing the app/website at `api.twoferapp.com`, which was never purchased. PITR, leaked-password protection, and static egress are recorded as deferrals inside other items rather than as separate boxes. |
+
+Two consequences worth stating plainly rather than leaving implicit:
+
+- **The plan's own structure caps developer completion below 100%.** 20 of the 33
+  remaining items need a credential the developer is explicitly forbidden to hold,
+  and 6 more need an account that does not exist. "Complete the plan" is not a
+  task a developer can finish; the correct developer end-state is what now holds —
+  no item blocked on work.
+- **One remaining `[DEV]` item is blocked by a deferred cost decision, not by
+  effort.** Phase 8's "point app + website at `api.twoferapp.com`" cannot start
+  because the custom hostname was deliberately not purchased. It should read as
+  deferred, not pending.
 
 ### Staged and waiting on a single approval each
 
@@ -203,7 +233,16 @@ Cheap, do first; later phases depend on these lists being true.
 
 ## Phase 1 — Make catastrophic deletion recoverable (highest priority)
 
-- [ ] `[DAN]` Open Supabase → Backups page; record what actually exists (API says none).
+- [x] `[DAN]` Open Supabase → Backups page; record what actually exists (API says none).
+      Recorded and cross-checked from two sources: the signed-in dashboard review
+      of 2026-07-29 reports "Free Plan does not include project backups", and
+      `supabase backups list` returns `backups: null`, empty
+      `physical_backup_data`, and `pitr_enabled: false`
+      (`docs/security/supabase-control-plane-snapshot-2026-07-29.json`,
+      `supabase-security-advisor-snapshot-2026-07-29.json`). There is no
+      provider-side restore point of any kind. That is the finding this item
+      existed to establish, and it is what makes the independent backup the only
+      recovery path.
 - [x] `[DAN]` 7-day PITR decision recorded: defer the ~$100/mo add-on while
       there are no customers and a 24-hour recovery point is acceptable.
       Reconsider when one day of loss would materially harm customers or cost
@@ -322,6 +361,30 @@ blast radius and were missing:
       store the Supabase database CA as the `BACKUP_DB_ROOT_CERT_PEM` secret.
 - [ ] Restrict direct Postgres/pooler access to a trusted static VPN/IP + the backup
       runner. (HTTPS APIs and Edge Functions are unaffected.)
+      **Feasibility analysed 2026-07-29 — this item cannot be done as written on
+      the current $0 architecture, and should not be approved until it is
+      rescoped.** Live state reconfirmed: `db_allowed_cidrs` is `0.0.0.0/0`,
+      IPv6 `::/0`, no network bans. The two clients that would need allowlisting
+      have no stable address:
+      (a) the backup workflow runs on `ubuntu-latest`, a GitHub-hosted runner
+      whose egress comes from GitHub's published Actions ranges — those rotate,
+      and allowlisting them all would admit any GitHub customer's runner, which
+      is worse than security theatre because it looks like a control;
+      (b) the founder machine has a dynamic residential address.
+      So an allowlist today either breaks the nightly backup or grants a range
+      broad enough to be meaningless. Three rescoping options, cheapest first:
+      1. **Self-hosted runner on the founder machine** ($0) — makes the backup's
+         egress the same address as the founder's, but that address still moves
+         and the machine must be awake at 08:23 UTC. Weak.
+      2. **Leave `0.0.0.0/0` and rely on the other controls** — SSL enforcement,
+         a rotated strong password, and `verify-full` certificate pinning. This
+         is the honest $0 posture, and it is what is in force today.
+      3. **Static egress** (paid: a small VPS or NAT gateway for the runner)
+         — the only option that makes an allowlist real. Needs a separate cost
+         approval, same as the already-deferred paid static runner.
+      Recommendation: adopt option 2 explicitly and mark this item deferred
+      rather than pending, so it stops reading as outstanding work. Option 3
+      returns as a cost decision alongside PITR.
 - [ ] Rotate the DB password after restrictions verified.
 - [ ] Inventory + revoke old Supabase personal access tokens; remove persistent prod CLI
       access from the daily-use machine when maintenance ends.
@@ -519,6 +582,11 @@ blast radius and were missing:
 - [ ] `[DEV]` Point app + website at it; test Auth callbacks, Storage, Functions,
       Google + Apple sign-in; document attach-to-restored-project procedure.
       (Until this ships, a replacement project forces a new store release.)
+      **Deferred, not pending:** there is no hostname to point at — the purchase
+      above was declined under the zero-cost policy. This item unblocks only when
+      that cost decision is revisited. Its real cost is already recorded in the
+      takeover worksheet: backend RTO for installed clients is gated on app
+      store review, i.e. days rather than hours.
 
 ## Phase 9 — Dependencies + exercise
 
