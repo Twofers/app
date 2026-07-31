@@ -511,6 +511,21 @@ Cheap, do first; later phases depend on these lists being true.
       target — a fresh project needs ~60 secrets re-minted. Outside-Git encrypted
       vault creation/verification tooling is ready; founder population and offline
       verification remain.
+      **Scoped down 2026-07-31 — this is a ~15-minute job, not an afternoon**
+      (`docs/security/secrets-vault-scope-2026-07-31.md`). Classified all 103
+      names by what happens if the value is lost: **4 are irreplaceable**
+      (`ANON_ABUSE_IP_HASH_SECRET`, `QR_SCAN_IP_HASH_SECRET`,
+      `APPLE_PASS_KEY_PEM_B64`, `APPLE_PASS_CERT_PEM_B64`), 27 are re-issuable
+      from a provider (so Phase 2 account security covers them — vaulting a
+      value that rotation invalidates buys nothing), 66 are config/flags/IDs
+      recoverable from the repo, and 6 are throwaway test logins.
+      **And a fifth, more serious one: the age private identity that decrypts
+      every backup is not in the inventory at all** — only its public recipient
+      is, carrying re-issue guidance that would not restore decryption. Lose
+      both copies of that key and every Object-Locked archive in B2 survives,
+      permanently unreadable. It is missing because the inventory is generated
+      from names referenced in code and that key is deliberately never
+      referenced. Add it by hand; verify the USB copy first.
 - [ ] `[DAN]` EAS credential export (Android keystore, iOS certs) into the same vault —
       losing these means losing the ability to ship app updates (new in v2).
 - [ ] `[DAN+DEV]` Quarterly restore drill into a disposable Supabase project: DB + Auth login +
