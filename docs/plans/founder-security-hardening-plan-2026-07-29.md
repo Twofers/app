@@ -42,10 +42,76 @@ new findings below, which are staged and waiting on approval rather than on work
 | Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
 | Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
 | Supabase production control plane | 5 | Founder approves each production setting; direct-client validation is now done | $0, except the already-deferred leaked-password add-on |
-| **New findings awaiting approval** | 2 | Apply the staged `business_locations` policy fix; diagnose the founder hotmail identity | $0 |
+| **Backup: one secret from working** | 1 | Re-set the malformed `BACKUP_SUPABASE_DB_URL` and dispatch a run | $0 |
+| **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
+| **CodeQL pre-existing alerts** | 1 | Triage 17 untriaged `js/file-access-to-http` alerts in probe scripts | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
 | Founder machine and recovery exercise | 3 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
+
+### Backup activation status — 2026-07-30/31
+
+Everything the backup needs now exists, **except one working secret**. There is
+still **no completed backup**, so the recovery position is unchanged: the Free
+plan supplies none, PITR is deferred, and a deletion today is unrecoverable.
+
+Done and verified:
+
+- B2 bucket `Twofer`, Object Lock **enabled**, immutability **proven** (a
+  COMPLIANCE-locked object could not be deleted; an unlocked control object
+  deleted cleanly with the same key, so the refusal is the lock, not permissions).
+- Lifecycle rules applied — `daily/` 10 d, `monthly/` 100 d, `verification/` 2 d,
+  each window outlasting its own lock retention.
+- age keypair generated and **round-trip verified**; private identity outside the
+  repository at `%USERPROFILE%\Documents\twofer-backup-age-identity.txt`,
+  user-only ACL. **It exists in exactly one place — an offline copy is still
+  outstanding, and losing it makes every backup permanently unreadable.**
+- All ten repository secrets set, plus `INDEPENDENT_BACKUP_ENABLED=true`.
+- PR #25 merged to `main` (401 files), so the workflow finally exists on the
+  default branch — scheduled and dispatched runs only ever run from there.
+
+Three live runs, three failures, each a real defect now fixed:
+
+| # | Failure | Cause | Fix |
+| --- | --- | --- | --- |
+| 1 | `Package 'awscli' has no installation candidate`, exit 100 | Ubuntu 24.04 dropped `awscli`; GitHub runners already ship AWS CLI v2 | PR #29 — removed from apt, asserts `aws`/`age`/`pg_dump` up front |
+| 2 | `password authentication failed for user "postgres"` | suspected URI percent-decoding of a password containing `#:}]` | PR #35 — password split out and passed via `PGPASSWORD` |
+| 3 | `TypeError: Invalid URL` | **the actual cause: the stored `BACKUP_SUPABASE_DB_URL` secret is not a parseable URL** | PR #36 — up-front validation that says which secret is wrong and how, without printing it |
+
+Run 3 disproved the run-2 theory. The percent-encoding fix is still correct
+defensive work, but the real defect is the stored secret. Note `key.txt` was
+deleted after the secrets were set, so the value cannot be re-derived from disk.
+
+**The one remaining step is founder-held:** re-set `BACKUP_SUPABASE_DB_URL` to
+
+```
+postgresql://postgres.kvodhiqhdqnptqovovia:<password>@aws-0-us-west-2.pooler.supabase.com:5432/postgres
+```
+
+then dispatch "Independent encrypted backup". The next failure, if any, will name
+the problem instead of throwing. Use the **session** pooler (`:5432`) — `pg_dump`
+needs session mode, and the direct `db.<ref>` host is IPv6-only and unresolvable
+from a GitHub runner.
+
+Also outstanding, none blocking: an offline copy of the age identity;
+`BACKUP_DB_ROOT_CERT_PEM` (both runs warned that the connection is encrypted but
+unverified); deleting the unused `twoferapp` bucket; and revoking the first B2
+key, which lacked retention capabilities.
+
+### CodeQL: 20 open alerts, 17 pre-existing
+
+Merging PR #25 surfaced the repository's first real CodeQL results. Three alerts
+were in code added this session and are dealt with: the high-severity
+`js/disabling-certificate-validation` in `pg-read.mjs` was a **genuine** weakness
+(a database password sent over an unverified channel) and now verifies by
+default; the other two are annotated as intentional.
+
+The remaining **17 are pre-existing and untriaged** — `js/file-access-to-http` in
+`probe-strong-deal.mjs`, `probe-subscription.mjs`, `probe-rls-inventory.mjs`,
+`probe-money-moment.mjs`, and `evaluate-ad-copy-naturalness.mjs`, all the same
+"read `.env`, send to an API" shape. They are developer scripts that never ship
+to the app or website, so severity is low, but nobody has assessed them. That is
+a new plan item, not something this pass closed.
 
 ### Why this plan cannot reach 100% from the repository
 
@@ -71,6 +137,23 @@ Two consequences worth stating plainly rather than leaving implicit:
   effort.** Phase 8's "point app + website at `api.twoferapp.com`" cannot start
   because the custom hostname was deliberately not purchased. It should read as
   deferred, not pending.
+
+### Merged to `main` — 2026-07-31
+
+PR #25 was retargeted from `qa/poster-ad-quality` to `main` and merged
+(`447d3cc9`, 401 files). Follow-up fixes #29, #35, #36 merged on top; `main` is
+at `a3a4fc5f`. The *deployed == committed == pushed* invariant is restored.
+
+Two consequences of that merge, both accepted knowingly:
+
+- **74 website files shipped to production.** "Vercel: manual production
+  promotion" is still an open Phase 6 item, so `main` most likely auto-deploys.
+  Verify the live site — the change includes a 1,700-line `styles.css` rewrite,
+  CSP/header changes, and the admin console redesign.
+- **The release-gate CI workflow is now active on PRs.** Setting `SUPABASE_URL`
+  (previously unset) un-skipped its live probes; `live-probes` passed on the
+  merge. Read-only, and a net improvement, but it was a side effect rather than
+  an intended change.
 
 ### The push hold is now released — 2026-07-30
 
@@ -271,6 +354,9 @@ Cheap, do first; later phases depend on these lists being true.
       more than the add-on.
 - [x] `[DEV]` Independent encrypted `pg_dump` daily tooling/workflow (includes `auth` schema), from a runner
       whose credentials a stolen Supabase account cannot revoke retroactively.
+      **Activated 2026-07-30, but the first runs failed — see "Backup activation
+      status" below. The workflow is live on `main` and armed; it has not yet
+      produced a backup.**
 - [x] `[DEV]` Back up every Storage bucket separately (DB backups exclude file bytes):
       all five live buckets are enumerated dynamically and checksummed.
 - [x] `[DAN]` Create the **separate-provider, separate-account** free-tier
