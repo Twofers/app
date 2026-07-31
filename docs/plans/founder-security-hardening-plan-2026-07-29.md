@@ -22,16 +22,15 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 41 completed / 32 remaining (recounted directly from the
+**Checklist progress: 42 completed / 31 remaining (recounted directly from the
 checkboxes with `grep -c "^- \[x\]"`, 2026-07-31 evening; every figure in this
 file's history that was written from prose rather than counted has been
 wrong).** The 2026-07-31 passes completed five items: CodeQL triage (`main` now
 at **0 open alerts**, from 81), Dependabot config repair, the admin
 session-hardening deploy (approved, executed, verified live), the
 close-seven-PRs item that Dependabot resolved itself, and the second-wave
-disposition (five merged, two closed, two withdrawn automatically). One small
-`[DAN]` item remains from that thread — two green PRs that arrived after the
-list was written (#52, #53). Both staged migrations were applied to
+disposition (seven merged, two closed, two withdrawn automatically). **Nothing
+from that thread is left open** — `main` is at `05642a44` with CI green. Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
 plan cannot reach 100% from the repository" below for the item-by-item gate audit:
 20 of the remaining 32 need a founder provider credential, and the rest need a
@@ -930,13 +929,20 @@ blast radius and were missing:
          both failing CI (2 and 4 failed checks). Real migrations, not bumps;
          close now and do them deliberately if ever wanted. Closing a
          Dependabot PR suppresses that version; the next major will reopen.
-- [ ] `[DAN]` **Two PRs opened after that list and are still waiting** (both
-      8/8 green, both trivial):
-      - **#52** — `actions/upload-artifact` 4.6.2 → 7.0.1, touching only
-        `.github/workflows/ios-screenshots.yml`. Same class as #27/#51, which
-        were merged; it simply arrived after the list was written.
-      - **#53** — corrects the codeql-action pin comments to `# v4.37.3`.
-        Comment-only, no SHA or behaviour change.
+- [x] `[DAN approved, DEV executed]` **The two late arrivals merged —
+      2026-07-31.** #53 (codeql-action pin labels corrected to `# v4.37.3`) and
+      #52 (`actions/upload-artifact` 4.6.2 → 7.0.1). **Every PR from this
+      thread is now disposed**; `main` is at `05642a44`, CI green, CodeQL at 0
+      open alerts, and the only pre-2026-07-31 PRs still open (#23 and the
+      March–May set) predate this work entirely.
+      #52 reproduced the `workflow` scope refusal and then merged unchanged
+      after `@dependabot rebase`, which confirms the reading recorded above:
+      **that error means the branch is stale, not that the token needs wider
+      scope.** Twice observed, twice fixed by a rebase. `@dependabot rebase` is
+      the one-line remedy; it took about a minute.
+      Pin labels on `main` now read, and were each checked against the source:
+      `actions/checkout@3d3c42e5… # v7.0.1`, all three
+      `github/codeql-action@e4fba868… # v4.37.3`.
 - [ ] `[DAN]` Replace the broad classic GitHub token with fine-grained/hardware-backed
       access.
 - [x] `[DEV]` Stage an encrypted repo mirror outside GitHub that includes local-only
