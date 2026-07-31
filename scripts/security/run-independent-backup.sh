@@ -188,9 +188,18 @@ storage_summary="$(
     --summarize \
     "${s3_endpoint_args[@]}"
 )"
-stored_bytes="$(awk -F': ' '/^Total Size:/ { print $2 }' <<< "$storage_summary" | tail -n 1)"
+# `aws s3 ls --summarize` indents the totals:
+#
+#   Total Objects: 1
+#      Total Size: 1234
+#
+# so an anchored /^Total Size:/ never matches and the guard below rejected a
+# perfectly good bucket. Match unanchored and keep only the digits.
+stored_bytes="$(awk -F': ' '/Total Size:/ { gsub(/[^0-9]/, "", $2); print $2 }' <<< "$storage_summary" | tail -n 1)"
 if [[ ! "$stored_bytes" =~ ^[0-9]+$ ]]; then
   echo "Could not verify current backup-bucket storage; refusing upload" >&2
+  echo "aws s3 ls returned:" >&2
+  printf '%s\n' "$storage_summary" | tail -n 5 >&2
   exit 3
 fi
 upload_copies=1
