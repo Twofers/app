@@ -328,6 +328,32 @@ describe("htmlToMenuText", () => {
     const html = "<p>" + "word ".repeat(10000) + "</p>";
     expect(htmlToMenuText(html).length).toBeLessThanOrEqual(MAX_MENU_TEXT_CHARS);
   });
+
+  // A parser accepts "</script >" as an end tag, so a filter requiring
+  // "</script>" exactly leaks the script body into the LLM prompt.
+  it("strips script blocks whose end tag carries whitespace or a stray slash", () => {
+    for (const close of ["</script >", "</script\n>", "</script/>", "</SCRIPT >", '</script data-x="1">']) {
+      const text = htmlToMenuText(`<script>INJECTED_PAYLOAD${close}<p>Latte $5</p>`);
+      expect(text).not.toContain("INJECTED_PAYLOAD");
+      expect(text).toContain("Latte");
+    }
+  });
+
+  it("strips style and noscript end tags with the same slack", () => {
+    expect(htmlToMenuText(`<style>.x{color:red}</style >`)).not.toContain("color:red");
+    expect(htmlToMenuText(`<noscript>NOSCRIPT_BODY</noscript >`)).not.toContain("NOSCRIPT_BODY");
+  });
+
+  it("drops the remainder of an unterminated script block", () => {
+    const text = htmlToMenuText(`<p>Latte $5</p><script>INJECTED_PAYLOAD and the rest of the page`);
+    expect(text).toContain("Latte");
+    expect(text).not.toContain("INJECTED_PAYLOAD");
+  });
+
+  it("does not let a commented-out script tag swallow the page", () => {
+    const text = htmlToMenuText(`<!-- <script> --><p>Espresso $4</p>`);
+    expect(text).toContain("Espresso");
+  });
 });
 
 describe("clampMenuPromptText", () => {
