@@ -106,6 +106,12 @@ async function b2(url, token, body) {
 }
 
 async function authorize({ keyId, appKey }) {
+  // CodeQL flags "file data flows to an outbound request" here. That is exactly
+  // and only what this does: the credentials read from the key file are sent to
+  // Backblaze — their own issuer — to authenticate. `API` is a hard-coded
+  // https://api.backblazeb2.com constant, not derived from the file, so the
+  // file's contents cannot redirect where they are sent.
+  // codeql[js/file-access-to-http]
   const basic = Buffer.from(`${keyId}:${appKey}`).toString("base64");
   const res = await fetch(`${API}/b2_authorize_account`, {
     headers: { Authorization: `Basic ${basic}` },

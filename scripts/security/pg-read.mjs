@@ -143,12 +143,40 @@ async function connectSecure(host, port) {
     raw.destroy();
     throw new Error("Server refused TLS on this endpoint; aborting before authentication.");
   }
+  // This connection carries a database password, so the certificate is
+  // VERIFIED BY DEFAULT. Supabase presents a chain from its own
+  // "Supabase Root 2021 CA", which is absent from the Node trust store, so
+  // point PG_READ_ROOT_CERT at that CA (Supabase dashboard -> Settings ->
+  // Database -> SSL configuration) to authenticate the server as well as
+  // encrypt to it.
+  //
+  // Skipping verification is possible but must be chosen explicitly by setting
+  // PG_READ_INSECURE_TLS=true. Encryption without authentication does not stop
+  // a machine-in-the-middle from presenting its own certificate and capturing
+  // the password, so it is never the default and is announced when used.
+  const rootCertPath = process.env.PG_READ_ROOT_CERT;
+  const insecure = process.env.PG_READ_INSECURE_TLS === "true";
+  let ca;
+  if (rootCertPath) {
+    ca = fs.readFileSync(rootCertPath);
+  } else if (!insecure) {
+    raw.destroy();
+    throw new Error(
+      "Refusing to send a database password over an unverified TLS connection.\n" +
+        "Set PG_READ_ROOT_CERT to the Supabase CA certificate, or set\n" +
+        "PG_READ_INSECURE_TLS=true to accept an unauthenticated channel deliberately.",
+    );
+  } else {
+    console.error("WARNING: PG_READ_INSECURE_TLS=true — the server certificate is NOT verified.");
+  }
+
   return new Promise((resolve, reject) => {
     const secured = tls.connect(
-      // Supabase presents a certificate from its own intermediate CA, which is
-      // not in the Node trust store. Transport encryption is still required;
-      // chain trust is verified separately by verify-database-tls.mjs.
-      { socket: raw, servername: host, rejectUnauthorized: false },
+      {
+        socket: raw,
+        servername: host,
+        ...(ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false }),
+      },
       () => resolve(secured)
     );
     secured.setTimeout(TIMEOUT_MS);

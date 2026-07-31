@@ -155,9 +155,17 @@ async function probeTlsNegotiation(host, port) {
         {
           socket,
           servername: host,
-          // Supabase direct-connection certificates chain to a Supabase CA that
-          // is not in the Node trust store. Record the verification outcome
-          // instead of silently accepting or silently failing.
+          // Deliberate, and the entire point of this tool: it exists to REPORT
+          // whether the certificate validates, which means it has to complete a
+          // handshake that strict verification would abort. The outcome is
+          // recorded below as certificateAuthorized / certificateAuthorizationError
+          // rather than being swallowed.
+          //
+          // Safe here because this probe sends NO credentials — it performs an
+          // SSLRequest and a cleartext StartupMessage carrying only a username,
+          // never a password. Contrast pg-read.mjs, which does send a password
+          // and therefore verifies by default.
+          // codeql[js/disabling-certificate-validation]
           rejectUnauthorized: false,
         },
         () => resolve(upgraded)
