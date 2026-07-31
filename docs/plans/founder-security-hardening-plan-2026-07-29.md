@@ -42,7 +42,7 @@ new findings below, which are staged and waiting on approval rather than on work
 | Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
 | Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
 | Supabase production control plane | 5 | Founder approves each production setting; direct-client validation is now done | $0, except the already-deferred leaked-password add-on |
-| **Backup: offline key copy** | 1 | The age identity exists in one place; losing it makes every backup unreadable. Backups themselves are now live and verified | $0 |
+| **Backup: verify the offline key copy** | 1 | A USB copy exists (2026-07-31, unverified). One `age-keygen -y` from the drive confirms it decrypts the archives | $0 |
 | **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
 | **CodeQL pre-existing alerts** | 1 | Triage 17 untriaged `js/file-access-to-http` alerts in probe scripts | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
@@ -78,8 +78,9 @@ Done and verified:
   each window outlasting its own lock retention.
 - age keypair generated and **round-trip verified**; private identity outside the
   repository at `%USERPROFILE%\Documents\twofer-backup-age-identity.txt`,
-  user-only ACL. **It exists in exactly one place — an offline copy is still
-  outstanding, and losing it makes every backup permanently unreadable.**
+  user-only ACL. A second copy was made to a USB drive on 2026-07-31 (founder
+  report; the drive was not mounted when this was written, so the copy has
+  **not** been independently verified — see the caveat below).
 - All ten repository secrets set, plus `INDEPENDENT_BACKUP_ENABLED=true`.
 - PR #25 merged to `main` (401 files), so the workflow finally exists on the
   default branch — scheduled and dispatched runs only ever run from there.
@@ -104,9 +105,23 @@ truncates the remainder, so the secret could never have parsed.
 
 Still outstanding, none of it blocking the nightly run:
 
-- **An offline copy of the age identity.** It still exists in exactly one place.
-  Losing it makes every backup — including the one that now exists — permanently
-  unreadable. This is the single highest-value remaining action in Phase 1.
+- **Verify the offline age identity copy.** A USB copy was made on 2026-07-31,
+  so the single-copy risk is addressed in practice. It has not been checked,
+  though, and a truncated or partially-written copy is indistinguishable from a
+  good one in a file listing — while being worth nothing. One command settles it,
+  from the drive:
+
+  ```
+  age-keygen -y <drive>:\twofer-backup-age-identity.txt
+  ```
+
+  It must print `age14h87sed9kx36vk2ufpyh6jr9uwflqvqnzr37f4u47pafncvfryxstt9qqz`,
+  the recipient the archives are encrypted to. Anything else means the copy does
+  not decrypt them.
+
+  Worth a third location eventually: unpowered flash degrades over a few years
+  and this key has no expiry. A password-manager secure note or a printed copy in
+  a safe removes the dependency on one physical device.
 - `BACKUP_DB_ROOT_CERT_PEM`: every run warns the database connection is encrypted
   but the server certificate is unverified.
 - Delete the unused `twoferapp` bucket; revoke the first B2 key (no retention
