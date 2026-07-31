@@ -511,6 +511,21 @@ Cheap, do first; later phases depend on these lists being true.
       target — a fresh project needs ~60 secrets re-minted. Outside-Git encrypted
       vault creation/verification tooling is ready; founder population and offline
       verification remain.
+      **Scoped down 2026-07-31 — this is a ~15-minute job, not an afternoon**
+      (`docs/security/secrets-vault-scope-2026-07-31.md`). Classified all 103
+      names by what happens if the value is lost: **4 are irreplaceable**
+      (`ANON_ABUSE_IP_HASH_SECRET`, `QR_SCAN_IP_HASH_SECRET`,
+      `APPLE_PASS_KEY_PEM_B64`, `APPLE_PASS_CERT_PEM_B64`), 27 are re-issuable
+      from a provider (so Phase 2 account security covers them — vaulting a
+      value that rotation invalidates buys nothing), 66 are config/flags/IDs
+      recoverable from the repo, and 6 are throwaway test logins.
+      **And a fifth, more serious one: the age private identity that decrypts
+      every backup is not in the inventory at all** — only its public recipient
+      is, carrying re-issue guidance that would not restore decryption. Lose
+      both copies of that key and every Object-Locked archive in B2 survives,
+      permanently unreadable. It is missing because the inventory is generated
+      from names referenced in code and that key is deliberately never
+      referenced. Add it by hand; verify the USB copy first.
 - [ ] `[DAN]` EAS credential export (Android keystore, iOS certs) into the same vault —
       losing these means losing the ability to ship app updates (new in v2).
 - [ ] `[DAN+DEV]` Quarterly restore drill into a disposable Supabase project: DB + Auth login +
@@ -558,6 +573,15 @@ blast radius and were missing:
       twoferapp.com).
 - [ ] `[DAN]` **Google Cloud project**: audit the wallet service account + Places/Maps API
       keys (closes the two open key alerts — verify app + API restrictions).
+      **The key is now named** (`android/app/google-services.json` is tracked in
+      the public repo; key `AIzaSyA29R…KDNU`, project `twofer-b64b2`, package
+      `com.unvmex2.twoforone`). Being public is expected for a client key and
+      changes nothing that shipping the APK did not — it is safe *only if
+      restricted*, and an unrestricted key of this shape is the realistic
+      billing-abuse path here. Application restriction should carry the **Play
+      App Signing** SHA-1 (Play Console → Setup → App integrity), not the upload
+      key's `96:46:B6:75:…:49:76`. Details in
+      `docs/security/android-signing-key-identification-2026-07-31.md`.
 - [ ] `[DAN]` Original set: Supabase org members + MFA (second TOTP factor stored
       offline — Supabase has no recovery codes); Vercel MFA + token audit; Namecheap +
       Cloudflare hardware-backed MFA; recovery email that does not depend on
@@ -983,6 +1007,16 @@ blast radius and were missing:
 - [ ] Sweep local secret files: filename/tracked-state inventory is complete; Dan must identify,
       minimize, and vault `.env.development.local`, Play service-account JSON,
       gh token, EAS session, adb keys — inventory, minimize, vault the rest.
+      **Signing-key half largely resolved 2026-07-31**
+      (`docs/security/android-signing-key-identification-2026-07-31.md`): no
+      keystore is tracked or has ever been committed; the four
+      `@unvmex2__twoforone*.jks` files are **byte-identical**, so there are two
+      distinct keys on this machine, not five; and the shipped upload cert is
+      `9E:05:0E:94:…:2C:93`, read off a real build with `apksigner` and matched
+      to assetlinks fingerprint #2 — #1 is Google's Play App Signing key, which
+      means losing the upload key is recoverable through Play rather than
+      fatal. One founder command per keystore (store password required) names
+      the live one; the doc has both commands ready to paste.
 - [ ] Password manager for all provider logins; no browser-stored passwords for the
       founder accounts.
 
