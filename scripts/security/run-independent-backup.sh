@@ -62,6 +62,30 @@ fi
 # from a client that decodes it itself, so do not depend on every client in the
 # chain decoding identically. Split the password out and hand it to libpq via
 # PGPASSWORD, leaving a URI that carries no password at all.
+# Validate the connection string BEFORE anything else, and describe what is
+# wrong without printing the secret. The first live run died on a bare
+# "TypeError: Invalid URL" from deep inside this split, which said nothing about
+# which secret was malformed.
+node --input-type=module -e '
+const raw = process.env.SUPABASE_DB_URL ?? "";
+const fail = (why) => {
+  console.error(`SUPABASE_DB_URL is unusable: ${why}`);
+  console.error(`  length: ${raw.length}`);
+  console.error(`  starts with "postgres": ${/^postgres(ql)?:\/\//.test(raw)}`);
+  console.error(`  contains "@": ${raw.includes("@")}`);
+  console.error(`  contains an unreplaced placeholder: ${/<[A-Z_]+>/.test(raw)}`);
+  console.error("Expected: postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres");
+  process.exit(2);
+};
+if (!raw) fail("it is empty or unset");
+if (/<[A-Z_]+>/.test(raw)) fail("it still contains a placeholder such as <PASSWORD>");
+try { new URL(raw); } catch { fail("it is not a parseable URL"); }
+'
+
+# Supabase-generated database passwords routinely contain characters that must
+# be percent-encoded inside a connection URI (#, :, @, /, ?). Do not depend on
+# every client in the chain decoding them identically: split the password out
+# and hand it to libpq via PGPASSWORD, leaving a URI with no password in it.
 if [[ "$SUPABASE_DB_URL" == *"@"* ]]; then
   PGPASSWORD="$(node -e 'const u=new URL(process.env.SUPABASE_DB_URL); process.stdout.write(decodeURIComponent(u.password))')"
   SUPABASE_DB_URL="$(node -e 'const u=new URL(process.env.SUPABASE_DB_URL); u.password=""; process.stdout.write(u.toString())')"
