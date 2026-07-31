@@ -31,11 +31,26 @@ jobs:
       - name: Install signed distro backup tools
         run: |
           sudo apt-get update
+          sudo apt-get install -y age curl ca-certificates
+
           # postgresql-client-17, not plain postgresql-client. Supabase runs
           # PostgreSQL 17.6 and Ubuntu 24.04's default client is 16, so pg_dump
-          # aborts with "server version mismatch" before writing a byte.
+          # aborts with "server version mismatch" before writing a byte —
           # pg_dump refuses to dump a server newer than itself.
-          sudo apt-get install -y age postgresql-client-17
+          #
+          # 17 is not in the runner image's repositories (the preinstalled 16.14
+          # is baked into the image, not served from a live PGDG source), so add
+          # the official PostgreSQL APT repository. The key is fetched over
+          # HTTPS from postgresql.org and apt verifies every package signature
+          # against it via signed-by.
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
           # pg_wrapper picks the highest installed version, but be explicit so a
           # future image change cannot silently reintroduce an older client.
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
