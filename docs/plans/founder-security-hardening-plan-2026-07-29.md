@@ -42,18 +42,32 @@ new findings below, which are staged and waiting on approval rather than on work
 | Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
 | Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
 | Supabase production control plane | 5 | Founder approves each production setting; direct-client validation is now done | $0, except the already-deferred leaked-password add-on |
-| **Backup: one secret from working** | 1 | Re-set the malformed `BACKUP_SUPABASE_DB_URL` and dispatch a run | $0 |
+| **Backup: offline key copy** | 1 | The age identity exists in one place; losing it makes every backup unreadable. Backups themselves are now live and verified | $0 |
 | **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
 | **CodeQL pre-existing alerts** | 1 | Triage 17 untriaged `js/file-access-to-http` alerts in probe scripts | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
 | Founder machine and recovery exercise | 3 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
 
-### Backup activation status — 2026-07-30/31
+### Backup activation status — FIRST BACKUP VERIFIED 2026-07-31
 
-Everything the backup needs now exists, **except one working secret**. There is
-still **no completed backup**, so the recovery position is unchanged: the Free
-plan supplies none, PITR is deferred, and a deletion today is unrecoverable.
+**The recovery position has changed for the first time.** A real, encrypted,
+immutable backup now exists:
+
+```
+daily/2026/07/31/twofer-backup-2026-07-31T15-23-48Z.tar.age
+  68.43 MB | retention COMPLIANCE until 2026-08-07T15:25:36Z
+daily/2026/07/31/twofer-backup-2026-07-31T15-23-48Z.tar.age.sha256
+  locked identically
+```
+
+Contents: the full logical database dump including the `auth` schema, plus all
+five Storage buckets (`deal-photos` 55, `ai-deal-assets` 3, `business-logos` 2,
+`deal-ads` 0, `business-assets` 0), config inventories, and checksums. Verified
+directly against the B2 catalog rather than trusting the workflow's exit code.
+Nobody holding Supabase *or* B2 credentials can delete it before it expires.
+
+The nightly schedule (08:23 UTC) is armed and runs from `main`.
 
 Done and verified:
 
@@ -70,33 +84,36 @@ Done and verified:
 - PR #25 merged to `main` (401 files), so the workflow finally exists on the
   default branch — scheduled and dispatched runs only ever run from there.
 
-Three live runs, three failures, each a real defect now fixed:
+It took six runs. Every failure was a real defect, and none would have been found
+without running it — which is the argument for exercising a backup rather than
+declaring it configured:
 
 | # | Failure | Cause | Fix |
 | --- | --- | --- | --- |
-| 1 | `Package 'awscli' has no installation candidate`, exit 100 | Ubuntu 24.04 dropped `awscli`; GitHub runners already ship AWS CLI v2 | PR #29 — removed from apt, asserts `aws`/`age`/`pg_dump` up front |
-| 2 | `password authentication failed for user "postgres"` | suspected URI percent-decoding of a password containing `#:}]` | PR #35 — password split out and passed via `PGPASSWORD` |
-| 3 | `TypeError: Invalid URL` | **the actual cause: the stored `BACKUP_SUPABASE_DB_URL` secret is not a parseable URL** | PR #36 — up-front validation that says which secret is wrong and how, without printing it |
+| 1 | `Package 'awscli' has no installation candidate`, exit 100 | Ubuntu 24.04 dropped `awscli`; runners already ship AWS CLI v2 | PR #29 — removed from apt, asserts tools up front |
+| 2 | `password authentication failed` | theorised URI percent-decoding | PR #35 — password split out to `PGPASSWORD`. **Theory was wrong**, fix kept as defence |
+| 3 | `TypeError: Invalid URL` | the stored secret was unparseable | PR #36 — up-front validation naming the fault without printing it |
+| 4 | `server version mismatch: server 17.6, pg_dump 16.14` | Supabase runs PG 17; Ubuntu 24.04 ships client 16, and `pg_dump` will not dump a newer server | PR #38 — install client 17, pin on PATH, refuse below 17 |
+| 5 | `Unable to locate package postgresql-client-17` | the image's 16.14 is baked in, not from a live PGDG source | PR #39 — add the official PGDG repo with `signed-by` verification |
+| 6 | `Could not verify current backup-bucket storage` | **my bug**: `aws s3 ls --summarize` indents its totals, so an anchored `/^Total Size:/` never matched | PR #40 — match unanchored, and print what `aws` returned when the guard trips |
 
-Run 3 disproved the run-2 theory. The percent-encoding fix is still correct
-defensive work, but the real defect is the stored secret. Note `key.txt` was
-deleted after the secrets were set, so the value cannot be re-derived from disk.
+The root cause of runs 2 and 3 was finally visible in the key file: the password
+had been pasted *inside* the `<PASSWORD>` angle brackets, producing
+`...:<Z#}...>@host...`. `<` and `>` are illegal in a URI's userinfo and the `#`
+truncates the remainder, so the secret could never have parsed.
 
-**The one remaining step is founder-held:** re-set `BACKUP_SUPABASE_DB_URL` to
+Still outstanding, none of it blocking the nightly run:
 
-```
-postgresql://postgres.kvodhiqhdqnptqovovia:<password>@aws-0-us-west-2.pooler.supabase.com:5432/postgres
-```
-
-then dispatch "Independent encrypted backup". The next failure, if any, will name
-the problem instead of throwing. Use the **session** pooler (`:5432`) — `pg_dump`
-needs session mode, and the direct `db.<ref>` host is IPv6-only and unresolvable
-from a GitHub runner.
-
-Also outstanding, none blocking: an offline copy of the age identity;
-`BACKUP_DB_ROOT_CERT_PEM` (both runs warned that the connection is encrypted but
-unverified); deleting the unused `twoferapp` bucket; and revoking the first B2
-key, which lacked retention capabilities.
+- **An offline copy of the age identity.** It still exists in exactly one place.
+  Losing it makes every backup — including the one that now exists — permanently
+  unreadable. This is the single highest-value remaining action in Phase 1.
+- `BACKUP_DB_ROOT_CERT_PEM`: every run warns the database connection is encrypted
+  but the server certificate is unverified.
+- Delete the unused `twoferapp` bucket; revoke the first B2 key (no retention
+  capabilities); rotate the database password, which appeared in a session
+  transcript.
+- **The restore drill is now unblocked** — a backup object finally exists. It
+  still needs a founder-provisioned disposable project.
 
 ### CodeQL: 20 open alerts, 17 pre-existing
 
@@ -354,9 +371,10 @@ Cheap, do first; later phases depend on these lists being true.
       more than the add-on.
 - [x] `[DEV]` Independent encrypted `pg_dump` daily tooling/workflow (includes `auth` schema), from a runner
       whose credentials a stolen Supabase account cannot revoke retroactively.
-      **Activated 2026-07-30, but the first runs failed — see "Backup activation
-      status" below. The workflow is live on `main` and armed; it has not yet
-      produced a backup.**
+      **Live and producing backups as of 2026-07-31.** First verified archive:
+      68.43 MB, COMPLIANCE-locked for 7 days, containing the database plus all
+      five Storage buckets. Six runs were needed; every failure was a real
+      defect. See "Backup activation status" below.
 - [x] `[DEV]` Back up every Storage bucket separately (DB backups exclude file bytes):
       all five live buckets are enumerated dynamically and checksummed.
 - [x] `[DAN]` Create the **separate-provider, separate-account** free-tier
@@ -408,8 +426,15 @@ Cheap, do first; later phases depend on these lists being true.
       founder-provisioned disposable project and an actual backup.
 - [ ] Bootstrap targets: independent-backup RPO ≤ 24 h; website RTO 4 h; full
       app/backend RTO measured during the first drill. PITR/minute-level RPO is
-      deferred with its paid add-on. Success-heartbeat/failure hooks are staged;
-      measured evidence awaits the first approved run.
+      deferred with its paid add-on.
+      **RPO target met as of 2026-07-31**: the nightly job runs at 08:23 UTC and
+      the first archive is verified in place, so the worst-case recovery point is
+      now under 24 hours where it was previously unbounded. RTO remains
+      **unmeasured** — that needs the restore drill, which is finally unblocked
+      now that a backup object exists but still needs a disposable project.
+      Success-heartbeat and failure hooks are staged but unconfigured, so a
+      silently failing nightly run would currently go unnoticed; setting
+      `BACKUP_SUCCESS_HEARTBEAT_URL` / `BACKUP_FAILURE_WEBHOOK_URL` closes that.
 
 ## Phase 2 — Provider account takeover hardening (expanded in v2)
 
