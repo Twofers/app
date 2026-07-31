@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `187`
-- Latest: `20260824142000_revoke_location_ownership_helper_client_execute.sql`
+- Count: `189`
+- Latest: `20260824144000_revoke_nested_definer_helper_client_execute.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 
