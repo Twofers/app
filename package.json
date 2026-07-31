@@ -52,9 +52,9 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
-    "@supabase/supabase-js": "^2.93.1",
-    "country-flag-icons": "^1.6.17",
-    "date-fns": "^4.1.0",
+    "@supabase/supabase-js": "^2.111.0",
+    "country-flag-icons": "^1.6.20",
+    "date-fns": "^4.4.0",
     "expo": "~54.0.35",
     "expo-apple-authentication": "~8.0.8",
     "expo-asset": "~12.0.13",
@@ -101,7 +101,7 @@
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.2"
   },
   "overrides": {
     "react-native": "$react-native",
@@ -121,7 +121,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "playwright": "^1.54.2",
+    "playwright": "^1.62.0",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
   },
