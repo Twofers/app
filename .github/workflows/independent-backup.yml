@@ -31,7 +31,16 @@ jobs:
       - name: Install signed distro backup tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y age postgresql-client
+          # postgresql-client-17, not plain postgresql-client. Supabase runs
+          # PostgreSQL 17.6 and Ubuntu 24.04's default client is 16, so pg_dump
+          # aborts with "server version mismatch" before writing a byte.
+          # pg_dump refuses to dump a server newer than itself.
+          sudo apt-get install -y age postgresql-client-17
+          # pg_wrapper picks the highest installed version, but be explicit so a
+          # future image change cannot silently reintroduce an older client.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+
           # awscli is deliberately NOT installed via apt. Ubuntu 24.04 dropped it
           # from the archive ("Package 'awscli' has no installation candidate",
           # exit 100), and GitHub-hosted runners already ship AWS CLI v2. Assert
@@ -40,6 +49,13 @@ jobs:
           aws --version
           age --version
           pg_dump --version
+
+          # Fail here, loudly, rather than after the dump starts.
+          dump_major="$(pg_dump --version | grep -oE '[0-9]+' | head -n 1)"
+          if [[ "$dump_major" -lt 17 ]]; then
+            echo "pg_dump is major version $dump_major but the server is 17.x; refusing to run." >&2
+            exit 2
+          fi
       - name: Materialize the Supabase database CA, when provided
         env:
           BACKUP_DB_ROOT_CERT_PEM: ${{ secrets.BACKUP_DB_ROOT_CERT_PEM }}
