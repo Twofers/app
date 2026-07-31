@@ -22,9 +22,13 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 36 completed / 31 remaining (recounted directly from the
-checkboxes, 2026-07-30; earlier "29/35" and "34/32" figures in this file's history
-were estimates and were wrong).** Both staged migrations were applied to
+**Checklist progress: 38 completed / 33 remaining (recounted directly from the
+checkboxes with `grep -c "^- \[x\]"`, 2026-07-31; every figure in this file's
+history that was written from prose rather than counted has been wrong).**
+The 2026-07-31 pass added two `[DEV]` items already done (CodeQL triage,
+Dependabot config repair) and two `[DAN]` items: close the seven unmergeable
+Dependabot PRs, and deploy the admin session hardening that is in `main` but
+not in production. Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
 plan cannot reach 100% from the repository" below for the item-by-item gate audit:
 20 of the remaining 32 need a founder provider credential, and the rest need a
@@ -37,16 +41,21 @@ GoTrue change specification, and the takeover-exercise worksheet are complete.
 credential, a provider console, or an explicit production approval — plus the two
 new findings below, which are staged and waiting on approval rather than on work.
 
+Counts below are the open checkboxes in each group and sum to 33, except the
+offline-key row, which is tracked in prose rather than as a checkbox.
+
 | Remaining group | Items left | Who must act | Added recurring cost |
 | --- | ---: | --- | --- |
-| Backups and recovery | 6 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
+| Backups and recovery | 4 | Founder creates the separate free B2 account and vault; joint first restore drill | $0 on the stated B2 free-tier ceiling |
 | Provider MFA, recovery, keys, and spend controls | 9 | Founder signs in to Stripe, Apple, Google, Expo, OpenAI/Gemini, Resend, Supabase, Vercel, registrar, and Cloudflare | $0 for MFA/passkeys and reviews |
 | Supabase production control plane | 5 | Founder approves each production setting; direct-client validation is now done | $0, except the already-deferred leaked-password add-on |
 | **Backup: verify the offline key copy** | 1 | A USB copy exists (2026-07-31, unverified). One `age-keygen -y` from the drive confirms it decrypts the archives | $0 |
 | **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
-| **CodeQL pre-existing alerts** | 1 | Triage 17 untriaged `js/file-access-to-http` alerts in probe scripts | $0 |
+| **CodeQL alert triage** | 0 | **Done 2026-07-31.** All 81 alerts triaged; the 2 in shipped code fixed with tests; the rest excluded by committed config | $0 |
+| **Dependabot PR triage** | 1 | Founder closes the 7 unmergeable PRs; the config that produced them is fixed | $0 |
+| **Website deploy gap** | 1 | Phase 5's admin session hardening is in `main` but not in production; deploying is founder-gated | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
-| Founder machine and recovery exercise | 3 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
+| Founder machine and recovery exercise | 4 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
 
 ### Backup activation status — FIRST BACKUP VERIFIED 2026-07-31
@@ -130,20 +139,66 @@ Still outstanding, none of it blocking the nightly run:
 - **The restore drill is now unblocked** — a backup object finally exists. It
   still needs a founder-provisioned disposable project.
 
-### CodeQL: 20 open alerts, 17 pre-existing
+### CodeQL: 81 open alerts, all triaged — 2026-07-31
 
-Merging PR #25 surfaced the repository's first real CodeQL results. Three alerts
-were in code added this session and are dealt with: the high-severity
-`js/disabling-certificate-validation` in `pg-read.mjs` was a **genuine** weakness
-(a database password sent over an unverified channel) and now verifies by
-default; the other two are annotated as intentional.
+**The "20 open / 17 pre-existing" figure recorded here earlier was a snapshot of
+a scan still in progress.** The completed first scan of `main` returns **81
+open, 0 dismissed** (17 high, 64 medium, 10 rules). Full triage:
+`docs/security/codeql-alert-triage-2026-07-31.md`.
 
-The remaining **17 are pre-existing and untriaged** — `js/file-access-to-http` in
-`probe-strong-deal.mjs`, `probe-subscription.mjs`, `probe-rls-inventory.mjs`,
-`probe-money-moment.mjs`, and `evaluate-ad-copy-naturalness.mjs`, all the same
-"read `.env`, send to an API" shape. They are developer scripts that never ship
-to the app or website, so severity is low, but nobody has assessed them. That is
-a new plan item, not something this pass closed.
+Two of the 81 were in code that runs in production, and both were real:
+
+- `js/bad-tag-filter` in `site-import.ts:570` — the `<script>` stripper feeding
+  the menu LLM required the end tag to be exactly `</script>`, so a merchant
+  page using `</script >` kept its script body in the extracted text. Measured:
+  `INJECTED_PAYLOAD Latte $5` before, `Latte $5` after. A prompt-injection
+  channel on pages we do not control, not XSS. **Fixed + regression tests.**
+- `js/incomplete-url-substring-sanitization` in `business-onboarding-sync.ts:78`
+  — `includes("instagram.com")` also matched
+  `https://evil.example/instagram.com/x`. Impact checked, not assumed: the value
+  becomes an admin-console contact channel, is never fetched and never rendered
+  as a link. **Fixed anyway + tests**, since a hostname check is three lines.
+
+Both are `_shared` Edge Function code and are **not deployed** — the running
+functions still carry the old copies. That is a separate approval.
+
+The other 79 are non-defects: 70 in `scripts/**` (probe scripts reading `.env`
+and calling the project's own APIs — the flagged flow is their purpose), 8 in
+vitest source-contract tests (CodeQL reads `expect(source).toMatch(/api\.resend\.com/)`
+as unanchored URL validation), and 1 in the vendored qrcode bundle.
+
+Also found: **inline `// codeql[rule-id]` comments do nothing** for
+JavaScript/TypeScript — code scanning ignores them. The two files annotated that
+way on 2026-07-29 still carry open alerts. The comments stay as documentation,
+but they suppress nothing.
+
+Rather than dismiss 79 alerts into dashboard state, `.github/codeql/codeql-config.yml`
+now excludes `scripts/**`, `**/*.test.ts(x)`, and the vendored bundle from
+analysis; everything a user can reach stays in scope. CodeQL closes alerts in
+files it stops analyzing, so the expected steady state after this reaches `main`
+is zero — which is what makes alert number 1 mean something. The tradeoff is
+recorded in the triage doc.
+
+### Dependabot: eight PRs, seven unmergeable — 2026-07-31
+
+Dependabot's first run produced PRs that expose two configuration faults, both
+now fixed in `.github/dependabot.yml`. Full triage:
+`docs/security/dependabot-pr-triage-2026-07-31.md`.
+
+- **Expo SDK packages were unconstrained.** The app is SDK 54; Dependabot
+  proposed `expo-web-browser` 15.0.11 → **57.0.2**, `expo-status-bar` →
+  57.0.1, `expo-splash-screen` → 57.0.5 and `react-native` 0.81.5 → **0.86.2**,
+  all SDK 57. The group doing it was named `expo-compatible-patches` while
+  accepting patch+minor for every npm package — the name asserted a constraint
+  the config never implemented. Now ignored as SDK-managed; group renamed
+  `sdk-independent-updates`.
+- **`github/codeql-action` was split across PRs.** `init`/`autobuild`/`analyze`
+  must move together: PR #28 failed with `Loaded a configuration file for
+  version '3.37.3', but running version '4.37.3'`. Now grouped.
+
+PRs #34, #33, #32, #31, #30, #28, #26 should be closed; #27
+(`actions/checkout` → v7) passes its checks and is safe to merge. Nothing was
+merged or closed on Dan's behalf.
 
 ### Why this plan cannot reach 100% from the repository
 
@@ -178,10 +233,19 @@ at `a3a4fc5f`. The *deployed == committed == pushed* invariant is restored.
 
 Two consequences of that merge, both accepted knowingly:
 
-- **74 website files shipped to production.** "Vercel: manual production
-  promotion" is still an open Phase 6 item, so `main` most likely auto-deploys.
-  Verify the live site — the change includes a 1,700-line `styles.css` rewrite,
-  CSP/header changes, and the admin console redesign.
+- **74 website files reached `main` — and none of them reached production.**
+  Verified 2026-07-31 (`docs/security/live-site-verification-2026-07-31.md`):
+  merging does **not** auto-deploy. That answers the Phase 6 "manual production
+  promotion" question — the behaviour is already what that item wants, by
+  accident rather than by configuration. The public site is current and healthy
+  (styles.css and localization.js byte-identical to `main`, production e2e green
+  across en/es/ko, 42-route UI crawl clean, all headers and infra files live).
+  **The admin console is not.** Production still runs the deployment made before
+  `d4e027ed`, so the entire admin session hardening is undeployed:
+  `/api/admin/session` and `/api/admin/proxy` return 404, and the live login page
+  still offers "Keep me signed in on this browser" — which stores a Supabase
+  refresh token in the browser, the exact condition the sealed-cookie work
+  removes. See the note on Phase 5 below.
 - **The release-gate CI workflow is now active on PRs.** Setting `SUPABASE_URL`
   (previously unset) un-skipped its live probes; `live-probes` passed on the
   merge. Read-only, and a net improvement, but it was a side effect rather than
@@ -745,8 +809,18 @@ blast radius and were missing:
 
 ## Phase 5 — Admin session hardening (website)
 
+> **Committed, not deployed — measured 2026-07-31.** All three `[x] [DEV]` items
+> below are true of `main` and false of production. The commit carrying them
+> (`d4e027ed`, 2026-07-29 22:01 UTC) postdates the last production deploy
+> (2026-07-29 00:41 UTC) and merging to `main` did not trigger a new one. Proof
+> and the pre-deploy `?v=` bump this needs:
+> `docs/security/live-site-verification-2026-07-31.md`. Deploying is the gated
+> step in `docs/website-edit-checklist.md` §8.
+
 - [x] `[DEV]` Add `Cache-Control: no-store` to `/admin(.*)` now (one-line vercel.json
       change; CSP/Referrer-Policy already exist — do not rebuild them).
+      *(In `main`; production still serves Vercel's static default because the
+      deployed `vercel.json` predates the change.)*
 - [ ] `[DAN]` Move admin console to `admin.twoferapp.com` behind Cloudflare Access
       (founder identity only).
 - [x] `[DEV]` Replace browser-stored Supabase tokens with a same-origin backend session:
@@ -755,6 +829,15 @@ blast radius and were missing:
 - [x] `[DEV]` Fresh TOTP for destructive/security-sensitive actions.
 - [x] `[DEV]` Document and enforce in the release runbook: no auto-deploy of the admin site from an unprotected branch — exact reviewed
       commit, manual promotion.
+- [ ] `[DAN]` **Deploy the admin session hardening.** Everything above is in
+      `main` and none of it is in production (verified 2026-07-31). The
+      cache-busting prerequisite is done: all six versioned includes `d4e027ed`
+      changed now carry `?v=20260731-admin-session` across 23 pages — six, not
+      the two the commit's line stats suggested, found by diffing each live file
+      against `main`. What remains is the gated deploy from `website/` per
+      checklist §8, then re-checking that `/api/admin/session` stops returning
+      404, the login page loses its "Keep me signed in" checkbox, and `/admin/*`
+      carries `no-store`.
 
 ## Phase 6 — GitHub, Vercel, DNS, email
 
@@ -768,6 +851,23 @@ blast radius and were missing:
 - [ ] `[DAN]` Approve/merge the staged GitHub controls and enable live Dependabot
       security updates. The read-only snapshot currently shows the repository
       setting disabled; CodeQL is not live until its workflow reaches `main`.
+      **Both are live as of the PR #25 merge** — see the two triage sections
+      above for what they immediately found.
+- [x] `[DEV]` Triage the whole first CodeQL scan (81 alerts, not the 20 recorded
+      earlier). Two genuine findings in shipped Edge Function code fixed with
+      regression tests (`js/bad-tag-filter` in `site-import.ts`,
+      `js/incomplete-url-substring-sanitization` in
+      `business-onboarding-sync.ts`); the other 79 dispositioned per rule and
+      scoped out of analysis by committed config rather than dashboard
+      dismissals. `docs/security/codeql-alert-triage-2026-07-31.md`.
+- [x] `[DEV]` Fix the two Dependabot configuration faults its first run exposed:
+      Expo SDK packages were unconstrained (SDK 57 bumps proposed against an
+      SDK 54 app) and `github/codeql-action` sub-actions were split across PRs
+      that cannot pass CI alone.
+      `docs/security/dependabot-pr-triage-2026-07-31.md`.
+- [ ] `[DAN]` Close the seven unmergeable Dependabot PRs (#34, #33, #32, #31,
+      #30, #28, #26); #27 (`actions/checkout` → v7) is safe to merge. The
+      corrected config reopens what still applies on the next scheduled run.
 - [ ] `[DAN]` Replace the broad classic GitHub token with fine-grained/hardware-backed
       access.
 - [x] `[DEV]` Stage an encrypted repo mirror outside GitHub that includes local-only

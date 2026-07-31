@@ -1,0 +1,36 @@
+name: "Twofer CodeQL config"
+
+# Scope: everything that reaches a user — the Expo app (app/, components/, lib/),
+# the website, and the Edge Functions — stays in scope. The exclusions below are
+# code that is never bundled into any of them.
+#
+# Why this exists: the first full scan of `main` returned 81 alerts, 79 of them
+# in code that does not ship. Two genuine findings in Edge Function code
+# (js/bad-tag-filter in site-import.ts, js/incomplete-url-substring-sanitization
+# in business-onboarding-sync.ts) were fixed rather than excluded. Leaving the
+# other 79 open would mean the next real alert arrives as number 80 and nobody
+# notices it. Dispositions are recorded per rule in
+# docs/security/codeql-alert-triage-2026-07-31.md.
+#
+# The tradeoff, stated plainly: a genuinely dangerous developer script would no
+# longer be flagged here. The compensating controls are that nothing under
+# scripts/ is bundled or deployed, and gitleaks CI still scans every commit for
+# credential leakage.
+#
+# Inline `// codeql[rule-id]` comments were tried first and do NOT work —
+# GitHub code scanning ignores them for JavaScript/TypeScript. The two files
+# carrying such comments (scripts/security/verify-database-tls.mjs,
+# scripts/security/verify-backup-destination.mjs) still had open alerts.
+
+paths-ignore:
+  # Developer and CI probe/evaluation scripts. They read .env and call the
+  # project's own APIs with those credentials — the flagged "file data reaches
+  # an HTTP request" flow is their purpose, not a defect. Never bundled.
+  - scripts/**
+  # Vitest source-contract tests: they read a production source file and assert
+  # on its text. CodeQL reads assertions like /api\.resend\.com\/emails/ as
+  # unanchored URL validation. Test-only, never bundled.
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  # Vendored third-party browserify bundle of the `qrcode` library.
+  - website/admin/qrcode-browser.js

@@ -70,12 +70,28 @@ export function normalizePhone(value: string | null): string | null {
   return digits.slice(0, 18);
 }
 
+/**
+ * True only when the value's *hostname* is instagram.com or a subdomain of it.
+ * A substring test (`includes("instagram.com")`) also matches
+ * `https://evil.example/instagram.com/x` and `https://instagram.com.evil.example`,
+ * filing an unrelated host under the merchant's Instagram channel
+ * (CodeQL js/incomplete-url-substring-sanitization).
+ */
+function isInstagramUrl(candidate: string): boolean {
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) ? candidate : `https://${candidate}`;
+  try {
+    const host = new URL(withScheme).hostname.toLowerCase();
+    return host === "instagram.com" || host.endsWith(".instagram.com");
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeUrlOrHandle(value: string | null): { type: "website" | "instagram" | null; value: string | null } {
   if (!value) return { type: null, value: null };
   const trimmed = value.trim();
   if (!trimmed) return { type: null, value: null };
-  const lower = trimmed.toLowerCase();
-  if (lower.includes("instagram.com") || trimmed.startsWith("@")) {
+  if (trimmed.startsWith("@") || isInstagramUrl(trimmed)) {
     const handle = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
     return { type: "instagram", value: handle.slice(0, 180) };
   }

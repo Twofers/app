@@ -11,8 +11,31 @@ updates:
     labels:
       - dependencies
       - security
+    ignore:
+      # Expo SDK packages are version-locked to the installed SDK (currently
+      # ~54.0.35). Left unconstrained, Dependabot proposed expo-web-browser
+      # 15.0.11 -> 57.0.2, expo-status-bar 3.0.9 -> 57.0.1 and react-native
+      # 0.81.5 -> 0.86.2 — all Expo SDK 57, none of which build against SDK 54.
+      # These move only through a deliberate SDK upgrade with
+      # `npx expo install --fix`, never one package at a time.
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react-native"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      # Community React Native modules: Expo pins compatible ranges for these
+      # too, so take patches and leave feature versions to the SDK upgrade.
+      - dependency-name: "react-native-*"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
     groups:
-      expo-compatible-patches:
+      # Everything the Expo SDK does not pin — supabase-js, date-fns,
+      # playwright and friends. This is where dependency security fixes
+      # actually land, so it stays on patch+minor.
+      sdk-independent-updates:
         update-types:
           - patch
           - minor
@@ -21,3 +44,11 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    groups:
+      # init/autobuild/analyze are one product and must move together. Bumping
+      # one alone fails the run outright: PR #28 (analyze 3.37.3 -> 4.37.3)
+      # died on "Loaded a configuration file for version '3.37.3', but running
+      # version '4.37.3'".
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

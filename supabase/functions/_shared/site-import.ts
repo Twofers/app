@@ -567,10 +567,22 @@ function decodeEntities(text: string): string {
 export function htmlToMenuText(html: string): string {
   const source = typeof html === "string" ? html : "";
   const stripped = source
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
+    // Comments first: one may contain an unbalanced "<script", which the
+    // unterminated-block rule below would otherwise read as swallowing the page.
     .replace(/<!--[\s\S]*?-->/g, " ")
+    // End tags may carry whitespace, a stray slash, or ignored attributes
+    // before ">" — a parser accepts "</script >", so a filter requiring
+    // "</script>" exactly leaves the script body in the extracted text (CodeQL
+    // js/bad-tag-filter). That text is handed to the menu-structuring LLM, so
+    // leaked script source is a prompt-injection channel on a page we do not
+    // control.
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript\b[^>]*>/gi, " ")
+    // Anything still open here was never closed; the tag stripper below would
+    // remove only its angle brackets and keep the body. Dropping the remainder
+    // is the fail-closed direction — worst case we extract less menu text.
+    .replace(/<(?:script|style|noscript)\b[^>]*>[\s\S]*$/i, " ")
     // Turn block boundaries into spaces so words don't fuse across tags.
     .replace(/<\/?(p|div|br|li|tr|td|th|h[1-6]|section|article|ul|ol|table)\b[^>]*>/gi, " ")
     .replace(/<[^>]+>/g, " ");
