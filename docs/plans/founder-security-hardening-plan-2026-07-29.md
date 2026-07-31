@@ -866,8 +866,31 @@ blast radius and were missing:
 - [ ] `[DAN]` Approve/merge the staged GitHub controls and enable live Dependabot
       security updates. The read-only snapshot currently shows the repository
       setting disabled; CodeQL is not live until its workflow reaches `main`.
-      **Both are live as of the PR #25 merge** — see the two triage sections
-      above for what they immediately found.
+      **Correction (measured 2026-07-31, replacing an earlier note here that
+      said "both are live"):** CodeQL is live and Dependabot *version updates*
+      are live — those are the scheduled bumps driven by
+      `.github/dependabot.yml`, and they are what produced the two PR waves.
+      Dependabot **security updates are still disabled**, which is a different
+      switch and the one this item is about. Measured, not inferred:
+      ```
+      gh api repos/Twofers/app --jq '.security_and_analysis'
+        dependabot_security_updates: disabled
+        secret_scanning:             enabled
+        secret_scanning_push_protection: enabled
+      gh api repos/Twofers/app/automated-security-fixes
+        {"enabled": false, "paused": false}
+      gh api repos/Twofers/app/vulnerability-alerts    -> HTTP 404 (alerts off)
+      ```
+      So nothing is currently watching for published CVEs in the dependency
+      tree; `npm audit` run by hand is the only coverage. This also sharpens
+      the caveat in the Dependabot triage doc — the `ignore` rules cannot be
+      suppressing security PRs for Expo packages, because no security PRs are
+      being generated at all. Enable at
+      **Settings → Code security → Dependabot alerts**, then **Dependabot
+      security updates**. Free on a public repository.
+      The good news in the same query: secret scanning *and* push protection
+      are both on, so a credential committed by mistake is blocked at push
+      time rather than found afterwards.
 - [x] `[DEV]` Triage the whole first CodeQL scan (81 alerts, not the 20 recorded
       earlier). Two genuine findings in shipped Edge Function code fixed with
       regression tests (`js/bad-tag-filter` in `site-import.ts`,
