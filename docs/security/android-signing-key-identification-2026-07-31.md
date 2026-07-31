@@ -102,6 +102,35 @@ Then:
 3. Delete the redundant `OLD_*` duplicates only after step 1, and only if the
    survivor is the identified one.
 
+## Related: the Google API key in the public repo
+
+`android/app/google-services.json` is **tracked**, and the repository is public.
+It carries one API key for package `com.unvmex2.twoforone` in Google Cloud
+project `twofer-b64b2` (project number `991672961636`), key prefix
+`AIzaSyA29R…KDNU`.
+
+This is normal — a Firebase/Google client key is designed to be embedded in an
+app binary, so it is not a secret in the way a service-account key is, and being
+in a public repo changes nothing that shipping the APK did not already. It is
+only safe **if the key is restricted**, and unrestricted keys of exactly this
+shape are what get scraped and billed against. That is what the Phase 2 item
+"Google Cloud project: audit the wallet service account + Places/Maps API keys —
+verify app + API restrictions" is about; this names the key it applies to.
+
+Check at **Google Cloud → APIs & Services → Credentials → the key above**:
+
+- **Application restrictions** should be *Android apps*, listing package
+  `com.unvmex2.twoforone` with the SHA-1 of the certificate Play actually ships.
+  With Play App Signing in use that is Google's signing cert, not the upload
+  key. For reference, the upload key's SHA-1 is
+  `96:46:B6:75:33:5E:61:DC:1D:AF:98:DF:FE:5F:40:9B:2C:EC:49:76`; the Play App
+  Signing SHA-1 is shown in Play Console → Setup → App integrity.
+- **API restrictions** should be *Restrict key* limited to the APIs actually
+  used (Places, Maps SDK for Android), never "Don't restrict key".
+
+An unrestricted key here is the realistic billing-abuse path in this codebase,
+and it costs nothing to close.
+
 ## Caveat worth stating
 
 EAS is the authority here, not this machine. `eas.json` sets no

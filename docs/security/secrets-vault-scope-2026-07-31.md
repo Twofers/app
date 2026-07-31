@@ -89,6 +89,14 @@ minutes, and it puts the genuinely fatal one first.
    2026-07-31. One command from the drive:
    `age-keygen -y <drive>:\twofer-backup-age-identity.txt` must print
    `age14h87sed9kx36vk2ufpyh6jr9uwflqvqnzr37f4u47pafncvfryxstt9qqz`.
+
+   The **primary** copy was checked on 2026-07-31 and carries that recipient.
+   Two caveats on how, both worth knowing: the check read only the file's own
+   `# public key:` comment — the secret line was never read into a transcript —
+   so it confirms the file is the intended one rather than deriving the public
+   key from the secret. A true derivation needs `age-keygen -y`, and **`age` is
+   not installed on this machine**, which is itself worth fixing before a
+   recovery is attempted under pressure.
 2. Add a third copy somewhere that is not flash memory — a password-manager
    secure note or paper in a safe. Unpowered flash degrades and this key has no
    expiry.

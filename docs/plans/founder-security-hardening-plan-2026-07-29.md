@@ -573,6 +573,15 @@ blast radius and were missing:
       twoferapp.com).
 - [ ] `[DAN]` **Google Cloud project**: audit the wallet service account + Places/Maps API
       keys (closes the two open key alerts — verify app + API restrictions).
+      **The key is now named** (`android/app/google-services.json` is tracked in
+      the public repo; key `AIzaSyA29R…KDNU`, project `twofer-b64b2`, package
+      `com.unvmex2.twoforone`). Being public is expected for a client key and
+      changes nothing that shipping the APK did not — it is safe *only if
+      restricted*, and an unrestricted key of this shape is the realistic
+      billing-abuse path here. Application restriction should carry the **Play
+      App Signing** SHA-1 (Play Console → Setup → App integrity), not the upload
+      key's `96:46:B6:75:…:49:76`. Details in
+      `docs/security/android-signing-key-identification-2026-07-31.md`.
 - [ ] `[DAN]` Original set: Supabase org members + MFA (second TOTP factor stored
       offline — Supabase has no recovery codes); Vercel MFA + token audit; Namecheap +
       Cloudflare hardware-backed MFA; recovery email that does not depend on
