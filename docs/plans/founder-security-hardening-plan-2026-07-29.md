@@ -22,13 +22,13 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 38 completed / 33 remaining (recounted directly from the
+**Checklist progress: 39 completed / 32 remaining (recounted directly from the
 checkboxes with `grep -c "^- \[x\]"`, 2026-07-31; every figure in this file's
 history that was written from prose rather than counted has been wrong).**
-The 2026-07-31 pass added two `[DEV]` items already done (CodeQL triage,
-Dependabot config repair) and two `[DAN]` items: close the seven unmergeable
-Dependabot PRs, and deploy the admin session hardening that is in `main` but
-not in production. Both staged migrations were applied to
+The 2026-07-31 pass added three completed items (CodeQL triage, Dependabot
+config repair, and the admin session-hardening deploy — approved by Dan and
+executed the same day) and one open `[DAN]` item: close the seven unmergeable
+Dependabot PRs. Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
 plan cannot reach 100% from the repository" below for the item-by-item gate audit:
 20 of the remaining 32 need a founder provider credential, and the rest need a
@@ -41,7 +41,7 @@ GoTrue change specification, and the takeover-exercise worksheet are complete.
 credential, a provider console, or an explicit production approval — plus the two
 new findings below, which are staged and waiting on approval rather than on work.
 
-Counts below are the open checkboxes in each group and sum to 33, except the
+Counts below are the open checkboxes in each group and sum to 32, except the
 offline-key row, which is tracked in prose rather than as a checkbox.
 
 | Remaining group | Items left | Who must act | Added recurring cost |
@@ -53,7 +53,7 @@ offline-key row, which is tracked in prose rather than as a checkbox.
 | **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
 | **CodeQL alert triage** | 0 | **Done 2026-07-31.** All 81 alerts triaged; the 2 in shipped code fixed with tests; the rest excluded by committed config | $0 |
 | **Dependabot PR triage** | 1 | Founder closes the 7 unmergeable PRs; the config that produced them is fixed | $0 |
-| **Website deploy gap** | 1 | Phase 5's admin session hardening is in `main` but not in production; deploying is founder-gated | $0 |
+| **Website deploy gap** | 0 | **Closed 2026-07-31.** Phase 5's admin session hardening is deployed and verified in production | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
 | Founder machine and recovery exercise | 4 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
@@ -240,12 +240,12 @@ Two consequences of that merge, both accepted knowingly:
   accident rather than by configuration. The public site is current and healthy
   (styles.css and localization.js byte-identical to `main`, production e2e green
   across en/es/ko, 42-route UI crawl clean, all headers and infra files live).
-  **The admin console is not.** Production still runs the deployment made before
-  `d4e027ed`, so the entire admin session hardening is undeployed:
-  `/api/admin/session` and `/api/admin/proxy` return 404, and the live login page
-  still offers "Keep me signed in on this browser" — which stores a Supabase
-  refresh token in the browser, the exact condition the sealed-cookie work
-  removes. See the note on Phase 5 below.
+  The admin console was **two days stale** — production still ran the deployment
+  made before `d4e027ed`, so the entire admin session hardening was missing:
+  `/api/admin/session` and `/api/admin/proxy` returned 404 and the login page
+  still offered "Keep me signed in on this browser", which stores a Supabase
+  refresh token in the browser. **Fixed the same day**: six versioned scripts
+  re-versioned, PR #43 merged, deployed, and all four markers verified flipped.
 - **The release-gate CI workflow is now active on PRs.** Setting `SUPABASE_URL`
   (previously unset) un-skipped its live probes; `live-probes` passed on the
   merge. Read-only, and a net improvement, but it was a side effect rather than
@@ -809,18 +809,17 @@ blast radius and were missing:
 
 ## Phase 5 — Admin session hardening (website)
 
-> **Committed, not deployed — measured 2026-07-31.** All three `[x] [DEV]` items
-> below are true of `main` and false of production. The commit carrying them
-> (`d4e027ed`, 2026-07-29 22:01 UTC) postdates the last production deploy
-> (2026-07-29 00:41 UTC) and merging to `main` did not trigger a new one. Proof
-> and the pre-deploy `?v=` bump this needs:
-> `docs/security/live-site-verification-2026-07-31.md`. Deploying is the gated
-> step in `docs/website-edit-checklist.md` §8.
+> **DEPLOYED 2026-07-31.** These items spent two days true of `main` and false
+> of production: `d4e027ed` (2026-07-29 22:01 UTC) postdated the last deploy
+> (00:41 UTC the same day), and merging to `main` does not trigger one. Found,
+> re-versioned, and shipped on 2026-07-31 —
+> deployment `dpl_A82VWVwNAPbNBoms2XkDJARXkNpy`, `READY`/`production`. All four
+> gap markers verified flipped. Record:
+> `docs/security/live-site-verification-2026-07-31.md`.
 
 - [x] `[DEV]` Add `Cache-Control: no-store` to `/admin(.*)` now (one-line vercel.json
       change; CSP/Referrer-Policy already exist — do not rebuild them).
-      *(In `main`; production still serves Vercel's static default because the
-      deployed `vercel.json` predates the change.)*
+      *(Live 2026-07-31: `/admin/` returns `no-store, private, max-age=0`.)*
 - [ ] `[DAN]` Move admin console to `admin.twoferapp.com` behind Cloudflare Access
       (founder identity only).
 - [x] `[DEV]` Replace browser-stored Supabase tokens with a same-origin backend session:
@@ -829,15 +828,16 @@ blast radius and were missing:
 - [x] `[DEV]` Fresh TOTP for destructive/security-sensitive actions.
 - [x] `[DEV]` Document and enforce in the release runbook: no auto-deploy of the admin site from an unprotected branch — exact reviewed
       commit, manual promotion.
-- [ ] `[DAN]` **Deploy the admin session hardening.** Everything above is in
-      `main` and none of it is in production (verified 2026-07-31). The
-      cache-busting prerequisite is done: all six versioned includes `d4e027ed`
-      changed now carry `?v=20260731-admin-session` across 23 pages — six, not
-      the two the commit's line stats suggested, found by diffing each live file
-      against `main`. What remains is the gated deploy from `website/` per
-      checklist §8, then re-checking that `/api/admin/session` stops returning
-      404, the login page loses its "Keep me signed in" checkbox, and `/admin/*`
-      carries `no-store`.
+- [x] `[DAN approved, DEV executed]` **Deploy the admin session hardening —
+      done 2026-07-31.** All six versioned includes `d4e027ed` changed were
+      re-versioned to `?v=20260731-admin-session` across 23 pages first (six,
+      not the two the commit's line stats suggested — found by diffing each live
+      file against `main`). Deployed from `website/` per checklist §8 after
+      merging PR #43. Verified: `/api/admin/session` and `/api/admin/proxy`
+      moved 404 → 403, the login page lost its "Keep me signed in" checkbox,
+      `/admin/*` now carries `no-store, private, max-age=0`, all six scripts are
+      byte-identical to `main`, and production e2e plus the infra sweep stayed
+      green.
 
 ## Phase 6 — GitHub, Vercel, DNS, email
 
