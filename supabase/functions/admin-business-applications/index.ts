@@ -1,8 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import {
+  requireAdmin,
+  type AdminContext,
+  type AdminRole,
+} from "../_shared/admin-prospects.ts";
 import {
   cleanString as cleanBusinessString,
   createOnboardingRequest,
@@ -14,26 +15,7 @@ import {
 } from "../_shared/approval-email.ts";
 import { hasPossibleDuplicate, quickApprovalTokenHash } from "../_shared/admin-quick-approval.ts";
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
-
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support"
-  | "sales"
-  | "finance"
-  | "moderator"
-  | "developer"
-  | "read_only";
-
-type AdminContext = {
-  user: { id: string; email?: string | null };
-  adminUser: {
-    email?: string | null;
-    role: AdminRole;
-  };
-  supabaseAdmin: any;
-  requestId: string;
-};
+import { grantFullAccessTrial } from "../_shared/admin-full-access-grant.ts";
 
 type Payload = {
   action?: unknown;
@@ -43,16 +25,28 @@ type Payload = {
   decision?: unknown;
   reason?: unknown;
   token?: unknown;
+  trial_days?: unknown;
 };
 
+// `approve_setup_verified` was named `approve_full` until 2026-07-23. It never
+// granted full access — only approved_not_activated with manual verification —
+// and the old name kept getting read as "this one turns everything on".
+// `approve_full_access` is the decision that actually does that.
 type DecisionKey =
   | "approve_setup"
   | "approve_limited"
-  | "approve_full"
+  | "approve_setup_verified"
+  | "approve_full_access"
   | "review_required"
   | "waitlist"
   | "reject"
   | "suspend";
+
+// Admin-entered countdown for approve_full_access, matching the
+// business_applications.trial_days check constraint.
+const MIN_FULL_ACCESS_TRIAL_DAYS = 1;
+const MAX_FULL_ACCESS_TRIAL_DAYS = 120;
+const BILLING_LINK_RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 
 type VerificationDecision = "verify" | "reject" | "needs_more_info";
 
@@ -69,6 +63,11 @@ type DecisionConfig = {
   businessVerificationStatus: string;
   subscriptionAccessStatus: string;
   auditAction: string;
+  /**
+   * Non-null only for approve_full_access: the countdown length for an
+   * admin-granted trial that is live immediately, with no Checkout step.
+   */
+  fullAccessTrialDays: number | null;
 };
 
 type BusinessDecisionSyncResult = {
@@ -78,7 +77,15 @@ type BusinessDecisionSyncResult = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPEN_STATUSES = ["pending_review", "pending_verification", "review_required"];
-const KNOWN_ACTIONS = new Set(["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"]);
+const KNOWN_ACTIONS = new Set([
+  "list",
+  "decide",
+  "create",
+  "verify_business",
+  "resend_billing_link",
+  "quick_preview",
+  "quick_confirm",
+]);
 const QUICK_APPROVAL_ACTIONS = new Set(["quick_preview", "quick_confirm"]);
 const QUICK_APPROVAL_TOKEN_RE = /^[A-Za-z0-9_-]{40,200}$/;
 const QUICK_APPROVAL_PROCESSING_TIMEOUT_MS = 2 * 60 * 1000;
@@ -99,21 +106,12 @@ function cleanString(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
-}
-
 function canDecideApplications(role: AdminRole): boolean {
   return role === "owner" || role === "admin" || role === "moderator" || role === "developer";
+}
+
+function canResendBillingLink(role: AdminRole): boolean {
+  return role === "owner" || role === "admin" || role === "support";
 }
 
 function riskLevel(score: unknown): "low" | "medium" | "high" | "blocked" | null {
@@ -125,7 +123,7 @@ function riskLevel(score: unknown): "low" | "medium" | "high" | "blocked" | null
   return "high";
 }
 
-function decisionConfig(decision: DecisionKey): DecisionConfig {
+function decisionConfig(decision: DecisionKey, fullAccessTrialDays: number | null = null): DecisionConfig {
   if (decision === "approve_setup" || decision === "approve_limited") {
     return {
       status: "approved_not_activated",
@@ -140,9 +138,10 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "basic_verified",
       subscriptionAccessStatus: "approved_not_activated",
       auditAction: "admin_business_application_approved_for_setup",
+      fullAccessTrialDays: null,
     };
   }
-  if (decision === "approve_full") {
+  if (decision === "approve_setup_verified") {
     return {
       status: "approved_not_activated",
       accessTier: "approved_not_activated",
@@ -155,7 +154,36 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessAccessLevel: "approved_not_activated",
       businessVerificationStatus: "manual_verified",
       subscriptionAccessStatus: "approved_not_activated",
+      // Audit action keeps its pre-rename string so log queries and dashboards
+      // spanning the rename still return one continuous series.
       auditAction: "admin_business_application_approved_for_setup_full",
+      fullAccessTrialDays: null,
+    };
+  }
+  if (decision === "approve_full_access") {
+    // Comp / partner / pilot fast-track: access is live the moment the owner
+    // claims, with no Checkout step, and runs out after the admin's day count.
+    //
+    // The APPLICATION deliberately stays approved_not_activated here.
+    // claim_approved_business_application_for_user only matches applications in
+    // that status (migration 20260817120000), so anything else would strand an
+    // unclaimed grant. The grant itself rides on full_access_trial_days, and the
+    // live state lands either immediately (business already exists, via
+    // syncBusinessDecision) or at claim time.
+    return {
+      status: "approved_not_activated",
+      accessTier: "approved_not_activated",
+      verificationStatus: "verified_low_risk",
+      trialDays: fullAccessTrialDays,
+      trialOfferLimit: null,
+      trialClaimLimit: null,
+      requestStatus: "approved_not_activated",
+      businessStatus: "trialing",
+      businessAccessLevel: "full_trial",
+      businessVerificationStatus: "manual_verified",
+      subscriptionAccessStatus: "trialing",
+      auditAction: "admin_business_application_approved_full_access_comp",
+      fullAccessTrialDays,
     };
   }
   if (decision === "waitlist") {
@@ -172,6 +200,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "needs_more_info",
       subscriptionAccessStatus: "pending",
       auditAction: "admin_business_application_waitlisted",
+      fullAccessTrialDays: null,
     };
   }
   if (decision === "reject") {
@@ -188,6 +217,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "failed",
       subscriptionAccessStatus: "pending",
       auditAction: "admin_business_application_rejected",
+      fullAccessTrialDays: null,
     };
   }
   if (decision === "suspend") {
@@ -204,6 +234,7 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
       businessVerificationStatus: "needs_more_info",
       subscriptionAccessStatus: "suspended",
       auditAction: "admin_business_application_suspended",
+      fullAccessTrialDays: null,
     };
   }
   return {
@@ -219,13 +250,15 @@ function decisionConfig(decision: DecisionKey): DecisionConfig {
     businessVerificationStatus: "needs_more_info",
     subscriptionAccessStatus: "pending",
     auditAction: "admin_business_application_review_required",
+    fullAccessTrialDays: null,
   };
 }
 
 function isDecision(value: unknown): value is DecisionKey {
   return (
     value === "approve_limited" ||
-    value === "approve_full" ||
+    value === "approve_setup_verified" ||
+    value === "approve_full_access" ||
     value === "approve_setup" ||
     value === "review_required" ||
     value === "waitlist" ||
@@ -234,10 +267,36 @@ function isDecision(value: unknown): value is DecisionKey {
   );
 }
 
-function isSetupApprovalDecision(
+/**
+ * Every decision that approves the business — the activation gate, the
+ * protected-access guard, the approved-email stamp, and the welcome email all
+ * key off this, so a new approve_* decision must be added here too.
+ */
+function isApprovalDecision(
   decision: DecisionKey,
 ): decision is ApprovalEmailDecision {
-  return decision === "approve_setup" || decision === "approve_limited" || decision === "approve_full";
+  return (
+    decision === "approve_setup" ||
+    decision === "approve_limited" ||
+    decision === "approve_setup_verified" ||
+    decision === "approve_full_access"
+  );
+}
+
+/**
+ * Handing out working access with no payment is a narrower authority than
+ * ordinary approval, so moderators and developers cannot do it.
+ */
+function canGrantFullAccess(role: AdminRole): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/** Admin-entered countdown; returns null when absent or out of range. */
+function parseFullAccessTrialDays(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null;
+  if (n < MIN_FULL_ACCESS_TRIAL_DAYS || n > MAX_FULL_ACCESS_TRIAL_DAYS) return null;
+  return n;
 }
 
 async function approvedActivationGateEnabled(supabaseAdmin: any): Promise<boolean> {
@@ -306,66 +365,6 @@ async function readPayload(req: Request): Promise<Payload> {
   } catch {
     return {};
   }
-}
-
-async function requireAdmin(req: Request, requestId: string): Promise<AdminContext | Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Admin business applications are not configured." }, 500);
-  }
-
-  const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabaseUser.auth.getUser();
-
-  if (userError || !user) {
-    return json(req, { error: "Unauthorized." }, 401);
-  }
-  if (isRedeemerUser(user)) {
-    return forbiddenForRedeemerResponse(getCorsHeaders(req));
-  }
-
-  const { data: adminUser, error: adminError } = await supabaseAdmin
-    .from("admin_users")
-    .select("id,email,role,is_active,require_mfa")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (adminError) throw adminError;
-  if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
-    await supabaseAdmin.from("admin_audit_log").insert({
-      admin_user_id: user.id,
-      admin_email: user.email ?? null,
-      action: "admin_business_applications_denied",
-      target_type: "business_application",
-      reason: "not_active_admin",
-      request_id: requestId,
-    });
-    return json(req, { error: "Forbidden." }, 403);
-  }
-  if (adminUser.require_mfa && !isAal2(bearerToken)) {
-    return json(req, { error: "MFA verification required." }, 403);
-  }
-
-  return {
-    user: { id: user.id, email: user.email },
-    adminUser: {
-      email: adminUser.email,
-      role: adminUser.role,
-    },
-    supabaseAdmin,
-    requestId,
-  };
 }
 
 function normalizedFromApplication(row: Record<string, unknown>): NormalizedBusinessOnboarding {
@@ -446,7 +445,7 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   let query = ctx.supabaseAdmin
     .from("business_applications")
     .select(
-      "id,business_name,contact_name,email,phone,address,business_type,website_or_instagram,slow_hours,offer_interests,launch_area,status,access_tier,verification_status,risk_score,risk_reasons,trial_days,trial_offer_limit,trial_claim_limit,business_id,onboarding_request_id,admin_notes,reviewed_at,created_at,updated_at",
+      "id,business_name,contact_name,email,phone,address,business_type,website_or_instagram,slow_hours,offer_interests,launch_area,status,access_tier,verification_status,risk_score,risk_reasons,trial_days,trial_offer_limit,trial_claim_limit,business_id,onboarding_request_id,admin_notes,approval_email_sent_at,approval_email_decision,reviewed_at,created_at,updated_at",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -462,6 +461,45 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   const { data, error } = await query;
   if (error) throw error;
 
+  const businessIds = [...new Set(
+    (data ?? [])
+      .map((application: Record<string, unknown>) =>
+        typeof application.business_id === "string" ? application.business_id : null
+      )
+      .filter((value: string | null): value is string => Boolean(value)),
+  )];
+  const subscriptionsByBusiness = new Map<string, Record<string, unknown>>();
+  if (businessIds.length > 0) {
+    const { data: subscriptions, error: subscriptionsError } = await ctx.supabaseAdmin
+      .from("business_subscriptions")
+      .select("business_id,trial_type,trial_end,activated_at,stripe_subscription_id")
+      .in("business_id", businessIds);
+    if (subscriptionsError) throw subscriptionsError;
+    for (const subscription of subscriptions ?? []) {
+      if (typeof subscription.business_id === "string") {
+        subscriptionsByBusiness.set(subscription.business_id, subscription);
+      }
+    }
+  }
+
+  const applications = (data ?? []).map((application: Record<string, unknown>) => {
+    const businessId = typeof application.business_id === "string"
+      ? application.business_id
+      : null;
+    const subscription = businessId ? subscriptionsByBusiness.get(businessId) : null;
+    const adminTrialCanConvert = application.status === "trial_active" &&
+      subscription?.trial_type === "admin_comp" &&
+      !subscription?.activated_at &&
+      !subscription?.stripe_subscription_id;
+    return {
+      ...application,
+      billing_link_resend_eligible:
+        canResendBillingLink(ctx.adminUser.role) &&
+        (application.status === "approved_not_activated" || adminTrialCanConvert),
+      billing_link_email_sent: Boolean(application.approval_email_sent_at),
+    };
+  });
+
   await ctx.supabaseAdmin.from("admin_audit_log").insert({
     admin_user_id: ctx.user.id,
     admin_email: ctx.adminUser.email ?? ctx.user.email ?? null,
@@ -474,7 +512,119 @@ async function listApplications(req: Request, ctx: AdminContext, payload: Payloa
   return json(req, {
     ok: true,
     request_id: ctx.requestId,
-    applications: data ?? [],
+    applications,
+  });
+}
+
+async function resendBillingLink(req: Request, ctx: AdminContext, payload: Payload) {
+  if (!canResendBillingLink(ctx.adminUser.role)) {
+    return json(req, { error: "This admin role cannot send billing links." }, 403);
+  }
+
+  const applicationId = cleanString(payload.application_id, 80);
+  if (!UUID_RE.test(applicationId)) {
+    return json(req, { error: "Application is required." }, 400);
+  }
+
+  const { data: applicationData, error: applicationError } = await ctx.supabaseAdmin
+    .from("business_applications")
+    .select("*")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (applicationError) throw applicationError;
+  if (!applicationData) return json(req, { error: "Trial request not found." }, 404);
+  const application = applicationData as Record<string, unknown>;
+
+  if (
+    application.status !== "approved_not_activated" &&
+    application.status !== "trial_active"
+  ) {
+    return json(req, {
+      error: "A new billing link can only be sent for approved setup or an unconverted admin trial.",
+    }, 409);
+  }
+
+  const recentCutoff = new Date(Date.now() - BILLING_LINK_RESEND_COOLDOWN_MS).toISOString();
+  const { data: recentSends, error: recentSendError } = await ctx.supabaseAdmin
+    .from("admin_audit_log")
+    .select("id")
+    .eq("target_type", "business_application")
+    .eq("target_id", applicationId)
+    .eq("action", "admin_business_application_billing_link_resent")
+    .gte("created_at", recentCutoff)
+    .limit(1);
+  if (recentSendError) throw recentSendError;
+  if ((recentSends ?? []).length > 0) {
+    return json(req, {
+      error: "A new billing link was sent recently. Wait five minutes before sending another.",
+    }, 429);
+  }
+
+  let decision: ApprovalEmailDecision = "approve_setup";
+  let trialDays = typeof application.trial_days === "number" &&
+      Number.isInteger(application.trial_days) &&
+      application.trial_days > 0
+    ? application.trial_days
+    : 30;
+
+  if (application.status === "trial_active") {
+    const businessId = typeof application.business_id === "string"
+      ? application.business_id
+      : "";
+    if (!UUID_RE.test(businessId)) {
+      return json(req, { error: "The active trial is not linked to a business." }, 409);
+    }
+    const { data: subscription, error: subscriptionError } = await ctx.supabaseAdmin
+      .from("business_subscriptions")
+      .select("trial_type,trial_end,activated_at,stripe_subscription_id")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (subscriptionError) throw subscriptionError;
+    if (
+      subscription?.trial_type !== "admin_comp" ||
+      subscription?.activated_at ||
+      subscription?.stripe_subscription_id
+    ) {
+      return json(req, {
+        error: "Stripe billing is already active. Use the customer billing portal instead.",
+      }, 409);
+    }
+    const trialEndMs = Date.parse(String(subscription.trial_end ?? ""));
+    if (!Number.isFinite(trialEndMs) || trialEndMs <= Date.now()) {
+      return json(req, { error: "The admin trial has ended and cannot receive a conversion link." }, 409);
+    }
+    trialDays = Math.max(1, Math.min(
+      MAX_FULL_ACCESS_TRIAL_DAYS,
+      Math.ceil((trialEndMs - Date.now()) / (24 * 60 * 60 * 1000)),
+    ));
+    decision = "approve_full_access";
+  } else {
+    const previousDecision = application.approval_email_decision;
+    if (isDecision(previousDecision) && isApprovalDecision(previousDecision)) {
+      decision = previousDecision;
+    }
+  }
+
+  const emailWarning = await sendApprovalEmail({
+    supabaseAdmin: ctx.supabaseAdmin,
+    application: { ...application, trial_days: trialDays },
+    decision,
+    requestId: ctx.requestId,
+    allowResend: true,
+    adminUserId: ctx.user.id,
+    adminEmail: ctx.adminUser.email ?? ctx.user.email ?? null,
+  });
+  if (emailWarning) {
+    return json(req, {
+      error: emailWarning,
+      request_id: ctx.requestId,
+    }, 502);
+  }
+
+  return json(req, {
+    ok: true,
+    request_id: ctx.requestId,
+    message: "A new billing link was sent. The previous email link is no longer valid.",
   });
 }
 
@@ -604,6 +754,19 @@ async function syncBusinessDecision(
         cancelAtPeriodEnd: false,
       });
     }
+  } else if (config.subscriptionAccessStatus === "trialing" && config.fullAccessTrialDays !== null) {
+    // approve_full_access on a business that already exists: turn access on now
+    // and start the countdown. No Stripe customer, subscription, or Checkout is
+    // involved — expire-billing-access sweeps the row to `expired` once
+    // trial_end passes, exactly as it does for any other card-free admin trial.
+    // When the business does NOT exist yet, this is skipped and the marker
+    // columns carry the grant to get-business-onboarding-context instead.
+    await grantFullAccessTrial({
+      supabase: ctx.supabaseAdmin,
+      businessId,
+      trialDays: config.fullAccessTrialDays,
+      source: "admin_approval_full_access",
+    });
   } else if (config.subscriptionAccessStatus === "suspended") {
     const now = new Date().toISOString();
     const { error: subscriptionError } = await ctx.supabaseAdmin
@@ -639,18 +802,35 @@ async function applyDecision(
   application: Record<string, unknown>,
   decision: DecisionKey,
   rawReason: unknown,
+  rawTrialDays: unknown = null,
 ) {
   const applicationId = String(application.id);
-  if (isSetupApprovalDecision(decision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+  if (isApprovalDecision(decision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
     return json(req, {
       error: "Approved activation rollout is not enabled.",
       error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
     }, 503);
   }
+  let fullAccessTrialDays: number | null = null;
+  if (decision === "approve_full_access") {
+    if (!canGrantFullAccess(ctx.adminUser.role)) {
+      return json(req, {
+        error: "This admin role cannot grant full access without payment.",
+        error_code: "FULL_ACCESS_GRANT_FORBIDDEN",
+      }, 403);
+    }
+    fullAccessTrialDays = parseFullAccessTrialDays(rawTrialDays);
+    if (fullAccessTrialDays === null) {
+      return json(req, {
+        error: `Enter the number of trial days (${MIN_FULL_ACCESS_TRIAL_DAYS}-${MAX_FULL_ACCESS_TRIAL_DAYS}).`,
+        error_code: "INVALID_TRIAL_DAYS",
+      }, 400);
+    }
+  }
   const linkedBusinessId =
     typeof application.business_id === "string" ? application.business_id : null;
   if (
-    isSetupApprovalDecision(decision) &&
+    isApprovalDecision(decision) &&
     linkedBusinessId &&
     await linkedBusinessHasProtectedAccess(ctx.supabaseAdmin, linkedBusinessId)
   ) {
@@ -659,7 +839,7 @@ async function applyDecision(
       error_code: "LINKED_BUSINESS_ACCESS_PROTECTED",
     }, 409);
   }
-  const config = decisionConfig(decision);
+  const config = decisionConfig(decision, fullAccessTrialDays);
   const reason = cleanBusinessString(rawReason, 500) ?? "";
   const adminEmail = ctx.adminUser.email ?? ctx.user.email ?? null;
   const onboardingRequestId = await ensureOnboardingRequestForDecision(ctx, application, config);
@@ -668,9 +848,14 @@ async function applyDecision(
   const applicationPatch = {
     status: config.status,
     access_tier: config.accessTier,
-    ...(isSetupApprovalDecision(decision)
+    ...(isApprovalDecision(decision)
       ? { approved_email_normalized: String(application.email ?? "").trim().toLowerCase() }
       : {}),
+    // Carries the grant to the claim path for an application whose business
+    // does not exist yet; harmless (and cleared) on every other decision.
+    full_access_trial_days: config.fullAccessTrialDays,
+    full_access_granted_at: config.fullAccessTrialDays === null ? null : new Date().toISOString(),
+    full_access_granted_by: config.fullAccessTrialDays === null ? null : ctx.user.id,
     verification_status: config.verificationStatus,
     trial_days: config.trialDays,
     trial_offer_limit: config.trialOfferLimit,
@@ -711,7 +896,7 @@ async function applyDecision(
   // Approval email (best-effort; never blocks the decision). Approval no longer
   // starts access; it hands the owner to account setup and trial activation.
   let approvalEmailWarning: string | null = null;
-  if (isSetupApprovalDecision(decision)) {
+  if (isApprovalDecision(decision)) {
     approvalEmailWarning = await sendApprovalEmail({
       supabaseAdmin: ctx.supabaseAdmin,
       application: updated as Record<string, unknown>,
@@ -757,7 +942,7 @@ async function applyDecision(
 type QuickApprovalContext = {
   rawTokenHash: string;
   application: Record<string, unknown>;
-  adminUser: { id: string; email: string | null; role: AdminRole };
+  adminContext: AdminContext;
   supabaseAdmin: any;
 };
 
@@ -782,17 +967,12 @@ function quickApprovalApplicationIsEligible(application: Record<string, unknown>
 async function loadQuickApprovalContext(
   req: Request,
   payload: Payload,
+  adminContext: AdminContext,
 ): Promise<QuickApprovalContext | Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Quick approval is not configured." }, 500);
-  }
-
   const rawToken = cleanString(payload.token, 240);
   if (!QUICK_APPROVAL_TOKEN_RE.test(rawToken)) return quickApprovalUnavailable(req);
   const tokenHash = await quickApprovalTokenHash(rawToken);
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  const supabaseAdmin = adminContext.supabaseAdmin;
   const { data: applicationData, error: applicationError } = await supabaseAdmin
     .from("business_applications")
     .select("*")
@@ -820,31 +1000,28 @@ async function loadQuickApprovalContext(
   const issuedTo = typeof application.quick_approval_token_issued_to === "string"
     ? application.quick_approval_token_issued_to
     : "";
-  if (!UUID_RE.test(issuedTo)) return quickApprovalUnavailable(req);
-  const { data: adminData, error: adminError } = await supabaseAdmin
-    .from("admin_users")
-    .select("id,email,role,is_active")
-    .eq("id", issuedTo)
-    .maybeSingle();
-  if (adminError) throw adminError;
-  if (!adminData?.is_active || !hasReadableAdminRole(adminData.role) || !canDecideApplications(adminData.role)) {
+  if (
+    !UUID_RE.test(issuedTo) ||
+    issuedTo !== adminContext.user.id ||
+    !canDecideApplications(adminContext.adminUser.role)
+  ) {
     return quickApprovalUnavailable(req);
   }
 
   return {
     rawTokenHash: tokenHash,
     application,
-    adminUser: {
-      id: adminData.id,
-      email: typeof adminData.email === "string" ? adminData.email : null,
-      role: adminData.role,
-    },
+    adminContext,
     supabaseAdmin,
   };
 }
 
-async function previewQuickApproval(req: Request, payload: Payload, requestId: string) {
-  const context = await loadQuickApprovalContext(req, payload);
+async function previewQuickApproval(
+  req: Request,
+  payload: Payload,
+  adminContext: AdminContext,
+) {
+  const context = await loadQuickApprovalContext(req, payload, adminContext);
   if (context instanceof Response) return context;
   const application = context.application;
 
@@ -852,13 +1029,13 @@ async function previewQuickApproval(req: Request, payload: Payload, requestId: s
   // reachable without an admin session, so record who/when it was viewed — attributed
   // to the issued-to admin the token is bound to.
   await context.supabaseAdmin.from("admin_audit_log").insert({
-    admin_user_id: context.adminUser.id,
-    admin_email: context.adminUser.email,
+    admin_user_id: context.adminContext.user.id,
+    admin_email: context.adminContext.adminUser.email,
     action: "admin_business_application_quick_previewed",
     target_type: "business_application",
     target_id: String(application.id),
     reason: "quick_approval_email_preview",
-    request_id: requestId,
+    request_id: context.adminContext.requestId,
   });
 
   return json(req, {
@@ -880,10 +1057,15 @@ async function previewQuickApproval(req: Request, payload: Payload, requestId: s
   });
 }
 
-async function confirmQuickApproval(req: Request, payload: Payload, requestId: string) {
-  const context = await loadQuickApprovalContext(req, payload);
+async function confirmQuickApproval(
+  req: Request,
+  payload: Payload,
+  adminContext: AdminContext,
+) {
+  const context = await loadQuickApprovalContext(req, payload, adminContext);
   if (context instanceof Response) return context;
   const applicationId = String(context.application.id);
+  const requestId = context.adminContext.requestId;
   const processingStartedAt = new Date().toISOString();
   const staleBefore = new Date(Date.now() - QUICK_APPROVAL_PROCESSING_TIMEOUT_MS).toISOString();
 
@@ -938,15 +1120,9 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
       return quickApprovalUnavailable(req);
     }
 
-    const adminContext: AdminContext = {
-      user: { id: context.adminUser.id, email: context.adminUser.email },
-      adminUser: { email: context.adminUser.email, role: context.adminUser.role },
-      supabaseAdmin: context.supabaseAdmin,
-      requestId,
-    };
     const decisionResponse = await applyDecision(
       req,
-      adminContext,
+      context.adminContext,
       claimedData as Record<string, unknown>,
       "approve_setup",
       "Approved for setup; 30-day trial starts only after verified Stripe activation.",
@@ -967,7 +1143,7 @@ async function confirmQuickApproval(req: Request, payload: Payload, requestId: s
       .from("business_applications")
       .update({
         quick_approval_token_used_at: usedAt,
-        quick_approval_token_used_by: context.adminUser.id,
+        quick_approval_token_used_by: context.adminContext.user.id,
         quick_approval_processing_started_at: null,
         quick_approval_processing_request_id: null,
       })
@@ -1021,7 +1197,14 @@ async function decideApplication(req: Request, ctx: AdminContext, payload: Paylo
   if (applicationError) throw applicationError;
   if (!applicationData) return json(req, { error: "Trial request not found." }, 404);
 
-  return applyDecision(req, ctx, applicationData as Record<string, unknown>, payload.decision, payload.reason);
+  return applyDecision(
+    req,
+    ctx,
+    applicationData as Record<string, unknown>,
+    payload.decision,
+    payload.reason,
+    payload.trial_days,
+  );
 }
 
 function isVerificationDecision(value: unknown): value is VerificationDecision {
@@ -1105,16 +1288,21 @@ async function createApplication(req: Request, ctx: AdminContext, payload: Paylo
   const contactName = cleanString(input.contact_name, 120);
   const email = cleanString(input.email, 200).toLowerCase();
   const decision = (payload as Record<string, unknown>).decision;
-  const accessDecision: DecisionKey = decision === "approve_full"
-    ? "approve_full"
-    : decision === "review_required"
-    ? "review_required"
-    : "approve_limited";
+  // TRANSITION SHIM — remove once the website deploy ships (2026-07-23).
+  // The deployed /admin/businesses/new still POSTs the retired `approve_full`.
+  // Without this it falls through to approve_limited and silently writes
+  // basic_verified on a form that promises manual verification.
+  const accessDecision: DecisionKey =
+    decision === "approve_setup_verified" || decision === "approve_full"
+      ? "approve_setup_verified"
+      : decision === "review_required"
+      ? "review_required"
+      : "approve_limited";
 
   if (!businessName || !contactName || !EMAIL_RE.test(email)) {
     return json(req, { error: "Business name, contact name, and a valid email are required." }, 400);
   }
-  if (isSetupApprovalDecision(accessDecision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
+  if (isApprovalDecision(accessDecision) && !(await approvedActivationGateEnabled(ctx.supabaseAdmin))) {
     return json(req, {
       error: "Approved activation rollout is not enabled.",
       error_code: "APPROVED_ACTIVATION_GATE_DISABLED",
@@ -1178,14 +1366,13 @@ Deno.serve(async (req) => {
     if (!KNOWN_ACTIONS.has(action)) {
       return json(req, { ok: false, error: "Unknown action.", request_id: requestId }, 400);
     }
+    const adminContext = await requireAdmin(req, requestId, "prospect.read");
+    if (adminContext instanceof Response) return adminContext;
     if (QUICK_APPROVAL_ACTIONS.has(action)) {
       return action === "quick_confirm"
-        ? confirmQuickApproval(req, payload, requestId)
-        : previewQuickApproval(req, payload, requestId);
+        ? confirmQuickApproval(req, payload, adminContext)
+        : previewQuickApproval(req, payload, adminContext);
     }
-
-    const adminContext = await requireAdmin(req, requestId);
-    if (adminContext instanceof Response) return adminContext;
     if (action === "decide") {
       return decideApplication(req, adminContext, payload);
     }
@@ -1194,6 +1381,9 @@ Deno.serve(async (req) => {
     }
     if (action === "verify_business") {
       return verifyBusiness(req, adminContext, payload);
+    }
+    if (action === "resend_billing_link") {
+      return resendBillingLink(req, adminContext, payload);
     }
     return listApplications(req, adminContext, payload);
   } catch (err) {
@@ -1208,6 +1398,8 @@ Deno.serve(async (req) => {
       ? "Failed to create business trial."
       : action === "verify_business"
       ? "Failed to save verification decision."
+      : action === "resend_billing_link"
+      ? "Failed to send a new billing link."
       : "Failed to load trial requests.";
     return json(req, { error, request_id: requestId }, 500);
   }

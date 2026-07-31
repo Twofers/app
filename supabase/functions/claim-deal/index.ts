@@ -20,6 +20,7 @@ import {
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -177,7 +178,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
 
     const supabase = createClient(
       supabaseUrl,

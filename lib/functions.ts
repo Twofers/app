@@ -426,10 +426,13 @@ export async function deleteUserAccount(): Promise<void> {
     timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) {
-    throw new Error(parseFunctionError(error));
+    // Keep the server's error_code on the thrown error — the function returns non-2xx
+    // on failure, so this branch (not the `data` one below) is the real failure path.
+    throwInvokeError(parseFunctionError(error), getErrorCode(error));
   }
   if (data && typeof data === "object" && "error" in data) {
-    throw new Error((data as { error?: string }).error ?? "Server returned an error");
+    const body = data as { error?: string; error_code?: string };
+    throwInvokeError(body.error ?? "Server returned an error", body.error_code);
   }
 }
 

@@ -104,9 +104,40 @@ export async function signIn(ctx, email, password) {
   return { token: body.access_token, userId: body.user?.id };
 }
 
+/**
+ * True for the transient `bad_jwt` GoTrue returns after a service-key rotation.
+ *
+ * Measured on the test project 2026-07-24, minutes after the key was rotated to
+ * the `sb_secret_` format: 4 of 12 identical admin calls failed with
+ * `403 bad_jwt / unrecognized JWT kid <nil> for algorithm ES256` while the other
+ * 8 succeeded. The key is valid — some GoTrue instances were still serving a
+ * stale JWKS cache, so calls failed depending on which one answered. Retrying
+ * the same call succeeds. Without this the suites fail at random and look like
+ * real RLS regressions.
+ *
+ * Deliberately narrow: only this signature is retried. A genuinely wrong key
+ * fails every attempt and still surfaces as an error.
+ */
+function isTransientStaleKeyError(status, body) {
+  return status === 403 && String(body?.error_code ?? "") === "bad_jwt";
+}
+
+async function adminFetchWithRetry(url, init, { tries = 5 } = {}) {
+  let last = { status: 0, body: {} };
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const res = await fetch(url, init);
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return { ok: true, status: res.status, body };
+    last = { status: res.status, body };
+    if (!isTransientStaleKeyError(res.status, body)) break;
+    await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+  }
+  return { ok: false, ...last };
+}
+
 /** Create a confirmed throwaway auth user via the admin API. Returns userId. */
 export async function adminCreateUser(ctx, { email, password, role }) {
-  const res = await fetch(`${ctx.url}/auth/v1/admin/users`, {
+  const r = await adminFetchWithRetry(`${ctx.url}/auth/v1/admin/users`, {
     method: "POST",
     headers: { apikey: ctx.service, Authorization: `Bearer ${ctx.service}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -116,17 +147,16 @@ export async function adminCreateUser(ctx, { email, password, role }) {
       user_metadata: role ? { role } : undefined,
     }),
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.id) {
-    throw new Error(`admin createUser failed (${res.status}): ${JSON.stringify(body).slice(0, 200)}`);
+  if (!r.ok || !r.body.id) {
+    throw new Error(`admin createUser failed (${r.status}): ${JSON.stringify(r.body).slice(0, 200)}`);
   }
-  return body.id;
+  return r.body.id;
 }
 
 /** Delete an auth user via the admin API. Best-effort. */
 export async function adminDeleteUser(ctx, userId) {
   if (!userId) return;
-  await fetch(`${ctx.url}/auth/v1/admin/users/${userId}`, {
+  await adminFetchWithRetry(`${ctx.url}/auth/v1/admin/users/${userId}`, {
     method: "DELETE",
     headers: { apikey: ctx.service, Authorization: `Bearer ${ctx.service}` },
   }).catch(() => {});

@@ -17,6 +17,9 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import * as AppleAuthentication from "expo-apple-authentication";
+import { GoogleSigninButton } from "@react-native-google-signin/google-signin";
+import type { Session } from "@supabase/supabase-js";
 import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { LaunchArguments } from "react-native-launch-arguments";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -26,7 +29,25 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
 import { useTabMode, type TabMode } from "@/lib/tab-mode";
-import { persistRoleForUser, resolveRoleForUser, SIGNUP_ROLE_META_KEY } from "@/lib/profiles-role";
+import {
+  persistRoleForUser,
+  resolveKnownRoleForUser,
+  resolveRoleForUser,
+  SIGNUP_ROLE_META_KEY,
+} from "@/lib/profiles-role";
+import {
+  clearPendingSocialRole,
+  decideSocialCompletion,
+  isAppleSignInAvailable,
+  setPendingSocialRole,
+  shouldBlockBusinessRelayEmail,
+  signInWithApple,
+  signInWithGoogle,
+  signOutSocialSessionLocally,
+  takePendingSocialRole,
+  type SocialSignInResult,
+} from "@/lib/social-auth";
+import { isGoogleSignInConfigured, isSocialAuthEnabled } from "@/lib/runtime-env";
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage, isEmailNotConfirmedError } from "@/lib/auth-error-messages";
 import { getScreenLayoutMetrics, Spacing, type TabBarPlatform } from "@/lib/screen-layout";
@@ -244,7 +265,13 @@ export default function AuthLandingScreen() {
   const [pw, setPw] = useState("");
   const [pwVisible, setPwVisible] = useState(false);
   const [focusedField, setFocusedField] = useState<null | "email" | "password">(null);
-  const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
+  const [busyAction, setBusyAction] = useState<null | "login" | "signup" | "google" | "apple" | "finishSetup">(null);
+  // Native Sign in with Apple exists on iOS 13+ only; probe once rather than assuming.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  // Set when a social session belongs to an account with no role anywhere yet (someone tapped a
+  // social button on the LOGIN tab and had never signed up). Holds the screen on an inline
+  // role + terms step instead of guessing a role.
+  const [finishSetup, setFinishSetup] = useState<null | { userId: string; email: string | null }>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
@@ -254,11 +281,26 @@ export default function AuthLandingScreen() {
   const [resendNotice, setResendNotice] = useState<string | null>(null);
   const qaLoginStarted = useRef(false);
 
+  // EXPO_PUBLIC_* is inlined at bundle time, so these are constant for the life of the build.
+  const socialAuthEnabled = isSocialAuthEnabled();
+  const googleSignInReady = isGoogleSignInConfigured();
+
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    if (!socialAuthEnabled || Platform.OS !== "ios") return;
+    let alive = true;
+    void isAppleSignInAvailable().then((ok) => {
+      if (alive) setAppleAvailable(ok);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [socialAuthEnabled]);
 
   // Count the resend cooldown down once a second so the button label stays live.
   useEffect(() => {
@@ -493,6 +535,122 @@ export default function AuthLandingScreen() {
     }
   }
 
+  // --- native Google / Apple sign-in -----------------------------------------
+  // `signInWithIdToken` carries no user metadata, so the role cannot ride the token the way
+  // `signup_role` rides `signUp`. It is stashed locally before the picker opens and taken back here.
+
+  async function routeForRole(role: TabMode, userId: string) {
+    await adoptRole(role, userId);
+    const href = await resolvePostAuthReplaceHref({
+      role,
+      nextParam: firstQueryString(params.next),
+    });
+    router.replace(href);
+  }
+
+  /**
+   * Merchant claim matches the confirmed auth email to the approved application email, so an Apple
+   * private-relay address can never open a business workspace. Stop before any business routing,
+   * explain the fix, and drop the session locally (global sign-out misbehaves on the S10).
+   */
+  async function blockRelayEmailBusiness() {
+    setFinishSetup(null);
+    await clearPendingSocialRole();
+    await signOutSocialSessionLocally();
+    setAuthError(t("authLanding.errAppleRelayBusiness"));
+  }
+
+  function socialErrorMessage(result: Extract<SocialSignInResult, { status: "error" }>): string {
+    if (result.reason === "not_configured") return t("authLanding.errSocialUnavailable");
+    if (result.reason === "no_id_token" || result.reason === "no_session") {
+      return t("authLanding.errSocialIncomplete");
+    }
+    return friendlyAuthError(result.error, t);
+  }
+
+  async function completeSocialSession(session: Session) {
+    const user = session.user;
+    const pendingRole = await takePendingSocialRole();
+    const storedRole = await resolveKnownRoleForUser(user);
+    const decision = decideSocialCompletion({ storedRole, pendingRole });
+
+    if (decision.action === "finish_setup") {
+      logAuthPath("social_finish_setup", user.email ?? undefined);
+      setSignupRole("customer");
+      setTermsAccepted(false);
+      setFinishSetup({ userId: user.id, email: user.email ?? null });
+      return;
+    }
+    if (shouldBlockBusinessRelayEmail(decision.role, user.email)) {
+      await blockRelayEmailBusiness();
+      return;
+    }
+    if (decision.action === "adopt") {
+      await persistRoleForUser(user.id, decision.role);
+    }
+    await routeForRole(decision.role, user.id);
+  }
+
+  async function handleSocialSignIn(provider: "google" | "apple") {
+    if (busy) return;
+    // Account creation can happen on either tab, but the terms gate is the signup tab's rule and
+    // stays exactly as strict as handleSignUp. A brand-new user arriving from the login tab hits
+    // the same checkbox in the finish-setup step below.
+    if (isSignup && !termsAccepted) {
+      setAuthError(t("authLanding.errTermsRequired"));
+      return;
+    }
+    setBusyAction(provider);
+    clearFeedback();
+    setSignUpAwaitingVerification(false);
+    logAuthPath(provider === "google" ? "google_signin" : "apple_signin");
+    try {
+      if (isSignup) await setPendingSocialRole(signupRole);
+      else await clearPendingSocialRole();
+
+      const result = provider === "google" ? await signInWithGoogle() : await signInWithApple();
+      if (result.status === "cancelled") {
+        // Backing out of the picker is not a failure: no banner, no state change.
+        await clearPendingSocialRole();
+        return;
+      }
+      if (result.status === "error") {
+        await clearPendingSocialRole();
+        setAuthError(socialErrorMessage(result));
+        return;
+      }
+      await completeSocialSession(result.session);
+    } catch (e: unknown) {
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleFinishSetup() {
+    if (busy || !finishSetup) return;
+    if (!termsAccepted) {
+      setAuthError(t("authLanding.errTermsRequired"));
+      return;
+    }
+    setBusyAction("finishSetup");
+    clearFeedback();
+    try {
+      if (shouldBlockBusinessRelayEmail(signupRole, finishSetup.email)) {
+        await blockRelayEmailBusiness();
+        return;
+      }
+      const { userId } = finishSetup;
+      await persistRoleForUser(userId, signupRole);
+      setFinishSetup(null);
+      await routeForRole(signupRole, userId);
+    } catch (e: unknown) {
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
   const consumerSubtitle = t("authLanding.subtitleConsumerPolished", {
@@ -503,6 +661,8 @@ export default function AuthLandingScreen() {
   });
   const isSignup = screenMode === "signup";
   const submitBlockedByTerms = isSignup && !termsAccepted;
+  const showAppleButton = socialAuthEnabled && Platform.OS === "ios" && appleAvailable;
+  const showSocialButtons = googleSignInReady || showAppleButton;
   const authInputPadding = isSignup ? Spacing.md : Spacing.lg;
   const authSubmitBottomGap = isSignup ? Spacing.sm : Spacing.md;
 
@@ -511,6 +671,176 @@ export default function AuthLandingScreen() {
     await setUiLocalePreference(locale, { manual: true });
     await setCustomerPreferredDealLocaleFromAppLanguage(locale);
     await i18n.changeLanguage(locale);
+  }
+
+  // Shared by the signup tab and the social finish-setup step, so the role choice and the terms
+  // gate stay literally the same controls rather than two copies that can drift.
+  function renderRolePicker() {
+    return (
+      <>
+        <Text
+          style={{
+            fontWeight: "800",
+            fontSize: 16,
+            color: theme.text,
+            marginBottom: Spacing.xs,
+            textAlign: "center",
+          }}
+        >
+          {t("authLanding.roleTitle")}
+        </Text>
+
+        <View
+          style={{
+            flexDirection: stackRoleCards ? "column" : "row",
+            gap: roleCardGap,
+            marginBottom: Spacing.sm,
+          }}
+        >
+          <RoleCard
+            theme={theme}
+            colorScheme={colorScheme}
+            selected={signupRole === "customer"}
+            title={t("authLanding.roleCustomer")}
+            hint={t("authLanding.roleCustomerPolishedHint", {
+              defaultValue: "Find nearby offers, claim tickets, and redeem in person.",
+            })}
+            onPress={() => {
+              setSignupRole("customer");
+              clearFeedback();
+            }}
+            disabled={busy}
+            stacked={stackRoleCards}
+          />
+          <RoleCard
+            theme={theme}
+            colorScheme={colorScheme}
+            selected={signupRole === "business"}
+            title={t("authLanding.roleBusiness")}
+            hint={t("authLanding.roleBusinessPolishedHint", {
+              defaultValue: "Post offers, track claims, and scan redemptions.",
+            })}
+            onPress={() => {
+              setSignupRole("business");
+              clearFeedback();
+            }}
+            disabled={busy}
+            stacked={stackRoleCards}
+          />
+        </View>
+      </>
+    );
+  }
+
+  function renderTermsRow() {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: Spacing.sm,
+          marginBottom: Spacing.md,
+        }}
+      >
+        <Pressable
+          onPress={() => setTermsAccepted((v) => !v)}
+          disabled={busy}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: termsAccepted, disabled: busy }}
+          accessibilityLabel={t("authLanding.termsCheckboxA11y", {
+            defaultValue: "I agree to the Terms of Service, which prohibit objectionable content and abusive behavior",
+          })}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{ paddingTop: 1 }}
+        >
+          <MaterialIcons
+            name={termsAccepted ? "check-box" : "check-box-outline-blank"}
+            size={22}
+            color={termsAccepted ? theme.primary : theme.mutedText}
+          />
+        </Pressable>
+        <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: theme.mutedText }} maxFontSizeMultiplier={1.1}>
+          <Trans
+            i18nKey="authLanding.termsCheckbox"
+            components={{
+              terms: (
+                <Text
+                  accessibilityRole="link"
+                  style={{ textDecorationLine: "underline", color: theme.primary }}
+                  onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
+                />
+              ),
+            }}
+          />
+        </Text>
+      </View>
+    );
+  }
+
+  /**
+   * Apple makes the hide-my-email choice sticky per Apple ID, so warn before the picker opens
+   * rather than only after the guard has already bounced them.
+   */
+  function renderBusinessEmailHint() {
+    if (signupRole !== "business") return null;
+    return (
+      <Text
+        style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText, textAlign: "center", marginBottom: Spacing.sm }}
+        maxFontSizeMultiplier={1.1}
+      >
+        {t("authLanding.socialBusinessEmailHint")}
+      </Text>
+    );
+  }
+
+  function renderSocialButtons() {
+    if (!showSocialButtons) return null;
+    return (
+      <View style={{ marginBottom: Spacing.md }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+          <Text style={{ fontSize: 12, color: theme.mutedText }} maxFontSizeMultiplier={1.1}>
+            {t("authLanding.orDivider")}
+          </Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+        </View>
+
+        {/* Both are the providers' own buttons: Apple requires its button for Sign in with Apple,
+            and Google's brand guidelines want the official asset rather than a redrawn G. */}
+        {googleSignInReady ? (
+          <GoogleSigninButton
+            size={GoogleSigninButton.Size.Wide}
+            color={colorScheme === "dark" ? GoogleSigninButton.Color.Dark : GoogleSigninButton.Color.Light}
+            disabled={busy}
+            onPress={() => void handleSocialSignIn("google")}
+            accessibilityLabel={t("authLanding.continueWithGoogle")}
+            style={{ width: "100%", height: Controls.buttonHeight, opacity: busy ? 0.6 : 1 }}
+          />
+        ) : null}
+
+        {showAppleButton ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={
+              colorScheme === "dark"
+                ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+            }
+            cornerRadius={Radii.md}
+            accessibilityLabel={t("authLanding.continueWithApple")}
+            onPress={() => void handleSocialSignIn("apple")}
+            style={{
+              width: "100%",
+              height: Controls.buttonHeight,
+              marginTop: googleSignInReady ? Spacing.sm : 0,
+              opacity: busy ? 0.6 : 1,
+            }}
+          />
+        ) : null}
+
+        {isSignup ? <View style={{ marginTop: Spacing.sm }}>{renderBusinessEmailHint()}</View> : null}
+      </View>
+    );
   }
 
   const currentLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
@@ -562,7 +892,7 @@ export default function AuthLandingScreen() {
                 textAlign: "center",
               }}
             >
-              {isSignup && signupRole === "business" ? businessSubtitle : consumerSubtitle}
+              {(isSignup || finishSetup) && signupRole === "business" ? businessSubtitle : consumerSubtitle}
             </Text>
           </View>
 
@@ -634,7 +964,45 @@ export default function AuthLandingScreen() {
             </View>
           ) : null}
 
-          {!signUpAwaitingVerification ? (
+          {/* Social sign-in produced a session for an account with no role anywhere. Ask once,
+              here, instead of guessing — the Shopper/Business split is permanent. */}
+          {finishSetup ? (
+            <View>
+              {renderRolePicker()}
+              {renderBusinessEmailHint()}
+              {renderTermsRow()}
+              <ScalePressable
+                disabled={busy || !termsAccepted}
+                onPress={() => void handleFinishSetup()}
+                accessibilityLabel={busy ? t("authLanding.pleaseWait") : t("authLanding.finishSetupContinue")}
+                accessibilityState={{ disabled: busy || !termsAccepted, busy }}
+                style={{
+                  minHeight: Controls.buttonHeight,
+                  borderRadius: Radii.md,
+                  backgroundColor: theme.primary,
+                  opacity: !termsAccepted && !busy ? 0.6 : 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: Spacing.sm,
+                  marginBottom: Spacing.md,
+                }}
+              >
+                {busy ? <ActivityIndicator color={theme.primaryText} /> : null}
+                <Text
+                  style={{ color: theme.primaryText, fontWeight: "800", fontSize: 17, textAlign: "center", flexShrink: 1 }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
+                  {busy ? t("authLanding.pleaseWait") : t("authLanding.finishSetupContinue")}
+                </Text>
+              </ScalePressable>
+            </View>
+          ) : null}
+
+          {!signUpAwaitingVerification && !finishSetup ? (
             <>
               <View
                 accessibilityRole="tablist"
@@ -686,60 +1054,7 @@ export default function AuthLandingScreen() {
                 })}
               </View>
 
-              {isSignup ? (
-                <>
-                  <Text
-                    style={{
-                      fontWeight: "800",
-                      fontSize: 16,
-                      color: theme.text,
-                      marginBottom: Spacing.xs,
-                      textAlign: "center",
-                    }}
-                  >
-                    {t("authLanding.roleTitle")}
-                  </Text>
-
-                  <View
-                    style={{
-                      flexDirection: stackRoleCards ? "column" : "row",
-                      gap: roleCardGap,
-                      marginBottom: Spacing.sm,
-                    }}
-                  >
-                    <RoleCard
-                      theme={theme}
-                      colorScheme={colorScheme}
-                      selected={signupRole === "customer"}
-                      title={t("authLanding.roleCustomer")}
-                      hint={t("authLanding.roleCustomerPolishedHint", {
-                        defaultValue: "Find nearby offers, claim tickets, and redeem in person.",
-                      })}
-                      onPress={() => {
-                        setSignupRole("customer");
-                        clearFeedback();
-                      }}
-                      disabled={busy}
-                      stacked={stackRoleCards}
-                    />
-                    <RoleCard
-                      theme={theme}
-                      colorScheme={colorScheme}
-                      selected={signupRole === "business"}
-                      title={t("authLanding.roleBusiness")}
-                      hint={t("authLanding.roleBusinessPolishedHint", {
-                        defaultValue: "Post offers, track claims, and scan redemptions.",
-                      })}
-                      onPress={() => {
-                        setSignupRole("business");
-                        clearFeedback();
-                      }}
-                      disabled={busy}
-                      stacked={stackRoleCards}
-                    />
-                  </View>
-                </>
-              ) : null}
+              {isSignup ? renderRolePicker() : null}
 
               <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
                 {t("authLanding.emailLabel")}
@@ -897,51 +1212,7 @@ export default function AuthLandingScreen() {
                 <View style={{ height: Spacing.sm }} />
               )}
 
-              {isSignup ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    gap: Spacing.sm,
-                    marginBottom: Spacing.md,
-                  }}
-                >
-                  <Pressable
-                    onPress={() => setTermsAccepted((v) => !v)}
-                    disabled={busy}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: termsAccepted, disabled: busy }}
-                    accessibilityLabel={t("authLanding.termsCheckboxA11y", {
-                      defaultValue: "I agree to the Terms of Service, which prohibit objectionable content and abusive behavior",
-                    })}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ paddingTop: 1 }}
-                  >
-                    <MaterialIcons
-                      name={termsAccepted ? "check-box" : "check-box-outline-blank"}
-                      size={22}
-                      color={termsAccepted ? theme.primary : theme.mutedText}
-                    />
-                  </Pressable>
-                  <Text
-                    style={{ flex: 1, fontSize: 12, lineHeight: 17, color: theme.mutedText }}
-                    maxFontSizeMultiplier={1.1}
-                  >
-                    <Trans
-                      i18nKey="authLanding.termsCheckbox"
-                      components={{
-                        terms: (
-                          <Text
-                            accessibilityRole="link"
-                            style={{ textDecorationLine: "underline", color: theme.primary }}
-                            onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
-                          />
-                        ),
-                      }}
-                    />
-                  </Text>
-                </View>
-              ) : null}
+              {isSignup ? renderTermsRow() : null}
 
               {/* Custom Pressable (not PrimaryButton) only because it renders an
                   inline busy spinner + accessibilityState.busy. Sizing must match
@@ -985,6 +1256,8 @@ export default function AuthLandingScreen() {
                       : t("authLanding.logIn")}
                 </Text>
               </ScalePressable>
+
+              {renderSocialButtons()}
             </>
           ) : null}
 

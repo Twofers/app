@@ -60,7 +60,7 @@ describe("website-to-app business onboarding sync", () => {
     const source = read("supabase/functions/submit-business-application/index.ts");
     expect(source).toMatch(/RATE_LIMIT_MAX_PER_EMAIL/);
     expect(source).toMatch(/RATE_LIMIT_MAX_PER_IP/);
-    expect(source).toMatch(/business_onboarding_requests/);
+    expect(source).toMatch(/claim_submission_slot/);
   });
 
   it("registers app-safe context and update endpoints", () => {

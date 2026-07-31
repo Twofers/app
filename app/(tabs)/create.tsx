@@ -18,6 +18,7 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
+import { useTrialActivation } from "@/hooks/use-trial-activation";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
@@ -25,7 +26,6 @@ import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-
 import { BusinessTermsGate } from "@/components/business-terms-gate";
 import { getBusinessOnboardingContext } from "@/lib/functions";
 import { CardShell } from "@/components/ui/card-shell";
-import { BUSINESS_START_TRIAL_URL, openWebsiteUrl } from "@/lib/legal-urls";
 
 type TemplateRow = {
   id: string;
@@ -56,6 +56,7 @@ export default function CreateDeal() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const { opening: activationOpening, start: startActivation } = useTrialActivation(businessId);
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const {
@@ -343,7 +344,7 @@ export default function CreateDeal() {
         </View>
       ) : blockedSubscription && !canShowPrepToolsWhileBlocked ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <MerchantAccessBlockedCard status={billingAccess.status} />
+          <MerchantAccessBlockedCard status={billingAccess.status} businessId={businessId} />
         </View>
       ) : termsRequired && businessId ? (
         <View style={{ marginTop: Spacing.lg }}>
@@ -372,8 +373,9 @@ export default function CreateDeal() {
                   {t("createHub.setupApprovedBody")}
                 </Text>
                 <PrimaryButton
-                  title={t("createHub.setupApprovedCta")}
-                  onPress={() => void openWebsiteUrl(BUSINESS_START_TRIAL_URL)}
+                  title={activationOpening ? t("merchantAccess.startTrialOpening") : t("createHub.setupApprovedCta")}
+                  onPress={() => void startActivation()}
+                  disabled={activationOpening}
                   style={{ borderRadius: Radii.md }}
                 />
               </View>

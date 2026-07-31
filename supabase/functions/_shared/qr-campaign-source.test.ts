@@ -79,8 +79,10 @@ describe("QR campaign tracking source contract", () => {
     expect(source).toMatch(/admin_qr_campaign_created/);
     expect(source).toMatch(/admin_qr_campaign_disabled/);
     expect(source).toMatch(/npm:qrcode@1\.5\.4/);
-    expect(page).toMatch(/data-admin-qr-campaigns-endpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-qr-campaigns-endpoint/);
     expect(page).toMatch(/Every code uses a Twofer redirect URL, never a direct store link/i);
+    expect(script).toMatch(/Shell\.adminPost\("admin-qr-campaigns"/);
     expect(script).toMatch(/action: "create"/);
     expect(script).toMatch(/action: "disable"/);
     expect(script).toMatch(/action: "qr"/);

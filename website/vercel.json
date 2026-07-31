@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "node scripts/check-i18n.mjs",
   "installCommand": null,
   "outputDirectory": ".",
   "headers": [
@@ -31,6 +31,10 @@
         {
           "key": "X-Robots-Tag",
           "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, private, max-age=0"
         },
         {
           "key": "Content-Security-Policy",
@@ -279,6 +283,38 @@
     {
       "source": "/admin/login/",
       "destination": "/admin/login/index.html"
+    },
+    {
+      "source": "/admin/accounts",
+      "destination": "/admin/accounts/index.html"
+    },
+    {
+      "source": "/admin/accounts/",
+      "destination": "/admin/accounts/index.html"
+    },
+    {
+      "source": "/admin/account-repair",
+      "destination": "/admin/account-repair/index.html"
+    },
+    {
+      "source": "/admin/account-repair/",
+      "destination": "/admin/account-repair/index.html"
+    },
+    {
+      "source": "/admin/communications",
+      "destination": "/admin/communications/index.html"
+    },
+    {
+      "source": "/admin/communications/",
+      "destination": "/admin/communications/index.html"
+    },
+    {
+      "source": "/admin/ai-usage",
+      "destination": "/admin/ai-usage/index.html"
+    },
+    {
+      "source": "/admin/ai-usage/",
+      "destination": "/admin/ai-usage/index.html"
     },
     {
       "source": "/admin/businesses",

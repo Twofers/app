@@ -711,14 +711,35 @@ export function buildDealOfferContract(
       locationName,
       quantityLimit,
     );
-    const isSameItem = dealType === "BUY_ONE_GET_ONE_FREE";
+    // A "get something free" deal whose reward is the SAME item the customer buys is a
+    // buy-one-get-one deal, whatever the merchant picked on the form.
+    // buildCanonicalHeadlineFromFacts already recognises this and writes same-item
+    // phrasing ("Buy one X and get one free"), but the emitted dealType used to keep the
+    // merchant's raw choice. validateAiCopyAgainstOffer dispatches on dealType, so it ran
+    // the different-item rulebook against that line and rejected the app's OWN canonical
+    // copy as VAGUE_GET_ONE_FREE — publish died client-side with "We couldn't match this
+    // ad to your offer", before any server call (observed live 2026-07-26 on a same-item
+    // chai BOGO). Normalising here keeps one contract self-consistent: same phrasing,
+    // same validation rulebook, same-item AI rules, and offer-definition records it as
+    // same_item_free / buy_one_get_one rather than a reward-item deal.
+    // Scope is deliberately narrow: ONLY a literal buy-one-get-one (quantities 1 and 1)
+    // normalises. validateBuyOneGetOneFree rejects any "buy two" line
+    // (REQUIRES_TWO_PURCHASES) and reads "get two free" as a swapped reward
+    // (CHANGES_FREE_ITEM), so widening this to other quantities would break same-item
+    // deals that publish fine today.
+    const isSameItem =
+      dealType === "BUY_ONE_GET_ONE_FREE" ||
+      (normalizeForSearch(requiredItem) === normalizeForSearch(freeItem) &&
+        requiredQuantity === 1 &&
+        freeQuantity === 1);
+    const effectiveDealType: DealEligibilityDealType = isSameItem ? "BUY_ONE_GET_ONE_FREE" : dealType;
 
     return {
       businessId: params.businessId,
       businessName,
       locationId,
       locationName,
-      dealType,
+      dealType: effectiveDealType,
       requiredPurchase,
       freeReward,
       customerValuePercent,
@@ -824,10 +845,17 @@ function stripParentheticalSegments(value: string): string {
   return cleanText(value.replace(/\([^()]*\)/g, " "));
 }
 
+// A leading article is not part of item identity. The deterministic generators
+// deliberately drop it for natural English ("Get 40% off one Recon Roast" for
+// item "The Recon Roast"), so copy that names the item without its article is
+// fact-safe. Without these variants every article-prefixed item name fails
+// MISSING_* / CHANGES_FREE_ITEM against the app's own generated copy and the
+// deal can never publish.
 function itemNameSearchVariants(itemName: string): string[] {
   const full = cleanText(itemName);
   const core = stripParentheticalSegments(itemName);
-  return [...new Set([full, core])].filter((value) => value.length > 0);
+  const articleStripped = [full, core].map((value) => stripLeadingArticle(value));
+  return [...new Set([full, core, ...articleStripped])].filter((value) => value.length > 0);
 }
 
 function itemRegex(itemName: string): RegExp {
@@ -971,6 +999,11 @@ function validateGeneralCopyQuality(
   if (normalizedHeadline && normalizedHeadline === normalizedSocial) reasonCodes.push("DUPLICATE_HEADLINE_SOCIAL");
 }
 
+// Phrases that mark the preceding item as the reward rather than a second
+// purchase: "... is on us", "... are on us", "... free", "... on the house".
+const FREE_REWARD_FOLLOWS_NEGATIVE_LOOKAHEAD =
+  "(?!\\s+(?:is|are)\\s+(?:on\\s+us|free|yours)\\b|\\s+free\\b|\\s+on\\s+the\\s+house\\b)";
+
 function validateBuyOneGetSomethingFree(
   text: string,
   contract: DealOfferContract,
@@ -993,10 +1026,29 @@ function validateBuyOneGetSomethingFree(
   if (/\bbuy\s+both\b|\bpurchase\s+both\b/.test(normalized)) {
     reasonCodes.push("BUYS_BOTH_ITEMS");
   }
-  if (new RegExp(`\\bbuy\\s+(?:a\\s+|one\\s+|1\\s+)?${requiredPattern}\\s*(?:and|&|\\+)\\s+(?:a\\s+|one\\s+|1\\s+)?${freePattern}\\b`).test(normalized)) {
+  // "buy X and <free item>" only means the customer must pay for both when the
+  // free item is not immediately presented as the reward. The deterministic
+  // description writes "Buy a latte and the house blend is on us." — harmless,
+  // and it slipped through only because "the" is absent from the determiner
+  // group above. A free item whose own name starts with an article ("The House
+  // Blend") supplies that "the" itself, so the app flagged its own copy. Reward
+  // language right after the item is what tells the two apart.
+  if (
+    new RegExp(
+      `\\bbuy\\s+(?:a\\s+|one\\s+|1\\s+)?${requiredPattern}\\s*(?:and|&|\\+)\\s+(?:a\\s+|one\\s+|1\\s+)?${freePattern}\\b${FREE_REWARD_FOLLOWS_NEGATIVE_LOOKAHEAD}`,
+    ).test(normalized)
+  ) {
     reasonCodes.push("FREE_ITEM_ADDED_TO_PURCHASE");
   }
-  if (/\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
+  // VAGUE_GET_ONE_FREE exists to stop copy that hides WHICH item is free. When the
+  // reward IS the purchased item there is only one item in play, so "get one free" is
+  // exact rather than vague — and it is precisely the phrasing this module's own
+  // canonical line uses for such an offer, which is how the app came to reject its own
+  // copy and block publish. Quantity-1 same-item deals now normalise to
+  // BUY_ONE_GET_ONE_FREE in buildDealOfferContract and never reach here; this covers the
+  // remaining same-item shapes, such as "Buy two lattes and get one free".
+  const rewardIsThePurchasedItem = requiredPattern.length > 0 && requiredPattern === freePattern;
+  if (!rewardIsThePurchasedItem && /\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
     reasonCodes.push("VAGUE_GET_ONE_FREE");
   }
   if (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CANDIDATE_JUDGE_PROMPT_VERSION,
   applyJudgeScoresToCandidates,
   buildCandidateJudgePrompt,
   rankCandidatesDeterministically,
@@ -118,5 +119,21 @@ describe("candidate judge helpers", () => {
     expect(prompt.system).toContain("Output JSON only");
     expect(prompt.userText).toContain("CANDIDATES TO JUDGE");
     expect(prompt.userText).not.toMatch(/openai|gemini|provider/i);
+  });
+
+  it("carries the v2 say-it-aloud, category-fit, and planning-vocabulary rubric", () => {
+    const prompt = buildCandidateJudgePrompt({
+      offerFacts: "Buy a coffee and get a free bagel.",
+      categoryPlaybookBlock: "CATEGORY PLAYBOOK: coffee_cafe",
+      merchantProfileBlock: "MERCHANT CREATIVE PROFILE: sparse",
+      creativeBrief: { exactCustomerHook: "breakfast is included" },
+      candidates: [copy("a", {}), copy("b", {})],
+    });
+
+    expect(CANDIDATE_JUDGE_PROMPT_VERSION).toBe("candidate-judge-v2");
+    expect(prompt.system).toContain("saying it out loud");
+    expect(prompt.system).toContain("borrowed from a different kind of business");
+    expect(prompt.system).toContain("planning vocabulary");
+    expect(prompt.system).toContain("what the customer does, and what the customer gets");
   });
 });

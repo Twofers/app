@@ -1,51 +1,34 @@
 (() => {
   const body = document.body;
+  const Shell = window.TwoferAdminShell;
   const section = body.dataset.adminSection;
-  const authEndpoint = body.dataset.adminAuthEndpoint;
-  const summaryEndpoint = body.dataset.adminSummaryEndpoint;
+  const summaryEndpoint = Shell.endpoint("admin-dashboard-summary");
   const endpoints = {
-    import: body.dataset.adminProspectImportEndpoint,
-    enrich: body.dataset.adminProspectEnrichEndpoint,
-    score: body.dataset.adminProspectScoreEndpoint,
-    demand: body.dataset.adminDemandProofEndpoint,
-    sales: body.dataset.adminProspectSalesEndpoint,
-    script: body.dataset.adminSalesScriptEndpoint,
-    claim: body.dataset.adminClaimLinkEndpoint,
-    claimAssistant: body.dataset.adminClaimLinkAssistantEndpoint,
-    trial: body.dataset.adminTrialFromProspectEndpoint,
-    trialAssistant: body.dataset.adminTrialConversionAssistantEndpoint,
+    import: Shell.endpoint("admin-prospect-import"),
+    enrich: Shell.endpoint("admin-prospect-enrich"),
+    score: Shell.endpoint("admin-prospect-score"),
+    demand: Shell.endpoint("admin-demand-proof"),
+    sales: Shell.endpoint("admin-prospect-sales"),
+    script: Shell.endpoint("admin-sales-script"),
+    claim: Shell.endpoint("admin-claim-link-create"),
+    claimAssistant: Shell.endpoint("admin-claim-link-assistant"),
+    trial: Shell.endpoint("admin-trial-create-from-prospect"),
+    trialAssistant: Shell.endpoint("admin-trial-conversion-assistant"),
   };
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
   const statusEl = document.querySelector("[data-admin-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
   const loginLink = document.querySelector("[data-admin-login-link]");
   let latestDetailPayload = null;
 
-  function storageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
   function syncNav() {
-    const hasToken = Boolean(storageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNav();
-  }
-
-  function storeSession(session, storage) {
-    storage.setItem(tokenKey, session.access_token);
-    if (session.refresh_token) storage.setItem(refreshTokenKey, session.refresh_token);
-    if (session.expires_in) storage.setItem(expiresAtKey, String(Date.now() + Number(session.expires_in) * 1000));
   }
 
   async function readJson(response) {
@@ -56,27 +39,8 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    const response = await fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    const payload = await readJson(response);
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storeSession(payload.session, storage);
-    return payload.session.access_token;
-  }
-
   async function getToken() {
-    const storage = storageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return Shell.getAccessToken();
   }
 
   function setStatus(message, tone = "info") {

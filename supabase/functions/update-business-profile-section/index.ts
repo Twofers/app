@@ -17,6 +17,7 @@ import {
   isPublicBusinessStatus,
 } from "../_shared/business-identity-lock.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type Payload = {
   business_id?: unknown;
@@ -112,7 +113,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Business profile updates are not configured." }, 500);

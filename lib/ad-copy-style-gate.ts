@@ -3,6 +3,7 @@ import {
   AD_COPY_FORBIDDEN_PATTERNS,
   AD_COPY_GENERIC_PHRASE_PATTERNS,
   AD_COPY_HYPE_WORD_PATTERN,
+  AD_COPY_INSTRUCTION_LEAK_PATTERNS,
   AD_COPY_LOCAL_CLICHE_PATTERNS,
 } from "./ad-language-policy.ts";
 
@@ -30,6 +31,9 @@ export type AdCopyStyleGateReason =
   | "BARE_SPECIFIC_TERM"
   | "WEAK_TRY_OUR_PHRASE"
   | "AWKWARD_ARTICLE_QUANTIFIER"
+  | "INSTRUCTION_LEAK_PHRASE"
+  | "TRUNCATED_FRAGMENT"
+  | "QUANTITY_ARTICLE_COLLISION"
   | "TOO_MANY_EXCLAMATIONS"
   | "EMOJI_IN_AI_COPY";
 
@@ -148,6 +152,27 @@ function hasAwkwardArticleQuantifier(text: string): boolean {
   return /\b(?:a|an|the|our|your)\s+any\b/i.test(text);
 }
 
+/**
+ * A line ending on a bare function word is a truncated fragment — observed live:
+ * the headline "Coffee and a free to" shipped as AI_VALIDATED (2026-07-26 corpus).
+ * Truncated text characteristically lacks terminal punctuation, so a sentence
+ * that properly ends in a period never matches.
+ */
+export function endsInDanglingFunctionWord(text: string): boolean {
+  return /\b(?:a|an|the|and|or|with|for|to|of|plus)\s*$/i.test((text ?? "").trim());
+}
+
+/**
+ * A count word directly followed by an article is broken English produced by
+ * pasting an article-bearing item name after a quantity — observed live: "40%
+ * off one THE SERGEANT'S STRIPES". Punctuation between the words ("buy one,
+ * the second is free") does not match. Pattern-level by design; no item name
+ * is special-cased.
+ */
+export function hasQuantityArticleCollision(text: string): boolean {
+  return /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:a|an|the)\b/i.test(text ?? "");
+}
+
 function shouldBypassStyleGate(provenance: AdSpecV3TextProvenance): boolean {
   return provenance === "merchant_typed" || provenance === "merchant_edited";
 }
@@ -162,6 +187,9 @@ function reasonsForField(text: string, requiredSpecificTerms: string[] | undefin
   if (isBareSpecificTerm(text, requiredSpecificTerms)) reasons.push("BARE_SPECIFIC_TERM");
   if (isWeakTryOurPhrase(text)) reasons.push("WEAK_TRY_OUR_PHRASE");
   if (hasAwkwardArticleQuantifier(text)) reasons.push("AWKWARD_ARTICLE_QUANTIFIER");
+  if (hasAnyPattern(text, [...AD_COPY_INSTRUCTION_LEAK_PATTERNS])) reasons.push("INSTRUCTION_LEAK_PHRASE");
+  if (endsInDanglingFunctionWord(text)) reasons.push("TRUNCATED_FRAGMENT");
+  if (hasQuantityArticleCollision(text)) reasons.push("QUANTITY_ARTICLE_COLLISION");
   if (AD_COPY_HYPE_WORD_PATTERN.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
     reasons.push("HYPE_WITHOUT_SPECIFICITY");
   }

@@ -7,6 +7,7 @@ const AI_STUDIO_DEV_APP_NAME = "Twofer Dev";
 const PRODUCTION_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
 const AI_STUDIO_DEV_VARIANT = "ai-studio-dev";
 const EXPO_DEV_CLIENT_PLUGIN = "expo-dev-client";
+const GOOGLE_SIGNIN_PLUGIN = "@react-native-google-signin/google-signin";
 const AI_STUDIO_DEV_EAS_PROFILE = "dev-apk-ai-studio";
 const DEV_CLIENT_EAS_PROFILES = new Set(["development", "dev-client-apk", AI_STUDIO_DEV_EAS_PROFILE]);
 const PRODUCTION_LIKE_EAS_PROFILES = new Set(["production", "apk", "preview"]);
@@ -86,6 +87,23 @@ function withPluginOnce(plugins, plugin) {
   return plugins.some((existing) => pluginName(existing) === name) ? plugins : [...plugins, plugin];
 }
 
+/**
+ * The iOS Google client ID lives in EAS env (EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) so JS and native
+ * cannot drift. Native needs it as the reversed URL scheme, so derive that here rather than making
+ * Dan paste the same ID into app.json a second time. app.json keeps a REPLACE-WITH placeholder that
+ * only survives when the env var is unset (the plugin requires *some* com.googleusercontent.apps.* value).
+ */
+function withGoogleIosUrlScheme(plugins) {
+  const clientId = String(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "").trim();
+  if (!clientId) return plugins;
+  const reversed = `com.googleusercontent.apps.${clientId.replace(/\.apps\.googleusercontent\.com$/, "")}`;
+  return plugins.map((plugin) =>
+    pluginName(plugin) === GOOGLE_SIGNIN_PLUGIN
+      ? [GOOGLE_SIGNIN_PLUGIN, { ...(Array.isArray(plugin) ? plugin[1] : null), iosUrlScheme: reversed }]
+      : plugin,
+  );
+}
+
 function shouldIncludeDevClientPlugin(aiStudioDev) {
   if (aiStudioDev) return true;
   if (process.env.TWOFER_ENABLE_DEV_CLIENT_PLUGIN === "true") return true;
@@ -101,7 +119,7 @@ function shouldIncludeDevClientPlugin(aiStudioDev) {
 }
 
 function resolvePlugins(config, aiStudioDev) {
-  const existing = Array.isArray(config.plugins) ? config.plugins : [];
+  const existing = withGoogleIosUrlScheme(Array.isArray(config.plugins) ? config.plugins : []);
   const devClientReady = shouldIncludeDevClientPlugin(aiStudioDev)
     ? withPluginOnce(existing, EXPO_DEV_CLIENT_PLUGIN)
     : withoutPlugin(existing, EXPO_DEV_CLIENT_PLUGIN);

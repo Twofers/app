@@ -9,6 +9,7 @@ import {
   ensureStripeCustomerForBusiness,
   type BusinessBillingProfileInput,
 } from "../_shared/stripe-business-billing.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -53,7 +54,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     if (!supabaseUrl || !serviceRoleKey) return json(req, { error: "Stripe backfill is not configured." }, 500);
 
     const authHeader = req.headers.get("Authorization") ?? "";

@@ -14,6 +14,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push.ts";
 import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "../_shared/digest-targeting.ts";
 import { buildDigestPushCopy, fetchProfileLocaleByUserId } from "../_shared/viewer-locale.ts";
+import { loadRepeatBlockedPairs, repeatBlockKey } from "../_shared/repeat-claim-audience.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const DIGEST_DAYS = 7;
 
@@ -29,7 +31,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, getServiceRoleKey());
 
   // Authorize the caller. Accept EITHER the CRON_SECRET env (manual/ops invocation)
   // OR the Vault-stored cron secret used by the scheduled pg_cron job (generated
@@ -114,6 +116,21 @@ serve(async (req) => {
       favByUser.set(f.user_id as string, arr);
     }
 
+    // 3b. Businesses whose repeat-claim policy currently blocks each customer.
+    // Without this the digest counts deals the customer cannot claim and sends
+    // them somewhere that dead-ends. Fails open (empty set → nothing filtered).
+    const digestBusinessIds = [...new Set(deals.map((d) => d.business_id))];
+    const blockedPairs = await loadRepeatBlockedPairs(admin, digestBusinessIds, userIds);
+    const blockedByUser = new Map<string, string[]>();
+    if (blockedPairs.size > 0) {
+      for (const userId of userIds) {
+        const blocked = digestBusinessIds.filter((businessId) =>
+          blockedPairs.has(repeatBlockKey(userId, businessId)),
+        );
+        if (blocked.length > 0) blockedByUser.set(userId, blocked);
+      }
+    }
+
     const consumers: DigestConsumer[] = base.map((r) => ({
       user_id: r.user_id as string,
       deal_alerts_enabled: r.deal_alerts_enabled === true,
@@ -122,6 +139,7 @@ serve(async (req) => {
       lng: r.last_longitude != null ? Number(r.last_longitude) : null,
       radius_miles: r.radius_miles != null ? Number(r.radius_miles) : null,
       favorite_business_ids: favByUser.get(r.user_id as string) ?? [],
+      blocked_business_ids: blockedByUser.get(r.user_id as string) ?? [],
     }));
 
     // 4. Per-user counts (pure, unit-tested, never throws).
@@ -142,6 +160,7 @@ serve(async (req) => {
         dry_run: true,
         recent_deals: deals.length,
         opted_in_consumers: consumers.length,
+        repeat_restricted_users: blockedByUser.size,
         audience: counts.size,
         count_distribution: distribution,
       });

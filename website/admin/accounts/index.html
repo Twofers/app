@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Accounts | Twofer Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
+    <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
+  </head>
+  <body
+    class="admin-shell"
+  >
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Identity &amp; safety</p>
+          <h1>Accounts</h1>
+          <p class="lede">Search, edit, suspend, or archive business and customer accounts. Permanent deletion is intentionally unavailable here.</p>
+        </div>
+        <span class="admin-badge" data-admin-status>Checking session</span>
+      </div>
+
+      <section class="admin-section" data-directory-view>
+        <div class="admin-section-header">
+          <div>
+            <h2>Business and customer directory</h2>
+            <p>Suspended and archived accounts remain here for support and audit work.</p>
+          </div>
+        </div>
+        <form class="admin-form" data-search-form>
+          <label class="full">Search
+            <input type="search" data-search placeholder="Email, business name, or user ID" maxlength="160" />
+          </label>
+          <label>Role
+            <select data-role-filter>
+              <option value="">All roles</option>
+              <option value="business">Business</option>
+              <option value="customer">Customer</option>
+            </select>
+          </label>
+          <label>Status
+            <select data-status-filter>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          <div class="admin-inline-actions">
+            <button class="button button-small" type="submit">Search accounts</button>
+            <button class="button button-small button-secondary" type="button" data-clear-search>Clear</button>
+          </div>
+        </form>
+        <p class="admin-note" data-result-count aria-live="polite"></p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Business / ZIP</th><th>Last sign-in</th><th>Created</th><th>Action</th></tr></thead>
+            <tbody data-account-rows>
+              <tr><td colspan="7" class="admin-row-detail">Sign in to load accounts.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="admin-inline-actions">
+          <button class="button button-small button-secondary" type="button" data-prev-page disabled>Previous</button>
+          <span class="admin-note" data-page-label>Page 1</span>
+          <button class="button button-small button-secondary" type="button" data-next-page disabled>Next</button>
+        </div>
+      </section>
+
+      <section class="admin-section" data-detail-view hidden>
+        <div class="admin-section-header">
+          <div>
+            <p class="admin-kicker">Account detail</p>
+            <h2 data-account-title>Account</h2>
+            <p data-account-meta></p>
+          </div>
+          <a class="button button-small button-secondary" href="/admin/accounts">Back to accounts</a>
+        </div>
+
+        <div class="admin-grid three">
+          <article class="admin-card"><span>Account status</span><strong data-account-status>&mdash;</strong></article>
+          <article class="admin-card"><span>Last sign-in</span><strong data-last-sign-in>&mdash;</strong></article>
+          <article class="admin-card"><span>Stripe subscriptions</span><strong data-stripe-count>0</strong></article>
+          <article class="admin-card"><span>Businesses</span><strong data-business-count>0</strong></article>
+          <article class="admin-card"><span>Deals</span><strong data-deal-count>0</strong></article>
+          <article class="admin-card"><span>Customer claims</span><strong data-claim-count>0</strong></article>
+        </div>
+
+        <section class="admin-section">
+          <h2>Edit profile</h2>
+          <p class="admin-note">Every saved edit requires a reason and is written to the admin audit log. Account role cannot be changed here.</p>
+          <form class="admin-form" data-profile-form>
+            <label class="full">Login email<input type="email" name="email" maxlength="320" /></label>
+            <div data-business-fields hidden>
+              <input type="hidden" name="business_id" />
+              <label>Business name<input name="name" maxlength="160" /></label>
+              <label>Category<input name="category" maxlength="100" /></label>
+              <label class="full">Short description<textarea name="short_description" maxlength="280"></textarea></label>
+              <label>Contact name<input name="contact_name" maxlength="160" /></label>
+              <label>Business email<input type="email" name="business_email" maxlength="320" /></label>
+              <label>Public email<input type="email" name="public_email" maxlength="320" /></label>
+              <label>Phone<input name="phone" maxlength="40" /></label>
+              <label class="full">Full address<input name="address" maxlength="300" /></label>
+              <label>Address line 1<input name="address_line1" maxlength="180" /></label>
+              <label>Address line 2<input name="address_line2" maxlength="180" /></label>
+              <label>City<input name="city" maxlength="100" /></label>
+              <label>State<input name="state" maxlength="40" /></label>
+              <label>ZIP / postal code<input name="postal_code" maxlength="20" /></label>
+              <label>Country<input name="country" maxlength="2" /></label>
+              <label class="full">Website<input type="url" name="website_url" maxlength="500" /></label>
+              <label class="full">Instagram URL<input type="url" name="instagram_url" maxlength="500" /></label>
+              <label class="full">Facebook URL<input type="url" name="facebook_url" maxlength="500" /></label>
+              <label class="full">Hours<textarea name="hours_text" maxlength="500"></textarea></label>
+              <label class="full">Pickup note<textarea name="pickup_note" maxlength="500"></textarea></label>
+              <label>Preferred language
+                <select name="preferred_locale">
+                  <option value="">Not set</option>
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="ko">Korean</option>
+                </select>
+              </label>
+              <label>Claim notifications
+                <select name="claim_notifications_enabled">
+                  <option value="true">On</option>
+                  <option value="false">Off</option>
+                </select>
+              </label>
+              <label>Repeat-customer rule
+                <select name="repeat_claim_policy_type">
+                  <option value="NONE">No restriction</option>
+                  <option value="COOLDOWN_DAYS">Cooldown</option>
+                  <option value="FOREVER">First-time only</option>
+                </select>
+              </label>
+              <label>Cooldown days<input type="number" name="repeat_claim_cooldown_days" min="1" max="365" /></label>
+            </div>
+            <div data-customer-fields hidden>
+              <label>ZIP code<input name="zip_code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" /></label>
+              <label>Birthday<input type="date" name="birthdate" /></label>
+              <label>Notification mode
+                <select name="notification_mode">
+                  <option value="all_nearby">All nearby</option>
+                  <option value="favorites_only">Favorites only</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label>Radius miles<input type="number" name="radius_miles" min="1" max="50" /></label>
+              <label>Deal alerts
+                <select name="deal_alerts_enabled">
+                  <option value="true">On</option>
+                  <option value="false">Off</option>
+                </select>
+              </label>
+            </div>
+            <label class="full">Reason for edit<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
+            <button class="button" type="submit" data-save-profile>Save profile changes</button>
+          </form>
+          <p class="status" data-profile-status role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="admin-section">
+          <h2>Account access</h2>
+          <p class="admin-note"><strong>Suspend</strong> blocks login and hides a business while preserving data and Stripe billing. <strong>Reactivate</strong> restores the exact pre-suspension state when still eligible.</p>
+          <label class="admin-form full">Reason for access change<textarea data-lifecycle-reason minlength="5" maxlength="500"></textarea></label>
+          <div class="admin-inline-actions">
+            <button class="button button-small button-secondary" type="button" data-action="suspend">Suspend account</button>
+            <button class="button button-small" type="button" data-action="reactivate">Reactivate account</button>
+          </div>
+          <p class="status" data-lifecycle-status role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="admin-section">
+          <h2>Archive account</h2>
+          <p class="admin-note"><strong>Archive</strong> cancels Stripe immediately, blocks login, removes the business from the app, and retains records so the action remains recoverable. Permanent deletion is not available from the admin dashboard.</p>
+          <label class="admin-form full">Reason<textarea data-delete-reason minlength="5" maxlength="500"></textarea></label>
+          <div class="admin-inline-actions">
+            <button class="button button-small button-secondary" type="button" data-action="archive">Archive &amp; cancel Stripe</button>
+          </div>
+          <p class="status" data-delete-status role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="admin-section">
+          <h2>Account audit history</h2>
+          <div class="admin-table-wrap">
+            <table class="admin-table" data-mobile-cards>
+              <thead><tr><th>Admin</th><th>Action</th><th>Reason</th><th>Created</th></tr></thead>
+              <tbody data-audit-rows><tr><td colspan="4" class="admin-row-detail">No account history loaded.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="/admin/admin-shell.js?v=20260728-admin-ops"></script>
+    <script src="/admin/accounts.js?v=20260728-account-growth"></script>
+  </body>
+</html>

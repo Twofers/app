@@ -33,15 +33,24 @@ export type ResolveLocalizedOfferTermParams = {
   locale: SupportedLocale;
   providedTerms?: readonly LocalizedOfferTerm[] | null;
   doNotTranslateTerms?: readonly string[] | null;
+  // Additional item-name coverage consulted ONLY when the reviewed base
+  // dictionary has no entry for this (term, locale). Supplied by the customer
+  // display path behind the EXPO_PUBLIC_DEAL_ITEM_TRANSLATION_LOCALES switch;
+  // never passed by the create/publish bundle path, so stored data is unchanged.
+  extraDictionary?: LocalizedTermExpansionDictionary | null;
 };
 
 export const PRESERVED_MERCHANT_TERM_VERSION = "preserved-merchant-term-v1";
 export const GENERIC_LOCALIZED_TERM_DICTIONARY_VERSION = "generic-localized-term-dictionary-v1";
+export const DEAL_ITEM_TRANSLATION_EXPANSION_VERSION = "deal-item-translation-expansion-v1";
 
-type GenericLocalizedTermDictionaryEntry = Partial<Record<SupportedLocale, {
+export type GenericLocalizedTermDictionaryEntry = Partial<Record<SupportedLocale, {
   displayName: string;
   koreanCounterId?: string;
 }>>;
+
+/** Same shape as the reviewed base dictionary; keyed by normalized source term. */
+export type LocalizedTermExpansionDictionary = Record<string, GenericLocalizedTermDictionaryEntry>;
 
 const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDictionaryEntry> = {
   bagel: {
@@ -1239,24 +1248,44 @@ function dictionaryTerm(
   sourceDisplayName: string,
   locale: SupportedLocale,
   entityId: string,
+  extraDictionary?: LocalizedTermExpansionDictionary | null,
 ): LocalizedOfferTerm | null {
   const key = normalizeKey(sourceDisplayName);
-  const entry =
+  // The reviewed base always wins, per (term, locale). The expansion only fills
+  // a gap the base leaves — so no reviewed term can regress and switch-off is
+  // byte-identical to today.
+  const baseEntry =
     GENERIC_LOCALIZED_TERM_DICTIONARY[key]?.[locale] ??
     SOURCE_TERM_TO_ENGLISH_DICTIONARY[key]?.[locale] ??
     composedModifierEntry(key, locale);
-  if (!entry?.displayName) return null;
-  return {
-    entityId,
-    locale,
-    displayName: entry.displayName,
-    ...(entry.koreanCounterId ? { koreanCounterId: entry.koreanCounterId } : {}),
-    doNotTranslate: false,
-    approvedLocalizedName: true,
-    source: "reviewed_dictionary",
-    verificationStatus: "verified",
-    version: GENERIC_LOCALIZED_TERM_DICTIONARY_VERSION,
-  };
+  if (baseEntry?.displayName) {
+    return {
+      entityId,
+      locale,
+      displayName: baseEntry.displayName,
+      ...(baseEntry.koreanCounterId ? { koreanCounterId: baseEntry.koreanCounterId } : {}),
+      doNotTranslate: false,
+      approvedLocalizedName: true,
+      source: "reviewed_dictionary",
+      verificationStatus: "verified",
+      version: GENERIC_LOCALIZED_TERM_DICTIONARY_VERSION,
+    };
+  }
+  const extraEntry = extraDictionary?.[key]?.[locale];
+  if (extraEntry?.displayName) {
+    return {
+      entityId,
+      locale,
+      displayName: extraEntry.displayName,
+      ...(extraEntry.koreanCounterId ? { koreanCounterId: extraEntry.koreanCounterId } : {}),
+      doNotTranslate: false,
+      approvedLocalizedName: true,
+      source: "reviewed_dictionary",
+      verificationStatus: "verified",
+      version: DEAL_ITEM_TRANSLATION_EXPANSION_VERSION,
+    };
+  }
+  return null;
 }
 
 function usableProvidedTerm(
@@ -1282,7 +1311,7 @@ export function resolveLocalizedOfferTerm(params: ResolveLocalizedOfferTermParam
   if (provided) return provided;
 
   const preserve = matchesDoNotTranslate(displayName, params.doNotTranslateTerms);
-  const genericTerm = preserve ? null : dictionaryTerm(displayName, params.locale, entityId);
+  const genericTerm = preserve ? null : dictionaryTerm(displayName, params.locale, entityId, params.extraDictionary);
   if (genericTerm) return genericTerm;
 
   return {

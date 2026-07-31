@@ -20,3 +20,41 @@ describe("auth landing source guards", () => {
     expect(authLandingSource).toContain("maxFontSizeMultiplier={1.1}");
   });
 });
+
+describe("native social sign-in wiring", () => {
+  it("renders nothing unless the kill switch and a real client ID are in place", () => {
+    expect(authLandingSource).toContain("const showSocialButtons = googleSignInReady || showAppleButton;");
+    expect(authLandingSource).toContain("if (!showSocialButtons) return null;");
+  });
+
+  it("offers Apple only on iOS, and only where the OS actually supports it", () => {
+    expect(authLandingSource).toContain(
+      'const showAppleButton = socialAuthEnabled && Platform.OS === "ios" && appleAvailable;',
+    );
+  });
+
+  it("applies the signup terms gate before launching a picker", () => {
+    expect(authLandingSource).toContain("if (isSignup && !termsAccepted) {");
+    expect(authLandingSource).toContain("if (isSignup) await setPendingSocialRole(signupRole);");
+  });
+
+  it("treats a dismissed picker as a silent no-op", () => {
+    expect(authLandingSource).toContain('if (result.status === "cancelled") {');
+  });
+
+  it("routes by the shared completion decision instead of guessing a role", () => {
+    expect(authLandingSource).toContain("const decision = decideSocialCompletion({ storedRole, pendingRole });");
+    expect(authLandingSource).toContain('{!signUpAwaitingVerification && !finishSetup ? (');
+  });
+
+  it("blocks an Apple private-relay address on both business paths", () => {
+    // Once for a resolved/pending business role, once for the role chosen in finish-setup.
+    expect(authLandingSource).toContain("if (shouldBlockBusinessRelayEmail(decision.role, user.email)) {");
+    expect(authLandingSource).toContain("if (shouldBlockBusinessRelayEmail(signupRole, finishSetup.email)) {");
+  });
+
+  it("logs the new auth paths", () => {
+    expect(authLandingSource).toContain('logAuthPath(provider === "google" ? "google_signin" : "apple_signin");');
+    expect(authLandingSource).toContain('logAuthPath("social_finish_setup", user.email ?? undefined);');
+  });
+});

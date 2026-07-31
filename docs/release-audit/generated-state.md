@@ -6,7 +6,7 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## App
 
-- Version: `1.0.0`
+- Version: `1.0.1`
 - Android versionCode: `49`
 - iOS buildNumber (app.json): `not set in app.json (managed via EAS)`
 - Android package: `com.unvmex2.twoforone`
@@ -37,13 +37,14 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `160`
-- Latest: `20260820190000_entire_order_scan_only_matches_basket_wording.sql`
+- Count: `189`
+- Latest: `20260824144000_revoke_nested_definer_helper_client_execute.sql`
 
-## Edge Functions (supabase/functions, 79 local)
+## Edge Functions (supabase/functions, 81 local)
 
 - accept-business-terms
 - activate-redemption-mode
+- admin-account-management
 - admin-ai-cost-ledger-reset
 - admin-ai-operating-report
 - admin-ai-prompts
@@ -56,6 +57,7 @@ Docs should link here instead of restating these facts (audit F-012).
 - admin-dashboard-summary
 - admin-demand-proof
 - admin-onboarding-review-ai
+- admin-owner-email
 - admin-promo-authorization
 - admin-prospect-enrich
 - admin-prospect-import

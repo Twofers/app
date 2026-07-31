@@ -14,9 +14,10 @@
  */
 
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
+import { ALLOWED_OPENAI_MODELS, resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { countAiQuotaUsage } from "../_shared/ai-quota-resets.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhotoWithTelemetry,
@@ -569,6 +570,7 @@ async function generateCopy(params: {
   research: ItemResearch;
   businessName: string;
   businessContext: BusinessContext;
+  savedMenuItemNames?: string[];
   offerContract: DealOfferContract;
   offerScheduleSummary: string;
   quantityLimit: number | null;
@@ -601,6 +603,7 @@ async function generateCopy(params: {
     research,
     businessName,
     businessContext,
+    savedMenuItemNames,
     offerContract,
     offerScheduleSummary,
     quantityLimit,
@@ -636,6 +639,7 @@ async function generateCopy(params: {
     location: businessContext.location,
     address: businessContext.address,
     description: businessContext.description,
+    savedMenuItemNames,
     itemHint,
     research,
   });
@@ -672,13 +676,31 @@ async function generateCopy(params: {
           systemPrompt: system,
           userPrompt: userText,
           jsonSchema,
-          maxOutputTokens: 1400,
-          timeoutMs: 12_000,
+          // max_completion_tokens = this + the low-effort reasoning reserve (512; see
+          // chatCompletionTuning). The combined cap must hold reasoning AND the full
+          // 5-variant JSON. At 1400 (cap 1912) reasoning alone often consumed the whole
+          // allowance and returned empty content — 136 of 148 failed ad_copy provider
+          // calls in the 30-day baseline were OPENAI_EMPTY_CONTENT — driving the 43%
+          // deterministic-copy fallback rate. 3000 (cap 3512) clears the 3448 cap that
+          // eliminated empty content when this call ran at medium effort; the ceiling
+          // costs nothing unless the model actually spends it.
+          maxOutputTokens: 3000,
+          // ADVISORY ONLY — this value does not take effect. runWithBreaker builds the
+          // provider request as `{ ...request, timeoutMs }` using config.primaryTimeoutMs
+          // (_shared/ai-text-provider.ts), so the caller's timeoutMs is always overwritten.
+          // The real ceiling is the AI_TEXT_PRIMARY_TIMEOUT_MS secret (code default
+          // 15_000; production raised it to 25_000 on 2026-07-26 after gpt-5.5, which
+          // takes 13-16s on this call, timed out ~50% of generations against the 15s
+          // default and fell back to deterministic copy). Change the SECRET, not this
+          // line. Kept in sync with the production value so the two do not disagree if
+          // the router is ever fixed to honour per-call timeouts.
+          timeoutMs: 25_000,
           generationRunId: costContext.requestGroupId,
           promptVersion: AD_COPY_PROMPT_VERSION,
-          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call
-          // and is aborted by the ~12s text timeout (OPENAI_FETCH_FAILED). "low"
-          // reasoning returns the same validated 5 variants in ~10.5s, inside budget.
+          // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call and
+          // was aborted by the old 12s ceiling; "low" returns the same validated five
+          // variants in ~10.5s. gpt-5.5 at "low" runs 13-16s, which is why the ceiling
+          // now lives at 25s in the secret above.
           reasoningLevel: "low",
         }, {
           openAiApiKey: openAiKey,
@@ -1096,15 +1118,34 @@ function seededShuffle<T>(items: readonly T[], seed: string): T[] {
     .map(({ item }) => item);
 }
 
+/**
+ * Judge model: env AI_JUDGE_OPENAI_MODEL when set, allowlisted, and different
+ * from the generator's model; otherwise a deterministic different-model default
+ * (the mini judges the big generator; the big model judges a mini generator).
+ * Never the generator's own model — a same-model judge shares the generator's
+ * blind spots, which defeats independent judging.
+ */
+function resolveJudgeOpenAiModel(generatorModel: string): string {
+  const requested = (Deno.env.get("AI_JUDGE_OPENAI_MODEL") ?? "").trim();
+  if (requested && requested !== generatorModel && ALLOWED_OPENAI_MODELS.has(requested)) {
+    return requested;
+  }
+  return generatorModel === "gpt-5.4-mini" ? "gpt-5.5" : "gpt-5.4-mini";
+}
+
 function makeJudgeConfig() {
   const base = resolveAiTextProviderConfig();
   return {
     ...base,
     routerEnabled: true,
-    primaryProvider: "gemini" as const,
+    // The judge runs on OpenAI with a DIFFERENT model than the generator (Dan,
+    // 2026-07-26: no ad copy text goes to Gemini for judging). Fallback stays
+    // off so a judge outage degrades to the deterministic ranking, never to a
+    // cross-provider hop this feature was scoped away from.
+    primaryProvider: "openai" as const,
     fallbackEnabled: false,
     fallbackProvider: "openai" as const,
-    geminiTextModel: resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL"),
+    openAiModel: resolveJudgeOpenAiModel(base.openAiModel),
     primaryTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
     fallbackTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
     transientRetryMax: 0,
@@ -1470,6 +1511,11 @@ const QUALITY_GATE_REPAIR_GUIDANCE: Record<string, string> = {
   IDENTICAL_HEADLINE: "Every headline must be clearly different from the others.",
   DUPLICATE_HEADLINE_OPENING: "Every headline must open with different words.",
   OBVIOUS_PARAPHRASE: "Each candidate must be a different idea, not a paraphrase of another candidate.",
+  INSTRUCTION_LEAK_PHRASE:
+    "Never let planning vocabulary reach customer copy (for example: clearly and simply, exact exchange, customer moment).",
+  TRUNCATED_FRAGMENT: "Every field must be a complete phrase. Never end on a bare connector word such as to, and, or the.",
+  QUANTITY_ARTICLE_COLLISION:
+    'Never place a count directly before an article ("one the ..."). Rephrase so the item name reads naturally after the count.',
 };
 
 function qualityGateRepairFeedback(telemetry: CopyQualityTelemetry): string | undefined {
@@ -1621,12 +1667,12 @@ async function prepareCopyCandidates(params: {
     telemetry.judge.skipped_reason = "feature_flag_disabled";
     return { variants: ranked, telemetry, judgeAttempts: [] };
   }
-  if (params.generationProvider === "gemini") {
-    telemetry.judge.skipped_reason = "same_provider_fallback";
-    return { variants: ranked, telemetry, judgeAttempts: [] };
-  }
-  if (!params.geminiApiKey) {
-    telemetry.judge.skipped_reason = "gemini_api_key_missing";
+  // The judge is OpenAI-based with a different model than the generator, so a
+  // gemini-generated fallback batch is judged CROSS-provider — no skip needed
+  // (the old same_provider_fallback / gemini_api_key_missing skips predate the
+  // OpenAI judge decision of 2026-07-26).
+  if (!params.openAiKey) {
+    telemetry.judge.skipped_reason = "openai_api_key_missing";
     return { variants: ranked, telemetry, judgeAttempts: [] };
   }
 
@@ -3760,7 +3806,7 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     const imageProviderConfig = resolveAiImageProviderConfig();
@@ -3916,8 +3962,16 @@ Deno.serve(async (req) => {
       !!previousAdRaw && typeof previousAdRaw === "object" && !Array.isArray(previousAdRaw);
     const isRevision: boolean = revisionTarget !== null && previousAdIsObject;
     if (!quotaStatusOnly && !isRevision && !photoPath && !hintText) {
+      // MISSING_OFFER_INPUT: no photo and no free-text description. This runs
+      // before deal_eligibility is parsed, so structured offer facts alone do
+      // not satisfy it. The code lets the client show an actionable "add a photo
+      // or describe the deal" message instead of mislabeling this as an image
+      // outage (the legacy message text contains the word "photo").
       return new Response(
-        JSON.stringify({ error: "Provide at least a photo or a description of the offer." }),
+        JSON.stringify({
+          error: "Provide at least a photo or a description of the offer.",
+          error_code: "MISSING_OFFER_INPUT",
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -4152,6 +4206,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Owner's saved menu items give the copy model real merchant substance
+    // beyond the single offer item (naturalness plan Phase 1.3). Names only,
+    // best-effort: a fetch failure must never block generation.
+    let savedMenuItemNames: string[] = [];
+    try {
+      const { data: menuRows } = await admin
+        .from("business_menu_items")
+        .select("name")
+        .eq("business_id", businessId)
+        .order("sort_order", { ascending: true })
+        .limit(6);
+      savedMenuItemNames = (menuRows ?? [])
+        .map((row) => (typeof (row as { name?: unknown }).name === "string" ? ((row as { name: string }).name).trim() : ""))
+        .filter((name) => name.length > 0);
+    } catch {
+      savedMenuItemNames = [];
+    }
+
     let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
       fallback_reason?: string;
       generator_version?: string;
@@ -4198,6 +4270,7 @@ Deno.serve(async (req) => {
             research,
             businessName,
             businessContext,
+            savedMenuItemNames,
             offerContract,
             offerScheduleSummary,
             quantityLimit,
@@ -4294,6 +4367,7 @@ Deno.serve(async (req) => {
                 location: businessContext.location,
                 address: businessContext.address,
                 description: businessContext.description,
+                savedMenuItemNames,
                 itemHint: sourceHint,
                 research,
               }),
@@ -4564,26 +4638,35 @@ Deno.serve(async (req) => {
       remaining: Math.max(0, startingQuota.limit - updatedUsed),
     };
 
+    /**
+     * An image the providers will not produce is no longer fatal.
+     *
+     * The native poster renders without a photo — AdPosterCanvas falls back to the
+     * template gradient — so copy plus a gradient poster is a complete, publishable
+     * ad, not a degraded one. Returning 502 here stranded any merchant whose item
+     * the providers refuse to depict: an item that is not on their menu, a business
+     * that never imported a menu at all, or anything awkward to render. "Try again"
+     * could never fix those, because the retry asks for the same picture.
+     *
+     * Accounting is deliberately unchanged: the reserved revision credit is still
+     * released, quota still does not tick, and the ai_generation_logs row still
+     * records success:false / IMAGE_NULL. This widens what the merchant can DO,
+     * not how a missing image is billed or measured.
+     */
+    let imageFallback: Record<string, unknown> | null = null;
     if (imageProductionFailed) {
       await releaseReservedChargeableRevision("image_failed");
-      const imageFailure = imageFailureDebug(imageResult);
-      return new Response(
-        JSON.stringify({
-          error: "AI image generation failed. Try again.",
-          error_code: "IMAGE_REQUIRED",
-          image_failure: imageFailure,
-          stage_timings_ms: stageTimingsMs,
-          // R4: this is the failure path that most needs the budget picture — it is
-          // where a chain that ran out of wall clock lands. Without it, an operator
-          // cannot tell "every provider refused" from "we ran out of time".
-          image_pipeline_budget: imagePipelineBudget.report ?? null,
-          quota,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      imageFallback = {
+        reason: "IMAGE_UNAVAILABLE",
+        detail: imageFailureDebug(imageResult),
+        // R4: the budget picture belongs with the failure — it is what tells an
+        // operator "every provider refused" apart from "we ran out of wall clock".
+        image_pipeline_budget: imagePipelineBudget.report ?? null,
+      };
+      console.log(
+        JSON.stringify({ tag: "ai_ads_v2", event: "image_fallback_gradient", errorCode: "IMAGE_NULL" }),
       );
-    }
-
-    if (chargeableRevisionCredit) {
+    } else if (chargeableRevisionCredit) {
       const reservation = chargeableRevisionCredit;
       await commitChargeableImageRevisionCredit(admin as any, reservation);
       chargeableRevisionCredit = null;
@@ -4593,6 +4676,8 @@ Deno.serve(async (req) => {
       ad,
       ads: [ad],
       quota,
+      /** Non-null when the ad ships without a photo, so the client can say why. */
+      image_fallback: imageFallback,
       image_provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
       poster_luma_debug: posterLumaDebug,
       image_pipeline_budget: imagePipelineBudget.report ?? null,

@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-07-29",
+  "domain": "twoferapp.com",
+  "read_only_checks": [
+    "Resolve-DnsName twoferapp.com -Type DS -DnsOnly (filtered to DS records)",
+    "Resolve-DnsName twoferapp.com -Type DNSKEY -DnsOnly (filtered to DNSKEY records)",
+    "Resolve-DnsName _dmarc.twoferapp.com -Type TXT -DnsOnly (policy field only)"
+  ],
+  "dnssec": {
+    "ds_record_count": 0,
+    "dnskey_record_count": 0,
+    "status": "not_delegated"
+  },
+  "dmarc": {
+    "policy": "none"
+  },
+  "interpretation": "DNSSEC is not currently delegated and DMARC remains monitoring-only. Registrar, DNS, and mail-policy mutations remain approval-gated."
+}

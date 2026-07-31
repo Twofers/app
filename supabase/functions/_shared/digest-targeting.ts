@@ -31,6 +31,12 @@ export type DigestConsumer = {
   lng: number | null;
   radius_miles: number | null;
   favorite_business_ids: string[];
+  /**
+   * Businesses whose repeat-claim policy currently blocks this customer. Their
+   * deals are never counted — the digest would deep-link to a Claim button that
+   * cannot succeed. Optional so existing callers/tests are unaffected.
+   */
+  blocked_business_ids?: string[];
 };
 
 const DEFAULT_RADIUS_MILES = 3;
@@ -62,11 +68,15 @@ export function computeDigestCounts(
     if (mode === "none") continue;
 
     const favs = new Set(c.favorite_business_ids ?? []);
+    const blocked = new Set(c.blocked_business_ids ?? []);
     const radius = isFiniteNum(c.radius_miles) && c.radius_miles > 0 ? c.radius_miles : DEFAULT_RADIUS_MILES;
     const hasLoc = isFiniteNum(c.lat) && isFiniteNum(c.lng);
 
     let count = 0;
     for (const d of deals) {
+      // Repeat-claim policy outranks favorites: a blocked customer can't claim
+      // here, so surfacing the deal at all is a dead end.
+      if (blocked.has(d.business_id)) continue;
       const inFav = favs.has(d.business_id);
 
       if (mode === "favorites_only") {

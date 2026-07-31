@@ -45,8 +45,8 @@ import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { fetchCustomerDealPosterSpecs, type CustomerDealPosterSpec } from "@/lib/customer-deal-poster-specs";
-import { isAiV4SharedRendererEnabled } from "@/lib/runtime-env";
 import {
+  isAiV4SharedRendererEnabled,
   isAiV5CustomerLocaleResolutionEnabled,
   isAiV5LocalizedOfferRendererEnabled,
 } from "@/lib/runtime-env";

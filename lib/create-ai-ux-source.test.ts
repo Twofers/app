@@ -376,11 +376,24 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("Twofer fallback");
   });
 
-  it("blocks poster-format generation from continuing without an image asset", () => {
+  it("blocks a REVISION without an image, but lets first generation continue", () => {
+    // Changed 2026-07-26 (Dan-approved). First generation used to abort here too,
+    // which stranded any merchant whose subject the image providers refuse — an
+    // item not on their menu, a business that never imported one — because the
+    // retry asks for the same picture. It now continues onto the template
+    // gradient, which the poster already renders. Revision still aborts on
+    // purpose: accepting an imageless revision would silently swap a merchant's
+    // existing photo for a gradient. So exactly ONE gate remains, the revision one.
     const noImageGateCount =
       createAiSource.split("if (!imageVersionStoragePath(normalizedAd))").length - 1;
 
-    expect(noImageGateCount).toBeGreaterThanOrEqual(2);
+    expect(noImageGateCount).toBe(1);
+    expect(createAiSource).toMatch(
+      /AiAdsEvents\.REVISION_FAILED,[\s\S]{0,400}?error_code: "NO_IMAGE_RETURNED"/,
+    );
+    expect(createAiSource).toContain(
+      "const generatedWithoutImage = !imageVersionStoragePath(normalizedAd);",
+    );
     expect(createAiSource).toContain("if (!imageVersionStoragePath(generatedAd))");
     expect(createAiSource).toContain("if (!hasImageSource)");
     expect(createAiSource).toContain("if (!posterForPublish)");

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Twofer",
     "slug": "twoforone",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/twofer-icon-1024.png",
     "scheme": [
@@ -21,6 +21,7 @@
         "applinks:www.twoferapp.com"
       ],
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Twofer uses your location to sort nearby deals and match your area to business profile locations.",
         "NSCameraUsageDescription": "Twofer uses your camera to scan QR codes for redeeming deals and to capture deal, AI offer, and menu photos.",
@@ -279,6 +280,24 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-secure-store",
+      "expo-apple-authentication",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              { "name": "GoogleUtilities", "modular_headers": true },
+              { "name": "RecaptchaInterop", "modular_headers": true }
+            ]
+          }
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.991672961636-2aishdg2m54avhl027ggkfr9pdn9794k"
+        }
+      ],
       [
         "expo-location",
         {

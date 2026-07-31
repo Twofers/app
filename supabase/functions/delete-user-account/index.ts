@@ -1,8 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cancelStripeForBusinesses } from "../_shared/account-stripe-cancellation.ts";
+import { deleteAuthUserWithRetry } from "../_shared/auth-admin-delete-retry.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -20,7 +24,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
 
     const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
@@ -44,6 +48,57 @@ serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    const { data: deletionAttemptAllowed, error: deletionRateError } = await supabaseAdmin
+      .rpc("consume_account_deletion_attempt", {
+        p_user_id: user.id,
+        p_max_attempts: 3,
+        p_global_max: 50,
+      });
+    if (deletionRateError) {
+      console.error("delete-user-account: deletion rate-limit check failed:", deletionRateError);
+      return new Response(
+        JSON.stringify({
+          error: "Could not safely start account deletion. Please contact support.",
+          error_code: "deletion_rate_limit_unavailable",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (deletionAttemptAllowed !== true) {
+      return new Response(
+        JSON.stringify({
+          error: "Too many account-deletion attempts. Please contact support.",
+          error_code: "deletion_rate_limited",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    /**
+     * Prove the Auth admin API is reachable BEFORE anything destructive runs.
+     *
+     * `auth.admin.*` talks to GoTrue, not PostgREST, and the two validate the
+     * service-role credential differently — a key that works fine for the database
+     * can still be rejected here (a stale key fails with `bad_jwt`). Without this
+     * probe the purge below succeeds, the auth delete then fails, and the account is
+     * left permanently stripped of its data but still able to log in.
+     *
+     * The purge cannot simply be moved after the delete instead: `deal_claims.user_id`
+     * is ON DELETE CASCADE, so deleting the auth user first would destroy those rows
+     * rather than anonymize them, taking the merchant's aggregates with it.
+     */
+    const { error: adminProbeErr } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (adminProbeErr) {
+      console.error("delete-user-account: admin auth probe failed:", adminProbeErr);
+      return new Response(
+        JSON.stringify({
+          error: "Could not delete account. Please contact support.",
+          error_code: "admin_auth_unavailable",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     /**
      * Deleting the auth user cascades through the schema automatically —
@@ -72,6 +127,38 @@ serve(async (req) => {
       .eq("owner_id", user.id);
     if (bizErr) {
       console.error("delete-user-account: business lookup failed:", bizErr);
+      return new Response(
+        JSON.stringify({
+          error: "Could not verify business billing before deletion. Please contact support.",
+          error_code: "business_lookup_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Billing is ended before any database rows are purged. If Stripe cannot
+    // confirm cancellation, keep the account intact so a deleted owner can
+    // never continue being charged without a way to sign in.
+    try {
+      const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+      const stripe = stripeSecretKey
+        ? new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" })
+        : null;
+      await cancelStripeForBusinesses({
+        supabase: supabaseAdmin,
+        stripe,
+        businessIds: (ownedBusinesses ?? []).map((business) => business.id),
+        source: "account_self_delete",
+      });
+    } catch (stripeError) {
+      console.error("delete-user-account: Stripe cancellation failed:", stripeError);
+      return new Response(
+        JSON.stringify({
+          error: "Your subscription could not be canceled, so your account was not deleted. Please contact support.",
+          error_code: "billing_cancel_failed",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Sever counter devices BEFORE the owner delete: staff Auth users are
@@ -87,7 +174,10 @@ serve(async (req) => {
       console.error("delete-user-account: redemption device lookup failed:", devicesErr);
     }
     for (const staffUserId of staffUserIdsToSweep(staffDevices, user.id)) {
-      const { error: staffDelErr } = await supabaseAdmin.auth.admin.deleteUser(staffUserId);
+      const { error: staffDelErr } = await deleteAuthUserWithRetry(
+        supabaseAdmin,
+        staffUserId,
+      );
       if (staffDelErr) {
         console.error(`delete-user-account: staff user ${staffUserId} delete failed:`, staffDelErr);
       }
@@ -133,14 +223,23 @@ serve(async (req) => {
       }
     }
 
-    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+    const { error: delErr, attempts: deleteAttempts } =
+      await deleteAuthUserWithRetry(supabaseAdmin, user.id);
 
     if (delErr) {
       console.error("delete-user-account error:", delErr);
-      return new Response(JSON.stringify({ error: "Could not delete account. Please contact support." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Could not delete account. Please contact support.",
+          error_code: "auth_delete_failed",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (deleteAttempts > 1) {
+      console.warn(
+        `delete-user-account: auth delete succeeded after ${deleteAttempts} attempts`,
+      );
     }
 
     return new Response(JSON.stringify({ ok: true }), {
@@ -149,7 +248,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ error: "Server error" }), {
+    return new Response(JSON.stringify({ error: "Server error", error_code: "server_error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

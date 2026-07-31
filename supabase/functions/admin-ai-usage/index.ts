@@ -1,8 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import {
+  requireAdmin,
+  type AdminContext,
+  type AdminRole,
+} from "../_shared/admin-prospects.ts";
 import {
   AI_QUOTA_SCOPES,
   countAiQuotaUsage,
@@ -11,27 +12,6 @@ import {
   type AiQuotaScope,
 } from "../_shared/ai-quota-resets.ts";
 import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
-
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support"
-  | "sales"
-  | "finance"
-  | "moderator"
-  | "developer"
-  | "read_only";
-
-type AdminContext = {
-  user: { id: string; email?: string | null };
-  adminUser: {
-    email?: string | null;
-    role: AdminRole;
-    display_name?: string | null;
-  };
-  supabaseAdmin: any;
-  requestId: string;
-};
 
 type Payload = {
   action?: unknown;
@@ -54,19 +34,6 @@ function json(req: Request, body: Record<string, unknown>, status = 200) {
 
 function cleanString(value: unknown, max = 300): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
 }
 
 function canResetQuota(role: AdminRole): boolean {
@@ -96,67 +63,6 @@ async function readPayload(req: Request): Promise<Payload> {
   } catch {
     return {};
   }
-}
-
-async function requireAdmin(req: Request, requestId: string): Promise<AdminContext | Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { error: "Admin AI usage is not configured." }, 500);
-  }
-
-  const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabaseUser.auth.getUser();
-
-  if (userError || !user) {
-    return json(req, { error: "Unauthorized." }, 401);
-  }
-  if (isRedeemerUser(user)) {
-    return forbiddenForRedeemerResponse(getCorsHeaders(req));
-  }
-
-  const { data: adminUser, error: adminError } = await supabaseAdmin
-    .from("admin_users")
-    .select("id,email,role,is_active,require_mfa,display_name")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (adminError) throw adminError;
-  if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
-    await supabaseAdmin.from("admin_audit_log").insert({
-      admin_user_id: user.id,
-      admin_email: user.email ?? null,
-      action: "admin_ai_usage_denied",
-      target_type: "ai_quota",
-      reason: "not_active_admin",
-      request_id: requestId,
-    });
-    return json(req, { error: "Forbidden." }, 403);
-  }
-  if (adminUser.require_mfa && !isAal2(bearerToken)) {
-    return json(req, { error: "MFA verification required." }, 403);
-  }
-
-  return {
-    user: { id: user.id, email: user.email },
-    adminUser: {
-      email: adminUser.email,
-      role: adminUser.role,
-      display_name: adminUser.display_name,
-    },
-    supabaseAdmin,
-    requestId,
-  };
 }
 
 async function authUserById(supabaseAdmin: any, userId: string) {
@@ -438,7 +344,7 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await readPayload(req);
-    const adminContext = await requireAdmin(req, requestId);
+    const adminContext = await requireAdmin(req, requestId, "prospect.read");
     if (adminContext instanceof Response) return adminContext;
 
     const action = cleanString(payload.action || "lookup", 40);

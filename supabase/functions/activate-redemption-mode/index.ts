@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { hashExitToken, hashPin, normalizePin, randomBase64Url, sha256Base64Url } from "../_shared/redemption-crypto.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,7 +31,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = getServiceRoleKey();
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     if (!anonKey) {
       return json({ error: "Server is missing Supabase anon key." }, 500, corsHeaders);

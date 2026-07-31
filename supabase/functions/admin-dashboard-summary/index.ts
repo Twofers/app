@@ -1,9 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { isAal2 } from "../_shared/admin-mfa.ts";
+import { requireAdmin } from "../_shared/admin-prospects.ts";
 import {
   AI_QUOTA_SCOPES,
   countAiQuotaUsage,
@@ -11,34 +9,11 @@ import {
 } from "../_shared/ai-quota-resets.ts";
 import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
 
-type AdminRole =
-  | "owner"
-  | "admin"
-  | "support"
-  | "sales"
-  | "finance"
-  | "moderator"
-  | "developer"
-  | "read_only";
-
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
-}
-
-function hasReadableAdminRole(role: unknown): role is AdminRole {
-  return (
-    role === "owner" ||
-    role === "admin" ||
-    role === "support" ||
-    role === "sales" ||
-    role === "finance" ||
-    role === "moderator" ||
-    role === "developer" ||
-    role === "read_only"
-  );
 }
 
 async function countRows(query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> {
@@ -63,10 +38,12 @@ async function countRowsSafe(query: PromiseLike<{ count: number | null; error: u
 const SECTION_NAMES = [
   "businesses",
   "offers",
+  "redemptions",
   "billing_events",
   "audit_log",
   "settings",
   "business_detail",
+  "owner_view",
   "prospects",
   "prospect_detail",
 ] as const;
@@ -167,6 +144,16 @@ function daysUntil(toIso: string | null, now: Date): number | null {
 }
 
 type OfferEffectiveStatus = "live" | "scheduled" | "expired" | "inactive";
+type RecentDealStatus = OfferEffectiveStatus | "sold_out" | "needs_review";
+
+const ACTIVE_USER_EVENT_NAMES = [
+  "app_opened",
+  "deal_viewed",
+  "deal_claimed",
+  "deal_redeemed",
+] as const;
+const ACTIVE_USER_DEFINITION =
+  "Distinct consumer with an app_opened, deal_viewed, deal_claimed, or deal_redeemed event in app_analytics_events in the last 30 days, excluding business-role users.";
 
 // Deals have no separate status enum -- only is_active plus start/end timestamps.
 // A stored is_active=true never means "live" on its own: an end_time in the past
@@ -185,6 +172,503 @@ function offerEffectiveStatus(
 function rate(numerator: number, denominator: number): number {
   if (!denominator) return 0;
   return Number((numerator / denominator).toFixed(4));
+}
+
+function chunks<T>(items: T[], size = 200): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+async function loadActiveConsumerCount(
+  supabaseAdmin: any,
+  sinceIso: string,
+): Promise<number> {
+  const userIds = new Set<string>();
+  const pageSize = 1000;
+  for (let offset = 0;; offset += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("app_analytics_events")
+      .select("user_id")
+      .in("event_name", [...ACTIVE_USER_EVENT_NAMES])
+      .gte("occurred_at", sinceIso)
+      .not("user_id", "is", null)
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{ user_id?: string | null }>;
+    for (const row of rows) {
+      if (row.user_id) userIds.add(row.user_id);
+    }
+    if (rows.length < pageSize) break;
+  }
+  if (!userIds.size) return 0;
+
+  let activeConsumers = 0;
+  for (const idChunk of chunks([...userIds])) {
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id,role")
+      .in("id", idChunk);
+    if (error) throw error;
+    activeConsumers += ((data ?? []) as Array<{ role?: string | null }>)
+      .filter((profile) => profile.role === "customer")
+      .length;
+  }
+  return activeConsumers;
+}
+
+async function loadAccountGrowth(
+  supabaseAdmin: any,
+  asOfIso: string,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabaseAdmin.rpc("admin_account_growth_summary", {
+    p_as_of: asOfIso,
+  });
+  if (error) throw error;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Account growth summary returned an invalid payload.");
+  }
+  return data as Record<string, unknown>;
+}
+
+async function loadDistinctLiveBusinessCount(
+  supabaseAdmin: any,
+  nowIso: string,
+): Promise<number> {
+  const businessIds = new Set<string>();
+  const pageSize = 1000;
+  for (let offset = 0;; offset += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("deals")
+      .select("business_id")
+      .eq("is_active", true)
+      .lte("start_time", nowIso)
+      .or(`end_time.is.null,end_time.gt.${nowIso}`)
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{ business_id?: string | null }>;
+    for (const row of rows) {
+      if (row.business_id) businessIds.add(row.business_id);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return businessIds.size;
+}
+
+function recentDealStatus(
+  deal: Record<string, unknown>,
+  claimCount: number,
+  now: Date,
+): RecentDealStatus {
+  const effective = offerEffectiveStatus(deal, now);
+  const maxClaims = Number(deal.max_claims || 0);
+  if (effective === "live" && maxClaims > 0 && claimCount >= maxClaims) return "sold_out";
+  if (effective === "inactive" && (dateOrNull(deal.end_time)?.getTime() ?? 0) > now.getTime()) {
+    return "needs_review";
+  }
+  return effective;
+}
+
+async function loadRecentDeals(
+  supabaseAdmin: any,
+  now: Date,
+): Promise<Array<Record<string, unknown>>> {
+  const { data, error } = await supabaseAdmin
+    .from("deals")
+    .select("id,title,business_id,is_active,start_time,end_time,max_claims,created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const deals = (data ?? []) as Array<Record<string, unknown>>;
+  const dealIds = deals.map((deal) => String(deal.id || "")).filter(Boolean);
+  const businessIds = [...new Set(deals.map((deal) => String(deal.business_id || "")).filter(Boolean))];
+  const [claimsResult, redemptionsResult, businessesResult] = await Promise.all([
+    dealIds.length
+      ? supabaseAdmin.from("deal_claims").select("id,deal_id").in("deal_id", dealIds).limit(10000)
+      : Promise.resolve({ data: [], error: null }),
+    dealIds.length
+      ? supabaseAdmin.from("admin_redemption_facts_v1").select("claim_id,deal_id").in("deal_id", dealIds).limit(10000)
+      : Promise.resolve({ data: [], error: null }),
+    businessIds.length
+      ? supabaseAdmin.from("businesses").select("id,name").in("id", businessIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (claimsResult.error) throw claimsResult.error;
+  if (redemptionsResult.error) throw redemptionsResult.error;
+  if (businessesResult.error) throw businessesResult.error;
+
+  const claimsByDeal = new Map<string, number>();
+  for (const claim of (claimsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(claim.deal_id || "");
+    claimsByDeal.set(dealId, (claimsByDeal.get(dealId) ?? 0) + 1);
+  }
+  const redemptionsByDeal = new Map<string, number>();
+  for (const redemption of (redemptionsResult.data ?? []) as Array<Record<string, unknown>>) {
+    const dealId = String(redemption.deal_id || "");
+    redemptionsByDeal.set(dealId, (redemptionsByDeal.get(dealId) ?? 0) + 1);
+  }
+  const businessNames = new Map<string, string>();
+  for (const business of (businessesResult.data ?? []) as Array<Record<string, unknown>>) {
+    businessNames.set(String(business.id), String(business.name || business.id));
+  }
+
+  return deals.map((deal) => {
+    const dealId = String(deal.id);
+    const claimCount = claimsByDeal.get(dealId) ?? 0;
+    const redemptionCount = redemptionsByDeal.get(dealId) ?? 0;
+    const maxClaims = Number(deal.max_claims || 0);
+    const status = recentDealStatus(deal, claimCount, now);
+    return {
+      id: dealId,
+      business_id: deal.business_id ?? null,
+      business_name: businessNames.get(String(deal.business_id || "")) ?? null,
+      title: deal.title ?? "",
+      status,
+      claims: claimCount,
+      redemptions: redemptionCount,
+      expires_at: deal.end_time ?? null,
+      created_at: deal.created_at ?? null,
+      anomaly_flags: [
+        ...(claimCount > 0 && redemptionCount === 0 ? ["claims_no_redemptions"] : []),
+        ...(maxClaims > 0 && redemptionCount > maxClaims ? ["redemptions_over_quantity"] : []),
+        ...(status !== "live" && status !== "sold_out" ? ["no_live_offer"] : []),
+      ],
+    };
+  });
+}
+
+async function loadOnboardingRows(
+  supabaseAdmin: any,
+): Promise<Array<Record<string, unknown>>> {
+  const approvedStatuses = [
+    "approved_not_billed",
+    "approved_not_activated",
+    "trial_active",
+    "trial_limited",
+    "active",
+  ];
+  const { data: applicationData, error: applicationError } = await supabaseAdmin
+    .from("business_applications")
+    .select("id,business_id,business_name,contact_name,email,status,terms_accepted,created_at")
+    .in("status", approvedStatuses)
+    .not("business_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (applicationError) throw applicationError;
+  const applications = (applicationData ?? []) as Array<Record<string, unknown>>;
+  const latestApplications = latestById(applications, "business_id");
+  const businessIds = [...latestApplications.keys()];
+  if (!businessIds.length) return [];
+
+  const [
+    businessesResult,
+    subscriptionsResult,
+    offerVersionsResult,
+    dealsResult,
+    termsResult,
+    redemptionsResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("businesses")
+      .select("id,owner_id,name,contact_name,business_email,public_email,address,address_line1,city,state,postal_code,category,phone,status")
+      .in("id", businessIds),
+    supabaseAdmin
+      .from("business_subscriptions")
+      .select("business_id,stripe_customer_id,billing_mode,billing_status,app_access_status,trial_start,trial_end,updated_at")
+      .in("business_id", businessIds)
+      .order("updated_at", { ascending: false }),
+    supabaseAdmin
+      .from("offer_versions")
+      .select("business_id,status,created_at")
+      .in("business_id", businessIds),
+    supabaseAdmin
+      .from("deals")
+      .select("id,business_id,is_active,start_time,end_time,created_at")
+      .in("business_id", businessIds),
+    supabaseAdmin
+      .from("terms_acceptances")
+      .select("business_id,document_type,accepted_at")
+      .in("business_id", businessIds)
+      .eq("document_type", "business_terms"),
+    supabaseAdmin
+      .from("admin_redemption_facts_v1")
+      .select("business_id,redeemed_at")
+      .in("business_id", businessIds)
+      .limit(10000),
+  ]);
+  for (const result of [
+    businessesResult,
+    subscriptionsResult,
+    offerVersionsResult,
+    dealsResult,
+    termsResult,
+    redemptionsResult,
+  ]) {
+    if (result.error) throw result.error;
+  }
+
+  const businesses = (businessesResult.data ?? []) as Array<Record<string, unknown>>;
+  const subscriptions = latestById(
+    (subscriptionsResult.data ?? []) as Array<Record<string, unknown>>,
+    "business_id",
+  );
+  const offerCreated = new Set(
+    ((offerVersionsResult.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => String(row.business_id || ""))
+      .filter(Boolean),
+  );
+  const published = new Set(
+    ((dealsResult.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => String(row.business_id || ""))
+      .filter(Boolean),
+  );
+  const termsAccepted = new Set(
+    ((termsResult.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => String(row.business_id || ""))
+      .filter(Boolean),
+  );
+  const redemptionTested = new Set(
+    ((redemptionsResult.data ?? []) as Array<Record<string, unknown>>)
+      .map((row) => String(row.business_id || ""))
+      .filter(Boolean),
+  );
+  const authByOwner = new Map<string, { email_confirmed_at?: string | null }>();
+  await Promise.all(businesses.map(async (business) => {
+    const ownerId = String(business.owner_id || "");
+    if (!ownerId || authByOwner.has(ownerId)) return;
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(ownerId);
+    if (!error && data.user) {
+      authByOwner.set(ownerId, {
+        email_confirmed_at: data.user.email_confirmed_at ?? null,
+      });
+    }
+  }));
+
+  return businesses.map((business) => {
+    const businessId = String(business.id);
+    const application = latestApplications.get(businessId)!;
+    const subscription = subscriptions.get(businessId) ?? null;
+    const businessInfoComplete = [
+      business.name,
+      business.contact_name,
+      business.business_email || business.public_email,
+      business.address || business.address_line1,
+      business.city,
+      business.state,
+      business.postal_code,
+      business.category,
+      business.phone,
+    ].every((value) => typeof value === "string" && value.trim().length > 0);
+    const appAccessStatus = String(subscription?.app_access_status || "");
+    const billingMode = String(subscription?.billing_mode || "");
+    const billingStatus = String(subscription?.billing_status || "");
+    const checklist = [
+      { key: "application_approved", label: "Application approved", complete: true },
+      {
+        key: "owner_email_verified",
+        label: "Owner email verified",
+        complete: Boolean(authByOwner.get(String(business.owner_id || ""))?.email_confirmed_at),
+      },
+      { key: "business_info_complete", label: "Business information complete", complete: businessInfoComplete },
+      {
+        key: "terms_accepted",
+        label: "Business terms accepted",
+        complete: application.terms_accepted === true || termsAccepted.has(businessId),
+      },
+      {
+        key: "trial_activated",
+        label: "Trial or access activated",
+        complete: ["trialing", "trial_limited", "active", "comped"].includes(appAccessStatus),
+      },
+      {
+        key: "billing_confirmed",
+        label: "Billing confirmed",
+        complete: Boolean(subscription?.stripe_customer_id) ||
+          ["admin_comp", "partner_comp"].includes(billingMode) ||
+          ["active", "trialing", "admin_comped", "partner_comped"].includes(billingStatus),
+      },
+      {
+        key: "first_offer_created",
+        label: "First offer created",
+        complete: offerCreated.has(businessId) || published.has(businessId),
+      },
+      { key: "first_offer_published", label: "First offer published", complete: published.has(businessId) },
+      { key: "redemption_tested", label: "Redemption tested", complete: redemptionTested.has(businessId) },
+    ];
+    const completedCount = checklist.filter((item) => item.complete).length;
+    return {
+      business_id: businessId,
+      business_name: business.name ?? application.business_name ?? businessId,
+      owner_email: application.email ?? business.business_email ?? null,
+      application_id: application.id ?? null,
+      application_status: application.status ?? null,
+      business_status: business.status ?? null,
+      app_access_status: subscription?.app_access_status ?? null,
+      checklist,
+      completed_count: completedCount,
+      total: checklist.length,
+    };
+  }).filter((row) => row.completed_count < row.total);
+}
+
+async function loadOptionalAiBudget(supabaseAdmin: any): Promise<number | null> {
+  const { data, error } = await supabaseAdmin
+    .from("feature_flags")
+    .select("enabled,rules")
+    .eq("key", "admin_ai_monthly_budget")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.enabled) return null;
+  const value = Number((data.rules as Record<string, unknown> | null)?.monthly_usd);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function queueCategory(row: Record<string, unknown>): string {
+  const codes = Array.isArray(row.reason_codes) ? row.reason_codes.map(String) : [];
+  if (codes.includes("pending_trial_request")) return "setup";
+  if (codes.some((code) => code.includes("redemptions"))) return "redemptions";
+  if (codes.includes("no_recent_offers")) return "offers";
+  if (codes.some((code) => code.startsWith("ai_"))) return "ai";
+  if (codes.includes("trial_ending_soon")) return "billing";
+  return "accounts";
+}
+
+function queuePriority(score: number): "high" | "medium" | "low" {
+  if (score >= 70) return "high";
+  if (score >= 45) return "medium";
+  return "low";
+}
+
+function normalizeQueue(
+  businessHealth: Array<Record<string, unknown>>,
+  counts: {
+    trialRequests: number;
+    pendingBusinesses: number;
+    failedBillingEvents: number;
+    openReports: number;
+    offersNeedingReview: number;
+  },
+): Array<Record<string, unknown>> {
+  const healthItems = businessHealth.map((row) => {
+    const businessId = String(row.business_id || "");
+    const reasonCode = Array.isArray(row.reason_codes) && row.reason_codes.length
+      ? String(row.reason_codes[0])
+      : "health_review";
+    const score = Number(row.attention_score || 0);
+    return {
+      key: `${reasonCode}:${businessId}`,
+      category: queueCategory(row),
+      priority: queuePriority(score),
+      attention_score: score,
+      business_id: businessId || null,
+      business_name: row.business_name ?? null,
+      title: row.primary_reason ?? "Business health review",
+      explanation: row.primary_reason ?? "Business activity needs review.",
+      waiting_since: row.trial_request_created_at ?? row.last_offer_at ?? null,
+      recommended_action: row.suggested_read_only_action ?? "Review business activity",
+      status: "new",
+      note: null,
+      links: {
+        business: businessId ? `/admin/businesses/detail?businessId=${businessId}` : null,
+      },
+    };
+  });
+  const countItems = [
+    {
+      key: "setup:open_trial_requests",
+      count: counts.trialRequests,
+      category: "setup",
+      attention_score: 90,
+      title: "Business access requests waiting for review",
+      explanation: "Owners cannot continue setup until these requests are reviewed.",
+      recommended_action: "Review business access requests",
+      href: "/admin/trial-requests",
+    },
+    {
+      key: "setup:pending_verification",
+      count: counts.pendingBusinesses,
+      category: "setup",
+      attention_score: 82,
+      title: "Businesses waiting for verification",
+      explanation: "Verification gaps can block a business from going fully live.",
+      recommended_action: "Review pending business verification",
+      href: "/admin/businesses?status=pending_verification",
+    },
+    {
+      key: "billing:failed_events",
+      count: counts.failedBillingEvents,
+      category: "billing",
+      attention_score: 88,
+      title: "Failed billing events",
+      explanation: "Billing sync failures may affect owner access or payment status.",
+      recommended_action: "Review failed billing events",
+      href: "/admin/billing/events?status=failed",
+    },
+    {
+      key: "reports:open",
+      count: counts.openReports,
+      category: "reports",
+      attention_score: 76,
+      title: "Customer reports waiting for review",
+      explanation: "Reported businesses, offers, or customers need an operator decision.",
+      recommended_action: "Review open reports",
+      href: "/admin/reports",
+    },
+    {
+      key: "offers:needs_review",
+      count: counts.offersNeedingReview,
+      category: "offers",
+      attention_score: 72,
+      title: "Offers needing review",
+      explanation: "Owner-created offers may need moderation or setup support.",
+      recommended_action: "Review offers",
+      href: "/admin/offers?status=review",
+    },
+  ]
+    .filter((item) => item.count > 0)
+    .map((item) => ({
+      ...item,
+      priority: queuePriority(item.attention_score),
+      business_id: null,
+      business_name: null,
+      waiting_since: null,
+      status: "new",
+      note: null,
+      links: { primary: item.href },
+    }));
+  return [...healthItems, ...countItems].sort((left, right) =>
+    Number(right.attention_score || 0) - Number(left.attention_score || 0));
+}
+
+async function overlayQueueStatuses(
+  supabaseAdmin: any,
+  queue: Array<Record<string, unknown>>,
+): Promise<{ items: Array<Record<string, unknown>>; error: string | null }> {
+  const keys = queue.map((item) => String(item.key || "")).filter(Boolean);
+  if (!keys.length) return { items: queue, error: null };
+  const { data, error } = await supabaseAdmin
+    .from("admin_queue_item_status")
+    .select("issue_key,status,note,updated_by,updated_at")
+    .in("issue_key", keys);
+  if (error) {
+    console.warn("[admin-dashboard-summary] queue status overlay error:", error);
+    return {
+      items: queue,
+      error: "Queue statuses could not be loaded.",
+    };
+  }
+  const statusByKey = new Map(
+    ((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.issue_key), row]),
+  );
+  return {
+    items: queue.map((item) => ({
+      ...item,
+      ...(statusByKey.get(String(item.key)) ?? {}),
+    })),
+    error: null,
+  };
 }
 
 function quotaLimitForScope(scope: AiQuotaScope, supabaseAdmin: any, businessId: string): Promise<number> | number {
@@ -317,7 +801,9 @@ function deriveHealthSignals(input: HealthSignalInputs, now: Date) {
   };
 }
 
-async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<string, unknown>>> {
+async function loadBusinessHealthRows(
+  supabaseAdmin: any,
+): Promise<{ rows: Array<Record<string, unknown>>; total: number }> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -333,7 +819,7 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
   ] = await Promise.all([
     supabaseAdmin
       .from("businesses")
-      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .select("id,owner_id,name,status,access_level,verification_status,risk_level,created_at")
       .order("created_at", { ascending: false })
       .limit(500),
     supabaseAdmin
@@ -524,7 +1010,7 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
     };
   }));
 
-  return rows
+  const sortedRows = rows
     .filter((row) => row.health_label !== "healthy" || Number(row.attention_score) > 0)
     .sort((left, right) => {
       const scoreDiff = Number(right.attention_score) - Number(left.attention_score);
@@ -538,8 +1024,11 @@ async function loadBusinessHealthRows(supabaseAdmin: any): Promise<Array<Record<
       if (leftTrial !== rightTrial) return leftTrial - rightTrial;
       return (dateOrNull(right.last_redeemed_at)?.getTime() ?? 0) -
         (dateOrNull(left.last_redeemed_at)?.getTime() ?? 0);
-    })
-    .slice(0, 50);
+    });
+  return {
+    rows: sortedRows.slice(0, 50),
+    total: sortedRows.length,
+  };
 }
 
 // Per-business version of the health signal computation used by the Business Health
@@ -766,7 +1255,7 @@ async function loadSection(
   if (section === "businesses") {
     const { data, error } = await supabaseAdmin
       .from("businesses")
-      .select("id,name,status,access_level,verification_status,risk_level,created_at")
+      .select("id,owner_id,name,status,access_level,verification_status,risk_level,created_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw error;
@@ -806,6 +1295,37 @@ async function loadSection(
         ...row,
         business_name: names.get(String(row.business_id)) ?? null,
         effective_status: offerEffectiveStatus(row, now),
+      })),
+    };
+  }
+
+  if (section === "redemptions") {
+    const { data, error } = await supabaseAdmin
+      .from("admin_redemption_facts_v1")
+      .select("claim_id,business_id,deal_id,customer_user_id,redeemed_at,redeem_method,claimed_at")
+      .order("redeemed_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const businessIds = [...new Set(rows.map((row) => String(row.business_id || "")).filter(Boolean))];
+    const dealIds = [...new Set(rows.map((row) => String(row.deal_id || "")).filter(Boolean))];
+    const [businesses, deals] = await Promise.all([
+      businessIds.length
+        ? supabaseAdmin.from("businesses").select("id,name").in("id", businessIds)
+        : Promise.resolve({ data: [], error: null }),
+      dealIds.length
+        ? supabaseAdmin.from("deals").select("id,title").in("id", dealIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (businesses.error) throw businesses.error;
+    if (deals.error) throw deals.error;
+    const businessNames = new Map((businesses.data ?? []).map((row: Record<string, unknown>) => [String(row.id), String(row.name || "")]));
+    const dealNames = new Map((deals.data ?? []).map((row: Record<string, unknown>) => [String(row.id), String(row.title || "")]));
+    return {
+      redemptions: rows.map((row) => ({
+        ...row,
+        business_name: businessNames.get(String(row.business_id)) || null,
+        deal_title: dealNames.get(String(row.deal_id)) || null,
       })),
     };
   }
@@ -1076,6 +1596,102 @@ async function loadSection(
     };
   }
 
+  if (section === "owner_view") {
+    const businessId = cleanText(payload.business_id, 40);
+    if (!UUID_RE.test(businessId)) {
+      throw Object.assign(new Error("A valid business id is required."), { status: 400 });
+    }
+    const [businessResult, dealsResult, subscriptionResult] = await Promise.all([
+      supabaseAdmin
+        .from("businesses")
+        .select("id,owner_id,name,status,verification_status,category,short_description,logo_url,created_at")
+        .eq("id", businessId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("deals")
+        .select("id,title,description,is_active,start_time,end_time,max_claims,created_at")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabaseAdmin
+        .from("business_subscriptions")
+        .select("billing_status,app_access_status,plan_name,trial_end,current_period_end,cancel_at_period_end,updated_at")
+        .eq("business_id", businessId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (businessResult.error) throw businessResult.error;
+    if (!businessResult.data) throw Object.assign(new Error("Business not found."), { status: 404 });
+    if (dealsResult.error) throw dealsResult.error;
+    if (subscriptionResult.error) throw subscriptionResult.error;
+    const deals = (dealsResult.data ?? []) as Array<Record<string, unknown>>;
+    const dealIds = deals.map((deal) => String(deal.id)).filter(Boolean);
+    const [claimsResult, redemptionsResult] = await Promise.all([
+      dealIds.length
+        ? supabaseAdmin.from("deal_claims").select("id,deal_id,claim_status,created_at,redeemed_at").in("deal_id", dealIds).limit(5000)
+        : Promise.resolve({ data: [], error: null }),
+      dealIds.length
+        ? supabaseAdmin.from("admin_redemption_facts_v1").select("claim_id,deal_id,redeemed_at").in("deal_id", dealIds).limit(5000)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (claimsResult.error) throw claimsResult.error;
+    if (redemptionsResult.error) throw redemptionsResult.error;
+    const claimsByDeal = new Map<string, number>();
+    const redemptionsByDeal = new Map<string, number>();
+    for (const claim of claimsResult.data ?? []) {
+      const dealId = String(claim.deal_id || "");
+      claimsByDeal.set(dealId, (claimsByDeal.get(dealId) ?? 0) + 1);
+    }
+    for (const redemption of redemptionsResult.data ?? []) {
+      const dealId = String(redemption.deal_id || "");
+      redemptionsByDeal.set(dealId, (redemptionsByDeal.get(dealId) ?? 0) + 1);
+    }
+    const now = new Date();
+    const offers = deals
+      .map((deal) => ({
+        ...deal,
+        status: offerEffectiveStatus(deal, now),
+        claim_count: claimsByDeal.get(String(deal.id)) ?? 0,
+        redemption_count: redemptionsByDeal.get(String(deal.id)) ?? 0,
+      }))
+      .sort((left, right) => {
+        const rank: Record<string, number> = { live: 0, scheduled: 1, inactive: 2, expired: 3 };
+        const statusRank = (rank[String(left.status)] ?? 4) - (rank[String(right.status)] ?? 4);
+        if (statusRank) return statusRank;
+        return (dateOrNull((right as Record<string, unknown>).created_at)?.getTime() ?? 0) -
+          (dateOrNull((left as Record<string, unknown>).created_at)?.getTime() ?? 0);
+      });
+    const subscription = subscriptionResult.data as Record<string, unknown> | null;
+    const banners: Array<{ tone: string; message: string }> = [];
+    if (String(subscription?.app_access_status || "") === "approved_not_activated") {
+      banners.push({ tone: "warning", message: "Finish secure billing activation to publish and receive customer claims." });
+    }
+    if (["past_due", "past_due_grace"].includes(String(subscription?.billing_status || subscription?.app_access_status || ""))) {
+      banners.push({ tone: "danger", message: "Billing needs attention. Review payment details to keep business access active." });
+    }
+    if (subscription?.trial_end) {
+      banners.push({ tone: "info", message: `Trial access ends ${new Date(String(subscription.trial_end)).toLocaleDateString("en-US")}.` });
+    }
+    if (!offers.some((offer) => offer.status === "live")) {
+      banners.push({ tone: "info", message: "No offer is live right now. Create or schedule an offer when ready." });
+    }
+    return {
+      owner_view: {
+        business: businessResult.data,
+        offers,
+        claims: {
+          total: (claimsResult.data ?? []).length,
+          redemptions: (redemptionsResult.data ?? []).length,
+        },
+        subscription,
+        banners,
+        read_only: true,
+        impersonation: false,
+      },
+    };
+  }
+
   // business_detail
   const businessId = typeof payload.business_id === "string" ? payload.business_id.trim() : "";
   if (!UUID_RE.test(businessId)) {
@@ -1140,6 +1756,13 @@ async function loadSection(
   // Never gates anything; a failure here degrades to an empty list rather than
   // failing the whole business detail view.
   const promoMaterials = await loadPromoMaterialsDetail(supabaseAdmin, businessId);
+  let onboarding: Record<string, unknown> | null = null;
+  try {
+    onboarding = (await loadOnboardingRows(supabaseAdmin))
+      .find((row) => row.business_id === businessId) ?? null;
+  } catch (onboardingErr) {
+    console.warn("[admin-dashboard-summary] business onboarding detail error:", onboardingErr);
+  }
 
   return {
     business: businessRow,
@@ -1151,6 +1774,7 @@ async function loadSection(
     claims_and_redemptions: healthDetail?.claims_and_redemptions ?? null,
     trial_and_access: healthDetail?.trial_and_access ?? null,
     ai_usage: healthDetail?.ai_usage ?? null,
+    onboarding,
     business_health_error: businessHealthError,
   };
 }
@@ -1265,64 +1889,61 @@ serve(async (req) => {
   const requestId = crypto.randomUUID();
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json(req, { error: "Admin dashboard is not configured." }, 500);
-    }
-
-    const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser();
-
-    if (userError || !user) {
-      return json(req, { error: "Unauthorized." }, 401);
-    }
-    if (isRedeemerUser(user)) {
-      return forbiddenForRedeemerResponse(corsHeaders);
-    }
-
-    const { data: adminUser, error: adminError } = await supabaseAdmin
-      .from("admin_users")
-      .select("id,email,role,is_active,require_mfa,display_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (adminError) throw adminError;
-    if (!adminUser?.is_active || !hasReadableAdminRole(adminUser.role)) {
-      await supabaseAdmin.from("admin_audit_log").insert({
-        admin_user_id: user.id,
-        admin_email: user.email ?? null,
-        action: "admin_dashboard_denied",
-        target_type: "admin_dashboard",
-        reason: "not_active_admin",
-        request_id: requestId,
-      });
-      return json(req, { error: "Forbidden." }, 403);
-    }
-    if (adminUser.require_mfa && !isAal2(bearerToken)) {
-      return json(req, { error: "MFA verification required." }, 403);
-    }
+    const ctx = await requireAdmin(req, requestId, "prospect.read");
+    if (ctx instanceof Response) return ctx;
+    const { user, adminUser, supabaseAdmin } = ctx;
 
     const payload = req.method === "POST" ? await readPayload(req) : {};
+    if (payload.section === "queue_status") {
+      if (!["owner", "admin", "support"].includes(String(adminUser.role))) {
+        return json(req, { error: "This admin role cannot update the action queue." }, 403);
+      }
+      const issueKey = cleanText(payload.issue_key, 200).toLowerCase();
+      const status = cleanText(payload.status, 40).toLowerCase();
+      const note = cleanText(payload.note, 1000);
+      const allowedStatuses = new Set(["new", "reviewing", "waiting_owner", "resolved", "dismissed"]);
+      if (!/^[a-z0-9_:-]{3,200}$/.test(issueKey) || !allowedStatuses.has(status)) {
+        return json(req, { error: "A valid issue key and queue status are required." }, 400);
+      }
+      const updatedAt = new Date().toISOString();
+      const { data: queueStatus, error: queueStatusError } = await supabaseAdmin
+        .from("admin_queue_item_status")
+        .upsert({
+          issue_key: issueKey,
+          status,
+          note: note || null,
+          updated_by: user.id,
+          updated_at: updatedAt,
+        }, { onConflict: "issue_key" })
+        .select("issue_key,status,note,updated_by,updated_at")
+        .single();
+      if (queueStatusError) throw queueStatusError;
+      await supabaseAdmin.from("admin_audit_log").insert({
+        admin_user_id: user.id,
+        admin_email: adminUser.email ?? user.email ?? null,
+        action: "admin_queue_status_set",
+        target_type: "admin_queue_item",
+        business_id: typeof payload.business_id === "string" && UUID_RE.test(payload.business_id)
+          ? payload.business_id
+          : null,
+        reason: note || `Queue status set to ${status}.`,
+        request_id: requestId,
+      });
+      return json(req, {
+        ok: true,
+        request_id: requestId,
+        queue_status: queueStatus,
+      });
+    }
     if (isSectionName(payload.section)) {
       const canViewAdminUsers = adminUser.role === "owner" || adminUser.role === "admin";
       const sectionData = await loadSection(supabaseAdmin, payload.section, payload, canViewAdminUsers);
       await supabaseAdmin.from("admin_audit_log").insert({
         admin_user_id: user.id,
         admin_email: adminUser.email ?? user.email ?? null,
-        action: `admin_${payload.section}_viewed`,
+        action: payload.section === "owner_view" ? "admin_owner_view_opened" : `admin_${payload.section}_viewed`,
         target_type: "admin_dashboard",
-        target_id: payload.section === "business_detail" && typeof payload.business_id === "string" &&
+        target_id: (payload.section === "business_detail" || payload.section === "owner_view") && typeof payload.business_id === "string" &&
             UUID_RE.test(payload.business_id)
           ? payload.business_id
           : null,
@@ -1347,6 +1968,8 @@ serve(async (req) => {
     dayStart.setUTCHours(0, 0, 0, 0);
     const weekStart = new Date();
     weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
     const sevenDaysOut = new Date();
     sevenDaysOut.setUTCDate(sevenDaysOut.getUTCDate() + 7);
     const currentMonthStart = utcMonthStart(0);
@@ -1371,6 +1994,12 @@ serve(async (req) => {
       stripeWebhookErrors,
       failedAdminActions,
       newConsumersThisWeek,
+      dealsCreatedToday,
+      dealsCreated7d,
+      redemptions7d,
+      claims30d,
+      redemptions30d,
+      dealsCreatedCurrentMonth,
       currentMonthAiSpend,
       priorMonthAiSpend,
       openProspects,
@@ -1415,6 +2044,7 @@ serve(async (req) => {
           .from("deals")
           .select("id", { count: "exact", head: true })
           .eq("is_active", true)
+          .lte("start_time", nowIso)
           .or(`end_time.is.null,end_time.gt.${nowIso}`),
       ),
       countRows(
@@ -1487,6 +2117,43 @@ serve(async (req) => {
           .select("user_id", { count: "exact", head: true })
           .gte("created_at", weekStart.toISOString()),
       ),
+      countRows(
+        supabaseAdmin
+          .from("deals")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deals")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", weekStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("admin_redemption_facts_v1")
+          .select("claim_id", { count: "exact", head: true })
+          .gte("redeemed_at", weekStart.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deal_claims")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", thirtyDaysAgo.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("admin_redemption_facts_v1")
+          .select("claim_id", { count: "exact", head: true })
+          .gte("redeemed_at", thirtyDaysAgo.toISOString()),
+      ),
+      countRows(
+        supabaseAdmin
+          .from("deals")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", currentMonthStart.toISOString())
+          .lt("created_at", nextMonthStart.toISOString()),
+      ),
       sumDailyAiCost(supabaseAdmin, currentMonthStart, nextMonthStart),
       sumDailyAiCost(supabaseAdmin, priorMonthStart, currentMonthStart),
       countRows(
@@ -1537,13 +2204,82 @@ serve(async (req) => {
     if (auditError) throw auditError;
 
     let businessHealth: Array<Record<string, unknown>> = [];
+    let businessHealthTotal = 0;
     let businessHealthError: string | null = null;
     try {
-      businessHealth = await loadBusinessHealthRows(supabaseAdmin);
+      const healthResult = await loadBusinessHealthRows(supabaseAdmin);
+      businessHealth = healthResult.rows;
+      businessHealthTotal = healthResult.total;
     } catch (healthErr) {
       businessHealthError = "Business health could not be loaded.";
       console.warn("[admin-dashboard-summary] business health error:", healthErr);
     }
+
+    let activeUsers30d = 0;
+    let activeUsersError: string | null = null;
+    try {
+      activeUsers30d = await loadActiveConsumerCount(supabaseAdmin, thirtyDaysAgo.toISOString());
+    } catch (activeErr) {
+      activeUsersError = "Active users could not be loaded.";
+      console.warn("[admin-dashboard-summary] active users error:", activeErr);
+    }
+
+    let accountGrowth: Record<string, unknown> | null = null;
+    let accountGrowthError: string | null = null;
+    try {
+      accountGrowth = await loadAccountGrowth(supabaseAdmin, nowIso);
+    } catch (accountGrowthErr) {
+      accountGrowthError = "Account growth could not be loaded.";
+      console.warn("[admin-dashboard-summary] account growth error:", accountGrowthErr);
+    }
+
+    let businessesWithLiveOffer = 0;
+    let liveBusinessCountError: string | null = null;
+    try {
+      businessesWithLiveOffer = await loadDistinctLiveBusinessCount(supabaseAdmin, nowIso);
+    } catch (liveBusinessErr) {
+      liveBusinessCountError = "Businesses with a live offer could not be loaded.";
+      console.warn("[admin-dashboard-summary] live business count error:", liveBusinessErr);
+    }
+
+    let recentDeals: Array<Record<string, unknown>> = [];
+    let recentDealsError: string | null = null;
+    try {
+      recentDeals = await loadRecentDeals(supabaseAdmin, new Date(nowIso));
+    } catch (recentDealErr) {
+      recentDealsError = "Recent deals could not be loaded.";
+      console.warn("[admin-dashboard-summary] recent deals error:", recentDealErr);
+    }
+
+    let onboarding: Array<Record<string, unknown>> = [];
+    let onboardingError: string | null = null;
+    try {
+      onboarding = await loadOnboardingRows(supabaseAdmin);
+    } catch (onboardingErr) {
+      onboardingError = "Business onboarding progress could not be loaded.";
+      console.warn("[admin-dashboard-summary] onboarding error:", onboardingErr);
+    }
+
+    let aiBudgetMonthlyUsd: number | null = null;
+    let aiBudgetError: string | null = null;
+    try {
+      aiBudgetMonthlyUsd = await loadOptionalAiBudget(supabaseAdmin);
+    } catch (budgetErr) {
+      aiBudgetError = "AI monthly budget setting could not be loaded.";
+      console.warn("[admin-dashboard-summary] AI budget setting error:", budgetErr);
+    }
+
+    const derivedQueue = normalizeQueue(businessHealth, {
+      trialRequests,
+      pendingBusinesses,
+      failedBillingEvents: stripeWebhookErrors,
+      openReports: openBusinessReports + openUserReports,
+      offersNeedingReview,
+    });
+    const queueOverlay = await overlayQueueStatuses(supabaseAdmin, derivedQueue);
+    const queueAll = queueOverlay.items;
+    const queue = queueAll.filter((item) =>
+      item.status !== "resolved" && item.status !== "dismissed");
 
     await supabaseAdmin.from("admin_audit_log").insert({
       admin_user_id: user.id,
@@ -1569,6 +2305,7 @@ serve(async (req) => {
           suspended: suspendedBusinesses,
           trialingLocations,
           trialsEndingSoon,
+          withLiveOffer: businessesWithLiveOffer,
         },
         trialRequests: {
           open: trialRequests,
@@ -1578,6 +2315,21 @@ serve(async (req) => {
           live: liveOffers,
           needsReview: offersNeedingReview,
         },
+        deals: {
+          createdToday: dealsCreatedToday,
+          created7d: dealsCreated7d,
+          liveNow: liveOffers,
+        },
+        redemptions: {
+          today: redemptionsToday,
+          last7d: redemptions7d,
+          claimToRedeemRate30d: rate(redemptions30d, claims30d),
+        },
+        users: {
+          active30d: activeUsers30d,
+          definition: ACTIVE_USER_DEFINITION,
+        },
+        accounts: accountGrowth,
         activity: {
           claimsToday,
           redemptionsToday,
@@ -1601,6 +2353,10 @@ serve(async (req) => {
           priorMonthStart: priorMonthStart.toISOString(),
           priorMonthEnd: currentMonthStart.toISOString(),
           updatedAt: nowIso,
+          perGeneratedDealUsd: dealsCreatedCurrentMonth > 0
+            ? Number((currentMonthAiSpend.totalUsd / dealsCreatedCurrentMonth).toFixed(6))
+            : 0,
+          budgetMonthlyUsd: aiBudgetMonthlyUsd,
         },
         prospects: {
           open: openProspects,
@@ -1612,7 +2368,21 @@ serve(async (req) => {
         },
       },
       businessHealth,
+      businessHealthTotal,
       businessHealthError,
+      queue,
+      queueAll,
+      recentDeals,
+      onboarding,
+      summaryV2Errors: {
+        activeUsers: activeUsersError,
+        accountGrowth: accountGrowthError,
+        businessesWithLiveOffer: liveBusinessCountError,
+        recentDeals: recentDealsError,
+        queueStatuses: queueOverlay.error,
+        onboarding: onboardingError,
+        aiBudget: aiBudgetError,
+      },
       recentApplications: recentApplications ?? [],
       recentAudit: recentAudit ?? [],
     });

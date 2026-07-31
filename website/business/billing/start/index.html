@@ -20,9 +20,9 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
   </head>
-  <body>
+  <body class="trial-page">
     <header class="site-header">
       <nav class="nav" aria-label="Primary navigation">
         <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
@@ -37,29 +37,25 @@
         </div>
       </nav>
     </header>
-    <main>
-      <section class="hero compact">
-        <div class="hero-copy">
-          <p class="eyebrow" data-i18n="billing.common.webOnly">Web-only billing</p>
-          <h1 data-i18n="billing.start.heading">Activate your approved 30-day trial securely with Stripe.</h1>
-          <p class="lede" data-i18n="billing.start.lede">Use the private activation link in your approval email. Checkout stays on the web, and access unlocks only after Twofer verifies Stripe's confirmation.</p>
-          <div class="hero-actions">
-            <a class="button" href="/support" data-i18n="trial.contactSupport">Contact support</a>
-            <a class="button button-secondary" href="/business" data-i18n="nav.businessAccess">Business access</a>
-          </div>
-        </div>
-      </section>
-      <section class="section-grid two">
-        <article class="info-card">
-          <h2 data-i18n="billing.start.trialTitle">Approval comes first</h2>
-          <p data-i18n="billing.start.trialBody">Activation is available only to an approved business account using its single-use email link. If you lost the email, contact support.</p>
-        </article>
-        <article class="info-card">
-          <h2 data-i18n="billing.start.stripeTitle">Your trial starts after confirmation</h2>
-          <p data-i18n="billing.start.stripeBody">Stripe always starts the approved 30-day trial. Card collection may vary, but it does not remove or shorten the trial.</p>
-        </article>
-      </section>
+    <main class="trial-main">
+      <p class="trial-kicker" data-i18n="billing.common.webOnly">Business billing</p>
+      <h1 class="trial-heading" data-i18n="billing.start.heading">Start your 30-day trial</h1>
+      <p class="trial-lede" data-i18n="billing.start.lede">Open the activation link in your approval email. It takes you to secure checkout with Stripe, and your account unlocks as soon as the payment is confirmed.</p>
+      <div class="trial-actions">
+        <a class="button" href="mailto:support@twoferapp.com" data-i18n="trial.contactSupport">Contact support</a>
+        <a class="button button-secondary" href="/business" data-i18n="nav.businessAccess">Business access</a>
+      </div>
+      <div class="business-feature-grid">
+        <section class="trial-panel">
+          <h2 data-i18n="billing.start.trialTitle">You need your approval email</h2>
+          <p data-i18n="billing.start.trialBody">The link works once, and only for your business. If you can't find the email, contact support and we'll send you a new one.</p>
+        </section>
+        <section class="trial-panel">
+          <h2 data-i18n="billing.start.stripeTitle">You get the full 30 days</h2>
+          <p data-i18n="billing.start.stripeBody">We may ask for a card at checkout, but you are not charged during the trial, and the 30 days are never shortened.</p>
+        </section>
+      </div>
     </main>
-    <script src="/localization.js?v=20260722-l2-feed"></script>
+    <script src="/localization.js?v=20260726-billing-copy"></script>
   </body>
 </html>

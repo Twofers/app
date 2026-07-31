@@ -7,11 +7,13 @@ type BannerProps = {
   message: string;
   tone?: "error" | "success" | "info" | "warning";
   onRetry?: () => void;
+  /** Overrides the default "Tap to retry" label when the action isn't a retry. */
+  actionLabel?: string;
 };
 
 // No greens/blues in chrome: success + warning render in brand orange,
 // info in neutral gray, error in the destructive red family.
-export function Banner({ message, tone = "info", onRetry }: BannerProps) {
+export function Banner({ message, tone = "info", onRetry, actionLabel }: BannerProps) {
   const isDark = useColorScheme() === "dark";
   const stylesByTone = isDark
     ? {
@@ -56,7 +58,7 @@ export function Banner({ message, tone = "info", onRetry }: BannerProps) {
             minimumFontScale={0.8}
             maxFontSizeMultiplier={1.15}
           >
-            {i18n.t("commonUi.tapToRetry")}
+            {actionLabel ?? i18n.t("commonUi.tapToRetry")}
           </Text>
         </Pressable>
       ) : null}

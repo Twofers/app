@@ -34,6 +34,13 @@ async function seedUserData(userId, businessId, dealId) {
   // deal_claims.business_id is denormalized and NOT NULL in the current schema.
   const claim = await rest(ctx, "service", "deal_claims", { method: "POST",
     body: { deal_id: dealId, business_id: businessId, user_id: userId, token: randomUUID(), expires_at: new Date(Date.now() + 864e5).toISOString() } });
+  // Surface WHY a seed failed. Previously a failed insert silently produced an
+  // undefined id, and the anonymization assertions downstream just reported
+  // "seed row id not captured" -- which hides a schema/trigger change behind
+  // what looks like a harmless skip.
+  if (!claim.json?.[0]?.id) {
+    console.warn(`  (seed) deal_claims insert failed: HTTP ${claim.status} ${String(claim.text).slice(0, 180)}`);
+  }
   const evt = await rest(ctx, "service", "app_analytics_events", { method: "POST",
     body: { event_name: "dbtest_seed", user_id: userId, business_id: businessId, deal_id: dealId } });
   return { claimId: claim.json?.[0]?.id, eventId: evt.json?.[0]?.id };
@@ -88,8 +95,13 @@ async function main() {
     body: { id: businessId, user_id: merchantId, owner_id: merchantId, name: "DBTest Cafe" } });
   await rest(ctx, "service", "business_locations", { method: "POST",
     body: { business_id: businessId, name: "DBTest HQ", address: "1 Test St" } });
+  // is_active:false is deliberate. enforce_live_deal_business_capability
+  // (20260817120000) refuses a LIVE deal for a business without
+  // can_publish_offer, and this throwaway fixture business has no entitlement.
+  // That gate is correct and unrelated to what 2a tests -- purge only needs a
+  // deal row for claims to hang off, not a published one.
   const deal = await rest(ctx, "service", "deals", { method: "POST",
-    body: { business_id: businessId, title: "Buy one get one free", description: "BOGO", is_recurring: true, end_time: new Date(Date.now() + 864e5).toISOString() } });
+    body: { business_id: businessId, title: "Buy one get one free", description: "BOGO", is_recurring: true, is_active: false, end_time: new Date(Date.now() + 864e5).toISOString() } });
   const dealId = deal.json?.[0]?.id;
   created.deals.push(dealId);
   if (!businessId || !dealId) {

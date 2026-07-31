@@ -1,10 +1,7 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const applicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
-  const onboardingReviewAiEndpoint = document.body.dataset.adminOnboardingReviewAiEndpoint;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const Shell = window.TwoferAdminShell;
+  const applicationsEndpoint = Shell.endpoint("admin-business-applications");
+  const onboardingReviewAiEndpoint = Shell.endpoint("admin-onboarding-review-ai");
   const statusEl = document.querySelector("[data-admin-status]");
   const trialStatus = document.querySelector("[data-trial-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
@@ -15,6 +12,11 @@
   const urlParams = new URLSearchParams(window.location.search);
   const highRiskOnly = urlParams.get("risk") === "high";
   const HIGH_RISK_MAX_SCORE = 39; // Mirrors admin-dashboard-summary's high-risk definition.
+  // Mirrors the business_applications.trial_days CHECK and the same bounds in
+  // admin-business-applications; keep all three in step.
+  const MIN_TRIAL_DAYS = 1;
+  const MAX_TRIAL_DAYS = 120;
+  const DEFAULT_TRIAL_DAYS = 30;
 
   function applyRequestedQueue() {
     if (!form) return;
@@ -25,31 +27,15 @@
     if ([...select.options].some((option) => option.value === requested)) select.value = requested;
   }
 
-  function sessionStorageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
-  }
-
   function syncNavForSession() {
-    const hasToken = Boolean(sessionStorageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNavForSession();
-  }
-
-  function storeSession(session, storage) {
-    storage.setItem(tokenKey, session.access_token);
-    if (session.refresh_token) storage.setItem(refreshTokenKey, session.refresh_token);
-    if (session.expires_in) {
-      storage.setItem(expiresAtKey, String(Date.now() + Number(session.expires_in) * 1000));
-    }
   }
 
   async function readJson(response) {
@@ -60,41 +46,8 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20000);
-    let response;
-    try {
-      response = await fetch(authEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      throw new Error(networkFailureMessage("session", error));
-    } finally {
-      window.clearTimeout(timeout);
-    }
-    const payload = await readJson(response);
-    if (response.status === 401 || response.status === 403) {
-      clearSession();
-      throw new Error("Admin session expired. Sign in again.");
-    }
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storeSession(payload.session, storage);
-    return payload.session.access_token;
-  }
-
   async function getAccessToken() {
-    const storage = sessionStorageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return Shell.getAccessToken();
   }
 
   function setAdminStatus(message, tone = "info") {
@@ -113,10 +66,12 @@
     if (error?.name === "AbortError") {
       if (action === "session") return "The admin session refresh timed out. Sign in again if this continues.";
       if (action === "decide") return "The approval decision request timed out. Refresh the queue before trying that decision again.";
+      if (action === "resend") return "The billing-link email request timed out. Refresh the queue before trying again.";
       return "The business access request queue timed out. Refresh this page and try again.";
     }
     if (action === "session") return "Could not refresh the admin session. Sign in again if this continues.";
     if (action === "decide") return "Could not reach the approval decision service. Refresh the queue before trying that decision again.";
+    if (action === "resend") return "Could not reach the billing-link email service. Refresh the queue before trying again.";
     return "Could not reach the business access request service. Refresh this page and try again.";
   }
 
@@ -141,6 +96,18 @@
     return String(data.get("reason") || "").trim();
   }
 
+  // Mirrors the server bound (business_applications.trial_days CHECK 1..120) so
+  // a bad number is caught before it costs a round trip.
+  function trialDaysFor(applicationId) {
+    const input = document.querySelector(`[data-trial-days-for="${applicationId}"]`);
+    if (!input) return null;
+    const raw = String(input.value || "").trim();
+    if (!/^\d+$/.test(raw)) return null;
+    const days = Number(raw);
+    if (!Number.isInteger(days) || days < MIN_TRIAL_DAYS || days > MAX_TRIAL_DAYS) return null;
+    return days;
+  }
+
   function selectedStatus() {
     if (!form) return "open";
     const data = new FormData(form);
@@ -151,7 +118,11 @@
     if (!applicationsEndpoint) throw new Error("Business access request endpoint is not configured.");
     const token = await getAccessToken();
     if (!token) throw new Error("Admin session not connected.");
-    const action = body?.action === "decide" ? "decide" : "list";
+    const action = body?.action === "decide"
+      ? "decide"
+      : body?.action === "resend_billing_link"
+      ? "resend"
+      : "list";
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 20000);
     let response;
@@ -294,6 +265,41 @@
         button.textContent = label;
         actions.appendChild(button);
       }
+
+      // Full access without payment: a day count plus its own button, kept next
+      // to each other so the number always belongs to the row being approved.
+      const daysLabel = document.createElement("label");
+      daysLabel.className = "admin-inline-field";
+      daysLabel.textContent = "Trial days";
+      const daysInput = document.createElement("input");
+      daysInput.type = "number";
+      daysInput.min = String(MIN_TRIAL_DAYS);
+      daysInput.max = String(MAX_TRIAL_DAYS);
+      daysInput.step = "1";
+      daysInput.value = String(DEFAULT_TRIAL_DAYS);
+      daysInput.dataset.trialDaysFor = app.id;
+      daysLabel.appendChild(daysInput);
+      actions.appendChild(daysLabel);
+
+      const fullAccessButton = document.createElement("button");
+      fullAccessButton.type = "button";
+      fullAccessButton.className = "button button-small";
+      fullAccessButton.dataset.decision = "approve_full_access";
+      fullAccessButton.dataset.applicationId = app.id;
+      fullAccessButton.textContent = "Approve - full access";
+      actions.appendChild(fullAccessButton);
+
+      if (app.billing_link_resend_eligible === true) {
+        const resendButton = document.createElement("button");
+        resendButton.type = "button";
+        resendButton.className = "button button-small button-secondary";
+        resendButton.dataset.adminAction = "resend_billing_link";
+        resendButton.dataset.applicationId = app.id;
+        resendButton.textContent = app.billing_link_email_sent
+          ? "Send new billing link"
+          : "Send billing link";
+        actions.appendChild(resendButton);
+      }
       actionsTd.appendChild(actions);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
@@ -353,6 +359,20 @@
     if (decision === "reject" && !window.confirm("Reject this business request?")) return;
     if (decision === "approve_setup" && !window.confirm("Approve this business for setup access? No trial or credits start yet.")) return;
     if (decision === "suspend" && !window.confirm("Suspend this business and block merchant actions?")) return;
+
+    let trialDays;
+    if (decision === "approve_full_access") {
+      trialDays = trialDaysFor(applicationId);
+      if (trialDays === null) {
+        setTrialStatus(`Enter a whole number of trial days between ${MIN_TRIAL_DAYS} and ${MAX_TRIAL_DAYS}.`, "warning");
+        return;
+      }
+      const confirmed = window.confirm(
+        `Grant ${trialDays} days of full access now, no payment required yet?`,
+      );
+      if (!confirmed) return;
+    }
+
     button.disabled = true;
     setTrialStatus("Saving decision...");
     try {
@@ -361,6 +381,7 @@
         application_id: applicationId,
         decision,
         reason: noteValue(),
+        ...(trialDays === undefined ? {} : { trial_days: trialDays }),
       });
       const savedMessage = payload.business_linked
         ? "Decision saved and linked business setup access updated."
@@ -375,6 +396,38 @@
       } catch (error) {
         if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
         setTrialStatus("Decision saved, but the queue refresh failed. Use Load requests before making another decision.", "warning");
+      }
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function resendBillingLink(applicationId, button) {
+    const confirmed = window.confirm(
+      "Send a new secure billing-link email? The previous email link will stop working.",
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    setTrialStatus("Sending a new billing link...");
+    try {
+      const payload = await postAdmin({
+        action: "resend_billing_link",
+        application_id: applicationId,
+      });
+      setTrialStatus(
+        payload.message || "A new billing-link email was sent. The previous link is no longer valid.",
+      );
+      try {
+        await loadApplications();
+      } catch (error) {
+        if (String(error?.message || "").includes("session")) {
+          setAdminStatus("Admin session not connected", "warning");
+        }
+        setTrialStatus(
+          "The billing-link email was sent, but the queue refresh failed. Use Load requests before sending another.",
+          "warning",
+        );
       }
     } finally {
       button.disabled = false;
@@ -400,8 +453,16 @@
 
   if (tbody) {
     tbody.addEventListener("click", (event) => {
-      const button = event.target instanceof HTMLElement ? event.target.closest("button[data-decision]") : null;
+      const button = event.target instanceof HTMLElement
+        ? event.target.closest("button[data-decision], button[data-admin-action]")
+        : null;
       if (!button) return;
+      if (button.dataset.adminAction === "resend_billing_link") {
+        resendBillingLink(button.dataset.applicationId || "", button).catch((error) => {
+          setTrialStatus(error instanceof Error ? error.message : "Could not send a new billing link.", "danger");
+        });
+        return;
+      }
       decide(button.dataset.applicationId || "", button.dataset.decision || "", button).catch((error) => {
         setTrialStatus(error instanceof Error ? error.message : "Could not save decision.", "danger");
       });

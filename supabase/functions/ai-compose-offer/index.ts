@@ -12,6 +12,7 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -224,7 +225,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseServiceKey = getServiceRoleKey();
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 

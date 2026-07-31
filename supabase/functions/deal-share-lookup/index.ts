@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 // Mirrors lib/deal-share-link.ts SHARE_CODE_RE and the RPC's own validation:
 // 7 chars from the crockford-ish alphabet (no 0/O/I/L/1).
@@ -25,10 +26,19 @@ type ShareRow = {
   business_logo_url?: string | null;
 };
 
-// Mirrors the businesses_public_read predicate (20260814120000): a business
-// moved back into a pre-approval state must not keep leaking its identity
-// through shares minted while it was live (audit F-002 residual).
-const HIDDEN_BUSINESS_STATUSES = new Set(["draft", "pending_verification", "rejected"]);
+// Mirrors the current businesses_public_read predicate: pre-approval,
+// suspended, disabled, canceled, and archived businesses must not keep
+// leaking identity through shares minted while they were live.
+const HIDDEN_BUSINESS_STATUSES = new Set([
+  "draft",
+  "pending_verification",
+  "approved_not_activated",
+  "rejected",
+  "canceled",
+  "suspended",
+  "disabled",
+  "archived",
+]);
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   const corsHeaders = getCorsHeaders(req);
@@ -59,7 +69,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      getServiceRoleKey(),
     );
     const { data, error } = await supabase.rpc("lookup_deal_share", { lookup_code: code });
     if (error) {

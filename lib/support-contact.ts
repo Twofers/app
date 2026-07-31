@@ -1,3 +1,5 @@
+import { Linking } from "react-native";
+
 /**
  * Single source of truth for the support email/phone the in-app Help row uses.
  *
@@ -10,6 +12,16 @@ export const SUPPORT_EMAIL = "support@twoferapp.com";
 /** Returns the public support email used by in-app contact actions. */
 export function getSupportEmail(): string {
   return SUPPORT_EMAIL;
+}
+
+/** Opens the device's email app for every in-app "Contact support" action. */
+export async function openSupportEmail(): Promise<boolean> {
+  try {
+    await Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Returns null when no phone is configured, so the UI hides the phone row. */

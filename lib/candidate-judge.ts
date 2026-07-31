@@ -2,7 +2,7 @@ import type { AiDealCopyVariant, DealOfferContract } from "./deal-offer-contract
 import type { MerchantCreativeProfile } from "./merchant-creative-profile.ts";
 import { AD_COPY_BOGO_SHORTHAND_PATTERNS, AD_COPY_FORBIDDEN_PATTERNS, AD_COPY_GENERIC_PHRASE_PATTERNS } from "./ad-language-policy.ts";
 
-export const CANDIDATE_JUDGE_PROMPT_VERSION = "candidate-judge-v1";
+export const CANDIDATE_JUDGE_PROMPT_VERSION = "candidate-judge-v2";
 
 export const CANDIDATE_JUDGE_JSON_SCHEMA = {
   name: "candidate_judge",
@@ -355,8 +355,11 @@ export function buildCandidateJudgePrompt(params: {
     system: [
       "You are judging mobile ad copy for Twofer.",
       "Choose the candidate a real local merchant would be most likely to approve.",
+      "Read each headline and description as if the owner were saying it out loud to a regular customer. Reward lines a person would actually say; punish template-sounding or machine-filled lines.",
+      "Reward copy that fits this exact item and business category; punish moments borrowed from a different kind of business.",
+      "The exchange must be instantly clear: what the customer does, and what the customer gets.",
       "Do not reward generic excitement. Prefer exact offer clarity, natural local language, merchant specificity, and mobile readability.",
-      "Hard-fail copy that changes the offer, uses BOGO/2-for-1 shorthand, invents claims, or sounds like generic AI marketing.",
+      'Hard-fail copy that changes the offer, uses BOGO/2-for-1 shorthand, invents claims, echoes planning vocabulary such as "clearly and simply" or "exact exchange", or sounds like generic AI marketing.',
       "Output JSON only.",
     ].join("\n"),
     userText: [

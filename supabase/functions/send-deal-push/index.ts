@@ -23,6 +23,8 @@ import {
   type DealReleaseNotificationState,
 } from "../../../lib/deal-release-notification.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { filterRepeatBlockedUserIds } from "../_shared/repeat-claim-audience.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const BASE_DEAL_SELECT = "id,title,business_id,location_id,start_time,end_time,is_active,max_claims,businesses(name,owner_id)";
 const STRUCTURED_DEAL_SELECT = [
@@ -88,6 +90,8 @@ type DealPushAudienceResult = {
   tokens: number;
   status: Exclude<DealPushEventStatus, "pending">;
   reason?: string;
+  /** Opted-in favorites dropped by the business's repeat-claim policy. */
+  repeatBlocked?: number;
 };
 
 function isMissingStructuredColumn(error: { code?: string; message?: string } | null | undefined): boolean {
@@ -263,6 +267,19 @@ async function sendDealPushToAudience(
   const allUserIds = new Set<string>((optedInRows ?? []).map((r: { user_id: string }) => r.user_id));
   if (ownerUserId) allUserIds.delete(ownerUserId);
 
+  // Business repeat-claim limits. Announcing a deal to a customer this business
+  // has already blocked deep-links them to a Claim button that cannot succeed —
+  // the consumer feed hides these deals for exactly this reason. Fails open.
+  const allowedUserIds = new Set(
+    await filterRepeatBlockedUserIds(admin, deal.business_id, [...allUserIds]),
+  );
+  let repeatBlocked = 0;
+  for (const userId of [...allUserIds]) {
+    if (allowedUserIds.has(userId)) continue;
+    allUserIds.delete(userId);
+    repeatBlocked++;
+  }
+
   if (allUserIds.size === 0) {
     return {
       sent: 0,
@@ -270,7 +287,8 @@ async function sendDealPushToAudience(
       audience: 0,
       tokens: 0,
       status: "skipped_no_audience",
-      reason: "no opted-in consumers",
+      repeatBlocked,
+      reason: repeatBlocked > 0 ? "all recipients repeat-restricted" : "no opted-in consumers",
     };
   }
 
@@ -293,6 +311,7 @@ async function sendDealPushToAudience(
       audience: allUserIds.size,
       tokens: 0,
       status: "skipped_no_tokens",
+      repeatBlocked,
       reason: "no push tokens",
     };
   }
@@ -320,6 +339,7 @@ async function sendDealPushToAudience(
     audience: allUserIds.size,
     tokens: messages.length,
     status: result.sent > 0 ? "sent" : "send_error",
+    repeatBlocked,
   };
 }
 
@@ -374,6 +394,7 @@ async function dispatchDueDealPushes(admin: any, dryRun: boolean): Promise<Recor
   let rescheduled = 0;
   let audience = 0;
   let tokens = 0;
+  let repeatBlocked = 0;
 
   for (const event of dueEvents) {
     const deal = dealsById.get(event.deal_id);
@@ -414,10 +435,12 @@ async function dispatchDueDealPushes(admin: any, dryRun: boolean): Promise<Recor
     errors += result.errors;
     audience += result.audience;
     tokens += result.tokens;
+    repeatBlocked += result.repeatBlocked ?? 0;
     if (result.status !== "sent") skipped++;
 
     await markDealPushEvent(admin, event.id, result.status, result.tokens, result.errors, {
       reason: result.reason ?? "deal_release",
+      repeat_blocked: result.repeatBlocked ?? 0,
     });
   }
 
@@ -430,6 +453,7 @@ async function dispatchDueDealPushes(admin: any, dryRun: boolean): Promise<Recor
     rescheduled,
     audience,
     tokens,
+    repeat_blocked: repeatBlocked,
   };
 }
 
@@ -452,7 +476,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = getServiceRoleKey();
     const admin = createClient(supabaseUrl, serviceKey);
 
     let body: { deal_id?: string; dispatch_due?: boolean; dry_run?: boolean };
@@ -577,6 +601,7 @@ serve(async (req) => {
     const result = await sendDealPushToAudience(admin as any, deal, user.id);
     await markDealPushEvent(admin as any, event.id, result.status, result.tokens, result.errors, {
       reason: result.reason ?? "merchant_publish_live_release",
+      repeat_blocked: result.repeatBlocked ?? 0,
     });
 
     return jsonResponse({

@@ -14,9 +14,15 @@ import {
   ensureStripeCustomerForBusiness,
   type BusinessBillingProfileInput,
 } from "../_shared/stripe-business-billing.ts";
-import { ensurePrimaryBusinessLocationId } from "../_shared/business-location-entitlement-sync.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type BillingSource = "admin" | "website" | "email";
+type CheckoutPurpose = "trial_start" | "admin_trial_conversion";
+type TrialCheckoutEligibility = {
+  applicationId: string;
+  checkoutPurpose: CheckoutPurpose;
+  adminTrialEnd: string | null;
+};
 const STANDARD_TRIAL_DAYS = 30;
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
@@ -52,53 +58,6 @@ async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/**
- * Manual override for the card requirement (and the trial-reuse guard below),
- * e.g. for launch partners Dan wants into a no-card trial regardless of the
- * global app_runtime_config.require_card_for_trial switch. Single atomic
- * UPDATE...RETURNING so a popular/shared code can't be raced past max_uses.
- */
-async function consumeTrialNoCardExemptionCode(supabaseAdmin: any, rawCode: string | null): Promise<boolean> {
-  const trimmed = typeof rawCode === "string" ? rawCode.trim() : "";
-  if (!trimmed) return false;
-  const codeHash = await sha256Hex(trimmed);
-  const nowIso = new Date().toISOString();
-  const { data, error } = await supabaseAdmin.rpc("consume_trial_no_card_exemption_code", {
-    p_code_hash: codeHash,
-    p_now: nowIso,
-  });
-  if (error) {
-    console.error("[stripe-create-checkout-session] exemption code check failed:", error);
-    return false;
-  }
-  return data === true;
-}
-
-/**
- * Finding 05: the automatic (code-less) no-card path must still respect
- * one-trial-per-physical-location. Mirrors admin_grant_location_trial's own
- * two checks exactly so a merchant can't get a second free ride by starting a
- * new business at the same storefront.
- */
-async function isBusinessLocationTrialAlreadyUsed(supabaseAdmin: any, locationId: string): Promise<boolean> {
-  const { count } = await supabaseAdmin
-    .from("deal_credit_periods")
-    .select("id", { count: "exact", head: true })
-    .eq("business_location_id", locationId)
-    .in("source", ["trial", "admin_trial"]);
-  if (typeof count === "number" && count > 0) return true;
-
-  const { data, error } = await supabaseAdmin.rpc("check_business_location_trial_reuse", {
-    p_business_location_id: locationId,
-  });
-  if (error) {
-    console.error("[stripe-create-checkout-session] trial reuse check failed:", error);
-    return false;
-  }
-  const rows = Array.isArray(data) ? data : data ? [data] : [];
-  return rows.some((row: { decision?: string }) => row.decision === "block" || row.decision === "review");
 }
 
 async function activeAdminRole(supabase: any, userId: string): Promise<string | null> {
@@ -147,7 +106,7 @@ async function userCanBillBusiness(supabase: any, businessId: string, userId: st
  * Audit F-006: consume the emailed billing token in ONE atomic conditional
  * UPDATE (consume_billing_token RPC, migration 20260813120000) so concurrent
  * replays of a single-use token cannot each create a Checkout Session. Fails
- * closed on any RPC error, mirroring consumeTrialNoCardExemptionCode above.
+ * closed on any RPC error.
  */
 async function useBillingToken(supabase: any, businessId: string, rawToken: string | null): Promise<boolean> {
   if (!rawToken) return false;
@@ -202,7 +161,10 @@ async function loadBillingInput(supabase: any, businessId: string): Promise<Busi
   };
 }
 
-async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: string): Promise<string> {
+async function assertBusinessCanStartTrialCheckout(
+  supabase: any,
+  businessId: string,
+): Promise<TrialCheckoutEligibility> {
   const { data: business, error: businessError } = await supabase
     .from("businesses")
     .select("status,access_level")
@@ -213,7 +175,7 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
 
   const { data: subscription, error: subscriptionError } = await supabase
     .from("business_subscriptions")
-    .select("app_access_status,activated_at,stripe_subscription_id")
+    .select("app_access_status,activated_at,stripe_subscription_id,trial_type,trial_end")
     .eq("business_id", businessId)
     .maybeSingle();
   if (subscriptionError) throw subscriptionError;
@@ -225,10 +187,25 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
   const alreadyHasProviderSubscription = Boolean(safeGetString(subscription?.stripe_subscription_id));
   const activeAccess = new Set(["trial_limited", "trialing", "active", "past_due_grace", "comped"]);
 
-  if (alreadyActivated || alreadyHasProviderSubscription || (appAccessStatus && activeAccess.has(appAccessStatus))) {
+  // An admin-granted (approve_full_access) trial is access without billing: it
+  // has no Stripe customer or subscription behind it and it runs out on its own.
+  // Those owners are exactly the ones we want converting to paid, so a card-free
+  // admin trial is checkout-eligible rather than "already activated". A trial
+  // that came from Stripe, or any business that has ever activated, still is not.
+  const onCardFreeAdminTrial = appAccessStatus === "trialing" &&
+    safeGetString(subscription?.trial_type) === "admin_comp" &&
+    !alreadyActivated &&
+    !alreadyHasProviderSubscription;
+
+  if (
+    alreadyActivated ||
+    alreadyHasProviderSubscription ||
+    (appAccessStatus && activeAccess.has(appAccessStatus) && !onCardFreeAdminTrial)
+  ) {
     throw new Error("BUSINESS_ALREADY_ACTIVATED");
   }
   if (
+    !onCardFreeAdminTrial &&
     businessStatus !== "approved_not_activated" &&
     accessLevel !== "approved_not_activated" &&
     appAccessStatus !== "approved_not_activated"
@@ -236,17 +213,46 @@ async function assertBusinessCanStartTrialCheckout(supabase: any, businessId: st
     throw new Error("BUSINESS_NOT_APPROVED_FOR_ACTIVATION");
   }
 
+  // Applying an admin grant moves the application to `trial_active` (the billing
+  // mirror in applyBusinessBillingAccessState does it), so restricting this to
+  // approved_not_activated would leave every comped owner unable to convert.
+  const claimableStatuses = onCardFreeAdminTrial
+    ? ["approved_not_activated", "trial_active"]
+    : ["approved_not_activated"];
   const { data: applications, error: applicationError } = await supabase
     .from("business_applications")
     .select("id,claimed_by_user_id")
     .eq("business_id", businessId)
-    .eq("status", "approved_not_activated")
+    .in("status", claimableStatuses)
     .limit(2);
   if (applicationError) throw applicationError;
   if (!Array.isArray(applications) || applications.length !== 1 || !applications[0]?.claimed_by_user_id) {
     throw new Error("APPROVED_APPLICATION_REQUIRED");
   }
-  return applications[0].id as string;
+  return {
+    applicationId: applications[0].id as string,
+    checkoutPurpose: onCardFreeAdminTrial ? "admin_trial_conversion" : "trial_start",
+    adminTrialEnd: onCardFreeAdminTrial ? safeGetString(subscription?.trial_end) : null,
+  };
+}
+
+function subscriptionTrialData(eligibility: TrialCheckoutEligibility): Record<string, number> {
+  if (eligibility.checkoutPurpose === "trial_start") {
+    return { trial_period_days: STANDARD_TRIAL_DAYS };
+  }
+
+  const trialEndMs = eligibility.adminTrialEnd ? Date.parse(eligibility.adminTrialEnd) : Number.NaN;
+  if (!Number.isFinite(trialEndMs) || trialEndMs <= Date.now()) {
+    return {};
+  }
+
+  // Stripe requires an explicit trial_end to be at least 48 hours away. Keep
+  // the exact remaining admin trial when possible; inside that window, use one
+  // final day rather than accidentally starting another 30-day trial.
+  if (trialEndMs >= Date.now() + 48 * 60 * 60 * 1000) {
+    return { trial_end: Math.floor(trialEndMs / 1000) };
+  }
+  return { trial_period_days: 1 };
 }
 
 async function approvedActivationGateEnabled(supabase: any): Promise<boolean> {
@@ -276,7 +282,7 @@ serve(async (req) => {
   let stripeForCleanup: Stripe | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) return jsonResponse(req, { error: "Stripe is not configured." }, 500);
 
@@ -359,38 +365,19 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
     stripeForCleanup = stripe;
-    const applicationId = await assertBusinessCanStartTrialCheckout(supabaseAdmin, businessId);
+    const eligibility = await assertBusinessCanStartTrialCheckout(supabaseAdmin, businessId);
+    const { applicationId, checkoutPurpose } = eligibility;
     const billingInput = await loadBillingInput(supabaseAdmin, businessId);
     const customerResult = await ensureStripeCustomerForBusiness({
       supabase: supabaseAdmin,
       stripe,
       input: billingInput,
       source: `${source}_checkout`,
-      accessStatus: "approved_not_activated",
+      accessStatus: checkoutPurpose === "admin_trial_conversion" ? "trialing" : "approved_not_activated",
+      preserveSubscriptionState: checkoutPurpose === "admin_trial_conversion",
     });
     if (!customerResult.stripeCustomerId) {
       return jsonResponse(req, { error: "Unable to prepare Stripe customer." }, 500);
-    }
-
-    // No-card trial (Dan, 2026-07-06). First decide the automatic outcome: the
-    // global app_runtime_config.require_card_for_trial switch grants a no-card
-    // trial by default, but only for a storefront that has not already used one
-    // (one-trial-per-physical-location, per findings/05-trial-reuse-guard.md).
-    // Only if the card would otherwise be required do we fall back to a
-    // single-use exemption code, which overrides BOTH the switch and the reuse
-    // guard (a manual VIP override, like admin_grant_location_trial's
-    // p_override_trial_reuse). Consuming the code last avoids burning a
-    // limited-use code when no-card was already going to be granted anyway.
-    let skipCardCollection = false;
-    if (!config.requireCardForTrial) {
-      const locationId = await ensurePrimaryBusinessLocationId(supabaseAdmin, businessId);
-      skipCardCollection = !(locationId && (await isBusinessLocationTrialAlreadyUsed(supabaseAdmin, locationId)));
-    }
-    if (!skipCardCollection) {
-      skipCardCollection = await consumeTrialNoCardExemptionCode(
-        supabaseAdmin,
-        safeGetString(body.trial_no_card_code),
-      );
     }
 
     const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
@@ -405,8 +392,8 @@ serve(async (req) => {
       application_id: applicationId,
       owner_user_id: billingInput.ownerUserId ?? "",
       billing_source: source,
-      checkout_purpose: "trial_start",
-      trial_days: String(STANDARD_TRIAL_DAYS),
+      checkout_purpose: checkoutPurpose,
+      trial_days: checkoutPurpose === "trial_start" ? String(STANDARD_TRIAL_DAYS) : "",
       requested_by_user_id: userId ?? "",
       requested_by_admin_role: adminRole ?? "",
       environment: config.billingEnvironment,
@@ -420,7 +407,7 @@ serve(async (req) => {
       .eq("business_id", businessId)
       .eq("session_type", "subscription_checkout")
       .in("status", ["created", "opened"])
-      .eq("metadata->>checkout_purpose", "trial_start")
+      .eq("metadata->>checkout_purpose", checkoutPurpose)
       .lt("url_expires_at", staleCutoff);
     if (staleReservationReadError) throw staleReservationReadError;
 
@@ -469,7 +456,7 @@ serve(async (req) => {
         .eq("business_id", businessId)
         .eq("session_type", "subscription_checkout")
         .in("status", ["created", "opened"])
-        .eq("metadata->>checkout_purpose", "trial_start")
+        .eq("metadata->>checkout_purpose", checkoutPurpose)
         .maybeSingle();
       if (existingError) throw existingError;
       const existingStripeId = safeGetString(existing?.stripe_checkout_session_id);
@@ -495,14 +482,14 @@ serve(async (req) => {
       client_reference_id: businessId,
       locale,
       allow_promotion_codes: true,
-      payment_method_collection: skipCardCollection ? "if_required" : "always",
+      // Stripe activation always collects a card. Admin-granted access remains
+      // the only no-card trial path and is created separately in the dashboard.
+      payment_method_collection: "always",
       automatic_tax: { enabled: config.automaticTaxEnabled || Deno.env.get("STRIPE_TAX_ENABLED") === "true" },
       metadata,
       subscription_data: {
         metadata,
-        // Approval activation always starts with the promised 30-day Stripe
-        // trial. Card collection changes payment_method_collection only.
-        trial_period_days: STANDARD_TRIAL_DAYS,
+        ...subscriptionTrialData(eligibility),
       },
     });
     createdStripeSessionId = session.id;
@@ -525,7 +512,7 @@ serve(async (req) => {
       event_source: source === "admin" ? "admin" : "website",
       event_type: "stripe_checkout_session_created",
       status_after: "checkout_created",
-      app_access_after: "approved_not_activated",
+      app_access_after: checkoutPurpose === "admin_trial_conversion" ? "trialing" : "approved_not_activated",
       processing_status: "processed",
       processed_at: new Date().toISOString(),
     });

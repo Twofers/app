@@ -23,8 +23,10 @@ describe("business approval trial-welcome email", () => {
     expect(source).toMatch(/api\.resend\.com\/emails/);
     expect(source).toMatch(/Deno\.env\.get\("RESEND_API_KEY"\)/);
     // Idempotency: skip if already sent.
-    expect(source).toMatch(/\.select\("approval_email_sent_at"\)/);
-    expect(source).toMatch(/if \(current\?\.approval_email_sent_at\) return null;/);
+    expect(source).toMatch(
+      /\.select\("approval_email_sent_at,checkout_token_hash,checkout_token_expires_at"\)/,
+    );
+    expect(source).toMatch(/if \(current\?\.approval_email_sent_at && !isResend\) return null;/);
     // Persist only the hash; the raw token lives only in the emailed link.
     expect(source).toMatch(/checkout_token_hash: tokenHash/);
     expect(source).toMatch(/\/business\/billing\/checkout\/\$\{rawToken\}/);
@@ -37,10 +39,42 @@ describe("business approval trial-welcome email", () => {
     expect(source).not.toMatch(/response\.text\(\)/);
   });
 
+  it("supports an explicit audited resend without invalidating the previous link on delivery failure", () => {
+    const email = read("supabase/functions/_shared/approval-email.ts");
+    const admin = read("supabase/functions/admin-business-applications/index.ts");
+    const dashboard = read("website/admin/trial-requests.js");
+
+    expect(email).toMatch(/allowResend\?: boolean/);
+    expect(email).toMatch(/currentTokenHash/);
+    expect(email).toMatch(/restorePreviousToken/);
+    expect(email).toMatch(/checkout_token_hash: currentTokenHash/);
+    expect(email).toMatch(/tokenUpdate\.eq\("checkout_token_hash", currentTokenHash\)/);
+    expect(email).toMatch(/tokenUpdate\.is\("checkout_token_hash", null\)/);
+    expect(email).toMatch(/if \(!tokenRow\)/);
+    expect(email).toMatch(/admin_business_application_billing_link_resent/);
+    expect(email).toMatch(/if \(current\?\.approval_email_sent_at && !isResend\) return null;/);
+
+    expect(admin).toMatch(/"resend_billing_link"/);
+    expect(admin).toMatch(/canResendBillingLink/);
+    expect(admin).toMatch(/BILLING_LINK_RESEND_COOLDOWN_MS/);
+    expect(admin).toMatch(/subscription\?\.trial_type !== "admin_comp"/);
+    expect(admin).toMatch(/Stripe billing is already active/);
+    expect(admin).toMatch(/allowResend: true/);
+    expect(admin).toMatch(/billing_link_resend_eligible/);
+    expect(admin).toMatch(/canResendBillingLink\(ctx\.adminUser\.role\)/);
+
+    expect(dashboard).toMatch(/Send new billing link/);
+    expect(dashboard).toMatch(/data-admin-action|dataset\.adminAction/);
+    expect(dashboard).toMatch(/action: "resend_billing_link"/);
+    expect(dashboard).toMatch(/previous email link will stop working/i);
+  });
+
   it("emails only on approval decisions from the trial-request / field-invite path", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     expect(source).toMatch(/import \{[\s\S]*sendApprovalEmail,[\s\S]*\} from "\.\.\/_shared\/approval-email\.ts"/);
-    expect(source).toMatch(/if \(isSetupApprovalDecision\(decision\)\) \{[\s\S]*sendApprovalEmail\(/);
+    // Renamed from isSetupApprovalDecision 2026-07-23: approve_full_access is an
+    // approval that is not setup-only, so the old name no longer described it.
+    expect(source).toMatch(/if \(isApprovalDecision\(decision\)\) \{[\s\S]*sendApprovalEmail\(/);
     expect(source).toMatch(/approval_email_warning: approvalEmailWarning/);
   });
 

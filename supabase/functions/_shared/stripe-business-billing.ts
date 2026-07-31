@@ -239,6 +239,13 @@ export async function ensureStripeCustomerForBusiness(args: {
   source: string;
   trialDays?: number | null;
   accessStatus?: string | null;
+  /**
+   * Customer preparation normally seeds the local subscription mirror. An
+   * admin-trial conversion already has authoritative trial dates and access;
+   * preserve that row until Checkout completes so retries can reuse the open
+   * session without turning the admin trial into a provider-backed trial early.
+   */
+  preserveSubscriptionState?: boolean;
   scheduleIfUnavailable?: boolean;
 }): Promise<EnsureStripeCustomerResult> {
   const { supabase, stripe, input } = args;
@@ -256,13 +263,15 @@ export async function ensureStripeCustomerForBusiness(args: {
         }),
       });
     }
-    await seedBusinessSubscription(supabase, {
-      businessId: input.businessId,
-      stripeCustomerId: billingProfile.stripeCustomerId,
-      source: args.source,
-      trialDays: args.trialDays,
-      accessStatus: args.accessStatus,
-    });
+    if (!args.preserveSubscriptionState) {
+      await seedBusinessSubscription(supabase, {
+        businessId: input.businessId,
+        stripeCustomerId: billingProfile.stripeCustomerId,
+        source: args.source,
+        trialDays: args.trialDays,
+        accessStatus: args.accessStatus,
+      });
+    }
     return { stripeCustomerId: billingProfile.stripeCustomerId, scheduled: true, reason: "queued" };
   }
 
@@ -306,13 +315,15 @@ export async function ensureStripeCustomerForBusiness(args: {
     .eq("business_id", input.businessId);
   if (error) throw error;
 
-  await seedBusinessSubscription(supabase, {
-    businessId: input.businessId,
-    stripeCustomerId: customer.id,
-    source: args.source,
-    trialDays: args.trialDays,
-    accessStatus: args.accessStatus,
-  });
+  if (!args.preserveSubscriptionState) {
+    await seedBusinessSubscription(supabase, {
+      businessId: input.businessId,
+      stripeCustomerId: customer.id,
+      source: args.source,
+      trialDays: args.trialDays,
+      accessStatus: args.accessStatus,
+    });
+  }
 
   await supabase.from("billing_events").insert({
     business_id: input.businessId,

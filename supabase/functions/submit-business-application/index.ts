@@ -12,60 +12,58 @@ import {
 import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts";
 import { adminAlertInbox, sendNewApplicationAdminAlert } from "../_shared/admin-alert-email.ts";
 import { mintFullTrialQuickApproval } from "../_shared/admin-quick-approval.ts";
+import { anonymousAbuseKeyHash } from "../_shared/anonymous-request-hash.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 30;
 const RATE_LIMIT_MAX_PER_EMAIL = 3;
 const RATE_LIMIT_MAX_PER_IP = 8;
+const RATE_LIMIT_MAX_GLOBAL_SUBMISSIONS = 200;
 // Client-independent flood ceiling. Even if an attacker rotates emails/IPs to
 // evade the per-actor caps above, no more than this many new applications per
 // window trigger the costly outbound admin alert + quick-approval token mint.
 // Set well above expected pilot volume so it never throttles genuine signups.
 const RATE_LIMIT_MAX_ALERTS_PER_WINDOW = 40;
 
-async function isRateLimited(
+async function claimSubmissionSlot(
   supabase: DbClient,
   params: { email: string; ip: string | null },
-): Promise<boolean> {
-  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
-
-  const { count: emailCount, error: emailError } = await supabase
-    .from("business_onboarding_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_email", params.email)
-    .gte("created_at", windowStart);
-  if (emailError) throw emailError;
-  if ((emailCount ?? 0) >= RATE_LIMIT_MAX_PER_EMAIL) return true;
-
-  if (params.ip) {
-    const { count: ipCount, error: ipError } = await supabase
-      .from("business_onboarding_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("ip_address", params.ip)
-      .gte("created_at", windowStart);
-    if (ipError) throw ipError;
-    if ((ipCount ?? 0) >= RATE_LIMIT_MAX_PER_IP) return true;
-  }
-
-  return false;
+): Promise<boolean | null> {
+  const emailKey = await anonymousAbuseKeyHash("business-application-email", params.email);
+  const ipKey = await anonymousAbuseKeyHash("business-application-ip", params.ip || "unknown");
+  if (!emailKey || !ipKey) return null;
+  const { data, error } = await supabase.rpc("claim_submission_slot", {
+    p_bucket: "business_application",
+    p_email_key: emailKey,
+    p_ip_key: ipKey,
+    p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+    p_max_email: RATE_LIMIT_MAX_PER_EMAIL,
+    p_max_ip: RATE_LIMIT_MAX_PER_IP,
+    p_max_global: RATE_LIMIT_MAX_GLOBAL_SUBMISSIONS,
+  });
+  if (error) throw error;
+  return data === true;
 }
 
-// Client-independent flood backstop. Counts applications inserted in the recent
-// window across ALL emails/IPs; when the ceiling is exceeded the caller skips the
-// outbound admin alert + quick-approval token mint. Fails OPEN (returns false on
-// a counting error) so a transient DB issue never silently drops a real signup's
-// alert.
-async function alertFloodExceeded(supabase: DbClient): Promise<boolean> {
-  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
-  const { count, error } = await supabase
-    .from("business_applications")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", windowStart);
+// Atomically bounds costly alert/token side effects across all rotating
+// identities. A limiter error fails closed for side effects while the saved
+// application remains available in the dashboard.
+async function claimAlertSideEffectSlot(supabase: DbClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc("claim_submission_slot", {
+    p_bucket: "business_application_alert",
+    p_email_key: null,
+    p_ip_key: null,
+    p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+    p_max_email: 0,
+    p_max_ip: 0,
+    p_max_global: RATE_LIMIT_MAX_ALERTS_PER_WINDOW,
+  });
   if (error) {
-    console.error("[submit-business-application] alert flood check failed:", error);
+    console.error("[submit-business-application] alert side-effect limiter failed:", error);
     return false;
   }
-  return (count ?? 0) > RATE_LIMIT_MAX_ALERTS_PER_WINDOW;
+  return data === true;
 }
 
 type Payload = {
@@ -83,9 +81,40 @@ type Payload = {
   privacy_acknowledged?: unknown;
   promo_materials_authorized?: unknown;
   company_website?: unknown;
+  source?: unknown;
 };
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
+
+// In-app submissions carry the owner's session JWT. Resolve the confirmed
+// identity's email from it so an authenticated caller can only apply as
+// themselves (and so get-business-onboarding-context can match the application
+// by that same verified email later). Website submissions carry no user JWT —
+// getUser returns no user for the anon key — so this returns null and the
+// public form keeps using the typed email. Best-effort: any failure falls back
+// to the payload email rather than blocking a genuine submission.
+async function resolveAuthedEmail(
+  req: Request,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
+  try {
+    const authedClient = createClient(supabaseUrl, serviceRoleKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data, error } = await authedClient.auth.getUser();
+    if (error || !data.user?.email) return null;
+    const confirmedAt =
+      (data.user as { email_confirmed_at?: unknown }).email_confirmed_at ??
+      (data.user as { confirmed_at?: unknown }).confirmed_at;
+    if (typeof confirmedAt !== "string" || !confirmedAt) return null;
+    return data.user.email.trim().toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 type IntakeDecision = {
   status: "pending_review" | "review_required" | "pending_verification" | "waitlisted" | "rejected";
@@ -301,27 +330,38 @@ serve(async (req) => {
 
   const businessName = cleanString(payload.business_name, 120);
   const contactName = cleanString(payload.contact_name, 120);
-  const email = cleanEmail(payload.email);
   const termsAccepted = payload.terms_accepted === true;
   const privacyAcknowledged = payload.privacy_acknowledged === true;
   // Optional and opt-in: absent, false, or any non-true value all mean "not
   // authorized". Deliberately NOT part of the required-fields guard below.
   const promoMaterialsAuthorized = payload.promo_materials_authorized === true;
+  // Where the application came from. Allowlisted so a caller can never write an
+  // arbitrary source; the public website form omits it and falls back here.
+  const resolvedSource = payload.source === "app_business_setup" ? "app_business_setup" : "website_start_trial";
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = tryGetServiceRoleKey();
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json(req, { error: "Business applications are not configured." }, 500);
+  }
+
+  // Authenticated (in-app) callers apply as their own confirmed email; the
+  // public website form has no user JWT and uses the typed email.
+  const authedEmail = await resolveAuthedEmail(req, supabaseUrl, serviceRoleKey);
+  const email = authedEmail ?? cleanEmail(payload.email);
 
   if (!businessName || !contactName || !email || !termsAccepted || !privacyAcknowledged) {
     return json(req, { error: "Missing required fields." }, 400);
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json(req, { error: "Business applications are not configured." }, 500);
-    }
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const requestIp = clientIpFromRequest(req);
-    if (await isRateLimited(supabase, { email, ip: requestIp })) {
+    const submissionSlot = await claimSubmissionSlot(supabase, { email, ip: requestIp });
+    if (submissionSlot === null) {
+      return json(req, { error: "Business applications are temporarily unavailable." }, 503);
+    }
+    if (!submissionSlot) {
       return json(req, { error: "Too many requests. Please try again later." }, 429);
     }
     const phone = cleanString(payload.phone, 40);
@@ -373,7 +413,7 @@ serve(async (req) => {
       terms_accepted: termsAccepted,
       privacy_acknowledged: privacyAcknowledged,
       promo_materials_authorized: promoMaterialsAuthorized,
-      source: "website_start_trial",
+      source: resolvedSource,
       status: decision.status,
       access_tier: decision.access_tier,
       verification_status: decision.verification_status,
@@ -413,7 +453,7 @@ serve(async (req) => {
     // requests receive a short-lived quick-approval action (mint returns null
     // otherwise); the honeypot early-return and rate-limited requests never reach
     // this point.
-    if (await alertFloodExceeded(supabase)) {
+    if (!await claimAlertSideEffectSlot(supabase)) {
       console.error(
         "[submit-business-application] alert flood ceiling exceeded; suppressing admin alert + quick approval for this window.",
       );
@@ -444,7 +484,7 @@ serve(async (req) => {
         accessTier: decision.access_tier,
         verificationStatus: decision.verification_status,
         riskScore: decision.risk_score,
-        source: "website_start_trial",
+        source: resolvedSource,
       }, quickApprovalUrl);
     }
     await enqueueStripeCustomerSync(supabase, {

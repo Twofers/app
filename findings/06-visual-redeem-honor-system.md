@@ -6,7 +6,30 @@ Files:
 - `supabase/functions/begin-visual-redeem/index.ts` (customer starts a countdown on their own claim)
 - `supabase/functions/complete-visual-redeem/index.ts:127-201` (customer's device marks the claim redeemed after a 14s–120s window)
 - `supabase/functions/_shared/claim-redeem.ts:19` (`VISUAL_REDEEM_AUTO_FINALIZE_MS = 30s` auto-finalize)
-Status: NOT STARTED
+Status: RESOLVED as Option 1 + trust level ACCEPTED (verified 2026-07-25 — this
+file had gone stale; the hardening it asks for is already in the code)
+
+Option 1 is implemented in `complete-visual-redeem/index.ts`: the completion
+writes via the service-role client, records `redeemed_at_location_id`
+(line ~195), rejects a mismatched client location with
+`WRONG_LOCATION_REDEMPTION` (line ~103), and inserts a `redemptions` audit row
+(line ~231) so visual, staff and owner redemptions share one trail. Finding 02's
+RLS hole is closed and applied on prod.
+
+**Trust level: accepted risk (Dan, 2026-07-25.)** The customer-completed path was
+deliberately re-exposed in the app as a double-tap-the-QR fallback for when staff
+cannot scan or type the code (`hooks/use-manual-qr-redeem.ts`,
+`lib/manual-redeem.ts`). Dan's decision, verbatim in intent: redeeming at home is
+acceptable because "they won't get any food" — burning the claim only forfeits
+the customer's own reward. Options 2 and 3 are NOT being pursued. Do not
+re-raise this as an open security item; raise it only if the loss model changes
+(e.g. rewards that are fulfilled without an in-person handoff).
+
+Deliberately NOT added, at Dan's instruction: any time gate on the fallback — no
+delayed reveal, no countdown. The `manual: true` flag on `complete-visual-redeem`
+exists precisely to skip the legacy 14s pacing wait, which is a UX device and not
+a fraud control (see "Do NOT", below). The one guardrail is a branded confirm,
+whose job is to stop a fumbled double-tap, not a dishonest one.
 
 ## What is wrong
 

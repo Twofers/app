@@ -177,6 +177,9 @@ type WalletPassStrings = {
   noDealSub: string;
   openAppLink: string;
   supportLink: string;
+  /** Google Wallet app-link button: opens the pass's claim inside Twofer. */
+  appLinkTitle: string;
+  appLinkBody: string;
 };
 
 const STRINGS: Record<WalletPassLocale, WalletPassStrings> = {
@@ -193,6 +196,8 @@ const STRINGS: Record<WalletPassLocale, WalletPassStrings> = {
     noDealSub: "Open Twofer to grab today's deal.",
     openAppLink: "Open Twofer",
     supportLink: "Support",
+    appLinkTitle: "Open in Twofer",
+    appLinkBody: "Can't scan? Redeem in the app.",
   },
   es: {
     cardTitle: "Twofer",
@@ -207,6 +212,8 @@ const STRINGS: Record<WalletPassLocale, WalletPassStrings> = {
     noDealSub: "Abre Twofer y aprovecha la oferta de hoy.",
     openAppLink: "Abrir Twofer",
     supportLink: "Soporte",
+    appLinkTitle: "Abrir en Twofer",
+    appLinkBody: "¿No pueden escanear? Canjea en la app.",
   },
   ko: {
     cardTitle: "Twofer",
@@ -221,6 +228,8 @@ const STRINGS: Record<WalletPassLocale, WalletPassStrings> = {
     noDealSub: "Twofer 앱에서 오늘의 딜을 받아보세요.",
     openAppLink: "Twofer 열기",
     supportLink: "고객 지원",
+    appLinkTitle: "Twofer에서 열기",
+    appLinkBody: "스캔이 안 되나요? 앱에서 사용하세요.",
   },
 };
 
@@ -256,6 +265,19 @@ export const WALLET_PASS_FOREGROUND_HEX = "#FFFFFF";
 export const WALLET_PASS_APP_URL = "https://twoferapp.com";
 export const WALLET_PASS_SUPPORT_EMAIL = "support@twoferapp.com";
 
+/** Production Android package. Dev builds use `.dev` and are never issued passes. */
+export const WALLET_PASS_ANDROID_PACKAGE = "com.unvmex2.twoferone";
+/**
+ * Where the pass's app-link button lands: the wallet, with the claim's pass
+ * sheet already open, so the double-tap manual redemption is one tap away.
+ *
+ * Deliberately carries NO identifier. A customer can hold only one active claim
+ * app-wide (enforced in `claim-deal`), and the pass is derived from that same
+ * single live claim, so "open the wallet pass" is unambiguous — and no claim id
+ * or redemption short code ends up in a copyable URI.
+ */
+export const WALLET_PASS_APP_DEEP_LINK = "twofer://wallet?pass=1";
+
 export type WalletPassContent = {
   state: WalletPassState["kind"];
   locale: WalletPassLocale;
@@ -273,6 +295,9 @@ export type WalletPassContent = {
   latitude: number | null;
   longitude: number | null;
   links: { uri: string; label: string }[];
+  /** Copy for the Google Wallet app-link button (active claims only). */
+  appLinkTitle: string;
+  appLinkBody: string;
 };
 
 export function buildWalletPassContent(state: WalletPassState, locale: WalletPassLocale): WalletPassContent {
@@ -285,6 +310,8 @@ export function buildWalletPassContent(state: WalletPassState, locale: WalletPas
     locale,
     cardTitle: s.cardTitle,
     links,
+    appLinkTitle: s.appLinkTitle,
+    appLinkBody: s.appLinkBody,
   };
 
   if (state.kind === "active_deal") {
@@ -384,6 +411,24 @@ export function buildGoogleWalletGenericObject(
       uris: content.links.map((link, idx) => ({ uri: link.uri, description: link.label, id: `link_${idx}` })),
     },
   };
+  // App-link button. `linksModuleData` only reliably renders http/https/tel/mailto,
+  // so a `twofer://` entry there could be dropped or rejected; `appLinkData` is
+  // Google's purpose-built field for opening the app from a pass. Only attached
+  // when there is a live claim to open — on a redeemed/empty card it would lead
+  // to an empty wallet. The https "Open Twofer" link stays in linksModuleData as
+  // the fallback for anyone without the app installed.
+  if (content.state === "active_deal") {
+    object.appLinkData = {
+      androidAppLinkInfo: {
+        title: localized(content.locale, content.appLinkTitle),
+        description: localized(content.locale, content.appLinkBody),
+        appTarget: {
+          packageName: WALLET_PASS_ANDROID_PACKAGE,
+          targetUri: { uri: WALLET_PASS_APP_DEEP_LINK, description: content.appLinkTitle },
+        },
+      },
+    };
+  }
   if (content.headerLabel) {
     object.subheader = localized(content.locale, content.headerLabel);
   }

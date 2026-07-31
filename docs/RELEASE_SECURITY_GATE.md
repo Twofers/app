@@ -28,7 +28,7 @@ from `.env` (and `gate:rls-smoke` also needs `TWOFER_SMOKE_EMAIL` /
 The deep catalog check needs an owner/service DB connection string:
 
 ```bash
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
+PGSSLMODE=require psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
 ```
 
 ## What's automated

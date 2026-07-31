@@ -293,6 +293,8 @@ const summary = {
     failure_rate: rate(logs.filter((row) => row.success === false).length, logs.length),
     quota_blocked_rows: logs.filter((row) => row.quota_blocked === true).length,
     duplicate_blocked_rows: logs.filter((row) => row.duplicate_blocked === true).length,
+    accepted_by_user_rows: logs.filter((row) => row.accepted_by_user === true).length,
+    accepted_by_user_rate: rate(logs.filter((row) => row.accepted_by_user === true).length, logs.length),
     by_request_type: countBy(logs, (row) => row.request_type),
     by_input_mode: countBy(logs, (row) => row.input_mode),
     by_model: countBy(logs, (row) => row.model),

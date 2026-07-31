@@ -97,7 +97,9 @@ describe("website prospect command center", () => {
     const helper = read("supabase/functions/_shared/admin-prospects.ts");
     expect(helper).toMatch(/from\("admin_users"\)/);
     expect(helper).toMatch(/isRedeemerUser/);
-    expect(helper).toMatch(/adminUser\.require_mfa && !isAal2/);
+    expect(helper).toMatch(/adminUser\.require_mfa !== true/);
+    expect(helper).toMatch(/if \(!isAal2\(bearerToken\)\)/);
+    expect(helper).toMatch(/isFounderAdminUser\(user\.id, adminUser\.role\)/);
     expect(helper).toMatch(/admin_prospect_permission_denied/);
   });
 
@@ -207,8 +209,9 @@ describe("website prospect command center", () => {
     const page = read("website/admin/ai-prompts/index.html");
     const script = read("website/admin/ai-prompts.js");
     const vercel = read("website/vercel.json");
-    expect(page).toMatch(/data-admin-ai-prompts-endpoint/);
-    expect(script).toMatch(/adminAiPromptsEndpoint|promptsEndpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-ai-prompts-endpoint/);
+    expect(script).toMatch(/Shell\.adminPost\("admin-ai-prompts"/);
     expect(script).not.toMatch(/OPENAI_API_KEY|GEMINI_API_KEY/);
     expect(vercel).toMatch(/"source": "\/admin\/ai-prompts"/);
 

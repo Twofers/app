@@ -1225,7 +1225,6 @@ export default function AiDealScreen() {
   const adReviewSectionYRef = useRef<number | null>(null);
   const draftEditorSectionYRef = useRef<number | null>(null);
   const previousEligibleRef = useRef(false);
-  const menuOfferScrollDoneRef = useRef(false);
   const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
@@ -2456,15 +2455,11 @@ export default function AiDealScreen() {
     params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
 
-  useEffect(() => {
-    const fromMenu = String(params.fromMenuOffer ?? "") === "1";
-    if (!fromMenu || menuOfferScrollDoneRef.current || scheduleSectionY == null) return;
-    menuOfferScrollDoneRef.current = true;
-    const tid = setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, scheduleSectionY - 16), animated: true });
-    }, 400);
-    return () => clearTimeout(tid);
-  }, [params.fromMenuOffer, scheduleSectionY]);
+  // No auto-scroll for the menu-promote path. It used to jump to the Schedule
+  // section 400ms after mount, which scrolled straight past Step 1 — so the
+  // merchant never saw the Standard/Poster toggle or the photo buttons and
+  // silently got the poster default. Landing at the top matches every other
+  // create entry point (approved by Dan 2026-07-25).
 
   useEffect(() => {
     const fromReuse = String(params.fromReuse ?? "") === "1";
@@ -2791,7 +2786,17 @@ export default function AiDealScreen() {
     if (code === "COOLDOWN_ACTIVE") return t("createAi.cooldownCaption");
     if (code === "REVISION_LIMIT") return t("createAi.errRegenClientLimit");
     if (code === "COPY_FAILED") return t("createAi.friendlyCopyFailed");
+    // No photo and no description reached the server (MISSING_OFFER_INPUT). The
+    // structured offer facts alone do not satisfy the server's input gate. Match
+    // the code AND the legacy message text so this resolves correctly even on a
+    // build whose edge function predates the code — otherwise the message ("…a
+    // photo or a description…") falls through to the photo/image branch below
+    // and is mislabeled as an image-service outage.
+    if (code === "MISSING_OFFER_INPUT") return t("createAi.errNeedPhotoOrDescription");
     const lower = raw.toLowerCase();
+    if (lower.includes("a photo or a description")) {
+      return t("createAi.errNeedPhotoOrDescription");
+    }
     if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) {
       return t("createAi.friendlyTimeout");
     }
@@ -3061,21 +3066,15 @@ export default function AiDealScreen() {
           setMerchantOriginalWarningAcknowledged(false);
         }
       }
-      if (!imageVersionStoragePath(normalizedAd)) {
-        const friendly = t("createAi.errImageGenerationNoImage", {
-          defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
-        });
-        setGenerationFailureState(
-          friendly,
-          hasFallbackTemplateSource() ? "ai_failed_fallback_available" : "ai_failed_no_fallback",
-        );
-        setBanner({ message: friendly, tone: "error" });
-        trackEvent(AiAdsEvents.GENERATION_FAILED, {
-          screen: "create_ai",
-          regeneration_attempt: 0,
-          error_code: "NO_IMAGE_RETURNED",
-        });
-        return;
+      // No photo is no longer a dead end. The providers refuse some subjects
+      // outright — an item the shop doesn't stock, a business that never imported
+      // a menu, or simply an awkward thing to depict — and "try again" asks for the
+      // same picture, so it never recovered. The poster renders on the template
+      // gradient without a photo, so this is a publishable ad; say what happened
+      // and carry on into review instead of blocking the merchant.
+      const generatedWithoutImage = !imageVersionStoragePath(normalizedAd);
+      if (generatedWithoutImage) {
+        setBanner({ message: t("createAi.noticeImagelessAd"), tone: "info" });
       }
       if (sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original") {
         setUsePhotoAsFinal(false);
@@ -3092,6 +3091,8 @@ export default function AiDealScreen() {
         image_model: normalizedAd.image_selection?.model ?? null,
         image_source_mode: normalizedAd.image_selection?.sourceMode ?? null,
         image_photo_source: normalizedAd.photo_source ?? null,
+        /** Distinguishes a gradient-poster ad from one that got a real photo. */
+        generated_without_image: generatedWithoutImage,
       });
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;
@@ -3591,9 +3592,16 @@ export default function AiDealScreen() {
     if (offerContract && offerDefinition) {
       const mechanicsValidation = validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(offerDefinition), offerContract);
       if (!mechanicsValidation.valid) {
-        const message = t("createAi.offerMechanicsInvalid", {
-          defaultValue: "Your offer setup doesn't match this deal type. Check what the customer buys, the free item, and the offer rule above, then try again.",
-        });
+        // A percent-off deal has no free item, so the generic wording sent
+        // merchants hunting for a field that does not exist on their form.
+        const message =
+          offerContract.dealType === "PERCENT_OFF_SINGLE_ITEM"
+            ? t("createAi.offerMechanicsInvalidPercent", {
+                defaultValue: "We couldn't match this ad to your offer. Check the item name and the discount above, then try again.",
+              })
+            : t("createAi.offerMechanicsInvalid", {
+                defaultValue: "We couldn't match this ad to your offer. Check what the customer buys, the free item, and the offer rule above, then try again.",
+              });
         showPublishError(message, "warning");
         trackEvent("deal_validation_failed", {
           businessId,
@@ -6107,6 +6115,14 @@ export default function AiDealScreen() {
                       </Text>
                     ) : null}
                   </>
+                ) : null}
+                {/* In poster mode only the two poster fields above reach the poster.
+                    These four feed the deal listing, so say so rather than leaving
+                    merchants to conclude their edits were dropped. */}
+                {showPosterFormat ? (
+                  <Text style={{ marginTop: 16, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+                    {t("createAi.posterListingFieldsNote")}
+                  </Text>
                 ) : null}
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />

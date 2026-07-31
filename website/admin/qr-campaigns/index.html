@@ -8,31 +8,15 @@
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
     <script src="/admin/admin-guard.js?v=20260712-session-guard"></script>
   </head>
   <body
     class="admin-shell"
-    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
-    data-admin-qr-campaigns-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-qr-campaigns"
   >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
         <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
-        <div class="nav-links">
-          <a href="/admin">Overview</a>
-          <a href="/admin/prospects">Prospects</a>
-          <a href="/admin/sales-ai">Sales AI</a>
-          <a href="/admin/trial-requests">Business Access</a>
-          <a href="/admin/businesses">Businesses</a>
-          <a href="/admin/qr-campaigns" aria-current="page">QR Campaigns</a>
-          <a href="/admin/offers">Offers</a>
-          <a href="/admin/billing/events">Billing</a>
-          <a href="/admin/ai-operating-report">AI Report</a>
-          <a href="/admin/ai-prompts">Prompts</a>
-          <a href="/admin/audit-log">Audit</a>
-          <a href="/admin/settings">Settings</a>
-        </div>
         <div class="nav-actions">
           <span data-admin-status class="admin-badge warning">Admin session not connected</span>
           <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
@@ -169,6 +153,7 @@
       </div>
       <p class="status" data-qr-dialog-status aria-live="polite"></p>
     </dialog>
-    <script src="/admin/qr-campaigns.js?v=20260714-qr-campaigns"></script>
+    <script src="/admin/admin-shell.js?v=20260728-admin-ops"></script>
+    <script src="/admin/qr-campaigns.js?v=20260728-admin-ops"></script>
   </body>
 </html>

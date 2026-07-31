@@ -1,0 +1,246 @@
+{
+  "captured_at_local": "2026-07-29",
+  "project_ref": "kvodhiqhdqnptqovovia",
+  "read_only": true,
+  "dashboard": {
+    "project_status": "Healthy",
+    "plan": "Free",
+    "scheduled_backups": false,
+    "scheduled_backups_message": "Free Plan does not include project backups."
+  },
+  "security_advisor": {
+    "total_error_and_warning_findings": 173,
+    "errors": 2,
+    "warnings": 171,
+    "rules": {
+      "security_definer_view": 2,
+      "authenticated_security_definer_function_executable": 76,
+      "anon_security_definer_function_executable": 66,
+      "function_search_path_mutable": 25,
+      "public_bucket_allows_listing": 2,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "critical_views": [
+      "public.business_performance_hourly",
+      "public.deal_stats"
+    ]
+  },
+  "anonymous_view_probe": {
+    "public.business_performance_hourly": {
+      "http_status": 200,
+      "visible_rows": 0
+    },
+    "public.deal_stats": {
+      "http_status": 206,
+      "visible_rows": 14,
+      "exposed_columns": [
+        "deal_id",
+        "business_id",
+        "claims_count",
+        "redeemed_count",
+        "expired_count",
+        "active_claims_count"
+      ]
+    }
+  },
+  "deep_catalog_grant_probe": {
+    "client_roles_checked": [
+      "PUBLIC",
+      "anon",
+      "authenticated"
+    ],
+    "privileges_checked": [
+      "TRUNCATE",
+      "REFERENCES",
+      "TRIGGER"
+    ],
+    "unexpected_grants": 0
+  },
+  "post_migration_verification": {
+    "migration": "20260824131000_harden_legacy_reporting_views.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "view_options": [
+      "security_invoker=true",
+      "security_barrier=true"
+    ],
+    "anonymous_http_status": {
+      "public.business_performance_hourly": 401,
+      "public.deal_stats": 401
+    },
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 171,
+      "security_definer_view_findings": 0
+    }
+  },
+  "post_bucket_listing_migration_verification": {
+    "migration": "20260824132000_remove_public_bucket_listing_policies.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "broad_listing_policy_count": 0,
+    "buckets_remain_public": [
+      "business-logos",
+      "deal-photos"
+    ],
+    "anonymous_listing_visible_entries": {
+      "business-logos": 0,
+      "deal-photos": 0
+    },
+    "public_asset_http_status": {
+      "business-logos": 200,
+      "deal-photos": 200
+    },
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 169,
+      "public_bucket_allows_listing_findings": 0
+    }
+  },
+  "post_function_search_path_migration_verification": {
+    "migration": "20260824133000_pin_remaining_function_search_paths.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 182,
+    "mutable_search_path_findings": 0,
+    "representative_rpc_smoke": {
+      "service_role_http_200": true,
+      "anon_http_200": true,
+      "expected_results": true
+    },
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 144,
+      "authenticated_security_definer_function_executable": 76,
+      "anon_security_definer_function_executable": 66,
+      "function_search_path_mutable": 0,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "post_trigger_function_execute_migration_verification": {
+    "migration": "20260824134000_revoke_trigger_function_client_execute.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 183,
+    "trigger_functions_checked": 13,
+    "enabled_trigger_bindings": 13,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 0,
+    "service_role_catalog_executable": 13,
+    "anonymous_rpc_http_404": 13,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 118,
+      "authenticated_security_definer_function_executable": 63,
+      "anon_security_definer_function_executable": 53,
+      "function_search_path_mutable": 0,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "post_service_role_function_execute_migration_verification": {
+    "migration": "20260824135000_revoke_service_role_function_client_execute.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 184,
+    "functions_checked": 22,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 0,
+    "service_role_catalog_executable": 22,
+    "anonymous_rpc_denied": 22,
+    "trusted_read_only_rpc_http_200": 11,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 74,
+      "authenticated_security_definer_function_executable": 41,
+      "anon_security_definer_function_executable": 31,
+      "function_search_path_mutable": 0,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "post_nonpublic_function_anon_execute_migration_verification": {
+    "migration": "20260824140000_revoke_nonpublic_function_anon_execute.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 185,
+    "functions_checked": 24,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 24,
+    "service_role_catalog_executable": 24,
+    "removed_anonymous_rpc_http_401": 24,
+    "intentional_anonymous_functions_excluded": 7,
+    "intentional_anonymous_rpc_http_200": 7,
+    "trusted_read_only_rpc_http_200": 15,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 50,
+      "authenticated_security_definer_function_executable": 41,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "post_internal_helper_client_execute_migration_verification": {
+    "migration": "20260824141000_revoke_internal_helper_client_execute.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 186,
+    "functions_checked": 6,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 0,
+    "service_role_catalog_executable": 6,
+    "anonymous_rpc_denied": 6,
+    "trusted_read_only_rpc_http_200": 4,
+    "cleanup_cron_active": true,
+    "dependent_triggers_enabled": 4,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 44,
+      "authenticated_security_definer_function_executable": 35,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "post_location_ownership_helper_client_execute_migration_verification": {
+    "migration": "20260824142000_revoke_location_ownership_helper_client_execute.sql",
+    "migration_recorded": true,
+    "migration_parity": true,
+    "migration_count": 187,
+    "functions_checked": 1,
+    "anon_catalog_executable": 0,
+    "authenticated_catalog_executable": 0,
+    "service_role_catalog_executable": 1,
+    "anonymous_rpc_http_401": 1,
+    "service_role_rpc_http_200": 1,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 43,
+      "authenticated_security_definer_function_executable": 34,
+      "anon_security_definer_function_executable": 7,
+      "auth_leaked_password_protection": 1,
+      "extension_in_public": 1
+    },
+    "added_recurring_cost": "$0"
+  },
+  "repository_drift": {
+    "views_previously_tracked": false,
+    "local_remediation_migration": "20260824131000_harden_legacy_reporting_views.sql",
+    "production_applied": true,
+    "production_approved_on": "2026-07-29",
+    "production_approval_required": false
+  },
+  "cost": {
+    "local_remediation": "$0",
+    "production_migration": "$0",
+    "paid_backup_upgrade": "deferred"
+  }
+}

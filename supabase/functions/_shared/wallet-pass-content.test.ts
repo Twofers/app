@@ -229,6 +229,74 @@ describe("Google Wallet object builder", () => {
     expect(object.state).toBe("ACTIVE");
   });
 
+  // The Google Wallet pass previously offered no route into the app at all — its
+  // only link was the marketing site — so a customer whose staff couldn't scan
+  // the barcode had nowhere to go. appLinkData is Google's purpose-built field
+  // for that; linksModuleData only reliably renders http/https/tel/mailto.
+  it("active object carries an app link into the wallet pass", () => {
+    const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
+    const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+    const android = (object.appLinkData as { androidAppLinkInfo?: Record<string, any> })?.androidAppLinkInfo;
+    expect(android).toBeDefined();
+    expect(android?.appTarget?.packageName).toBe("com.unvmex2.twoferone");
+    expect(android?.appTarget?.targetUri?.uri).toBe("twofer://wallet?pass=1");
+  });
+
+  it("app link carries no claim id or redemption code", () => {
+    const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
+    const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+    const uri = (object.appLinkData as any).androidAppLinkInfo.appTarget.targetUri.uri as string;
+    // The barcode is the only place a short code belongs; a link is copyable.
+    expect(uri).not.toMatch(/ABC123/i);
+    expect(uri).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i);
+  });
+
+  it("omits the app link when there is no live claim to open", () => {
+    for (const content of [
+      buildWalletPassContent({ kind: "no_deal" }, "en"),
+      buildWalletPassContent(
+        { kind: "redeemed", dealTitle: "Free latte", businessName: "Maya's", redeemedAtIso: new Date(NOW).toISOString() },
+        "en",
+      ),
+    ]) {
+      const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+      expect(object.appLinkData).toBeUndefined();
+    }
+  });
+
+  it("keeps the https fallback link for customers without the app", () => {
+    const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
+    const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+    const uris = (object.linksModuleData as { uris: { uri: string }[] }).uris.map((u) => u.uri);
+    expect(uris).toContain("https://twoferapp.com");
+    expect(uris.every((u) => /^(https?|mailto|tel):/.test(u))).toBe(true);
+  });
+
+  it("localizes the app link copy", () => {
+    for (const [locale, title] of [
+      ["en", "Open in Twofer"],
+      ["es", "Abrir en Twofer"],
+      ["ko", "Twofer에서 열기"],
+    ] as const) {
+      const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, locale), locale);
+      expect(content.appLinkTitle).toBe(title);
+      expect(content.appLinkBody.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("the app link is droppable, so a Google rejection can't break pass updates", () => {
+    // upsertGoogleWalletObject retries without appLinkData on a 4xx. That only
+    // works if removing the key leaves a complete, valid card.
+    const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
+    const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+    const { appLinkData, ...withoutAppLink } = object as Record<string, unknown>;
+    expect(appLinkData).toBeDefined();
+    expect(withoutAppLink.id).toBe(objectId);
+    expect(withoutAppLink.barcode).toBeDefined();
+    expect(withoutAppLink.linksModuleData).toBeDefined();
+    expect(withoutAppLink.validTimeInterval).toBeDefined();
+  });
+
   it("save JWT references the pre-inserted object by id only (short URL)", () => {
     const claims = buildGoogleSaveJwtClaims({
       serviceAccountEmail: "sa@project.iam.gserviceaccount.com",

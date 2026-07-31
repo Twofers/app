@@ -250,8 +250,13 @@ export default function RedemptionModeScreen() {
       // No owner session lives on this device; exit always ends at login.
       router.replace("/auth-landing" as Href);
     } catch (err) {
+      // exitRedemptionMode rethrows the raw edge-function message, which is
+      // always English. Translate it so es/ko staff don't get an English banner.
+      const raw = err instanceof Error ? err.message.trim() : "";
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.exitFailed", { defaultValue: "Could not exit Redemption Mode." }),
+        message: raw
+          ? translateKnownApiMessage(raw, t)
+          : t("redemptionMode.exitFailed", { defaultValue: "Could not exit Redemption Mode." }),
         tone: "error",
       });
     } finally {

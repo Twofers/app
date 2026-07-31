@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { keepSessionForActiveAccount } from "@/lib/account-access";
 import { supabase } from "@/lib/supabase";
 import { buildScreenshotSession, isScreenshotMode } from "@/lib/screenshot-mode";
 
@@ -44,7 +45,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         }
         // Only apply if onAuthStateChange hasn't already delivered a fresher session.
         if (!authChangeReceived) {
-          setSession(data.session ?? null);
+          void keepSessionForActiveAccount(data.session ?? null).then((allowedSession) => {
+            if (!cancelled && !authChangeReceived) {
+              setSession(allowedSession);
+              setIsInitialLoading(false);
+            }
+          });
+          return;
         }
         setIsInitialLoading(false);
       })
@@ -58,8 +65,11 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       authChangeReceived = true;
-      setSession(nextSession);
-      setIsInitialLoading(false);
+      void keepSessionForActiveAccount(nextSession).then((allowedSession) => {
+        if (cancelled) return;
+        setSession(allowedSession);
+        setIsInitialLoading(false);
+      });
     });
     return () => {
       cancelled = true;

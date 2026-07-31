@@ -14,6 +14,7 @@ import { validateExactLocalizationApprovalPayload } from "../_shared/localizatio
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { validatePosterSpecV1 } from "../../../lib/poster/posterAdSpec.ts";
 import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -388,7 +389,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
 
     const userClient = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },

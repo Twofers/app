@@ -23,7 +23,7 @@ const MIME = new Map([
   [".webp", "image/webp"],
 ]);
 
-const ROUTES = [
+const DEFAULT_ROUTES = [
   "/",
   "/404.html",
   "/business/",
@@ -47,6 +47,10 @@ const ROUTES = [
   "/s/smoke-deal",
   "/admin/login/",
   "/admin/",
+  "/admin/accounts/",
+  "/admin/account-repair/",
+  "/admin/communications/",
+  "/admin/ai-usage/",
   "/admin/prospects/",
   "/admin/prospects/import/",
   "/admin/prospects/11111111-1111-4111-8111-111111111111/",
@@ -56,12 +60,16 @@ const ROUTES = [
   "/admin/businesses/detail/",
   "/admin/qr-campaigns/",
   "/admin/offers/",
+  "/admin/offers/?view=redemptions",
   "/admin/billing/events/",
   "/admin/audit-log/",
   "/admin/settings/",
   "/admin/ai-operating-report/",
   "/admin/ai-prompts/",
 ];
+const ROUTES = process.env.WEBSITE_UI_ROUTES
+  ? process.env.WEBSITE_UI_ROUTES.split(",").map((route) => route.trim()).filter(Boolean)
+  : DEFAULT_ROUTES;
 
 const VIEWPORTS = [
   { name: "desktop", width: 1366, height: 900 },
@@ -132,6 +140,17 @@ function safeName(value) {
 
 function mockPayload(pathname, requestBody) {
   if (pathname.endsWith("/admin-dashboard-summary")) {
+    if (requestBody?.section === "queue_status") {
+      return {
+        ok: true,
+        queue_status: {
+          issue_key: requestBody.issue_key,
+          status: requestBody.status,
+          note: requestBody.note || null,
+          updated_at: "2026-07-02T12:40:00.000Z",
+        },
+      };
+    }
     if (requestBody?.section === "businesses") {
       return {
         ok: true,
@@ -201,6 +220,34 @@ function mockPayload(pathname, requestBody) {
         claim_links: [{ created_at: "2026-07-02T12:15:00.000Z", expires_at: "2026-07-16T12:15:00.000Z", uses_count: 0, max_uses: 1 }],
         conversions: [],
         audit_log: [{ admin_email: "admin@example.com", action: "admin_prospect_imported", reason: "qa", created_at: "2026-07-02T12:00:00.000Z" }],
+      };
+    }
+
+    if (requestBody?.section === "owner_view") {
+      return {
+        ok: true,
+        admin: { role: "owner" },
+        section: "owner_view",
+        owner_view: {
+          business: {
+            id: requestBody.business_id,
+            name: "Sample Coffee",
+            category: "Cafe",
+            verification_status: "manual_verified",
+          },
+          offers: [{
+            id: "deal-1",
+            title: "Morning pastry offer",
+            status: "live",
+            claim_count: 4,
+            redemption_count: 1,
+          }],
+          claims: { total: 4, redemptions: 1 },
+          subscription: { app_access_status: "trialing", billing_status: "trialing" },
+          banners: [{ tone: "info", message: "Trial access ends August 1." }],
+          read_only: true,
+          impersonation: false,
+        },
       };
     }
 
@@ -281,7 +328,42 @@ function mockPayload(pathname, requestBody) {
           ai_month_cost_usd: 0.42,
           ai_cost_available: true,
         },
+        onboarding: {
+          business_id: requestBody.business_id || "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Coffee",
+          owner_email: "owner@example.com",
+          completed_count: 5,
+          total: 9,
+          checklist: [
+            { key: "application_approved", label: "Application approved", complete: true },
+            { key: "owner_email_verified", label: "Owner email verified", complete: true },
+            { key: "business_info_complete", label: "Business information complete", complete: true },
+            { key: "terms_accepted", label: "Business terms accepted", complete: true },
+            { key: "trial_activated", label: "Trial or access activated", complete: true },
+            { key: "billing_confirmed", label: "Billing confirmed", complete: false },
+            { key: "first_offer_created", label: "First offer created", complete: false },
+            { key: "first_offer_published", label: "First offer published", complete: false },
+            { key: "redemption_tested", label: "Redemption tested", complete: false },
+          ],
+        },
         business_health_error: null,
+      };
+    }
+
+    if (requestBody?.section === "redemptions") {
+      return {
+        ok: true,
+        admin: { role: "owner" },
+        redemptions: [{
+          claim_id: "claim-1",
+          business_id: "11111111-1111-4111-8111-111111111111",
+          deal_id: "deal-1",
+          deal_title: "Morning pastry offer",
+          business_name: "Sample Coffee",
+          redeemed_at: "2026-07-02T12:30:00.000Z",
+          redeem_method: "staff_qr",
+          claimed_at: "2026-07-02T12:00:00.000Z",
+        }],
       };
     }
 
@@ -292,9 +374,11 @@ function mockPayload(pathname, requestBody) {
         offers: [
           {
             id: "offer-1",
+            business_id: "11111111-1111-4111-8111-111111111111",
             title: "Morning pastry offer",
             business_name: "Sample Bakery",
             is_active: true,
+            effective_status: "live",
             start_time: "2026-07-02T13:00:00.000Z",
             end_time: "2026-07-02T15:00:00.000Z",
             created_at: "2026-07-02T12:00:00.000Z",
@@ -351,14 +435,126 @@ function mockPayload(pathname, requestBody) {
       ok: true,
       admin: { role: "owner" },
       summary: {
-        businesses: { active: 4, pendingVerification: 2, trialingLocations: 1, trialsEndingSoon: 1 },
+        businesses: { active: 4, pendingVerification: 2, trialingLocations: 1, trialsEndingSoon: 1, withLiveOffer: 3 },
         trialRequests: { open: 3, highRisk: 1 },
         offers: { live: 7, needsReview: 2 },
-        apiSpend: { currentMonthUsd: 1.25, priorMonthUsd: 7.32, updatedAt: "2026-07-02T12:30:00.000Z" },
-        activity: { claimsToday: 2, redemptionsToday: 1 },
-        billing: { pastDueLocations: 0, pastDueBusinesses: 0, missingStripeCustomers: 1 },
+        deals: { createdToday: 2, created7d: 9, liveNow: 7 },
+        redemptions: { today: 1, last7d: 8, claimToRedeemRate30d: 0.42 },
+        users: {
+          active30d: 24,
+          definition: "Distinct consumer with an app_opened, deal_viewed, deal_claimed, or deal_redeemed event in app_analytics_events in the last 30 days, excluding business-role users.",
+        },
+        accounts: {
+          as_of: "2026-07-02T12:00:00.000Z",
+          definition: "Mock account-growth definition.",
+          customers: {
+            total: 240,
+            day: { current: 8, previous: 5 },
+            week: { current: 34, previous: 28 },
+            month: { current: 110, previous: 92 },
+          },
+          businesses: {
+            total: 24,
+            day: { current: 1, previous: 2 },
+            week: { current: 5, previous: 3 },
+            month: { current: 12, previous: 8 },
+          },
+          combined: {
+            total: 264,
+            day: { current: 9, previous: 7 },
+            week: { current: 39, previous: 31 },
+            month: { current: 122, previous: 100 },
+          },
+        },
+        apiSpend: { currentMonthUsd: 1.25, priorMonthUsd: 7.32, perGeneratedDealUsd: 0.14, updatedAt: "2026-07-02T12:30:00.000Z" },
+        activity: { claimsToday: 2, redemptionsToday: 1, newConsumersThisWeek: 6 },
+        billing: { pastDueLocations: 0, pastDueBusinesses: 0, missingStripeCustomers: 1, stripeWebhookErrors: 1 },
         security: { failedAdminActions: 0 },
+        moderation: { openReports: 1 },
       },
+      businessHealth: [
+        {
+          business_id: "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Coffee",
+          health_label: "needs_attention",
+          attention_score: 65,
+          primary_reason: "Claims are not turning into redemptions",
+          reason_codes: ["claims_no_redemptions"],
+          suggested_read_only_action: "Review offer performance and merchant setup",
+          claims_30d: 4,
+          redemptions_30d: 0,
+          last_offer_at: "2026-07-02T12:00:00.000Z",
+        },
+      ],
+      businessHealthError: null,
+      businessHealthTotal: 1,
+      onboarding: [
+        {
+          business_id: "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Coffee",
+          owner_email: "owner@example.com",
+          completed_count: 5,
+          total: 9,
+          checklist: [
+            { key: "application_approved", label: "Application approved", complete: true },
+            { key: "owner_email_verified", label: "Owner email verified", complete: true },
+            { key: "business_info_complete", label: "Business information complete", complete: true },
+            { key: "terms_accepted", label: "Business terms accepted", complete: true },
+            { key: "trial_activated", label: "Trial or access activated", complete: true },
+            { key: "billing_confirmed", label: "Billing confirmed", complete: false },
+            { key: "first_offer_created", label: "First offer created", complete: false },
+            { key: "first_offer_published", label: "First offer published", complete: false },
+            { key: "redemption_tested", label: "Redemption tested", complete: false },
+          ],
+        },
+      ],
+      queue: [
+        {
+          key: "claims_no_redemptions:11111111-1111-4111-8111-111111111111",
+          category: "redemptions",
+          priority: "medium",
+          attention_score: 65,
+          business_id: "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Coffee",
+          title: "Claims are not turning into redemptions",
+          explanation: "Customers are claiming offers but none have been redeemed.",
+          waiting_since: "2026-07-02T12:00:00.000Z",
+          recommended_action: "Review the redemption setup",
+          links: { business: "/admin/businesses/detail?businessId=11111111-1111-4111-8111-111111111111" },
+        },
+      ],
+      queueAll: [
+        {
+          key: "claims_no_redemptions:11111111-1111-4111-8111-111111111111",
+          category: "redemptions",
+          priority: "medium",
+          attention_score: 65,
+          business_id: "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Coffee",
+          title: "Claims are not turning into redemptions",
+          explanation: "Customers are claiming offers but none have been redeemed.",
+          waiting_since: "2026-07-02T12:00:00.000Z",
+          recommended_action: "Review the redemption setup",
+          status: "new",
+          note: null,
+          links: { business: "/admin/businesses/detail?businessId=11111111-1111-4111-8111-111111111111" },
+        },
+      ],
+      recentDeals: [
+        {
+          id: "offer-1",
+          business_id: "11111111-1111-4111-8111-111111111111",
+          business_name: "Sample Bakery",
+          title: "Morning pastry offer",
+          status: "live",
+          claims: 4,
+          redemptions: 1,
+          expires_at: "2026-07-02T15:00:00.000Z",
+          created_at: "2026-07-02T12:00:00.000Z",
+          anomaly_flags: [],
+        },
+      ],
+      summaryV2Errors: { activeUsers: null, accountGrowth: null, businessesWithLiveOffer: null, recentDeals: null },
       recentApplications: [
         {
           business_name: "Sample Coffee",
@@ -497,7 +693,76 @@ function mockPayload(pathname, requestBody) {
   if (pathname.endsWith("/admin-trial-create-from-prospect")) {
     return { ok: true, application: { id: "app-1" }, business_onboarding_request_id: "request-1" };
   }
-
+  if (pathname.endsWith("/admin-account-management")) {
+    if (requestBody?.action === "list") {
+      return {
+        ok: true,
+        accounts: [{
+          user_id: "22222222-2222-4222-8222-222222222222",
+          email: "owner@example.com",
+          role: "business",
+          account_status: "active",
+          business_name: "Sample Coffee",
+          business_id: "11111111-1111-4111-8111-111111111111",
+          last_sign_in_at: "2026-07-02T12:00:00.000Z",
+          auth_created_at: "2026-06-01T12:00:00.000Z",
+        }],
+        total: 1,
+        page: 1,
+        per_page: 50,
+      };
+    }
+    if (requestBody?.action === "detail") {
+      return {
+        ok: true,
+        account: {
+          user_id: requestBody.user_id,
+          email: "owner@example.com",
+          role: "business",
+          account_status: "active",
+          email_confirmed_at: "2026-06-01T12:00:00.000Z",
+          last_sign_in_at: "2026-07-02T12:00:00.000Z",
+          mfa_factors: [{ factor_type: "totp", status: "verified" }],
+        },
+        businesses: [{ id: "11111111-1111-4111-8111-111111111111", name: "Sample Coffee" }],
+        subscriptions: [{ app_access_status: "trialing", billing_status: "trialing", trial_end: "2026-08-01T12:00:00.000Z" }],
+        impact: { recent_redemption_failures: 0, redemption_lockout_active: false },
+        audit_log: [{ action: "admin_account_viewed", admin_email: "admin@example.com", reason: "support", created_at: "2026-07-02T12:00:00.000Z" }],
+        permissions: { can_repair: true, can_manage_lifecycle: true },
+      };
+    }
+    return { ok: true, action: requestBody?.action, repair: { delivered: true } };
+  }
+  if (pathname.endsWith("/admin-owner-email")) {
+    if (requestBody?.action === "list") {
+      return {
+        ok: true,
+        communications: [{
+          id: "communication-1",
+          business_id: "11111111-1111-4111-8111-111111111111",
+          reason_category: "setup_help",
+          subject: "A quick next step for Sample Coffee",
+          status: "sent",
+          sent_at: "2026-07-02T12:00:00.000Z",
+          created_at: "2026-07-02T12:00:00.000Z",
+          businesses: { name: "Sample Coffee" },
+        }],
+      };
+    }
+    if (requestBody?.action === "draft" || requestBody?.action === "refine") {
+      return {
+        ok: true,
+        business: { business_id: requestBody.business_id, business_name: "Sample Coffee" },
+        draft: {
+          subject: "A quick next step for Sample Coffee",
+          body: "Hi Pat,\\n\\nWe noticed there is still a setup step to finish. Reply and we will help.",
+          fallback_used: false,
+          requires_human_review: true,
+        },
+      };
+    }
+    return { ok: true, communication: { id: "communication-1", status: requestBody?.action === "send" ? "sent" : "draft" } };
+  }
   if (pathname.endsWith("/admin-ai-operating-report")) {
     return {
       ok: true,
@@ -559,6 +824,31 @@ function mockPayload(pathname, requestBody) {
 }
 
 async function installMocks(page) {
+  await page.route("**/api/admin/session", async (route) => {
+    const method = route.request().method();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(method === "GET"
+        ? { ok: true, authenticated: true, pending_mfa: false }
+        : { ok: true, authenticated: true }),
+    });
+  });
+  await page.route("**/api/admin/proxy?function=*", async (route) => {
+    let body = {};
+    try {
+      body = JSON.parse(route.request().postData() || "{}");
+    } catch {
+      body = {};
+    }
+    const url = new URL(route.request().url());
+    const functionName = url.searchParams.get("function") || "";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(mockPayload(`/${functionName}`, body)),
+    });
+  });
   await page.route(SUPABASE_FUNCTIONS_HOST, async (route) => {
     let body = {};
     try {
@@ -576,15 +866,10 @@ async function installMocks(page) {
 }
 
 async function prepareStorage(context, route) {
-  await context.addInitScript((currentRoute) => {
+  await context.addInitScript(() => {
     localStorage.clear();
     sessionStorage.clear();
-    if (currentRoute.startsWith("/admin/") && currentRoute !== "/admin/login/") {
-      localStorage.setItem("twofer_admin_access_token", "mock-token");
-      localStorage.setItem("twofer_admin_refresh_token", "mock-refresh");
-      localStorage.setItem("twofer_admin_expires_at", String(Date.now() + 3600 * 1000));
-    }
-  }, route);
+  });
 }
 
 function isPublicRoute(route) {
@@ -662,9 +947,21 @@ async function checkTrialMobilePosition(page) {
 }
 
 async function checkAdminMobileNav(page, route) {
-  if (!(await page.locator(".admin-shell .nav-links").count())) return [];
-  const display = await page.locator(".admin-shell .nav-links").first().evaluate((el) => getComputedStyle(el).display);
-  return display === "none" ? [`${route}: admin mobile navigation links are hidden`] : [];
+  if (route === "/admin/login/") return [];
+  const nav = page.locator(".admin-shell .admin-bottom-nav").first();
+  if (!(await nav.count())) return [`${route}: admin mobile navigation is missing`];
+  const result = await nav.evaluate((el) => ({
+    display: getComputedStyle(el).display,
+    targets: [...el.querySelectorAll("a, button")].map((target) =>
+      Math.round(target.getBoundingClientRect().height)),
+  }));
+  const issues = [];
+  if (result.display === "none") issues.push(`${route}: admin mobile navigation is hidden`);
+  if (result.targets.length < 5) issues.push(`${route}: admin mobile navigation is incomplete`);
+  if (result.targets.some((height) => height < 48)) {
+    issues.push(`${route}: admin mobile navigation has a touch target below 48px`);
+  }
+  return issues;
 }
 
 async function checkAdminDashboard(page) {
@@ -674,28 +971,69 @@ async function checkAdminDashboard(page) {
       timeout: 5000,
     })
     .catch(() => issues.push("/admin/: summary did not load signed-in state"));
-  // AI Spend & Quotas now starts collapsed by default (north-star redesign) --
-  // open it before interacting with the form inside.
-  const aiSpendPanel = page.locator("details:has([data-ai-quota-form])").first();
-  if ((await aiSpendPanel.count()) && !(await aiSpendPanel.evaluate((el) => el.open))) {
-    await aiSpendPanel.locator("summary").click();
-  }
-  await page.locator('input[name="query"]').fill("owner@example.com");
-  await page.locator('[data-ai-quota-form] button[type="submit"]').click();
   await page
-    .waitForFunction(() => document.querySelector("[data-ai-usage-body]")?.innerText?.includes("Sample Coffee"), null, {
+    .waitForFunction(() => document.querySelector("[data-service-alerts]")?.innerText?.includes("Sample Coffee"), null, {
       timeout: 5000,
     })
-    .catch(() => issues.push("/admin/: AI usage lookup did not populate usage rows"));
-  const resetEnabled = await page.locator("[data-ai-reset-button]").evaluate((button) => !button.disabled).catch(() => false);
-  if (!resetEnabled) issues.push("/admin/: reset button stayed disabled after usage lookup");
-  if (resetEnabled) {
-    await page.locator("[data-ai-reset-button]").click();
+    .catch(() => issues.push("/admin/: service alerts did not populate"));
+  const queueText = await page.locator("[data-action-queue-body]").innerText().catch(() => "");
+  if (!queueText.includes("Claims are not turning into redemptions")) {
+    issues.push("/admin/: unified action queue did not include business health");
+  }
+  const statusSelect = page.locator("[data-action-queue-body] .admin-queue-status-select").first();
+  if (await statusSelect.count()) {
+    await statusSelect.selectOption("reviewing");
+    const updatedStatus = await statusSelect.inputValue().catch(() => "");
+    if (updatedStatus !== "reviewing") issues.push("/admin/: queue workflow status did not update");
+  } else {
+    issues.push("/admin/: queue workflow status control is missing");
+  }
+  const recentText = await page.locator("[data-recent-deals-body]").innerText().catch(() => "");
+  if (!recentText.includes("Morning pastry offer")) issues.push("/admin/: recent deal activity did not load");
+  await page
+    .waitForFunction(() => {
+      const section = document.querySelector("[data-onboarding-section]");
+      const text = document.querySelector("[data-onboarding-list]")?.textContent || "";
+      return section && !section.hidden && text.includes("5 of 9 steps") && text.includes("Billing confirmed");
+    }, null, { timeout: 5000 })
+    .catch(() => issues.push("/admin/: guided onboarding panel did not load"));
+  const draftEmail = page.locator("[data-service-alerts] button", { hasText: "Draft email" }).first();
+  if (await draftEmail.count()) {
+    await draftEmail.click();
+    await page.locator("[data-owner-email-draft]").click();
     await page
-      .waitForFunction(() => document.querySelector("[data-ai-quota-status]")?.textContent?.includes("Reset"), null, {
+      .waitForFunction(() => document.querySelector("[data-owner-email-subject]")?.value?.includes("Sample Coffee"), null, {
         timeout: 5000,
       })
-      .catch(() => issues.push("/admin/: quota reset status did not confirm reset"));
+      .catch(() => issues.push("/admin/: owner email draft workflow did not populate reviewed fields"));
+    await page.locator("[data-owner-email-close]").click();
+  } else {
+    issues.push("/admin/: service alert owner-email action is missing");
+  }
+  const ownerView = page.locator("[data-service-alerts] button", { hasText: "View as owner" }).first();
+  if (await ownerView.count()) {
+    await ownerView.click();
+    await page
+      .waitForFunction(() => {
+        const banner = document.querySelector("[data-owner-view-banner]")?.textContent || "";
+        return document.body.classList.contains("is-owner-viewing")
+          && banner.includes("Viewing as Sample Coffee")
+          && document.querySelector("[data-owner-view]")?.textContent?.includes("Morning pastry offer");
+      }, null, { timeout: 5000 })
+      .catch(() => issues.push("/admin/: read-only owner view did not load with its safety banner"));
+    await page.locator("[data-owner-view-exit]").click();
+  } else {
+    issues.push("/admin/: owner-view action is missing");
+  }
+  const openButton = page.locator("[data-recent-deals-body] button").first();
+  if (await openButton.count()) {
+    await openButton.click();
+    await page
+      .waitForFunction(() => document.querySelector("[data-business-panel-content]")?.innerText?.includes("Claims · 30d"), null, {
+        timeout: 5000,
+      })
+      .catch(() => issues.push("/admin/: business activity side panel did not load"));
+    await page.locator("[data-close-side-panel]").click();
   }
   const mobileLabels = await page.evaluate(() =>
     [...document.querySelectorAll(".admin-table[data-mobile-cards] tbody td")]
@@ -703,6 +1041,45 @@ async function checkAdminDashboard(page) {
       .every((td) => Boolean(td.dataset.label)),
   );
   if (!mobileLabels) issues.push("/admin/: generated mobile table cells are missing labels");
+  return issues;
+}
+
+async function checkAccountRepair(page) {
+  const issues = [];
+  await page.locator("[data-repair-search-form] input[name=query]").fill("owner@example.com");
+  await page.locator("[data-repair-search-form]").evaluate((form) => form.requestSubmit());
+  await page
+    .waitForFunction(() => document.querySelector("[data-repair-results]")?.textContent?.includes("Sample Coffee"), null, {
+      timeout: 5000,
+    })
+    .catch(() => issues.push("/admin/account-repair/: account search did not return a result"));
+  const open = page.locator("[data-repair-results] button").first();
+  if (await open.count()) {
+    await open.click();
+    await page
+      .waitForFunction(() => document.querySelector("[data-repair-detail]")?.textContent?.includes("1 enrolled"), null, {
+        timeout: 5000,
+      })
+      .catch(() => issues.push("/admin/account-repair/: verified account summary did not load"));
+  }
+  const mobileLabels = await page.evaluate(() =>
+    [...document.querySelectorAll(".admin-table[data-mobile-cards] tbody td")]
+      .filter((td) => td.className !== "admin-row-detail")
+      .every((td) => Boolean(td.dataset.label)),
+  );
+  if (!mobileLabels) issues.push("/admin/account-repair/: generated mobile table cells are missing labels");
+  return issues;
+}
+
+async function checkAiUsage(page) {
+  const issues = [];
+  await page.locator("[data-ai-lookup-form] input[name=query]").fill("owner@example.com");
+  await page.locator("[data-ai-lookup-form]").evaluate((form) => form.requestSubmit());
+  await page
+    .waitForFunction(() => document.querySelector("[data-ai-businesses]")?.textContent?.includes("Ad Generation"), null, {
+      timeout: 5000,
+    })
+    .catch(() => issues.push("/admin/ai-usage/: quota lookup did not render"));
   return issues;
 }
 
@@ -825,6 +1202,14 @@ async function crawlRoute(browser, baseUrl, route, viewport) {
     }
   }
   if (route === "/admin/" && viewport.name === "mobile") issues.push(...(await checkAdminDashboard(page)));
+  if (route === "/admin/account-repair/" && viewport.name === "mobile") issues.push(...(await checkAccountRepair(page)));
+  if (route === "/admin/ai-usage/" && viewport.name === "mobile") issues.push(...(await checkAiUsage(page)));
+  if (route === "/admin/offers/?view=redemptions" && viewport.name === "mobile") {
+    const redemptionText = await page.locator("[data-rows]").innerText().catch(() => "");
+    if (!redemptionText.includes("Staff Qr") || !redemptionText.includes("Morning pastry offer")) {
+      issues.push("/admin/offers/?view=redemptions: redemption sibling view did not render");
+    }
+  }
   if (route === "/admin/trial-requests/" && viewport.name === "mobile") issues.push(...(await checkTrialRequests(page)));
   if (route === "/admin/qr-campaigns/" && viewport.name === "mobile") issues.push(...(await checkQrCampaigns(page)));
   if (route.startsWith("/quick-approve-trial/") && viewport.name === "mobile") issues.push(...(await checkQuickApproval(page)));

@@ -161,8 +161,13 @@ export default function RedeemScanner() {
       setPinEnabled(businessId, true);
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
     } catch (err) {
+      // verifyOwnerRedemptionPin rethrows raw server text (English). Translate it
+      // so a PIN failure doesn't surface an English banner to es/ko owners.
+      const raw = err instanceof Error ? err.message.trim() : "";
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.ownerPinInvalid", { defaultValue: "Incorrect redemption PIN." }),
+        message: raw
+          ? translateKnownApiMessage(raw, t)
+          : t("redemptionMode.ownerPinInvalid", { defaultValue: "Incorrect redemption PIN." }),
         tone: "error",
       });
     } finally {

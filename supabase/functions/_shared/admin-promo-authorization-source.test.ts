@@ -21,7 +21,8 @@ describe("admin-assisted promotional materials authorization", () => {
     expect(source).toMatch(/if \(ctx instanceof Response\) return ctx/);
     // requireAdmin itself enforces active admin + MFA aal2 + roleCan.
     const shared = read("supabase/functions/_shared/admin-prospects.ts");
-    expect(shared).toMatch(/adminUser\.require_mfa && !isAal2\(bearerToken\)/);
+    expect(shared).toMatch(/adminUser\.require_mfa !== true/);
+    expect(shared).toMatch(/if \(!isAal2\(bearerToken\)\)/);
     expect(shared).toMatch(/roleCan\(adminUser\.role, permission\)/);
   });
 

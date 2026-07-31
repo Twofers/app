@@ -31,12 +31,14 @@ describe("launch signup intake", () => {
     // the spoofable leftmost x-forwarded-for hop) — see client-ip.test.ts.
     expect(source).toMatch(/const RATE_LIMIT_WINDOW_MINUTES\s*=\s*\d+/);
     expect(source).toMatch(/const RATE_LIMIT_MAX_PER_IP\s*=\s*\d+/);
+    expect(source).toMatch(/const RATE_LIMIT_MAX_GLOBAL\s*=\s*\d+/);
+    expect(source).toMatch(/p_max_global: RATE_LIMIT_MAX_GLOBAL/);
     expect(source).toMatch(/from "\.\.\/_shared\/client-ip\.ts"/);
     expect(source).toMatch(/clientIpFromRequest\(req\)/);
     expect(source).not.toMatch(/firstForwardedIp/);
     expect(source).toMatch(/\},\s*429\)/);
     // The rate-limit gate must run BEFORE the row is written.
-    const rateLimitIndex = source.indexOf("isRateLimited(supabase");
+    const rateLimitIndex = source.indexOf("claimSubmissionSlot(supabase");
     const insertIndex = source.indexOf('from("launch_signups")\n      .upsert');
     expect(rateLimitIndex).toBeGreaterThan(-1);
     expect(insertIndex).toBeGreaterThan(rateLimitIndex);

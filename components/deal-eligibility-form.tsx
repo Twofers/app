@@ -211,11 +211,16 @@ export function DealEligibilityForm({
     if (activeType.id !== "PERCENT_OFF_SINGLE_ITEM") {
       const estimate =
         eligibility.customerValuePercent != null
-          ? ` Estimated value is about ${eligibility.customerValuePercent}%.`
+          ? t("dealEligibility.validFreeItemEstimate", {
+              percent: eligibility.customerValuePercent,
+              defaultValue: " Estimated value is about {{percent}}%.",
+            })
           : "";
-      return t("dealEligibility.validFreeItemBody", {
-        defaultValue: `Eligible: customers get a named item free with purchase.${estimate}`,
-      });
+      return (
+        t("dealEligibility.validFreeItemBody", {
+          defaultValue: "Eligible: customers get a named item free with purchase.",
+        }) + estimate
+      );
     }
     if (eligibility.customerValuePercent == null) {
       return t("dealEligibility.validPercentBody", {
@@ -223,7 +228,8 @@ export function DealEligibilityForm({
       });
     }
     return t("dealEligibility.validBody", {
-      defaultValue: `Customer value is about ${eligibility.customerValuePercent}%.`,
+      percent: eligibility.customerValuePercent,
+      defaultValue: "Customer value is about {{percent}}%.",
     });
   }
 

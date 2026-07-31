@@ -9,6 +9,7 @@ import {
 } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type PortalSource = "admin" | "merchant_web" | "email";
 
@@ -120,7 +121,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseServiceKey = getServiceRoleKey();
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) return jsonResponse(req, { error: "Stripe is not configured." }, 500);
 
@@ -173,6 +174,9 @@ serve(async (req) => {
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);
     if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
       return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);
+    }
+    if (!stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment === "production") {
+      return jsonResponse(req, { error: "Production billing requires a live Stripe key." }, 500);
     }
 
     const { data: billingProfile, error: billingError } = await supabaseAdmin

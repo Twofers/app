@@ -38,7 +38,15 @@ async function main() {
       owner_id: ownerId,
       name: "Name Lock Cafe",
       status: "pending_verification",
-      access_level: "none",
+      // Setup access, not "none". 20260817120000 gates every owner profile
+      // write on can_edit_business_information, which requires setup, active,
+      // or lapsed access — a bare access_level="none" row is now rejected with
+      // BUSINESS_PROFILE_EDIT_CAPABILITY_REQUIRED before the name lock is ever
+      // reached, which is not what this suite is testing. Holding
+      // approved_not_activated across both phases keeps profile edits legal
+      // while `status` alone drives public visibility, which is what
+      // is_public_business_status() (and therefore the lock) keys on.
+      access_level: "approved_not_activated",
     },
   });
   const biz = Array.isArray(createRes.json) ? createRes.json[0] : null;
@@ -48,20 +56,28 @@ async function main() {
     return;
   }
 
+  // Owner-JWT writes use return=minimal on purpose. 20260820121000 puts
+  // `businesses` on a COLUMN-level SELECT grant for `authenticated` (34 of 55
+  // columns are deliberately withheld), so the shared default of
+  // `return=representation` asks PostgREST to echo columns the role cannot read
+  // and earns a 42501 that has nothing to do with the name lock. Every app write
+  // narrows the same way (`.update(...).select("id")` or no select at all), so
+  // this matches production behavior instead of working around it.
+
   // --- 1. pre-approval: name corrections are free -------------------------
   const preRename = await rest(ctx, "anon", `businesses?id=eq.${biz.id}`, {
-    token: ownerJwt, method: "PATCH", body: { name: "Name Lock Cafe (fixed typo)" },
+    token: ownerJwt, method: "PATCH", prefer: "return=minimal", body: { name: "Name Lock Cafe (fixed typo)" },
   });
   const preName = await rest(ctx, "service", `businesses?select=name&id=eq.${biz.id}`);
   R.check("pre-approval owner rename succeeds", !isDenied(preRename) && preName.json?.[0]?.name === "Name Lock Cafe (fixed typo)",
-    { detail: `HTTP ${preRename.status}, name=${preName.json?.[0]?.name}`,
+    { detail: `HTTP ${preRename.status} ${preRename.text}, name=${preName.json?.[0]?.name}`,
       onFail: "Lock fires before approval — owners can no longer fix typos during setup (app bug)." });
 
   // --- 2. approve, then a direct REST rename must fail --------------------
   await rest(ctx, "service", `businesses?id=eq.${biz.id}`, { method: "PATCH", body: { status: "active" } });
 
   const renameDenied = await rest(ctx, "anon", `businesses?id=eq.${biz.id}`, {
-    token: ownerJwt, method: "PATCH", body: { name: "Totally Different Brand" },
+    token: ownerJwt, method: "PATCH", prefer: "return=minimal", body: { name: "Totally Different Brand" },
   });
   const lockedName = await rest(ctx, "service", `businesses?select=name&id=eq.${biz.id}`);
   R.check("post-approval owner rename is rejected (business_name_locked)",
@@ -71,7 +87,7 @@ async function main() {
 
   // --- 3. other profile edits still work after approval --------------------
   const otherEdit = await rest(ctx, "anon", `businesses?id=eq.${biz.id}`, {
-    token: ownerJwt, method: "PATCH", body: { short_description: "Still editable", name: "Name Lock Cafe (fixed typo)" },
+    token: ownerJwt, method: "PATCH", prefer: "return=minimal", body: { short_description: "Still editable", name: "Name Lock Cafe (fixed typo)" },
   });
   R.check("post-approval non-name edit (same name resent) still succeeds", !isDenied(otherEdit),
     { detail: `HTTP ${otherEdit.status} ${otherEdit.text}`,

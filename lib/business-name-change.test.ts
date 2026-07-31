@@ -7,23 +7,19 @@ import { isBusinessNameLocked, NON_PUBLIC_BUSINESS_STATUSES } from "./business-n
 // publicly visible. business-name-lock-source.test.ts checks the list stays
 // in sync with the SQL and edge-function copies; this covers the behavior.
 describe("isBusinessNameLocked", () => {
-  it("keeps the name editable for every pre-approval status", () => {
+  it("keeps the name editable for every non-public lifecycle status", () => {
     for (const status of NON_PUBLIC_BUSINESS_STATUSES) {
       expect(isBusinessNameLocked(status)).toBe(false);
     }
   });
 
-  it("locks the name for every post-approval lifecycle status", () => {
+  it("locks the name for every publicly visible lifecycle status", () => {
     for (const status of [
-      "active",
-      "trialing",
       "limited_trial",
+      "trialing",
+      "active",
       "past_due",
       "trial_expired",
-      "canceled",
-      "suspended",
-      "disabled",
-      "archived",
     ]) {
       expect(isBusinessNameLocked(status)).toBe(true);
     }

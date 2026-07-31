@@ -20,7 +20,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
   </head>
   <body>
     <header class="site-header">
@@ -51,7 +51,7 @@
       </nav>
     </header>
     <main class="content-page">
-      <p class="eyebrow" data-i18n="privacy.effective">Effective July 1, 2026</p>
+      <p class="eyebrow" data-i18n="privacy.effective">Effective July 25, 2026</p>
       <h1 data-i18n="privacy.heading">Privacy Policy</h1>
       <p class="lede" data-i18n="privacy.lede">This policy describes the data used by the current Twofer app and website launch flow.</p>
 
@@ -66,6 +66,21 @@
         <li data-i18n="privacy.collect7">Usage, diagnostics, support messages, and app analytics needed to operate and improve Twofer.</li>
         <li data-i18n="privacy.collect8">When you open a physical marketing QR code, we may record the campaign, time, coarse device category, truncated user agent, and a short-lived hashed network identifier for fraud prevention and aggregate campaign measurement. We do not record your account, location, or raw IP address through this flow.</li>
       </ul>
+
+      <h2 data-i18n="privacy.signInTitle">Signing in</h2>
+      <p data-i18n="privacy.signInBody">
+        You can sign in with an email address and password, with Google (iPhone and Android), or with Apple (iPhone).
+        When you use Google or Apple, that provider confirms who you are and sends Twofer your name, your email
+        address, and an account identifier — enough to create or open your Twofer account. Twofer never receives your
+        Google or Apple password. We request only your name and email; signing in this way does not give Twofer access
+        to your contacts, calendar, photos, or files, and does not let Twofer post anything for you.
+      </p>
+      <p data-i18n="privacy.signInRelay">
+        Sign in with Apple lets you choose Hide My Email, which gives Twofer a private relay address instead of your
+        personal one. Twofer treats it as your account email and sends account mail to it. A business account cannot be
+        claimed with a relay address, because claiming a business requires the sign-in email to match the email on the
+        approved business application.
+      </p>
 
       <h2 data-i18n="privacy.useTitle">How we use data</h2>
       <p data-i18n="privacy.useBody">
@@ -83,9 +98,10 @@
 
       <h2 data-i18n="privacy.providersTitle">Service providers</h2>
       <p data-i18n="privacy.providersBody">
-        Twofer uses service providers such as Supabase for backend services, Stripe for approved web/admin business
-        billing, push notification providers, map/location services, AI providers, diagnostics tools, and
-        email/support providers where configured.
+        Twofer uses service providers such as Supabase for backend services and authentication, Google and Apple for
+        sign-in when you choose those options, Stripe for approved web/admin business billing, push notification
+        providers, map/location services, AI providers, diagnostics tools, and email/support providers where
+        configured.
       </p>
 
       <h2 data-i18n="privacy.noSaleTitle">No sale or tracking</h2>
@@ -101,6 +117,6 @@
         <a href="/delete-account">delete account page</a>.
       </p>
     </main>
-    <script src="/localization.js?v=20260722-l2-feed"></script>
+    <script src="/localization.js?v=20260726-billing-copy"></script>
   </body>
 </html>

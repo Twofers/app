@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 // Public exchange endpoint for the payment link emailed to an approved business.
 //
@@ -17,9 +18,10 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 //
 // Errors are deliberately generic; internals are never exposed.
 
-// This email token is exclusively for first activation. Existing trial, paid,
-// lapsed, or suspended accounts use billing management/support instead.
-const ELIGIBLE_STATUSES = new Set(["approved_not_activated"]);
+// Standard approvals activate their first Stripe trial. An admin-granted trial
+// is already live and uses the same emailed link to attach a card for continued
+// billing without receiving another 30-day trial.
+const ELIGIBLE_STATUSES = new Set(["approved_not_activated", "trial_active"]);
 
 // Abuse guard: cap how many checkout sessions a single business can spin up in a
 // short window, so a leaked link can't hammer Stripe session creation.
@@ -81,7 +83,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { ok: false, error: "This link isn't available right now." }, 500);
     }

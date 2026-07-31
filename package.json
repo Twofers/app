@@ -1,7 +1,7 @@
 {
   "name": "twoforone",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "start": "expo start",
     "start:go": "expo start",
@@ -13,15 +13,18 @@
     "lint": "expo lint",
     "assert:brand-assets": "node scripts/assert-no-legacy-branding.js",
     "check:mobile-store-copy": "node scripts/check-mobile-store-copy.js",
+    "check:i18n": "node website/scripts/check-i18n.mjs",
     "check:website-i18n": "node scripts/check-website-i18n.js",
     "check:website-supabase": "node scripts/check-website-supabase-readiness.js",
     "check:website-ui": "node scripts/check-website-ui-crawl.js",
+    "check:i18n-keys": "node scripts/check-i18n-keys.mjs",
     "website:preview": "python -m http.server 4173 --directory website",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "node scripts/typecheck-functions.cjs",
     "pretest": "node scripts/check-ai-poster-core-lock.mjs",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
+    "test:e2e": "node scripts/e2e-smoke.js",
     "test:watch": "vitest",
     "copy:evaluate": "node scripts/evaluate-ai-promotional-copy.mjs",
     "gate:ai-ad": "node scripts/check-ai-ad-release-gates.mjs",
@@ -45,6 +48,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
@@ -52,8 +56,10 @@
     "country-flag-icons": "^1.6.17",
     "date-fns": "^4.1.0",
     "expo": "~54.0.35",
+    "expo-apple-authentication": "~8.0.8",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
+    "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
@@ -104,7 +110,9 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["react-native-launch-arguments"]
+        "exclude": [
+          "react-native-launch-arguments"
+        ]
       }
     }
   },

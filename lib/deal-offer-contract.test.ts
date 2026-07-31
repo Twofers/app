@@ -720,3 +720,264 @@ describe("item names with parenthetical descriptions and banned words", () => {
     expect(result.headline).not.toMatch(/\(/);
   });
 });
+
+describe("article-prefixed item names", () => {
+  const ARTICLE_ITEM_NAMES = [
+    "latte",
+    "The Recon Roast",
+    "THE RECON ROAST",
+    "A Really Big Latte",
+    "An Americano",
+    "The Recon Roast ( roaster fresh coffee with a shot of espresso)",
+  ];
+
+  function percentOffContract(itemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription,
+      itemRetailValueCents: 600,
+    });
+  }
+
+  function bogoSameItemContract(itemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: itemDescription,
+      requiredItemRetailValueCents: 400,
+      freeItemQuantity: 1,
+      freeItemDescription: itemDescription,
+      freeItemRetailValueCents: 400,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  function bogoOtherItemContract(requiredItemDescription: string, freeItemDescription: string): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription,
+      requiredItemRetailValueCents: 400,
+      freeItemQuantity: 1,
+      freeItemDescription,
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  // The invariant this whole class of bug violated: copy the deterministic
+  // generators produce for a contract must satisfy the validator for that same
+  // contract. Generators strip a leading article for natural English, so any
+  // item named "The <thing>" used to fail its own validation and could never
+  // publish. Keep this passing and that failure mode cannot come back.
+  it("deterministic copy always validates against its own contract", () => {
+    for (const itemName of ARTICLE_ITEM_NAMES) {
+      const cases: [string, DealOfferContract][] = [
+        ["PERCENT_OFF_SINGLE_ITEM", percentOffContract(itemName)],
+        ["BUY_ONE_GET_ONE_FREE", bogoSameItemContract(itemName)],
+        ["BUY_ONE_GET_SOMETHING_FREE", bogoOtherItemContract(itemName, "bagel")],
+        ["BUY_ONE_GET_SOMETHING_FREE / article free item", bogoOtherItemContract(itemName, "The House Blend")],
+      ];
+      for (const [dealType, contract] of cases) {
+        const validation = validateAiCopyAgainstOffer(deterministicFallbackCopy(contract), contract);
+        expect(validation.reasonCodes, `${dealType} / ${itemName}`).toEqual([]);
+      }
+    }
+  });
+
+  // F-6 regression: a free item whose own name starts with an article supplies
+  // the "the" in "Buy a latte and the House Blend is on us.", which used to read
+  // as the customer paying for both and flagged the app's own copy.
+  it("deterministic copy validates when the free item starts with an article", () => {
+    const contract = bogoOtherItemContract("latte", "The House Blend");
+    const validation = validateAiCopyAgainstOffer(deterministicFallbackCopy(contract), contract);
+
+    expect(validation.reasonCodes).toEqual([]);
+  });
+
+  it("still flags copy that makes the free item a second purchase", () => {
+    for (const [freeItem, headline] of [
+      ["The House Blend", "Buy a latte and the House Blend for $8"],
+      ["bagel", "Buy a latte and a bagel today"],
+    ]) {
+      const contract = bogoOtherItemContract("latte", freeItem);
+      const result = validateAiCopyAgainstOffer(
+        copy({
+          headline,
+          short_description: `${headline} at the counter.`,
+          push_notification: headline,
+          social_caption: `${headline} at the shop.`,
+        }),
+        contract,
+      );
+
+      expect(result.reasonCodes, headline).toContain("FREE_ITEM_ADDED_TO_PURCHASE");
+    }
+  });
+
+  it("accepts copy that names an article-prefixed item without its article", () => {
+    const contract = percentOffContract("THE RECON ROAST");
+
+    expect(contract.singleItemDiscount?.itemName).toBe("THE RECON ROAST");
+    // The generator drops the article; the validator must accept its own output.
+    expect(contract.canonicalOfferLine).toBe("Get 40% off one RECON ROAST");
+    expect(
+      validateAiCopyAgainstOffer(
+        copyText("Get 40% off one Recon Roast", "Save 40% on one Recon Roast."),
+        contract,
+      ).valid,
+    ).toBe(true);
+  });
+
+  it("still rejects copy that names a different item", () => {
+    const contract = percentOffContract("THE RECON ROAST");
+    const result = validateAiCopyAgainstOffer(
+      copyText("Get 40% off one espresso", "Save 40% on one espresso."),
+      contract,
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("MISSING_DISCOUNT_ITEM");
+  });
+
+  it("still flags copy that swaps the free item, but not copy that drops its article", () => {
+    // CHANGES_FREE_ITEM lives in the same-item BOGO validator, so exercise it there.
+    const contract = bogoSameItemContract("The House Blend");
+
+    const swapped = validateAiCopyAgainstOffer(
+      copy({
+        headline: "Buy one House Blend and get a free muffin",
+        short_description: "Buy one House Blend and the muffin is on us.",
+        push_notification: "Buy one House Blend and get a free muffin",
+        social_caption: "Buy one House Blend and get a free muffin at the shop.",
+      }),
+      contract,
+    );
+    expect(swapped.reasonCodes).toContain("CHANGES_FREE_ITEM");
+
+    // Naming the free item without its leading article is the same item, not a swap.
+    const withoutArticle = validateAiCopyAgainstOffer(
+      copy({
+        headline: "Buy one House Blend and get one house blend free",
+        short_description: "Buy one House Blend and the second house blend is on us.",
+        push_notification: "Buy one House Blend and get one house blend free",
+        social_caption: "Buy one House Blend and get one house blend free at the shop.",
+      }),
+      contract,
+    );
+    expect(withoutArticle.reasonCodes).not.toContain("CHANGES_FREE_ITEM");
+  });
+});
+
+describe("same-item reward typed as BUY_ONE_GET_SOMETHING_FREE", () => {
+  // Live 2026-07-26: a merchant built a chai deal with the SAME item as both the
+  // purchase and the reward but left the type on "get something free". The canonical
+  // line builder correctly wrote same-item phrasing ("Buy one X and get one free"),
+  // while the emitted dealType kept the raw form choice, so validateAiCopyAgainstOffer
+  // ran the different-item rulebook and rejected the app's own line as
+  // VAGUE_GET_ONE_FREE. Publish failed client-side ("We couldn't match this ad to your
+  // offer") before any server call.
+  function sameItemSomethingFree(
+    itemDescription: string,
+    requiredPurchaseQuantity = 1,
+    freeItemQuantity = 1,
+  ): DealOfferContract {
+    return contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity,
+      requiredItemDescription: itemDescription,
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity,
+      freeItemDescription: itemDescription,
+      freeItemRetailValueCents: 600,
+      freeItemDiscountPercent: 100,
+    });
+  }
+
+  function publishMechanicsCopy(contract: DealOfferContract) {
+    // Mirrors buildPublishMechanicsValidationCopy in lib/offer-version-publish.ts
+    // field for field (no social_caption): publish validates the LOCKED offer line,
+    // not the AI copy.
+    return {
+      headline: contract.canonicalOfferLine,
+      short_description: "Redeem at the participating location during the offer window.",
+      push_notification: contract.canonicalOfferLine,
+      terms_summary: contract.canonicalOfferLine,
+    };
+  }
+
+  it("normalizes a one-for-one same-item reward to BUY_ONE_GET_ONE_FREE", () => {
+    const contract = sameItemSomethingFree("THE SPICE COMMAND (CHAI LATTE)");
+    expect(contract.dealType).toBe("BUY_ONE_GET_ONE_FREE");
+    // Same-item AI rules: the item is named once, not twice.
+    expect(contract.aiRules.mustUseExactItemNames).toEqual(["THE SPICE COMMAND (CHAI LATTE)"]);
+  });
+
+  it("matches item names ignoring case and surrounding whitespace", () => {
+    const eligibility: DealEligibilityInput = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Latte",
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity: 1,
+      freeItemDescription: "  latte ",
+      freeItemRetailValueCents: 600,
+      freeItemDiscountPercent: 100,
+    };
+    expect(contractFor(eligibility).dealType).toBe("BUY_ONE_GET_ONE_FREE");
+  });
+
+  it("lets the publish-time mechanics validation pass for the offer line it generates", () => {
+    const contract = sameItemSomethingFree("THE SPICE COMMAND (CHAI LATTE)");
+    const result = validateAiCopyAgainstOffer(publishMechanicsCopy(contract), contract);
+    expect(result.reasonCodes).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it("leaves quantities other than one-for-one on the reward-item path", () => {
+    // validateBuyOneGetOneFree rejects "buy two" lines and reads "get two free" as a
+    // swapped reward, so only a literal buy-one-get-one may normalize.
+    expect(sameItemSomethingFree("latte", 1, 2).dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+    expect(sameItemSomethingFree("latte", 2, 1).dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+  });
+
+  it("still publishes same-item offers whose quantities keep them on the reward path", () => {
+    for (const contract of [sameItemSomethingFree("latte", 1, 2), sameItemSomethingFree("latte", 2, 1)]) {
+      const result = validateAiCopyAgainstOffer(publishMechanicsCopy(contract), contract);
+      expect(result.reasonCodes).not.toContain("VAGUE_GET_ONE_FREE");
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it("keeps genuinely different reward items on the reward-item path", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "grilled cheese sandwich",
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity: 1,
+      freeItemDescription: "fountain drink",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+    expect(contract.dealType).toBe("BUY_ONE_GET_SOMETHING_FREE");
+    expect(contract.aiRules.mustUseExactItemNames).toEqual(["grilled cheese sandwich", "fountain drink"]);
+  });
+
+  it("still rejects vague get-one-free copy when the reward is a DIFFERENT item", () => {
+    // The rule's whole purpose: copy must not hide which item is free.
+    const result = validateAiCopyAgainstOffer(
+      copyText("Buy a coffee and get one free"),
+      coffeeBagelContract,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("VAGUE_GET_ONE_FREE");
+  });
+});

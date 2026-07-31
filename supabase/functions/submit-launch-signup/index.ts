@@ -2,11 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { anonymousAbuseKeyHash } from "../_shared/anonymous-request-hash.ts";
 import { cleanEmail, cleanString } from "../_shared/business-onboarding-sync.ts";
 import { clientIpFromRequest } from "../_shared/client-ip.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const RATE_LIMIT_WINDOW_MINUTES = 60;
 const RATE_LIMIT_MAX_PER_IP = 6;
+const RATE_LIMIT_MAX_GLOBAL = 500;
 
 const ALLOWED_LOCALES = new Set(["en", "es", "ko"]);
 const ALLOWED_SOURCES = new Set(["website-hero", "website-customers", "website"]);
@@ -27,16 +30,20 @@ function json(req: Request, body: Record<string, unknown>, status = 200) {
   });
 }
 
-async function isRateLimited(supabase: DbClient, ip: string | null): Promise<boolean> {
-  if (!ip) return false;
-  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
-  const { count, error } = await supabase
-    .from("launch_signups")
-    .select("id", { count: "exact", head: true })
-    .eq("ip_address", ip)
-    .gte("created_at", windowStart);
+async function claimSubmissionSlot(supabase: DbClient, ip: string | null): Promise<boolean | null> {
+  const ipKey = await anonymousAbuseKeyHash("launch-signup-ip", ip || "unknown");
+  if (!ipKey) return null;
+  const { data, error } = await supabase.rpc("claim_submission_slot", {
+    p_bucket: "launch_signup",
+    p_email_key: null,
+    p_ip_key: ipKey,
+    p_window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+    p_max_email: 0,
+    p_max_ip: RATE_LIMIT_MAX_PER_IP,
+    p_max_global: RATE_LIMIT_MAX_GLOBAL,
+  });
   if (error) throw error;
-  return (count ?? 0) >= RATE_LIMIT_MAX_PER_IP;
+  return data === true;
 }
 
 serve(async (req) => {
@@ -75,14 +82,18 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Launch signups are not configured." }, 500);
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const requestIp = clientIpFromRequest(req);
-    if (await isRateLimited(supabase, requestIp)) {
+    const submissionSlot = await claimSubmissionSlot(supabase, requestIp);
+    if (submissionSlot === null) {
+      return json(req, { error: "Launch signups are temporarily unavailable." }, 503);
+    }
+    if (!submissionSlot) {
       return json(req, { error: "Too many requests. Please try again later." }, 429);
     }
 

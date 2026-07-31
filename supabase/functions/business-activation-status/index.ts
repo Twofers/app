@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -17,7 +18,7 @@ serve(async (req) => {
   if (req.method !== "POST") return json(req, { error: "Method not allowed." }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = tryGetServiceRoleKey();
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { error: "Activation status is not configured." }, 500);
   }
@@ -50,11 +51,24 @@ serve(async (req) => {
       .maybeSingle();
     if (subscriptionError) throw subscriptionError;
 
+    const { data: failedProviderEvent, error: failedProviderEventError } = await admin
+      .from("billing_provider_events")
+      .select("id")
+      .eq("provider", "stripe")
+      .eq("event_type", "checkout.session.completed")
+      .eq("processing_status", "failed")
+      .contains("payload", { data: { object: { id: sessionId } } })
+      .limit(1)
+      .maybeSingle();
+    if (failedProviderEventError) throw failedProviderEventError;
+
     const activated =
       subscription?.activation_checkout_session_id === sessionId &&
       ["trialing", "active", "past_due_grace"].includes(subscription?.app_access_status ?? "");
     const state = activated
       ? "active"
+      : failedProviderEvent?.id
+        ? "failed"
       : checkout.status === "expired" || checkout.status === "canceled" || checkout.status === "failed"
         ? checkout.status
         : "pending";

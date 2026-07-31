@@ -3,6 +3,8 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { applyPendingFullAccessGrant } from "../_shared/admin-full-access-grant.ts";
+import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -30,6 +32,49 @@ function friendlyStatus(status: string | null | undefined, accessLevel: string |
     return "You're approved. Finish setup now; AI tools and publishing unlock after you activate your 30-day trial.";
   }
   return "Your business profile is being reviewed. You can finish setup and preview an offer now. Publishing will unlock after verification.";
+}
+
+type ApplicationSummary = {
+  status: "none" | "pending" | "waitlisted" | "rejected";
+  submitted_at: string | null;
+};
+
+// Reports THIS confirmed identity's own most-recent application state so the app
+// can say "under review" / "waitlisted" / "not approved" instead of always
+// showing "apply". Safe to expose here (unlike the public submit endpoint, which
+// echoes nothing): the caller has already proven ownership of `email` via a
+// confirmed session, so this reveals no information about other accounts.
+async function readApplicationStatus(supabase: DbClient, email: string): Promise<ApplicationSummary> {
+  const { data, error } = await supabase
+    .from("business_applications")
+    .select("status, created_at")
+    .eq("email", email)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return { status: "none", submitted_at: null };
+  }
+  const row = data[0] as { status?: unknown; created_at?: unknown };
+  const raw = String(row.status ?? "");
+  const submittedAt = typeof row.created_at === "string" ? row.created_at : null;
+  if (raw === "waitlisted") return { status: "waitlisted", submitted_at: submittedAt };
+  if (raw === "rejected") return { status: "rejected", submitted_at: submittedAt };
+  // Approved tiers normally never reach the business:null branch (the claim
+  // would have materialized a business), but if the claim is momentarily behind,
+  // "pending" keeps the app on the recheck path until it resolves.
+  const pending = new Set([
+    "pending_review",
+    "pending_verification",
+    "review_required",
+    "trial_limited",
+    "trial_active",
+    "approved_not_billed",
+    "active",
+  ]);
+  if (pending.has(raw)) return { status: "pending", submitted_at: submittedAt };
+  // suspended / expired / archived (or unknown): the INSERT gate intentionally
+  // lets these re-apply, so surface "none" and let them submit again.
+  return { status: "none", submitted_at: submittedAt };
 }
 
 /**
@@ -69,7 +114,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = tryGetServiceRoleKey();
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!supabaseUrl || !serviceRoleKey) {
       return json(req, { error: "Business onboarding is not configured." }, 500);
@@ -95,10 +140,19 @@ serve(async (req) => {
     }
 
     const businessId = await ensureLinkedBusiness(supabaseAdmin, user.id, email);
+    // An approve_full_access grant approved before this business existed is
+    // applied here, immediately after the claim materialized it. Deliberately
+    // outside ensureLinkedBusiness: the claim RPC owns materialization, this
+    // owns access. No-ops unless an unspent marker is present, and never throws.
+    if (businessId) {
+      await applyPendingFullAccessGrant({ supabase: supabaseAdmin, businessId });
+    }
     if (!businessId) {
+      const application = await readApplicationStatus(supabaseAdmin, email);
       return json(req, {
         ok: true,
         business: null,
+        application,
         locations: [],
         contact_channels: [],
         slow_hours: [],

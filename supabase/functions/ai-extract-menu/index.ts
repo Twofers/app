@@ -15,6 +15,7 @@ import {
   MAX_MENU_ITEM_DESCRIPTION_CHARS,
   splitMenuItemDescription,
 } from "../_shared/menu-item-text.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
@@ -198,7 +199,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseServiceKey = getServiceRoleKey();
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const allowSyntheticWithoutKey =

@@ -52,12 +52,15 @@ describe("business application intake", () => {
     expect(source).toMatch(/const RATE_LIMIT_WINDOW_MINUTES\s*=\s*\d+/);
     expect(source).toMatch(/const RATE_LIMIT_MAX_PER_EMAIL\s*=\s*\d+/);
     expect(source).toMatch(/const RATE_LIMIT_MAX_PER_IP\s*=\s*\d+/);
-    // The throttle counts prior onboarding requests within a recent window,
-    // keyed by both the submitted email and the forwarded client IP.
-    expect(source).toMatch(/from\("business_onboarding_requests"\)/);
-    expect(source).toMatch(/\.eq\("owner_email", params\.email\)/);
-    expect(source).toMatch(/\.eq\("ip_address", params\.ip\)/);
-    expect(source).toMatch(/\.gte\("created_at", windowStart\)/);
+    expect(source).toMatch(/const RATE_LIMIT_MAX_GLOBAL_SUBMISSIONS\s*=\s*\d+/);
+    // The database RPC atomically checks and records HMAC-pseudonymized email
+    // and trusted client-IP keys; it must not persist raw identifiers.
+    expect(source).toMatch(/rpc\("claim_submission_slot"/);
+    expect(source).toMatch(/anonymousAbuseKeyHash\("business-application-email"/);
+    expect(source).toMatch(/anonymousAbuseKeyHash\("business-application-ip"/);
+    expect(source).toMatch(/p_email_key: emailKey/);
+    expect(source).toMatch(/p_ip_key: ipKey/);
+    expect(source).not.toMatch(/p_email_key: params\.email/);
     // Exceeding either ceiling returns HTTP 429. The client IP is derived from
     // trusted edge/CDN headers and validated as a real IP — never trusting the
     // attacker-controllable leftmost x-forwarded-for hop on this public endpoint.
@@ -71,17 +74,23 @@ describe("business application intake", () => {
     // A client-independent flood ceiling backstops evasion of the per-actor caps
     // (email/IP rotation) by bounding the costly admin alert + quick-approval mint.
     expect(source).toMatch(/const RATE_LIMIT_MAX_ALERTS_PER_WINDOW\s*=\s*\d+/);
-    expect(source).toMatch(/alertFloodExceeded/);
+    expect(source).toMatch(/claimAlertSideEffectSlot/);
+    expect(source).toMatch(/p_bucket: "business_application_alert"/);
+    expect(source).toMatch(/p_max_global: RATE_LIMIT_MAX_ALERTS_PER_WINDOW/);
     // A honeypot field short-circuits obvious bots before any DB work.
     expect(source).toMatch(/cleanString\(payload\.company_website/);
 
     // The rate-limit gate must run BEFORE the application row is inserted,
     // otherwise a flood still writes rows before being rejected.
-    const rateCheckAt = source.indexOf("await isRateLimited(");
+    const rateCheckAt = source.indexOf("await claimSubmissionSlot(");
     const insertAt = source.indexOf('from("business_applications").insert');
     expect(rateCheckAt).toBeGreaterThan(-1);
     expect(insertAt).toBeGreaterThan(-1);
     expect(rateCheckAt).toBeLessThan(insertAt);
+    const atomicMigration = read("supabase/migrations/20260824130000_atomic_submission_rate_limit.sql");
+    expect(atomicMigration).toMatch(/pg_advisory_xact_lock/);
+    expect(atomicMigration).toMatch(/p_max_global/);
+    expect(atomicMigration).toMatch(/GRANT EXECUTE[\s\S]*TO service_role/);
 
     // The throttle-counted onboarding request must be recorded BEFORE the costly
     // outbound admin alert, so network I/O stays out of the rate-limit window.
@@ -108,7 +117,7 @@ describe("business application intake", () => {
 
   it("keeps admin trial decisions server-authorized and audited", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/from\("admin_users"\)/);
+    expect(source).toMatch(/requireAdmin\(req, requestId, "prospect\.read"\)/);
     expect(source).toMatch(/from\("business_applications"\)/);
     expect(source).toMatch(/createOnboardingRequest/);
     expect(source).toMatch(/admin_business_application_approved_for_setup/);
@@ -117,9 +126,8 @@ describe("business application intake", () => {
     expect(source).not.toMatch(/admin_business_application_billing_sync_failed/);
     expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).toMatch(/billing_sync_warning/);
-    // Token-gated quick_preview PII disclosure is audited (reachable without an
-    // admin session), and quick_confirm re-runs the duplicate screen on the
-    // freshly claimed row before granting.
+    // Token-gated quick_preview is founder-session authorized and audited, and
+    // quick_confirm re-runs the duplicate screen on the freshly claimed row.
     expect(source).toMatch(/admin_business_application_quick_previewed/);
     expect(source).toMatch(/hasPossibleDuplicate/);
     expect(source).not.toMatch(/auth\.admin\.listUsers/);
@@ -129,8 +137,10 @@ describe("business application intake", () => {
   it("wires the admin trial request page to live list and decision actions", () => {
     const page = read("website/admin/trial-requests/index.html");
     const script = read("website/admin/trial-requests.js");
-    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-business-applications-endpoint/);
     expect(page).toMatch(/\/admin\/trial-requests\.js/);
+    expect(script).toMatch(/Shell\.endpoint\("admin-business-applications"\)/);
     expect(script).toMatch(/action: "list"/);
     expect(script).toMatch(/action: "decide"/);
     expect(script).toMatch(/approve_setup/);
@@ -162,17 +172,21 @@ describe("business application intake", () => {
 
   it("rejects an unrecognized action with a clear 400 instead of silently falling through to listApplications", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
-    expect(source).toMatch(/const KNOWN_ACTIONS = new Set\(\["list", "decide", "create", "verify_business", "quick_preview", "quick_confirm"\]\)/);
+    expect(source).toMatch(
+      /const KNOWN_ACTIONS = new Set\(\[[\s\S]*"list"[\s\S]*"resend_billing_link"[\s\S]*"quick_confirm"[\s\S]*\]\)/,
+    );
     expect(source).toMatch(/if \(!KNOWN_ACTIONS\.has\(action\)\) \{\s*\n\s*return json\(req, \{ ok: false, error: "Unknown action\.", request_id: requestId \}, 400\);/);
   });
 
   it("wires the founder field-invite page to the create action", () => {
     const page = read("website/admin/businesses/new/index.html");
     const script = read("website/admin/admin-new-trial.js");
-    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/\/admin\/admin-shell\.js/);
+    expect(page).not.toMatch(/data-admin-business-applications-endpoint/);
     expect(page).toMatch(/data-new-trial-form/);
     expect(page).toMatch(/name="business_name"/);
     expect(page).toMatch(/name="email"/);
+    expect(script).toMatch(/Shell\.endpoint\("admin-business-applications"\)/);
     expect(script).toMatch(/action: "create"/);
     expect(script).toMatch(/fields/);
     expect(script).toMatch(/billing_sync_warning/);

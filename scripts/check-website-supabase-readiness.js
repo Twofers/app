@@ -122,6 +122,16 @@ function assertNotIncludes(rel, text, needle, message) {
   if (text.includes(needle)) failures.push(`${rel}: ${message}`);
 }
 
+// Same reasoning as the derived styles.css/localization.js versions below: a
+// frozen `?v=` literal rots and fails the gate on a correct edit. For scripts
+// with a single including page there is nothing to cross-check against, so
+// assert only that the include carries SOME cache key — the behaviour that
+// version was standing in for is asserted directly elsewhere.
+function assertCacheBustedScript(rel, text, scriptPath, message) {
+  const pattern = new RegExp(`${scriptPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?v=[0-9a-z-]+`);
+  if (!pattern.test(text)) failures.push(`${rel}: ${message}`);
+}
+
 for (const rel of requiredFiles) {
   if (!exists(rel)) failures.push(`${rel}: required file is missing`);
 }
@@ -155,19 +165,34 @@ if (failures.length === 0) {
   const adminLoginHtml = read("website/admin/login/index.html");
   const adminGuardScript = read("website/admin/admin-guard.js");
   const styles = read("website/styles.css");
+  // Cache-key consistency. The real risk that docs/website-edit-checklist.md
+  // guards is a page left behind on an OLD ?v= after an asset edit, which
+  // serves stale CSS/JS to returning visitors. Pinning a literal version here
+  // just goes stale itself (it sat on 20260717-home-refresh while the site had
+  // moved to 20260722/20260723, failing this gate for no real reason), so
+  // derive the expected version from the home page and require every other
+  // page to agree with it.
+  const assetVersion = (asset) => {
+    const m = homePage.match(new RegExp(`/${asset.replace(".", "\\.")}\\?v=([0-9a-z-]+)`));
+    return m ? m[1] : null;
+  };
+  const expectedStyles = assetVersion("styles.css");
+  const expectedLocalization = assetVersion("localization.js");
   for (const rel of walkFiles("website").filter((file) => file.endsWith(".html"))) {
     const html = read(rel);
     assertNotIncludes(rel, html, "20260701-logo", "website pages must not point at stale stylesheet cache keys");
-    if (html.includes("/styles.css?v=")) {
-      assertIncludes(rel, html, "/styles.css?v=20260717-home-refresh", "website pages must load the current shared stylesheet version");
+    if (expectedStyles && html.includes("/styles.css?v=")) {
+      assertIncludes(rel, html, `/styles.css?v=${expectedStyles}`,
+        `website pages must all load the same stylesheet cache key as the home page (${expectedStyles})`);
     }
-    if (html.includes("/localization.js?v=")) {
-      assertIncludes(rel, html, "/localization.js?v=20260717-home-refresh", "public pages must load the current localization version");
+    if (expectedLocalization && html.includes("/localization.js?v=")) {
+      assertIncludes(rel, html, `/localization.js?v=${expectedLocalization}`,
+        `public pages must all load the same localization cache key as the home page (${expectedLocalization})`);
     }
   }
   assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
   assertIncludes("website/styles.css", styles, ".nav-menu-button", "shared stylesheet must support the mobile navigation menu");
-  assertIncludes("website/styles.css", styles, ".admin-shell .nav-links", "shared stylesheet must keep admin navigation available on mobile");
+  assertIncludes("website/styles.css", styles, ".admin-shell .admin-bottom-nav", "shared stylesheet must keep admin navigation available on mobile");
   assertIncludes("website/styles.css", styles, "data-mobile-cards", "shared stylesheet must support mobile admin table cards");
   assertIncludes("website/styles.css", styles, ".skip-link", "shared stylesheet must expose a keyboard skip link");
   assertIncludes("website/styles.css", styles, "--accent-dark: #b85020", "interactive orange must meet normal-text contrast");
@@ -203,12 +228,21 @@ if (failures.length === 0) {
     assertIncludes("website/localization.js", localizationScript, key, `localization script must cover ${key}`);
   }
   assertIncludes("website/404.html", read("website/404.html"), 'name="robots" content="noindex,follow"', "custom 404 must not be indexed");
-  assertIncludes("website/store-links.js", storeLinksScript, "ios: null", "iOS store CTA must stay hidden until a real listing exists");
+  // iOS shipped 2026-07-22, so the CTA is no longer meant to be hidden. Assert
+  // the real listing the same way the Android one is asserted; Dan confirmed on
+  // 2026-07-24 that the live store build resolves this link.
+  assertIncludes("website/store-links.js", storeLinksScript,
+    'ios: "https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303"',
+    "iOS store CTA must use the live App Store listing");
   assertIncludes("website/store-links.js", storeLinksScript, 'android: "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone"', "Android store CTA must use the verified Google Play listing");
   assertIncludes("website/business/claim/claim.js", claimScript, "setFormEnabled(false)", "claim form must stay disabled until the token preview succeeds");
   assertNotIncludes("website/admin/login/index.html", adminLoginHtml, 'name="remember" type="checkbox" checked', "persistent admin sessions must be opt-in");
-  assertIncludes("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js?v=20260712-session-hardening", "admin login must load the current session script version");
-  assertIncludes("website/business/claim/index.html", read("website/business/claim/index.html"), "/business/claim/claim.js?v=20260712-claim-hardening", "claim page must load the current guarded claim script version");
+  // The hardening these two used to pin by version string is asserted directly:
+  // opt-in `remember` above, and claim.js's setFormEnabled(false) below. All
+  // that is left to require here is a cache key, so a legitimate script edit
+  // (which the checklist requires bumping `?v=` for) does not turn the gate red.
+  assertCacheBustedScript("website/admin/login/index.html", adminLoginHtml, "/admin/admin-login.js", "admin login must load its session script with a cache key");
+  assertCacheBustedScript("website/business/claim/index.html", read("website/business/claim/index.html"), "/business/claim/claim.js", "claim page must load its guarded claim script with a cache key");
   assertIncludes("website/admin/admin-guard.js", adminGuardScript, "window.location.replace", "signed-out admin subroutes must return to login");
   for (const rel of walkFiles("website/admin").filter((file) => file.endsWith("/index.html") && !["website/admin/index.html", "website/admin/login/index.html"].includes(file))) {
     assertIncludes(rel, read(rel), "/admin/admin-guard.js", "admin subroutes must load the signed-out session guard");
@@ -426,7 +460,10 @@ if (failures.length === 0) {
 
   const fn = read("supabase/functions/submit-business-application/index.ts");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "company_website", "function must enforce honeypot");
-  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "SUPABASE_SERVICE_ROLE_KEY", "function must use service role insert");
+  // The ES256 migration moved every function off the raw SUPABASE_SERVICE_ROLE_KEY
+  // env read and onto the shared helper, which prefers PROJECT_SERVICE_ROLE_KEY
+  // and falls back to the legacy name. Assert the helper, not the old literal.
+  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "tryGetServiceRoleKey", "function must resolve the service role key through the shared helper");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, 'from("business_applications").insert', "function must insert applications");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "createOnboardingRequest", "function must save normalized onboarding requests");
   // This is a public, unauthenticated endpoint: it must never materialize a
@@ -444,7 +481,7 @@ if (failures.length === 0) {
   }
 
   const adminFn = read("supabase/functions/admin-dashboard-summary/index.ts");
-  assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, 'from("admin_users")', "admin summary must check admin_users");
+  assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "requireAdmin(", "admin summary must use the centralized admin guard");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "admin_dashboard_summary_viewed", "admin summary must write audit log");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "location_entitlements", "admin summary must use current entitlement source of truth");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "business_subscriptions", "admin summary must include business subscription risk counts");
@@ -459,13 +496,13 @@ if (failures.length === 0) {
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_success", "admin auth must audit successful logins");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_denied", "admin auth must audit denied logins");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=password", "admin auth must perform password grant server-side");
-  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support persistent browser sessions");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support server-managed session refresh");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminAuthFn)) {
     failures.push("supabase/functions/admin-auth-session/index.ts: admin auth must not depend on payment or AI secrets");
   }
 
   const adminAiFn = read("supabase/functions/admin-ai-usage/index.ts");
-  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, 'from("admin_users")', "admin AI usage must check admin_users");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, 'requireAdmin(req, requestId, "prospect.read")', "admin AI usage must use the centralized founder guard");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_reset", "admin AI usage must audit quota resets");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_resets", "admin AI usage must write reset ledger rows");
   assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "countAiQuotaUsage", "admin AI usage must use shared reset-aware quota counts");
@@ -474,7 +511,7 @@ if (failures.length === 0) {
   }
 
   const adminApplicationsFn = read("supabase/functions/admin-business-applications/index.ts");
-  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("admin_users")', "admin business applications must check admin_users");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'requireAdmin(req, requestId, "prospect.read")', "admin business applications must use the centralized founder guard");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("business_applications")', "admin business applications must read and update trial requests");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_for_setup", "admin business applications must audit setup approvals");
   assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "approved_not_activated", "admin business applications must leave approved businesses setup-only until activation");
@@ -493,10 +530,13 @@ if (failures.length === 0) {
   const adminDashboardPage = read("website/admin/app.html");
   const adminDashboardJs = read("website/admin/admin.js");
   const adminLoginPage = read("website/admin/login/index.html");
+  const adminShellJs = read("website/admin/admin-shell.js");
   assertIncludes("website/admin/app.html", adminDashboardPage, "data-mobile-cards", "admin dashboard tables must render as labeled cards on phones");
   assertIncludes("website/admin/admin.js", adminDashboardJs, "dataset.label", "admin dashboard dynamic rows must provide mobile table labels");
   assertIncludes("website/admin/login/index.html", adminLoginPage, "data:image/gif;base64", "admin MFA QR image must use a non-broken placeholder before setup");
-  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must point at the admin application endpoint");
+  assertIncludes("website/admin/admin-shell.js", adminShellJs, 'adminBusinessApplicationsEndpoint: "admin-business-applications"', "shared admin shell must own the admin application endpoint");
+  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "/admin/admin-shell.js", "trial requests page must load shared endpoint and session configuration");
+  assertNotIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must not duplicate the shared admin application endpoint");
   assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "/admin/trial-requests.js", "trial requests page must load the live admin workflow script");
   assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-mobile-cards", "trial requests table must render as labeled cards on phones");
 
@@ -505,8 +545,14 @@ if (failures.length === 0) {
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"list\"", "trial requests script must load applications from the backend");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"decide\"", "trial requests script must submit admin decisions");
   assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_setup", "trial requests script must expose setup-only approval");
-  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must retire limited auto-trial approval");
-  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must retire full auto-trial approval");
+  // Quoted exactly: the retired keys are the old auto-trial decisions, and a
+  // bare "approve_full" substring also matches the deliberate, admin-gated
+  // approve_full_access grant that replaced them.
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_limited"', "trial requests script must retire limited auto-trial approval");
+  assertNotIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_full"', "trial requests script must retire full auto-trial approval");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, '"approve_full_access"', "trial requests script must expose the no-payment full-access grant");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "trialDaysFor", "full-access grant must validate its day count before submitting");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "trial_days", "full-access grant must send the admin's day count");
 
   const quickApprovalPage = read("website/quick-approve-trial/index.html");
   const quickApprovalJs = read("website/quick-approve-trial/quick-approve.js");

@@ -10,17 +10,14 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
   </head>
   <body
     class="admin-shell"
-    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
-    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
   >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
         <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
-        <div class="nav-links"><a href="/admin">Overview</a><a href="/support">Support</a></div>
       </nav>
     </header>
     <main class="admin-main">
@@ -42,10 +39,6 @@
             <label>
               Password
               <input name="password" type="password" autocomplete="current-password" required />
-            </label>
-            <label class="check admin-session-choice">
-              <input name="remember" type="checkbox" />
-              <span>Keep me signed in on this browser</span>
             </label>
             <div class="admin-login-actions">
               <button type="submit">Sign in to admin</button>
@@ -88,6 +81,8 @@
         </article>
       </section>
     </main>
-    <script src="/admin/admin-login.js?v=20260712-session-hardening"></script>
+    <script src="/admin/qrcode-browser.js?v=20260728-local-qr"></script>
+    <script src="/admin/admin-shell.js?v=20260728-admin-ops"></script>
+    <script src="/admin/admin-login.js?v=20260728-local-qr"></script>
   </body>
 </html>

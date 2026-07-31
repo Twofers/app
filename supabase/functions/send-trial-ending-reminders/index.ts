@@ -16,6 +16,7 @@ import {
   resolveTrialReminderLocale,
   trialEndingPushScheduledForIso,
 } from "../_shared/trial-reminder-push.ts";
+import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_CANDIDATES = 500;
@@ -153,7 +154,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseServiceKey = getServiceRoleKey();
   const admin = createClient(supabaseUrl, supabaseServiceKey);
 
   if (!(await isAuthorized(admin, req.headers.get("x-cron-secret")))) {

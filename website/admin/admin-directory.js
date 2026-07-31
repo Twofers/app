@@ -1,44 +1,45 @@
 (() => {
-  const authEndpoint = document.body.dataset.adminAuthEndpoint;
-  const summaryEndpoint = document.body.dataset.adminSummaryEndpoint;
-  const businessApplicationsEndpoint = document.body.dataset.adminBusinessApplicationsEndpoint;
-  const promoAuthorizationEndpoint = document.body.dataset.adminPromoAuthorizationEndpoint;
+  const Shell = window.TwoferAdminShell;
+  const summaryEndpoint = Shell.endpoint("admin-dashboard-summary");
+  const businessApplicationsEndpoint = Shell.endpoint("admin-business-applications");
+  const promoAuthorizationEndpoint = Shell.endpoint("admin-promo-authorization");
   const ADMIN_ASSISTED_LABEL = "Recorded by Twofer on behalf of business";
-  const section = document.body.dataset.adminSection;
-  const tokenKey = "twofer_admin_access_token";
-  const refreshTokenKey = "twofer_admin_refresh_token";
-  const expiresAtKey = "twofer_admin_expires_at";
+  const section = document.body.dataset.adminSection === "offers" &&
+      new URLSearchParams(window.location.search).get("view") === "redemptions"
+    ? "redemptions"
+    : document.body.dataset.adminSection;
   const statusEl = document.querySelector("[data-admin-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
   const loginLink = document.querySelector("[data-admin-login-link]");
   let currentDirectoryRows = [];
   let directoryControlsState = { q: "", filters: {}, sortKey: "", dir: "asc" };
 
-  function sessionStorageSource() {
-    return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
+  if (document.body.dataset.adminSection === "offers") {
+    const redemptions = section === "redemptions";
+    const title = document.querySelector("[data-offers-page-title]");
+    const lede = document.querySelector("[data-offers-page-lede]");
+    const head = document.querySelector("[data-offers-table-head]");
+    if (title) title.textContent = redemptions ? "Redemptions" : "Offers";
+    if (lede) lede.textContent = redemptions
+      ? "Review completed redemptions from the canonical reporting facts."
+      : "Monitor live, inactive, scheduled, and expired offers across all businesses.";
+    if (head && redemptions) {
+      head.innerHTML = "<tr><th>Offer</th><th>Business</th><th>Redeemed</th><th>Method</th><th>Claimed</th><th>Action</th></tr>";
+    }
+    document.querySelectorAll("[data-offers-tab]").forEach((tab) => {
+      tab.classList.toggle("is-active", tab.dataset.offersTab === (redemptions ? "redemptions" : "offers"));
+    });
   }
 
   function syncNavForSession() {
-    const hasToken = Boolean(sessionStorageSource().getItem(tokenKey));
+    const hasToken = Shell.hasStoredToken();
     if (loginLink) loginLink.hidden = hasToken;
     if (signOutButton) signOutButton.hidden = !hasToken;
   }
 
   function clearSession() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
-      storage.removeItem(tokenKey);
-      storage.removeItem(refreshTokenKey);
-      storage.removeItem(expiresAtKey);
-    }
+    Shell.clearSession();
     syncNavForSession();
-  }
-
-  function storeSession(session, storage) {
-    storage.setItem(tokenKey, session.access_token);
-    if (session.refresh_token) storage.setItem(refreshTokenKey, session.refresh_token);
-    if (session.expires_in) {
-      storage.setItem(expiresAtKey, String(Date.now() + Number(session.expires_in) * 1000));
-    }
   }
 
   async function readJson(response) {
@@ -49,27 +50,8 @@
     }
   }
 
-  async function refreshSession(refreshToken, storage) {
-    const response = await fetch(authEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    const payload = await readJson(response);
-    if (!response.ok || !payload.ok || !payload.session?.access_token) throw new Error("Session refresh failed.");
-    storeSession(payload.session, storage);
-    return payload.session.access_token;
-  }
-
   async function getAccessToken() {
-    const storage = sessionStorageSource();
-    const token = storage.getItem(tokenKey);
-    const refreshToken = storage.getItem(refreshTokenKey);
-    const expiresAt = Number(storage.getItem(expiresAtKey) || "0");
-    if (!token) return null;
-    if (!refreshToken || !authEndpoint) return token;
-    if (expiresAt && expiresAt - Date.now() > 60000) return token;
-    return refreshSession(refreshToken, storage);
+    return Shell.getAccessToken();
   }
 
   function setStatus(message, tone = "info") {
@@ -514,7 +496,7 @@
         { label: "Business", value: (r) => r.name || r.id },
         { label: "Owner", value: (r) => r.owner_email || "" },
         { label: "Status", value: (r) => statusCell(r.status) },
-        { label: "Access", value: (r) => r.access_level || "" },
+        { label: "Access", value: (r) => formatOptionLabel(r.access_level) },
         { label: "Verification", value: (r) => statusCell(r.verification_status) },
         { label: "Risk", value: (r) => statusCell(r.risk_level) },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
@@ -560,6 +542,28 @@
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ],
     },
+    redemptions: {
+      selector: "[data-rows]",
+      dataKey: "redemptions",
+      emptyText: "No completed redemptions yet.",
+      noMatchText: "No matching redemptions. Clear filters to see all.",
+      searchFields: ["deal_title", "business_name", "redeem_method"],
+      filters: [
+        { key: "method", label: "Method", getValue: (r) => r.redeem_method || "unknown" },
+      ],
+      sortOptions: [
+        { key: "redeemed_at", label: "Redeemed", type: "date" },
+        { key: "business_name", label: "Business", type: "text" },
+      ],
+      columns: [
+        { label: "Offer", value: (r) => r.deal_title || r.deal_id || "" },
+        { label: "Business", value: (r) => r.business_name || r.business_id || "" },
+        { label: "Redeemed", value: (r) => formatDateTime(r.redeemed_at) },
+        { label: "Method", value: (r) => formatOptionLabel(r.redeem_method) },
+        { label: "Claimed", value: (r) => formatDateTime(r.claimed_at) },
+        { label: "Action", value: (r) => ({ href: `/admin/businesses/detail?businessId=${encodeURIComponent(r.business_id || "")}`, text: "Business" }) },
+      ],
+    },
     billing_events: {
       selector: "[data-rows]",
       dataKey: "billing_events",
@@ -576,7 +580,7 @@
         { key: "processing_status", label: "Status", type: "text" },
       ],
       columns: [
-        { label: "Event", value: (r) => r.event_type || "" },
+        { label: "Event", value: (r) => formatOptionLabel(r.event_type) },
         { label: "Provider", value: (r) => r.provider || "" },
         { label: "Status", value: (r) => statusCell(r.processing_status) },
         { label: "Received", value: (r) => formatDateTime(r.received_at) },
@@ -628,7 +632,7 @@
       fillTable("[data-launch-areas]", payload.launch_areas || [], [
         { label: "Area", value: (r) => r.name || "" },
         { label: "City", value: (r) => [r.city, r.state].filter(Boolean).join(", ") },
-        { label: "Status", value: (r) => r.status || "" },
+        { label: "Status", value: (r) => formatOptionLabel(r.status) },
         { label: "Timezone", value: (r) => r.timezone || "" },
       ], "No launch areas configured.");
       fillTable("[data-feature-flags]", payload.feature_flags || [], [
@@ -639,7 +643,7 @@
       ], "No feature flags configured.");
       fillTable("[data-admin-users]", payload.admin_users || [], [
         { label: "Email", value: (r) => r.email || "" },
-        { label: "Role", value: (r) => r.role || "" },
+        { label: "Role", value: (r) => formatOptionLabel(r.role) },
         { label: "Active", value: (r) => (r.is_active ? "Yes" : "No") },
         { label: "MFA", value: (r) => (r.require_mfa ? "Required" : "Optional") },
         { label: "Last login", value: (r) => formatDateTime(r.last_admin_login_at) },
@@ -655,14 +659,14 @@
       if (nameEl) nameEl.textContent = business ? business.name || business.id : "Business not found";
       if (metaEl) {
         metaEl.textContent = business
-          ? `Owner ${business.owner_email || "unknown"} | Status ${business.status || "unknown"} | Access ${business.access_level || "unknown"} | Verification ${business.verification_status || "unknown"} | Risk ${business.risk_level || "unknown"}`
+          ? `Owner ${business.owner_email || "unknown"} | Status ${formatOptionLabel(business.status)} | Access ${formatOptionLabel(business.access_level)} | Verification ${formatOptionLabel(business.verification_status)} | Risk ${formatOptionLabel(business.risk_level)}`
           : "Check the link from the Businesses page and try again.";
       }
       fillTable("[data-applications]", payload.applications || [], [
         { label: "Contact", value: (r) => r.contact_name || "" },
         { label: "Email", value: (r) => r.email || "" },
         { label: "Request status", value: (r) => statusCell(r.status) },
-        { label: "Requested access", value: (r) => r.access_tier || "" },
+        { label: "Requested access", value: (r) => formatOptionLabel(r.access_tier) },
         { label: "Approved trial days", value: (r) => r.trial_days ?? "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ], "No applications linked to this business.");
@@ -687,17 +691,65 @@
         },
         {
           label: "Source",
-          value: (r) => (r.recorded_on_behalf_label ? ADMIN_ASSISTED_LABEL : r.source || ""),
+          value: (r) => (r.recorded_on_behalf_label ? ADMIN_ASSISTED_LABEL : formatOptionLabel(r.source)),
         },
         { label: "Authorized", value: (r) => (r.authorized_at ? formatDateTime(r.authorized_at) : "") },
         { label: "Revoked", value: (r) => (r.revoked_at ? formatDateTime(r.revoked_at) : "") },
       ], "No locations for this business.");
       populatePromoLocations(payload.promo_materials || []);
       renderBusinessDrilldown(payload);
+      renderOnboardingDetail(payload.onboarding);
+      loadCommunicationHistory(business?.id || detailBusinessId());
       const viewOffersLink = document.querySelector("[data-view-offers-link]");
       if (viewOffersLink) {
         viewOffersLink.href = business?.name ? `/admin/offers?q=${encodeURIComponent(business.name)}` : "/admin/offers";
       }
+      document.querySelectorAll("[data-manage-account-link]").forEach((manageAccountLink) => {
+        manageAccountLink.href = business?.owner_id
+          ? `/admin/accounts?userId=${encodeURIComponent(business.owner_id)}`
+          : "/admin/accounts";
+      });
+    }
+  }
+
+  async function loadCommunicationHistory(businessId) {
+    if (!businessId || !document.querySelector("[data-owner-communications]")) return;
+    try {
+      const payload = await Shell.adminPost("admin-owner-email", { action: "list", business_id: businessId });
+      fillTable("[data-owner-communications]", payload.communications || [], [
+        { label: "Reason", value: (r) => formatOptionLabel(r.reason_category) },
+        { label: "Subject", value: (r) => r.subject || "" },
+        { label: "Status", value: (r) => statusCell(r.status) },
+        { label: "Created / sent", value: (r) => formatDateTime(r.sent_at || r.created_at) },
+      ], "No owner communications for this business.");
+    } catch {
+      fillTable("[data-owner-communications]", [], [], "Communication history is temporarily unavailable.");
+    }
+  }
+
+  function renderOnboardingDetail(onboarding) {
+    const section = document.querySelector("[data-business-onboarding]");
+    const progress = document.querySelector("[data-business-onboarding-progress]");
+    const checklist = document.querySelector("[data-business-onboarding-checklist]");
+    if (!section || !progress || !checklist) return;
+    section.hidden = !onboarding;
+    checklist.textContent = "";
+    if (!onboarding) return;
+    const completed = Number(onboarding.completed_count || 0);
+    const total = Number(onboarding.total || 9);
+    progress.textContent = `${completed} of ${total} steps complete`;
+    progress.setAttribute("aria-valuenow", String(completed));
+    progress.setAttribute("aria-valuemax", String(total));
+    for (const step of onboarding.checklist || []) {
+      const item = document.createElement("li");
+      item.className = step.complete ? "is-complete" : "";
+      const mark = document.createElement("span");
+      mark.className = "admin-onboarding-check";
+      mark.textContent = step.complete ? "✓" : "○";
+      const label = document.createElement("span");
+      label.textContent = step.label || formatOptionLabel(step.key);
+      item.append(mark, label);
+      checklist.appendChild(item);
     }
   }
 
@@ -780,12 +832,12 @@
         ? `Access mismatch: ${trialAndAccess.access_mismatch_note || "the application record does not match current app access."} Current app access controls what the owner can do.`
         : "";
     }
-    setText("[data-trial-request-status]", trialAndAccess?.trial_request_status || "—");
+    setText("[data-trial-request-status]", trialAndAccess?.trial_request_status ? formatOptionLabel(trialAndAccess.trial_request_status) : "—");
     setText(
       "[data-trial-request-created]",
       trialAndAccess?.trial_request_created_at ? formatDateTime(trialAndAccess.trial_request_created_at) : "—",
     );
-    setText("[data-app-access-status]", trialAndAccess?.app_access_status || "—");
+    setText("[data-app-access-status]", trialAndAccess?.app_access_status ? formatOptionLabel(trialAndAccess.app_access_status) : "—");
     setText("[data-trial-ends]", trialAndAccess?.trial_ends_at ? formatDateTime(trialAndAccess.trial_ends_at) : "—");
     setText(
       "[data-trial-days-remaining]",
@@ -999,6 +1051,15 @@
       });
     }
   }
+
+  document.querySelector("[data-detail-owner-email]")?.addEventListener("click", () => {
+    const businessId = detailBusinessId();
+    if (businessId) window.TwoferOwnerEmail?.open({ businessId, reason: "account_support" });
+  });
+  document.querySelector("[data-detail-owner-view]")?.addEventListener("click", () => {
+    const businessId = detailBusinessId();
+    if (businessId) window.TwoferOwnerView?.open({ businessId });
+  });
 
   syncNavForSession();
   initBackToCommandCenterLink();

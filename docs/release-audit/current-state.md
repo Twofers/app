@@ -77,7 +77,7 @@ This document reflects the repository after the launch-hardening pass. Routes an
 - **Supabase Auth** email/password (`(tabs)/auth`).
 - **Forgot / reset**: `forgot-password`, `reset-password` + `AuthRecoveryLinkHandler` in root layout.
 - **Sign out**: `supabase.auth.signOut()` from account screen.
-- **Delete account**: Consumers use Settings tab → **Delete my account**; business owners use Account tab → **Delete my account**. Both paths show a destructive confirmation, call Edge `delete-user-account` → `auth.admin.deleteUser`, and show a friendly alert plus a configured delete-account URL link on failure. Business-owner confirmation warns that the business, deals, and related claim history are also removed. See `docs/deployment-notes.md`.
+- **Delete account**: Consumers use Settings tab → **Delete my account**; business owners use Account tab → **Delete my account**. Both paths show a destructive confirmation and call Edge `delete-user-account`, which cancels every linked Stripe subscription before purging data and calling `auth.admin.deleteUser`. A Stripe cancellation failure leaves the account intact and returns a support-safe error. Business-owner confirmation warns that the business, deals, and related claim history are also removed. See `docs/deployment-notes.md`.
 
 ## Onboarding fields (launch scope)
 

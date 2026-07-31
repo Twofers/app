@@ -36,5 +36,43 @@ describe("category ad playbooks", () => {
     expect(block).toContain("CATEGORY PLAYBOOK");
     expect(block).toContain("coffee_cafe");
     expect(block).toContain("coffee run");
+    expect(block).toContain("Voice anchor: write like a friendly barista's chalkboard");
+    expect(block).toContain("Voice examples (tone and rhythm only");
+    expect(block).toContain('Headline "Second latte\'s on us"');
+  });
+
+  it("gives every category its own voice anchor and at least two voice examples", () => {
+    const representativeInputs = [
+      "coffee shop",
+      "juice bar",
+      "bakery",
+      "restaurant",
+      "wine bar",
+      "gym",
+      "massage",
+      "hair salon",
+      "services",
+      "pet grooming",
+      "auto repair",
+      "hvac contractor",
+      "dry cleaning",
+      "tax preparation",
+      "retail",
+      "florist",
+      "bowling alley",
+      "mystery category",
+    ];
+    const seen = new Set<string>();
+    for (const input of representativeInputs) {
+      const playbook = getCategoryAdPlaybook(input);
+      seen.add(playbook.normalizedCategory);
+      expect(playbook.voiceAnchor.length).toBeGreaterThan(10);
+      expect(playbook.voiceExamples.length).toBeGreaterThanOrEqual(2);
+      for (const example of playbook.voiceExamples) {
+        expect(example.headline.length).toBeLessThanOrEqual(28);
+        expect(example.headline).not.toMatch(/\b(savings|deals?|specials?|offers?)$/i);
+      }
+    }
+    expect(seen.size).toBe(18);
   });
 });

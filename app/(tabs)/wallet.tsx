@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
@@ -32,6 +32,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { useSaveBusinessPrompt } from "@/hooks/use-save-business-prompt";
 import { useSecondTick } from "@/hooks/use-second-tick";
 import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -146,6 +147,9 @@ export default function WalletScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const nowMs = useSecondTick();
+  const passParams = useLocalSearchParams<{ pass?: string | string[] }>();
+  const openPassParam = Array.isArray(passParams.pass) ? passParams.pass[0] : passParams.pass;
+  const passDeepLinkHandledRef = useRef(false);
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -162,6 +166,7 @@ export default function WalletScreen() {
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
   const [releasingClaimId, setReleasingClaimId] = useState<string | null>(null);
+  const { confirm, confirmModal } = useBrandedConfirm();
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
   const playRegisterSuccess = useRegisterSuccessSound();
@@ -362,7 +367,7 @@ export default function WalletScreen() {
 
   function openVerifyForClaim(row: ClaimRow) {
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     const dead = claimNotRedeemable(row, nowMs);
@@ -389,7 +394,7 @@ export default function WalletScreen() {
     }
     const activeClaim = claims.find((c) => c.deal_id === activeDealId);
     if (isDemoOffer(activeClaim?.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (refreshingQr) return;
@@ -428,7 +433,7 @@ export default function WalletScreen() {
 
   async function refreshClaimFromRow(row: ClaimRow) {
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (claimingRefreshId) return;
@@ -479,7 +484,7 @@ export default function WalletScreen() {
   async function shareWalletDeal(row: ClaimRow) {
     if (!shareDealEnabled || isSharing) return;
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     setIsSharing(true);
@@ -535,6 +540,22 @@ export default function WalletScreen() {
     const name = businessName(row);
     const place = business?.address?.trim() || business?.location?.trim() || "";
     return place ? `${name} - ${place}` : name;
+  }
+
+  // F-09: releasing is a forfeit, and it is not always reversible — a sold-out
+  // deal or one that has hit its daily cap cannot be claimed again. Confirm
+  // before giving the claim up.
+  function confirmReleaseWalletClaim(row: ClaimRow) {
+    if (row.claim_status !== "active" && row.claim_status !== "redeeming") return;
+    if (releasingClaimId) return;
+    confirm({
+      iconName: "remove-circle-outline",
+      title: t("consumerWallet.releaseConfirmTitle"),
+      message: t("consumerWallet.releaseConfirmBody"),
+      confirmLabel: t("consumerWallet.releaseConfirmCta"),
+      onConfirm: () => void releaseWalletClaim(row),
+      cancelLabel: t("consumerWallet.releaseKeepCta"),
+    });
   }
 
   async function releaseWalletClaim(row: ClaimRow) {
@@ -593,6 +614,23 @@ export default function WalletScreen() {
     return { active: a, ended: e };
   }, [claims, nowMs]);
 
+  // Deep link from the Google Wallet pass (`twofer://wallet?pass=1`): open the
+  // active claim's pass sheet so the manual double-tap redemption is reachable
+  // from the wallet card. Carries no claim id — a customer holds at most one
+  // active claim, which is the one the pass was built from. Fires once.
+  useEffect(() => {
+    if (openPassParam !== "1" || passDeepLinkHandledRef.current) return;
+    if (loading) return;
+    const target = active[0];
+    if (!target) {
+      // Nothing to open (already redeemed, or expired while the pass sat idle).
+      passDeepLinkHandledRef.current = true;
+      return;
+    }
+    passDeepLinkHandledRef.current = true;
+    setUseDealState({ row: target, confirmed: true });
+  }, [openPassParam, loading, active]);
+
   const stats = useMemo(() => {
     let saved = 0;
     for (const { row: c } of ended) {
@@ -608,7 +646,7 @@ export default function WalletScreen() {
   async function startUseDealFlow(row: ClaimRow) {
     setBanner(null);
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (row.claim_status === "redeeming") {
@@ -622,7 +660,7 @@ export default function WalletScreen() {
     const row = useDealState?.row;
     if (!row || useDealState.confirmed) return;
     if (isDemoOffer(row.deals)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       setUseDealState(null);
       return;
     }
@@ -945,7 +983,7 @@ export default function WalletScreen() {
               </NativePressable>
             ) : null}
             <NativePressable
-              onPress={() => void releaseWalletClaim(row)}
+              onPress={() => confirmReleaseWalletClaim(row)}
               disabled={rowIsDemo || releasingClaimId !== null || isRedeeming}
               accessibilityRole="button"
               accessibilityLabel={t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
@@ -1170,6 +1208,9 @@ export default function WalletScreen() {
           )}
           nowMs={nowMs}
           onClose={closeUseDealFlow}
+          dealId={passRow.deal_id}
+          businessId={passRow.deals?.business_id ?? null}
+          onManuallyRedeemed={() => void loadClaims()}
         />
       ) : null}
 
@@ -1187,9 +1228,14 @@ export default function WalletScreen() {
         onShare={shareDealEnabled && activeQrClaim ? () => void shareWalletDeal(activeQrClaim) : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
+        claimId={qrClaimId}
+        dealId={activeQrClaim?.deal_id ?? null}
+        businessId={activeQrClaim?.deals?.business_id ?? null}
+        onManuallyRedeemed={() => void loadClaims()}
       />
 
       {saveBusinessPromptElement}
+      {confirmModal}
     </View>
   );
 }

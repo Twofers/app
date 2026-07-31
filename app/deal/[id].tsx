@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "../../lib/supabase";
-import { claimDeal } from "../../lib/functions";
+import { claimDeal, getErrorCode } from "../../lib/functions";
 import { buildClaimDealTelemetry } from "../../lib/claim-telemetry";
 import { trackAppAnalyticsEvent } from "../../lib/app-analytics";
 import { Banner } from "../../components/ui/banner";
@@ -20,8 +20,13 @@ import { useColorScheme } from "../../hooks/use-color-scheme";
 import { useSaveBusinessPrompt } from "../../hooks/use-save-business-prompt";
 import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
-import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
+import { translateApiError, translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
+import {
+  isDealHiddenByRepeatPolicy,
+  loadBusinessRedemptionMap,
+  loadBusinessRepeatPolicies,
+} from "@/lib/repeat-claim-visibility";
 import {
   getCustomerPreferredDealLocale,
   getDeviceDealLocale,
@@ -178,7 +183,23 @@ export default function DealDetail() {
   const [claimsCount, setClaimsCount] = useState(0);
   /** True only when claimsCount came from the deal_claim_counts RPC (full total, not own-claims-only). */
   const [claimsCountReliable, setClaimsCountReliable] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBannerState] = useState<string | null>(null);
+  /**
+   * True when the banner is the "you already hold an active deal" conflict, so
+   * it can offer a one-tap route to the wallet instead of being a dead end.
+   */
+  const [bannerWalletAction, setBannerWalletAction] = useState(false);
+  /** Wrapper so every ordinary setBanner() call clears a stale wallet action. */
+  const setBanner = useCallback((message: string | null) => {
+    setBannerState(message);
+    setBannerWalletAction(false);
+  }, []);
+  /**
+   * True when this business's repeat-claim policy currently blocks this
+   * customer. The feed already hides these deals, but a push or a shared link
+   * lands here directly — without this the Claim button is a dead end.
+   */
+  const [repeatBlocked, setRepeatBlocked] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -238,7 +259,7 @@ export default function DealDetail() {
         })();
       },
     });
-  }, [deal, userId, brandedConfirm, performHideBusiness, goBack, t]);
+  }, [deal, userId, brandedConfirm, performHideBusiness, goBack, setBanner, t]);
 
   const handleQrHide = useCallback(() => {
     setQrVisible(false);
@@ -433,7 +454,7 @@ export default function DealDetail() {
     setDeal(dealData);
     setLoadStatus("ready");
     await loadClaimCount(dealData.id);
-  }, [id, loadClaimCount, t]);
+  }, [id, loadClaimCount, setBanner, t]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -455,6 +476,33 @@ export default function DealDetail() {
         .eq("business_id", deal.business_id)
         .maybeSingle();
       if (!cancelled) setIsFavorite(!!fav);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, deal?.business_id]);
+
+  // Repeat-claim policy for this customer at this business. Both loaders fail
+  // open (empty map on any error), so a lookup failure shows Claim and lets the
+  // server stay authoritative — same posture as the feed's visibility filter.
+  useEffect(() => {
+    const businessId = deal?.business_id;
+    if (!userId || !businessId) {
+      setRepeatBlocked(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const [policies, redemptions] = await Promise.all([
+        loadBusinessRepeatPolicies([businessId]),
+        loadBusinessRedemptionMap(userId, [businessId]),
+      ]);
+      if (cancelled) return;
+      setRepeatBlocked(
+        isDealHiddenByRepeatPolicy({
+          policy: policies.get(businessId) ?? null,
+          lastRedeemedAt: redemptions.get(businessId) ?? null,
+          nowMs: Date.now(),
+        }),
+      );
     })();
     return () => { cancelled = true; };
   }, [userId, deal?.business_id]);
@@ -546,7 +594,7 @@ export default function DealDetail() {
       }
       if (!deal) return;
       if (isDemoOffer(deal)) {
-        setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+        setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
         return;
       }
       if (isClaiming) return;
@@ -572,6 +620,7 @@ export default function DealDetail() {
       void loadClaimCount(deal.id);
     } catch (e: unknown) {
       const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
+      const code = getErrorCode(e);
       if (deal && userId) {
         const existing = await loadActiveClaimForDeal(deal.id, userId, 4);
         if (existing) {
@@ -582,7 +631,10 @@ export default function DealDetail() {
           return;
         }
       }
-      setBanner(translateKnownApiMessage(msg, t));
+      // The active deal is on another deal, so there is nothing to open here —
+      // point the customer at the wallet instead of stranding them on an error.
+      setBannerState(translateApiError({ code, message: msg }, t));
+      setBannerWalletAction(code === "CUSTOMER_ALREADY_HAS_ACTIVE_DEAL");
     } finally {
       setIsClaiming(false);
     }
@@ -590,7 +642,7 @@ export default function DealDetail() {
 
   async function viewQr() {
     if (deal && isDemoOffer(deal)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     if (activeClaim) {
@@ -648,7 +700,7 @@ export default function DealDetail() {
     if (!shareDealEnabled) return;
     if (!deal || isSharing) return;
     if (isDemoOffer(deal)) {
-      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
     setIsSharing(true);
@@ -753,7 +805,12 @@ export default function DealDetail() {
   const scheduleBlockReason = getDealClaimScheduleBlock(deal);
   const claimBlockedLabel =
     dealIsDemo
-      ? DEMO_OFFER_LABEL
+      ? t("demoOffer.label", { defaultValue: DEMO_OFFER_LABEL })
+      // Ahead of sold-out: "Sold out" would be misleading for a customer whose
+      // own history is the blocker. An existing active claim still wins over
+      // both (getDealDetailActionState checks hasActiveClaim first).
+      : repeatBlocked
+      ? t("dealDetail.repeatRestricted")
       : claimsCountReliable && deal.max_claims > 0 && remaining <= 0
       ? t("dealDetail.soldOut")
       : scheduleBlockReason
@@ -912,7 +969,14 @@ export default function DealDetail() {
           ) : null}
         </View>
       </View>
-      {banner ? <Banner message={banner} tone="error" /> : null}
+      {banner ? (
+        <Banner
+          message={banner}
+          tone="error"
+          onRetry={bannerWalletAction ? () => router.push("/(tabs)/wallet" as Href) : undefined}
+          actionLabel={bannerWalletAction ? t("commonUi.goToWallet") : undefined}
+        />
+      ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -1179,6 +1243,13 @@ export default function DealDetail() {
         onShare={shareDealEnabled ? handleShare : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
+        claimId={activeClaim?.id ?? null}
+        dealId={deal.id}
+        businessId={deal.business_id}
+        onManuallyRedeemed={() => {
+          setActiveClaim(null);
+          void loadClaimCount(deal.id);
+        }}
       />
 
       {saveBusinessPromptElement}

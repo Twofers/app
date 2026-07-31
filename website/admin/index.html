@@ -10,14 +10,14 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260722-store-badges" />
+    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
   </head>
   <!--
     Minimal signed-out shell (audit F-015): no internal section names, queue
     names, or admin endpoint config are shipped to signed-out visitors. When a
-    stored admin token exists, admin.js fetches /admin/app.html and injects the
-    dashboard; all privileged data still requires a server-verified admin
-    session either way.
+    server-sealed admin session is verified, admin.js fetches /admin/app.html
+    and injects the dashboard; all privileged data still requires a
+    server-verified admin session either way.
   -->
   <body class="admin-shell">
     <div data-admin-app-root>
@@ -37,12 +37,19 @@
 
       <main class="admin-main">
         <section class="admin-section" aria-label="Restricted access">
-          <h1>Restricted access</h1>
-          <p class="lede">Admin access is limited to active users in the server-side admin allowlist. Sign in to continue.</p>
+          <div class="admin-title-row">
+            <div>
+              <h1>Restricted access</h1>
+              <p class="lede">Admin access is limited to active users in the server-side admin allowlist. Sign in to continue.</p>
+            </div>
+          </div>
           <a class="button" href="/admin/login">Sign in</a>
         </section>
       </main>
     </div>
-    <script src="/admin/admin.js?v=20260811-admin-shell"></script>
+    <script src="/admin/admin-shell.js?v=20260728-admin-ops"></script>
+    <script src="/admin/owner-email.js?v=20260728-admin-ops"></script>
+    <script src="/admin/owner-view.js?v=20260728-admin-ops"></script>
+    <script src="/admin/admin.js?v=20260728-account-growth"></script>
   </body>
 </html>

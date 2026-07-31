@@ -1,6 +1,6 @@
 {
   "app": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "androidVersionCode": 49,
     "iosBuildNumber": null,
     "androidPackage": "com.unvmex2.twoforone",
@@ -36,14 +36,15 @@
     "apk": {}
   },
   "migrations": {
-    "count": 160,
-    "latest": "20260820190000_entire_order_scan_only_matches_basket_wording.sql"
+    "count": 189,
+    "latest": "20260824144000_revoke_nested_definer_helper_client_execute.sql"
   },
   "edgeFunctions": {
-    "count": 79,
+    "count": 81,
     "names": [
       "accept-business-terms",
       "activate-redemption-mode",
+      "admin-account-management",
       "admin-ai-cost-ledger-reset",
       "admin-ai-operating-report",
       "admin-ai-prompts",
@@ -56,6 +57,7 @@
       "admin-dashboard-summary",
       "admin-demand-proof",
       "admin-onboarding-review-ai",
+      "admin-owner-email",
       "admin-promo-authorization",
       "admin-prospect-enrich",
       "admin-prospect-import",
