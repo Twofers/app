@@ -56,6 +56,23 @@ if [[ -n "${BACKUP_S3_ENDPOINT_URL:-}" ]]; then
   s3_endpoint_args+=(--endpoint-url "$BACKUP_S3_ENDPOINT_URL")
 fi
 
+# Supabase-generated database passwords routinely contain characters that must
+# be percent-encoded inside a connection URI (#, :, @, /, ?). The first live run
+# failed with "password authentication failed" while the identical URI worked
+# from a client that decodes it itself, so do not depend on every client in the
+# chain decoding identically. Split the password out and hand it to libpq via
+# PGPASSWORD, leaving a URI that carries no password at all.
+if [[ "$SUPABASE_DB_URL" == *"@"* ]]; then
+  PGPASSWORD="$(node -e 'const u=new URL(process.env.SUPABASE_DB_URL); process.stdout.write(decodeURIComponent(u.password))')"
+  SUPABASE_DB_URL="$(node -e 'const u=new URL(process.env.SUPABASE_DB_URL); u.password=""; process.stdout.write(u.toString())')"
+  export PGPASSWORD
+  export SUPABASE_DB_URL
+  if [[ -z "$PGPASSWORD" ]]; then
+    echo "SUPABASE_DB_URL contains no password; set one or use PGPASSWORD directly." >&2
+    exit 2
+  fi
+fi
+
 work_dir="$(mktemp -d)"
 trap 'rm -rf -- "$work_dir"' EXIT
 backup_stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
