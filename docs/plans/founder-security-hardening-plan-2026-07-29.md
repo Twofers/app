@@ -22,15 +22,16 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 40 completed / 32 remaining (recounted directly from the
+**Checklist progress: 41 completed / 32 remaining (recounted directly from the
 checkboxes with `grep -c "^- \[x\]"`, 2026-07-31 evening; every figure in this
 file's history that was written from prose rather than counted has been
-wrong).** The 2026-07-31 passes completed four items — CodeQL triage (now 0
-open alerts on `main`), Dependabot config repair, the admin session-hardening
-deploy (approved and verified live), and the close-seven-PRs item, which
-Dependabot resolved itself. One `[DAN]` item was added in their place:
-dispose of the second Dependabot wave — five green PRs to merge, four to
-close, itemized with instructions in Phase 6. Both staged migrations were applied to
+wrong).** The 2026-07-31 passes completed five items: CodeQL triage (`main` now
+at **0 open alerts**, from 81), Dependabot config repair, the admin
+session-hardening deploy (approved, executed, verified live), the
+close-seven-PRs item that Dependabot resolved itself, and the second-wave
+disposition (five merged, two closed, two withdrawn automatically). One small
+`[DAN]` item remains from that thread — two green PRs that arrived after the
+list was written (#52, #53). Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
 plan cannot reach 100% from the repository" below for the item-by-item gate audit:
 20 of the remaining 32 need a founder provider credential, and the rest need a
@@ -884,9 +885,22 @@ blast radius and were missing:
       needed**: Dependabot closed all seven itself when the corrected config
       reached `main` (verified 2026-07-31, all show CLOSED). It then opened a
       second wave the same hour, which is the item below.
-- [ ] `[DAN]` **Dispose of the second Dependabot wave** (opened 2026-07-31 after
-      the config fix; every check status verified). Merge these five — all 8/8
-      green:
+- [x] `[DAN approved, DEV executed]` **Second Dependabot wave disposed —
+      2026-07-31.** Merged #49, #44, #27, #50, #51; closed #45 and #46 with
+      reasons on the PR. #47 and #48 needed no action — Dependabot withdrew them
+      itself the moment #49 landed and the scoped ignore rules took effect,
+      which is the second time today the corrected config cleaned up after
+      itself. `npm ci` run locally against the new lockfile; full suite green
+      (314 files, 2178 tests) on `supabase-js` 2.111.0. Two notes worth keeping:
+      #27 refused to merge on the first attempt with *"refusing to allow an
+      OAuth App to create or update workflow `.github/workflows/codeql.yml`
+      without `workflow` scope"* and succeeded once Dependabot rebased it, so
+      that error means "stale branch", not "you need a new token"; and the
+      codeql-action group bump left its pin comments reading `# v3` while
+      advancing the SHAs to v4.37.3 — corrected separately, because a stale
+      comment on a SHA pin is the whole readable part of the pin. The original
+      itemized list follows for the record.
+      ~~Merge these five — all 8/8 green:~~
       1. **#49** — the website-deploy record (docs + this plan; also carries the
          scoped-package ignore fix described below). Merge this one first so the
          plan on `main` stops claiming production is stale.
@@ -916,6 +930,13 @@ blast radius and were missing:
          both failing CI (2 and 4 failed checks). Real migrations, not bumps;
          close now and do them deliberately if ever wanted. Closing a
          Dependabot PR suppresses that version; the next major will reopen.
+- [ ] `[DAN]` **Two PRs opened after that list and are still waiting** (both
+      8/8 green, both trivial):
+      - **#52** — `actions/upload-artifact` 4.6.2 → 7.0.1, touching only
+        `.github/workflows/ios-screenshots.yml`. Same class as #27/#51, which
+        were merged; it simply arrived after the list was written.
+      - **#53** — corrects the codeql-action pin comments to `# v4.37.3`.
+        Comment-only, no SHA or behaviour change.
 - [ ] `[DAN]` Replace the broad classic GitHub token with fine-grained/hardware-backed
       access.
 - [x] `[DEV]` Stage an encrypted repo mirror outside GitHub that includes local-only
