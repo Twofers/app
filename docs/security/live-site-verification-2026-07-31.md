@@ -8,6 +8,12 @@ Method: `docs/website-edit-checklist.md` step 9, plus byte-level comparison of
 live responses against `origin/main`, plus header probes taken both through
 `www.twoferapp.com` (Cloudflare) and directly at the Vercel origin.
 
+> **Resolved the same day.** PR #43 merged (`08c44827`) and the site was
+> deployed to production at 19:0x UTC — deployment `dpl_A82VWVwNAPbNBoms2XkDJARXkNpy`,
+> `readyState: READY`, `target: production`. All four gap markers flipped; see
+> "After the deploy" at the end. The rest of this document describes the state
+> that was found, and is kept as the record of how it was found.
+
 ## Headline
 
 **The public site is current and healthy. The admin console is not — production
@@ -143,10 +149,38 @@ both JSON-LD blocks parse (`MobileApplication`, `FAQPage`); all six
 `data-store-cta` anchors resolve to the correct store URLs; `apple-itunes-app`
 meta present; mobile nav button present; `h1` scales 90.9 px → 54.4 px.
 
-## Recommended order
+## After the deploy — 2026-07-31
 
-1. ~~Bump the `?v=` on every versioned include `d4e027ed` changed.~~ Done
-   2026-07-31 — all six, `?v=20260731-admin-session`.
-2. Deploy from `website/` per checklist step 8 — this is the gated step.
-3. Re-run the four checks in the deploy-gap table; all four should flip.
-4. Then Phase 5's three items are true of production, not just of `main`.
+Merged PR #43 (`08c44827`) at Dan's instruction, confirmed `website/` on disk was
+byte-identical to `origin/main`, and deployed from `website/` per checklist §8.
+Deployment `dpl_A82VWVwNAPbNBoms2XkDJARXkNpy`, `readyState: READY`,
+`target: production`.
+
+Every marker in the deploy-gap table flipped:
+
+| Check | Before | After |
+| --- | --- | --- |
+| `POST /api/admin/session` | 404 | **403** — the endpoint exists and rejects an unauthenticated call |
+| `POST /api/admin/proxy` | 404 | **403** |
+| `/admin/login/` "Keep me signed in" | present | **absent** (0 occurrences; inputs are email + password only) |
+| `/admin/*` `Cache-Control` | `public, max-age=0, must-revalidate` | **`no-store, private, max-age=0`** |
+
+That last row also settles the false lead recorded above: the header applies
+fine to static `/admin` paths. It was never a Vercel quirk — the deployed
+config simply predated the rule.
+
+All six re-versioned scripts now serve `?v=20260731-admin-session` and are
+byte-identical to `main`: `accounts.js` (11,382), `admin-guard.js` (679),
+`admin-login.js` (6,132), `admin-shell.js` (15,357), `admin.js` (41,680),
+`quick-approve.js` (4,804). `styles.css` and `localization.js` are unchanged at
+109,370 and 114,449 bytes.
+
+Nothing regressed: production e2e green across en/es/ko, the four infra files
+still 200 with correct content types, unknown paths still 404, and the login
+page renders with no broken images, no Supabase token in `localStorage`, and the
+admin shell loaded.
+
+Phase 5's three `[DEV]` items are now true of production, not just of `main`.
+
+Still open, unchanged by this deploy: `/admin` behind Cloudflare Access, and the
+Cloudflare analytics beacon that CSP blocks on every admin page load.

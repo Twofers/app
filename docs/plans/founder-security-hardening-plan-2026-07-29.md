@@ -22,13 +22,15 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 38 completed / 33 remaining (recounted directly from the
-checkboxes with `grep -c "^- \[x\]"`, 2026-07-31; every figure in this file's
-history that was written from prose rather than counted has been wrong).**
-The 2026-07-31 pass added two `[DEV]` items already done (CodeQL triage,
-Dependabot config repair) and two `[DAN]` items: close the seven unmergeable
-Dependabot PRs, and deploy the admin session hardening that is in `main` but
-not in production. Both staged migrations were applied to
+**Checklist progress: 40 completed / 32 remaining (recounted directly from the
+checkboxes with `grep -c "^- \[x\]"`, 2026-07-31 evening; every figure in this
+file's history that was written from prose rather than counted has been
+wrong).** The 2026-07-31 passes completed four items — CodeQL triage (now 0
+open alerts on `main`), Dependabot config repair, the admin session-hardening
+deploy (approved and verified live), and the close-seven-PRs item, which
+Dependabot resolved itself. One `[DAN]` item was added in their place:
+dispose of the second Dependabot wave — five green PRs to merge, four to
+close, itemized with instructions in Phase 6. Both staged migrations were applied to
 production on 2026-07-30, closing the `business_locations` item. See "Why this
 plan cannot reach 100% from the repository" below for the item-by-item gate audit:
 20 of the remaining 32 need a founder provider credential, and the rest need a
@@ -41,7 +43,7 @@ GoTrue change specification, and the takeover-exercise worksheet are complete.
 credential, a provider console, or an explicit production approval — plus the two
 new findings below, which are staged and waiting on approval rather than on work.
 
-Counts below are the open checkboxes in each group and sum to 33, except the
+Counts below are the open checkboxes in each group and sum to 32, except the
 offline-key row, which is tracked in prose rather than as a checkbox.
 
 | Remaining group | Items left | Who must act | Added recurring cost |
@@ -52,8 +54,8 @@ offline-key row, which is tracked in prose rather than as a checkbox.
 | **Backup: verify the offline key copy** | 1 | A USB copy exists (2026-07-31, unverified). One `age-keygen -y` from the drive confirms it decrypts the archives | $0 |
 | **New findings awaiting approval** | 1 | Diagnose the founder hotmail identity (the `business_locations` fix is applied and confirmed) | $0 |
 | **CodeQL alert triage** | 0 | **Done 2026-07-31.** All 81 alerts triaged; the 2 in shipped code fixed with tests; the rest excluded by committed config | $0 |
-| **Dependabot PR triage** | 1 | Founder closes the 7 unmergeable PRs; the config that produced them is fixed | $0 |
-| **Website deploy gap** | 1 | Phase 5's admin session hardening is in `main` but not in production; deploying is founder-gated | $0 |
+| **Dependabot/CodeQL aftermath** | 1 | The 7 unmergeable PRs auto-closed when the fixed config landed; CodeQL is at 0 open alerts. One item left: founder disposes of the second Dependabot wave (merge 5 green PRs, close 4) — exact list in the Phase 6 note | $0 |
+| **Website deploy gap** | 0 | **Closed 2026-07-31.** Phase 5's admin session hardening is deployed and verified in production | $0 |
 | Admin site, GitHub, Vercel, DNS, and email | 7 | Founder choices/approvals and provider-console changes | $0 where provider free tiers permit |
 | Founder machine and recovery exercise | 4 | Founder vaults local credentials and verifies device protection; joint recovery drill | $0 |
 | Future custom-hostname portability | 1 | Deferred until a separate cost decision | Not approved |
@@ -200,6 +202,19 @@ PRs #34, #33, #32, #31, #30, #28, #26 should be closed; #27
 (`actions/checkout` → v7) passes its checks and is safe to merge. Nothing was
 merged or closed on Dan's behalf.
 
+**Aftermath, measured after the #43 merge (2026-07-31 evening):** CodeQL on
+`main` is at **0 open alerts** (was 81 — the two fixes closed theirs, the
+excluded paths closed the other 79 automatically). Dependabot **closed all
+seven unmergeable PRs itself** and opened a second wave under the corrected
+config: #44 (the `sdk-independent-updates` group working as intended) plus
+#50/#51 (grouped/single Actions bumps) are green and mergeable, while #47/#48
+exposed one remaining config gap — `react-native-*` does not match scoped
+`@react-native-community/*` names, so two Expo-SDK-pinned majors slipped
+through with green-but-meaningless checks (CI runs no native build). The
+ignore list now covers the three scoped gaps found by auditing
+`expo/bundledNativeModules.json` against `package.json`. Disposition of the
+whole wave is a single `[DAN]` item in Phase 6.
+
 ### Why this plan cannot reach 100% from the repository
 
 Audited item by item on 2026-07-29 (second pass). Every remaining box falls into
@@ -240,12 +255,12 @@ Two consequences of that merge, both accepted knowingly:
   accident rather than by configuration. The public site is current and healthy
   (styles.css and localization.js byte-identical to `main`, production e2e green
   across en/es/ko, 42-route UI crawl clean, all headers and infra files live).
-  **The admin console is not.** Production still runs the deployment made before
-  `d4e027ed`, so the entire admin session hardening is undeployed:
-  `/api/admin/session` and `/api/admin/proxy` return 404, and the live login page
-  still offers "Keep me signed in on this browser" — which stores a Supabase
-  refresh token in the browser, the exact condition the sealed-cookie work
-  removes. See the note on Phase 5 below.
+  The admin console was **two days stale** — production still ran the deployment
+  made before `d4e027ed`, so the entire admin session hardening was missing:
+  `/api/admin/session` and `/api/admin/proxy` returned 404 and the login page
+  still offered "Keep me signed in on this browser", which stores a Supabase
+  refresh token in the browser. **Fixed the same day**: six versioned scripts
+  re-versioned, PR #43 merged, deployed, and all four markers verified flipped.
 - **The release-gate CI workflow is now active on PRs.** Setting `SUPABASE_URL`
   (previously unset) un-skipped its live probes; `live-probes` passed on the
   merge. Read-only, and a net improvement, but it was a side effect rather than
@@ -809,18 +824,17 @@ blast radius and were missing:
 
 ## Phase 5 — Admin session hardening (website)
 
-> **Committed, not deployed — measured 2026-07-31.** All three `[x] [DEV]` items
-> below are true of `main` and false of production. The commit carrying them
-> (`d4e027ed`, 2026-07-29 22:01 UTC) postdates the last production deploy
-> (2026-07-29 00:41 UTC) and merging to `main` did not trigger a new one. Proof
-> and the pre-deploy `?v=` bump this needs:
-> `docs/security/live-site-verification-2026-07-31.md`. Deploying is the gated
-> step in `docs/website-edit-checklist.md` §8.
+> **DEPLOYED 2026-07-31.** These items spent two days true of `main` and false
+> of production: `d4e027ed` (2026-07-29 22:01 UTC) postdated the last deploy
+> (00:41 UTC the same day), and merging to `main` does not trigger one. Found,
+> re-versioned, and shipped on 2026-07-31 —
+> deployment `dpl_A82VWVwNAPbNBoms2XkDJARXkNpy`, `READY`/`production`. All four
+> gap markers verified flipped. Record:
+> `docs/security/live-site-verification-2026-07-31.md`.
 
 - [x] `[DEV]` Add `Cache-Control: no-store` to `/admin(.*)` now (one-line vercel.json
       change; CSP/Referrer-Policy already exist — do not rebuild them).
-      *(In `main`; production still serves Vercel's static default because the
-      deployed `vercel.json` predates the change.)*
+      *(Live 2026-07-31: `/admin/` returns `no-store, private, max-age=0`.)*
 - [ ] `[DAN]` Move admin console to `admin.twoferapp.com` behind Cloudflare Access
       (founder identity only).
 - [x] `[DEV]` Replace browser-stored Supabase tokens with a same-origin backend session:
@@ -829,15 +843,16 @@ blast radius and were missing:
 - [x] `[DEV]` Fresh TOTP for destructive/security-sensitive actions.
 - [x] `[DEV]` Document and enforce in the release runbook: no auto-deploy of the admin site from an unprotected branch — exact reviewed
       commit, manual promotion.
-- [ ] `[DAN]` **Deploy the admin session hardening.** Everything above is in
-      `main` and none of it is in production (verified 2026-07-31). The
-      cache-busting prerequisite is done: all six versioned includes `d4e027ed`
-      changed now carry `?v=20260731-admin-session` across 23 pages — six, not
-      the two the commit's line stats suggested, found by diffing each live file
-      against `main`. What remains is the gated deploy from `website/` per
-      checklist §8, then re-checking that `/api/admin/session` stops returning
-      404, the login page loses its "Keep me signed in" checkbox, and `/admin/*`
-      carries `no-store`.
+- [x] `[DAN approved, DEV executed]` **Deploy the admin session hardening —
+      done 2026-07-31.** All six versioned includes `d4e027ed` changed were
+      re-versioned to `?v=20260731-admin-session` across 23 pages first (six,
+      not the two the commit's line stats suggested — found by diffing each live
+      file against `main`). Deployed from `website/` per checklist §8 after
+      merging PR #43. Verified: `/api/admin/session` and `/api/admin/proxy`
+      moved 404 → 403, the login page lost its "Keep me signed in" checkbox,
+      `/admin/*` now carries `no-store, private, max-age=0`, all six scripts are
+      byte-identical to `main`, and production e2e plus the infra sweep stayed
+      green.
 
 ## Phase 6 — GitHub, Vercel, DNS, email
 
@@ -865,9 +880,42 @@ blast radius and were missing:
       SDK 54 app) and `github/codeql-action` sub-actions were split across PRs
       that cannot pass CI alone.
       `docs/security/dependabot-pr-triage-2026-07-31.md`.
-- [ ] `[DAN]` Close the seven unmergeable Dependabot PRs (#34, #33, #32, #31,
-      #30, #28, #26); #27 (`actions/checkout` → v7) is safe to merge. The
-      corrected config reopens what still applies on the next scheduled run.
+- [x] ~~`[DAN]` Close the seven unmergeable Dependabot PRs~~ — **no action was
+      needed**: Dependabot closed all seven itself when the corrected config
+      reached `main` (verified 2026-07-31, all show CLOSED). It then opened a
+      second wave the same hour, which is the item below.
+- [ ] `[DAN]` **Dispose of the second Dependabot wave** (opened 2026-07-31 after
+      the config fix; every check status verified). Merge these five — all 8/8
+      green:
+      1. **#49** — the website-deploy record (docs + this plan; also carries the
+         scoped-package ignore fix described below). Merge this one first so the
+         plan on `main` stops claiming production is stale.
+      2. **#44** — `sdk-independent-updates` group: `@supabase/supabase-js`
+         2.100.1→2.111.0, `date-fns`, `playwright`, `country-flag-icons`,
+         `react-native-worklets` 0.5.1→0.5.2 (patch). This is where dependency
+         security fixes actually land. After merging, run `npm install` on the
+         dev machine; the app picks it up at the next rebuild.
+      3. **#27** — `actions/checkout` 4.4.0→7.0.1 (SHA pin preserved).
+      4. **#50** — `codeql-action` group, all three sub-actions to 4.37.3
+         together — the grouping fix working as designed; this also clears the
+         runner's Node-20 deprecation warning.
+      5. **#51** — `actions/setup-node` 4.4.0→7.0.0.
+      Close these four:
+      6. **#47** (`@react-native-community/datetimepicker` →9.1.0) and
+         **#48** (`@react-native-async-storage/async-storage` →3.1.1) — both
+         pinned by Expo SDK 54; their green checks are misleading because CI
+         runs vitest/typecheck, not a native build. The first ignore config
+         missed them: `react-native-*` does not match scoped `@…` names. Fixed
+         in #49 (adds `@react-native-community/*`,
+         `@react-native-async-storage/*`, `eslint-config-expo` — an audit of
+         `expo/bundledNativeModules.json` against `package.json` found exactly
+         these three gaps). Closing is optional-but-tidy: once #49 merges,
+         Dependabot auto-closes both on its next weekly run (Monday 13:00
+         America/Chicago).
+      7. **#45** (`eslint` 9→10) and **#46** (`react-i18next` 16→17) — majors,
+         both failing CI (2 and 4 failed checks). Real migrations, not bumps;
+         close now and do them deliberately if ever wanted. Closing a
+         Dependabot PR suppresses that version; the next major will reopen.
 - [ ] `[DAN]` Replace the broad classic GitHub token with fine-grained/hardware-backed
       access.
 - [x] `[DEV]` Stage an encrypted repo mirror outside GitHub that includes local-only
