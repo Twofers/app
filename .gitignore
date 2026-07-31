@@ -100,3 +100,4 @@ set-signing-creds.ps1
 # This repository is PUBLIC and secret-scanning non-provider patterns are off,
 # so a B2 application key here would not be caught on push. Never track it.
 /security/
+/key.txt
