@@ -830,11 +830,14 @@ blast radius and were missing:
 - [x] `[DEV]` Document and enforce in the release runbook: no auto-deploy of the admin site from an unprotected branch — exact reviewed
       commit, manual promotion.
 - [ ] `[DAN]` **Deploy the admin session hardening.** Everything above is in
-      `main` and none of it is in production (verified 2026-07-31). Bump `?v=`
-      for `admin-shell.js` (22 admin pages) and `admin-login.js` first, then
-      deploy from `website/` per checklist §8, then re-check that
-      `/api/admin/session` stops returning 404, the login page loses its
-      "Keep me signed in" checkbox, and `/admin/*` carries `no-store`.
+      `main` and none of it is in production (verified 2026-07-31). The
+      cache-busting prerequisite is done: all six versioned includes `d4e027ed`
+      changed now carry `?v=20260731-admin-session` across 23 pages — six, not
+      the two the commit's line stats suggested, found by diffing each live file
+      against `main`. What remains is the gated deploy from `website/` per
+      checklist §8, then re-checking that `/api/admin/session` stops returning
+      404, the login page loses its "Keep me signed in" checkbox, and `/admin/*`
+      carries `no-store`.
 
 ## Phase 6 — GitHub, Vercel, DNS, email
 
