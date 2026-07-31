@@ -983,6 +983,16 @@ blast radius and were missing:
 - [ ] Sweep local secret files: filename/tracked-state inventory is complete; Dan must identify,
       minimize, and vault `.env.development.local`, Play service-account JSON,
       gh token, EAS session, adb keys — inventory, minimize, vault the rest.
+      **Signing-key half largely resolved 2026-07-31**
+      (`docs/security/android-signing-key-identification-2026-07-31.md`): no
+      keystore is tracked or has ever been committed; the four
+      `@unvmex2__twoforone*.jks` files are **byte-identical**, so there are two
+      distinct keys on this machine, not five; and the shipped upload cert is
+      `9E:05:0E:94:…:2C:93`, read off a real build with `apksigner` and matched
+      to assetlinks fingerprint #2 — #1 is Google's Play App Signing key, which
+      means losing the upload key is recoverable through Play rather than
+      fatal. One founder command per keystore (store password required) names
+      the live one; the doc has both commands ready to paste.
 - [ ] Password manager for all provider logins; no browser-stored passwords for the
       founder accounts.
 
