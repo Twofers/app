@@ -31,7 +31,15 @@ jobs:
       - name: Install signed distro backup tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y age postgresql-client awscli
+          sudo apt-get install -y age postgresql-client
+          # awscli is deliberately NOT installed via apt. Ubuntu 24.04 dropped it
+          # from the archive ("Package 'awscli' has no installation candidate",
+          # exit 100), and GitHub-hosted runners already ship AWS CLI v2. Assert
+          # the tools this job depends on are actually present rather than
+          # discovering it halfway through a backup.
+          aws --version
+          age --version
+          pg_dump --version
       - name: Materialize the Supabase database CA, when provided
         env:
           BACKUP_DB_ROOT_CERT_PEM: ${{ secrets.BACKUP_DB_ROOT_CERT_PEM }}
