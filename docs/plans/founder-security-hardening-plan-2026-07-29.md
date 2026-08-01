@@ -22,7 +22,7 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 42 completed / 31 remaining (recounted directly from the
+**Checklist progress: 44 completed / 29 remaining (recounted directly from the
 checkboxes with `grep -c "^- \[x\]"`, 2026-07-31 evening; every figure in this
 file's history that was written from prose rather than counted has been
 wrong).** The 2026-07-31 passes completed five items: CodeQL triage (`main` now
@@ -883,38 +883,48 @@ blast radius and were missing:
 - [ ] `[DAN]` Decide repo visibility (currently PUBLIC — full backend + admin design
       exposed; note making it private does NOT scrub history, and gitleaks CI already
       guards new commits).
-- [ ] `[DAN]` Protect `main` (include administrators): block force-push + deletion,
+- [x] `[DAN]` Protect `main` (include administrators): block force-push + deletion,
       require CI/tests/secret-scan/security gates.
+      **Done 2026-07-31.** Ruleset `main-protection`, enforcement `active`,
+      target `branch`, **bypass list empty** — so it applies to the founder too,
+      which is what "include administrators" asked for. Verified by API rather
+      than by screenshot:
+      ```
+      gh api repos/Twofers/app/rules/branches/main --jq '[.[].type]'
+        ["deletion","non_fast_forward","pull_request","required_status_checks"]
+        required contexts: ["check","secret-scan"]
+      ```
+      `analyze` (CodeQL) was deliberately **not** made a required check: it does
+      run on every PR to `main` today, but a required check that ever fails to
+      trigger blocks merges permanently and needs a console visit to unstick.
+      Revisit once the check has a longer track record.
 - [x] `[DEV]` Stage Dependabot configuration + CodeQL; pin GitHub Actions to commit
       SHAs; verify downloaded tool checksums.
-- [ ] `[DAN]` Approve/merge the staged GitHub controls and enable live Dependabot
-      security updates. The read-only snapshot currently shows the repository
-      setting disabled; CodeQL is not live until its workflow reaches `main`.
-      **Correction (measured 2026-07-31, replacing an earlier note here that
-      said "both are live"):** CodeQL is live and Dependabot *version updates*
-      are live — those are the scheduled bumps driven by
-      `.github/dependabot.yml`, and they are what produced the two PR waves.
-      Dependabot **security updates are still disabled**, which is a different
-      switch and the one this item is about. Measured, not inferred:
+- [x] `[DAN]` Approve/merge the staged GitHub controls and enable live Dependabot
+      security updates. **Done 2026-07-31**, after a correction: an earlier note
+      here claimed both controls went live with the PR #25 merge. Only half was
+      true — CodeQL and Dependabot *version* updates were live (those are the
+      `.github/dependabot.yml` bumps that produced the two PR waves), while
+      Dependabot **security** updates, a different switch, were off. Enabled
+      along with the **Dependency graph**, which turned out to be the
+      prerequisite gating the rest, plus grouped security updates and private
+      vulnerability reporting. Verified:
       ```
       gh api repos/Twofers/app --jq '.security_and_analysis'
-        dependabot_security_updates: disabled
-        secret_scanning:             enabled
-        secret_scanning_push_protection: enabled
-      gh api repos/Twofers/app/automated-security-fixes
-        {"enabled": false, "paused": false}
-      gh api repos/Twofers/app/vulnerability-alerts    -> HTTP 404 (alerts off)
+        dependabot_security_updates: enabled
+        secret_scanning: enabled | secret_scanning_push_protection: enabled
+      gh api repos/Twofers/app/automated-security-fixes -> {"enabled":true,"paused":false}
+      gh api -i repos/Twofers/app/vulnerability-alerts  -> HTTP 204
       ```
-      So nothing is currently watching for published CVEs in the dependency
-      tree; `npm audit` run by hand is the only coverage. This also sharpens
-      the caveat in the Dependabot triage doc — the `ignore` rules cannot be
-      suppressing security PRs for Expo packages, because no security PRs are
-      being generated at all. Enable at
-      **Settings → Code security → Dependabot alerts**, then **Dependabot
-      security updates**. Free on a public repository.
-      The good news in the same query: secret scanning *and* push protection
-      are both on, so a credential committed by mistake is blocked at push
-      time rather than found afterwards.
+      **The alert volume was badly over-predicted from `npm audit`.** Audit
+      reported 21 (1 high, 19 moderate, 1 low); Dependabot reports **2** —
+      `uuid` (medium, runtime, missing buffer bounds check when `buf` is
+      supplied) and `esbuild` (low, dev-server only). The gap is that `npm
+      audit` counts each transitive path separately, so one Expo advisory
+      appeared nineteen times, and it flags dev-tree paths Dependabot does not
+      consider reachable. The high-severity `brace-expansion` reaches the tree
+      only through eslint, a devDependency, and does not appear at all. Worth
+      remembering before quoting `npm audit` totals as a risk figure.
 - [x] `[DEV]` Triage the whole first CodeQL scan (81 alerts, not the 20 recorded
       earlier). Two genuine findings in shipped Edge Function code fixed with
       regression tests (`js/bad-tag-filter` in `site-import.ts`,
