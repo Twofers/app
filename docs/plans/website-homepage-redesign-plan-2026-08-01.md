@@ -1,15 +1,14 @@
 # Homepage redesign — evaluation + implementation plan (2026-08-01)
 
-Status: DEPLOYED TO PRODUCTION (2026-08-01, Dan approved "deploy it") — all
-phases built same day with defaults D1–D4, every automated check green
-(`check:website-ui` 42 routes × 2 viewports, `test:e2e` en/es/ko ×2 including
-against production, `check:website-i18n`, `check:i18n`), §9 live verification
-passed in full. QA captures in
-`qa-artifacts/website-homepage-redesign-2026-08-01/`. Remaining: **commit**
-(Dan-gated; ~50 modified + 4 new files sit uncommitted on
-`security/web-attack-hardening-2026-07-31` — move to their own branch).
-D3 used its documented fallback (DOM-composed poster); swapping in a
-pipeline-generated image later is a one-file change.
+Status: COMPLETE — DEPLOYED + COMMITTED (2026-08-01). All phases built same
+day with defaults D1–D4, every automated check green (`check:website-ui` 42
+routes × 2 viewports, `test:e2e` en/es/ko ×2 including against production,
+`check:website-i18n`, `check:i18n`), §9 live verification passed in full.
+Committed as `0b632f63` on branch `website/homepage-redesign-2026-08-01`
+(not pushed — pushing needs its own approval). QA captures in
+`qa-artifacts/website-homepage-redesign-2026-08-01/`. D3 used its documented
+fallback (DOM-composed poster); swapping in a pipeline-generated image later
+is a one-file change.
 
 Goal (from Dan's brief): make `www.twoferapp.com`'s main page look like it was
 designed by a top-tier human web team for a large company with a real design
@@ -303,9 +302,10 @@ pages**; `localization.js` bumps hit its 22.
       Bricolage+Inter confirmed loading on prod, e2e suite green against
       `https://www.twoferapp.com` (en/es/ko), `/s/AAAAAAA` renders the
       shared-offer fallback correctly. `<lastmod>` already 2026-08-01.
-- [ ] Commit only when Dan asks (repo rule; work currently sits on
-      `security/web-attack-hardening-2026-07-31` — put website work on its
-      own branch when committing).
+- [x] Commit only when Dan asks — approved and committed 2026-08-01 as
+      `0b632f63` on dedicated branch `website/homepage-redesign-2026-08-01`
+      (58 files; the unrelated pre-existing admin-ops plan edit was left
+      uncommitted). Not pushed — pushing needs its own approval.
 
 ## 6. Guardrails (do not regress)
 
