@@ -5,7 +5,7 @@ day with defaults D1–D4, every automated check green (`check:website-ui` 42
 routes × 2 viewports, `test:e2e` en/es/ko ×2 including against production,
 `check:website-i18n`, `check:i18n`), §9 live verification passed in full.
 Committed as `0b632f63` on branch `website/homepage-redesign-2026-08-01`
-(not pushed — pushing needs its own approval). QA captures in
+and pushed to origin 2026-08-01 (no PR opened yet). QA captures in
 `qa-artifacts/website-homepage-redesign-2026-08-01/`. D3 used its documented
 fallback (DOM-composed poster); swapping in a pipeline-generated image later
 is a one-file change.
@@ -305,7 +305,7 @@ pages**; `localization.js` bumps hit its 22.
 - [x] Commit only when Dan asks — approved and committed 2026-08-01 as
       `0b632f63` on dedicated branch `website/homepage-redesign-2026-08-01`
       (58 files; the unrelated pre-existing admin-ops plan edit was left
-      uncommitted). Not pushed — pushing needs its own approval.
+      uncommitted). Pushed to origin on Dan's approval 2026-08-01.
 
 ## 6. Guardrails (do not regress)
 
