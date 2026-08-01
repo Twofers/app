@@ -83,4 +83,10 @@ describe("composed ad card EAS rollout profile guards", () => {
       }
     }
   });
+
+  it("enables the exact localization approval UI in production", () => {
+    const productionEnv = resolveProfileEnv("production");
+    expect(productionEnv.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED).toBe("true");
+    expect(productionEnv.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED).toBe("true");
+  });
 });
