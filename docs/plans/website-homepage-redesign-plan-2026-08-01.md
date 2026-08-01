@@ -359,6 +359,18 @@ passes, so same-name cache poisoning can't occur.
   not weakened for a proper noun.
 - **Checklist updated** (§3): new `home-motion.js` row + the new-filename
   rule for images/fonts.
+- **Public-copy guard (caught by CI, 2026-08-01)**: `supabase/functions/
+  _shared/prospect-command-center-source.test.ts` asserts that the joined copy
+  of `website/index.html`, `website/business/start-trial/index.html`,
+  `website/localization.js`, and `scripts/check-website-ui-crawl.js` does
+  **not** match `/BOGO|2-for-1|2 for 1|2x1/i`. The first poster headline
+  ("2 for 1 croissants") violated it. Fixed the copy, not the guard: the
+  poster headline now carries the mechanic spelled out ("Buy one, get one
+  free") and the sub-line names the item ("Fresh-baked croissants"), ×3
+  locales. Spelled-out "two-for-one" is allowed and is what the App Store
+  copy already ships -- only the numeral/BOGO shorthands are banned. Mini
+  frames switched from ellipsis truncation to a 2-line clamp so the longer
+  es/ko strings do not clip.
 - **Display font swap (2026-08-01, after first deploy)**: Dan rejected
   Bricolage Grotesque; display face is now **Fraunces** (variable v38, latin +
   latin-ext + OFL, `--font-display` token swap + retuned weights/tracking for
