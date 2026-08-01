@@ -10,6 +10,7 @@ import {
   type BusinessBillingProfileInput,
 } from "../_shared/stripe-business-billing.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { adminBillingAccessGranted, bearerTokenFromRequest } from "../_shared/stripe-admin-gate.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -26,10 +27,6 @@ async function activeAdminRole(supabase: any, userId: string): Promise<string | 
     .maybeSingle();
   if (error) throw error;
   return data?.is_active ? safeGetString(data.role) : null;
-}
-
-function adminCanBackfill(role: string | null): boolean {
-  return role === "owner" || role === "admin" || role === "finance" || role === "developer";
 }
 
 function billingInputFromRow(row: Record<string, unknown>): BusinessBillingProfileInput {
@@ -69,8 +66,13 @@ serve(async (req) => {
     if (userError || !user) return json(req, { error: "Unauthorized." }, 401);
     if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
 
+    // H-2: admin backfill requires the founder-lock + MFA (AAL2) bar, not merely
+    // an active admin_users role.
     const adminRole = await activeAdminRole(supabaseAdmin, user.id);
-    if (!adminCanBackfill(adminRole)) return json(req, { error: "Forbidden." }, 403);
+    const accessToken = bearerTokenFromRequest(req);
+    if (!adminBillingAccessGranted({ userId: user.id, role: adminRole, accessToken })) {
+      return json(req, { error: "Forbidden." }, 403);
+    }
 
     let body: Record<string, unknown>;
     try {

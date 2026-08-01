@@ -5,6 +5,7 @@ import {
   isPastRedeemDeadline,
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { clientIpFromRequest } from "../_shared/client-ip.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { parseShortCodeScanValue } from "../_shared/wallet-pass-content.ts";
 import { syncWalletPassForUser } from "../_shared/wallet-pass-sync.ts";
@@ -96,11 +97,12 @@ serve(async (req) => {
     /** Service role — failed_redeem_attempts is RLS default-deny (service role only). */
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const clientIp = (() => {
-      const fwd = req.headers.get("x-forwarded-for");
-      const first = fwd?.split(",")[0]?.trim();
-      return first || req.headers.get("x-real-ip") || null;
-    })();
+    // Trusted client IP: prefers edge/CDN headers a client cannot append to and
+    // otherwise takes the RIGHTMOST valid x-forwarded-for hop. The old leftmost-hop
+    // derivation was attacker-controlled, letting a caller rotate the value per
+    // request to stay under the per-IP lockout below (see the business-scoped
+    // ceiling that backstops IP rotation).
+    const clientIp = clientIpFromRequest(req);
 
     // 🔐 Get authenticated business user
     const {
@@ -165,6 +167,16 @@ serve(async (req) => {
     // >= 10 failed attempts in the last 5 minutes for this business (and IP,
     // when one is available) → 429 before any code lookup happens.
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const tooManyFailures = () =>
+      new Response(
+        JSON.stringify({ error: "Too many failed attempts. Try again in a few minutes." }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+
+    // Per-(business, IP) lockout: >= 10 failures in 5 minutes for the resolved IP.
     let lockoutQuery = supabaseAdmin
       .from("failed_redeem_attempts")
       .select("*", { count: "exact", head: true })
@@ -177,13 +189,23 @@ serve(async (req) => {
     if (lockoutErr) {
       console.error("[redeem-token] lockout check failed:", lockoutErr);
     } else if (failedCount !== null && failedCount >= 10) {
-      return new Response(
-        JSON.stringify({ error: "Too many failed attempts. Try again in a few minutes." }),
-        {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return tooManyFailures();
+    }
+
+    // Client-independent business ceiling: backstops IP rotation. Even a caller
+    // spoofing a fresh x-forwarded-for per request cannot exceed this business-wide
+    // failure budget, because it ignores ip_address entirely. Set well above the
+    // per-IP cap so legitimate multi-terminal merchants are unaffected.
+    const BUSINESS_FAILURE_CEILING = 60;
+    const { count: businessFailedCount, error: ceilingErr } = await supabaseAdmin
+      .from("failed_redeem_attempts")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", business.id)
+      .gte("attempted_at", fiveMinutesAgo);
+    if (ceilingErr) {
+      console.error("[redeem-token] business ceiling check failed:", ceilingErr);
+    } else if (businessFailedCount !== null && businessFailedCount >= BUSINESS_FAILURE_CEILING) {
+      return tooManyFailures();
     }
 
     /** Best-effort failure log feeding the lockout above. Never blocks the response. */

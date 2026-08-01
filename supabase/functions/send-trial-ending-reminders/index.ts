@@ -17,6 +17,7 @@ import {
   trialEndingPushScheduledForIso,
 } from "../_shared/trial-reminder-push.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { constantTimeEqual } from "../_shared/constant-time-equal.ts";
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_CANDIDATES = 500;
@@ -50,7 +51,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 async function isAuthorized(admin: any, provided: string | null): Promise<boolean> {
   const envSecret = Deno.env.get("CRON_SECRET");
-  if (envSecret && provided && provided === envSecret) return true;
+  if (envSecret && provided && constantTimeEqual(provided, envSecret)) return true;
   if (!provided) return false;
 
   try {

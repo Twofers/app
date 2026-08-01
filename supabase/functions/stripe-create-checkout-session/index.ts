@@ -10,6 +10,7 @@ import {
 } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { adminBillingAccessGranted, bearerTokenFromRequest } from "../_shared/stripe-admin-gate.ts";
 import {
   ensureStripeCustomerForBusiness,
   type BusinessBillingProfileInput,
@@ -70,17 +71,23 @@ async function activeAdminRole(supabase: any, userId: string): Promise<string | 
   return data?.is_active ? safeGetString(data.role) : null;
 }
 
-function adminCanCreateCheckout(role: string | null): boolean {
-  return role === "owner" || role === "admin" || role === "finance";
-}
-
-async function userCanBillBusiness(supabase: any, businessId: string, userId: string, source: BillingSource): Promise<{
+async function userCanBillBusiness(
+  supabase: any,
+  businessId: string,
+  userId: string,
+  source: BillingSource,
+  accessToken: string,
+): Promise<{
   ok: boolean;
   adminRole: string | null;
+  adminGranted: boolean;
 }> {
   const adminRole = await activeAdminRole(supabase, userId);
-  if (source === "admin") return { ok: adminCanCreateCheckout(adminRole), adminRole };
-  if (adminRole && adminCanCreateCheckout(adminRole)) return { ok: true, adminRole };
+  // Admin surface requires the full founder-lock + MFA bar (H-2), not just an
+  // active admin_users role.
+  const adminGranted = adminBillingAccessGranted({ userId, role: adminRole, accessToken });
+  if (source === "admin") return { ok: adminGranted, adminRole, adminGranted };
+  if (adminGranted) return { ok: true, adminRole, adminGranted };
 
   const { data: business, error: businessError } = await supabase
     .from("businesses")
@@ -88,7 +95,7 @@ async function userCanBillBusiness(supabase: any, businessId: string, userId: st
     .eq("id", businessId)
     .maybeSingle();
   if (businessError) throw businessError;
-  if (business?.owner_id === userId) return { ok: true, adminRole: null };
+  if (business?.owner_id === userId) return { ok: true, adminRole: null, adminGranted: false };
 
   const { data: member, error: memberError } = await supabase
     .from("business_members")
@@ -99,7 +106,7 @@ async function userCanBillBusiness(supabase: any, businessId: string, userId: st
     .in("role", ["owner", "manager"])
     .maybeSingle();
   if (memberError) throw memberError;
-  return { ok: Boolean(member?.id), adminRole: null };
+  return { ok: Boolean(member?.id), adminRole: null, adminGranted: false };
 }
 
 /**
@@ -325,12 +332,13 @@ serve(async (req) => {
       if (userError || !user) return jsonResponse(req, { error: "Unauthorized." }, 401);
       if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
       userId = user.id;
-      const authz = await userCanBillBusiness(supabaseAdmin, businessId, user.id, requestedSource);
+      const accessToken = bearerTokenFromRequest(req);
+      const authz = await userCanBillBusiness(supabaseAdmin, businessId, user.id, requestedSource, accessToken);
       if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
       adminRole = authz.adminRole;
-      // "admin" only with a verified active admin role; everything else is the
-      // public website surface regardless of what the body claimed.
-      source = requestedSource === "admin" && adminCanCreateCheckout(authz.adminRole) ? "admin" : "website";
+      // "admin" only with a founder-lock + MFA-verified admin session (H-2);
+      // everything else is the public website surface regardless of the body.
+      source = requestedSource === "admin" && authz.adminGranted ? "admin" : "website";
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);

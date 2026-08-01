@@ -165,6 +165,19 @@ serve(async (req) => {
       }
     }
 
+    // Web-attack review 2026-07-31, finding M-4: reserve the single-use slot in
+    // one atomic conditional UPDATE BEFORE doing any work, so two concurrent
+    // POSTs on the same token cannot each create an application/approval record.
+    // Fails closed: if this call did not win a use, the link is spent.
+    const { data: consumedUse, error: consumeError } = await supabaseAdmin.rpc(
+      "consume_business_claim_link_use",
+      { p_token_hash: tokenHash, p_accepted_by_user_id: acceptedByUserId },
+    );
+    if (consumeError) throw consumeError;
+    if (consumedUse !== true) {
+      return json(req, { error: "This claim link has already been used." }, 410);
+    }
+
     const normalized = normalizeFromTarget(target.row, ownerEmail, contactName, phone);
     const { data: application, error: applicationError } = await supabaseAdmin
       .from("business_applications")
@@ -207,14 +220,8 @@ serve(async (req) => {
       .update({ onboarding_request_id: onboardingRequestId })
       .eq("id", application.id);
 
-    await supabaseAdmin
-      .from("business_claim_links")
-      .update({
-        uses_count: Number(link.uses_count) + 1,
-        accepted_by_user_id: acceptedByUserId,
-        accepted_at: new Date().toISOString(),
-      })
-      .eq("id", link.id);
+    // uses_count / accepted_by_user_id / accepted_at were already set atomically
+    // by consume_business_claim_link_use above (M-4).
 
     if (target.type === "prospect") {
       await supabaseAdmin.from("business_prospects").update({ status: "claimed" }).eq("id", target.row.id as string);

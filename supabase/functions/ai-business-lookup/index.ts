@@ -293,6 +293,30 @@ serve(async (req) => {
           reason_code: capabilities.reason_code,
         });
       }
+      // Web-attack review 2026-07-31, finding M-1: the owner path previously had no
+      // rate limit, so an onboarded owner could loop lookups and burn the Google
+      // Places bill. Apply the same trailing-window cap the applicant path uses.
+      const since = new Date(Date.now() - APPLICANT_LOOKUP_WINDOW_MS).toISOString();
+      const { count: recentLookups, error: rateError } = await admin
+        .from("system_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_type", APPLICANT_LOOKUP_EVENT)
+        .eq("metadata->>actor_user_id", user.id)
+        .gte("created_at", since);
+      if (!rateError && typeof recentLookups === "number" && recentLookups >= APPLICANT_LOOKUP_LIMIT) {
+        logLookup("owner_rate_limited", { recentLookups });
+        return jsonResponse(corsHeaders, 429, {
+          error: "You've reached the lookup limit for now. Try again later or enter details manually.",
+          error_code: "BUSINESS_LOOKUP_RATE_LIMITED",
+        });
+      }
+      await admin.from("system_events").insert({
+        event_type: APPLICANT_LOOKUP_EVENT,
+        severity: "info",
+        source: "mobile_app",
+        message: "Owner business lookup.",
+        metadata: { actor_user_id: user.id },
+      });
     } else if (!Array.isArray(ownedBusinesses) || ownedBusinesses.length === 0) {
       // Prospective applicant with no business row yet. The old gate hard-required
       // owning an approved business, which blocked the lookup for exactly the

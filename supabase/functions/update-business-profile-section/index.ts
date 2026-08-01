@@ -18,6 +18,7 @@ import {
 } from "../_shared/business-identity-lock.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { sanitizeOrFilterValue } from "../_shared/postgrest-or-filter.ts";
 
 type Payload = {
   business_id?: unknown;
@@ -69,7 +70,7 @@ async function assertCanEdit(
     .from("business_members")
     .select("id,role,status")
     .eq("business_id", businessId)
-    .or(`user_id.eq.${userId},invited_email.eq.${email}`)
+    .or(`user_id.eq.${userId},invited_email.eq.${sanitizeOrFilterValue(email)}`)
     .maybeSingle();
   if (memberError) throw memberError;
   const memberRow = member as { status?: string; role?: string } | null;

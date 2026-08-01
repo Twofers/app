@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { enforceAnonReadRateLimit } from "../_shared/anon-read-rate-limit.ts";
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -36,6 +37,15 @@ serve(async (req) => {
 
   try {
     const admin = createClient(supabaseUrl, serviceRoleKey);
+    // M-5: bound unauthenticated polling of this 3-query endpoint per IP.
+    const { limited } = await enforceAnonReadRateLimit(admin, req, {
+      surface: "business-activation-status",
+      actorLimit: 120,
+      globalLimit: 20000,
+      windowSeconds: 900,
+    });
+    if (limited) return json(req, { error: "Too many requests. Please slow down." }, 429);
+
     const { data: checkout, error: checkoutError } = await admin
       .from("stripe_checkout_sessions")
       .select("business_id,status,updated_at")

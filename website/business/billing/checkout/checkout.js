@@ -45,6 +45,20 @@
     }
   }
 
+  // Only follow https redirects to a Stripe-hosted checkout domain. Blocks an
+  // arbitrary/`javascript:`/phishing redirect if the checkout API is ever
+  // compromised or misconfigured. Web-attack review 2026-07-31, finding F6.
+  function isTrustedCheckoutUrl(value) {
+    try {
+      const url = new URL(String(value));
+      if (url.protocol !== "https:") return false;
+      const host = url.hostname.toLowerCase();
+      return host === "checkout.stripe.com" || host.endsWith(".stripe.com");
+    } catch {
+      return false;
+    }
+  }
+
   async function start() {
     const token = tokenFromPath();
     if (!endpoint || !token) {
@@ -59,9 +73,16 @@
       });
       const payload = await readJson(response);
 
-      if (response.ok && payload.ok && payload.url) {
+      if (response.ok && payload.ok && payload.url && isTrustedCheckoutUrl(payload.url)) {
         render("Redirecting to checkout", "Taking you to secure Stripe checkout…", "Redirecting…");
         window.location.href = payload.url;
+        return;
+      }
+      if (response.ok && payload.ok && payload.url) {
+        // Server returned a URL we do not trust as a checkout destination.
+        // Refuse rather than follow an arbitrary (possibly javascript:/phishing)
+        // redirect. Web-attack review 2026-07-31, finding F6.
+        renderProblem("This link isn't available. Email support@twoferapp.com.");
         return;
       }
 

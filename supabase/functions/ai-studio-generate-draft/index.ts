@@ -18,6 +18,8 @@ import {
   type AiImageDeadlineReport,
 } from "../_shared/ai-image-deadline.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
+import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
+import { DEFAULT_COOLDOWN_SEC, DEFAULT_MONTHLY_LIMIT } from "../_shared/ai-limits.ts";
 
 // Static anchors so Supabase's remote bundler includes the optional JPEG->PNG
 // conversion packages used by `_shared/ai-image-provider.ts`.
@@ -870,6 +872,51 @@ serve(async (req) => {
       },
       403,
     );
+  }
+
+  // Web-attack review 2026-07-31, finding H-3: this image-generation endpoint had
+  // no cost controls, unlike every sibling AI function. Enforce a per-business
+  // cooldown and monthly cap before spending on the model. `admin` is the
+  // service-role client; both windows read ai_generation_logs (request_type
+  // "ai_studio_draft"), which this function writes one row of per generation.
+  const studioMonthlyLimit = Number(
+    Deno.env.get("AI_STUDIO_DRAFT_MONTHLY_LIMIT") ?? String(DEFAULT_MONTHLY_LIMIT),
+  );
+  const studioCooldownMs = Math.max(10, DEFAULT_COOLDOWN_SEC) * 1000;
+
+  const { data: recentStudioDraft } = await admin
+    .from("ai_generation_logs")
+    .select("id")
+    .eq("business_id", input.businessId)
+    .eq("request_type", "ai_studio_draft")
+    .eq("success", true)
+    .gte("created_at", new Date(Date.now() - studioCooldownMs).toISOString())
+    .limit(1)
+    .maybeSingle();
+  if (recentStudioDraft) {
+    return json(
+      req,
+      { error: "Please wait a moment before generating again.", error_code: "COOLDOWN_ACTIVE" },
+      429,
+    );
+  }
+
+  if (Number.isFinite(studioMonthlyLimit) && studioMonthlyLimit > 0) {
+    const { used } = await countAiQuotaUsage(admin, {
+      businessId: input.businessId,
+      scope: "studio_draft",
+      monthStartIso: utcMonthStartIso(),
+    });
+    if (used >= studioMonthlyLimit) {
+      return json(
+        req,
+        {
+          error: "Monthly AI studio limit reached. Try again next month.",
+          error_code: "AI_STUDIO_MONTHLY_LIMIT",
+        },
+        429,
+      );
+    }
   }
 
   const requestGroupId = crypto.randomUUID();
