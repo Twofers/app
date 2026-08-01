@@ -932,8 +932,9 @@
 
 .home-page .mini-offer {
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 780;
+  line-height: 1.25;
 }
 
 .home-page .mini-pill {
@@ -964,12 +965,16 @@
   color: var(--ink);
 }
 
+/* Wraps to two lines rather than clipping: offer names are longer in es/ko,
+   and a truncated deal title reads as a bug on a marketing page. */
 .home-page .mini-copy strong {
+  display: -webkit-box;
   overflow: hidden;
-  font-size: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12.5px;
   font-weight: 780;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 
 .home-page .mini-copy small {
