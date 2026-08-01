@@ -31,7 +31,13 @@ const { chromium, request } = require("playwright");
 
 const SITE_ROOT = path.resolve(__dirname, "..", "website");
 const LOCALES = ["en", "es", "ko"];
-const MIN_TRANSLATED = 25; // es/ko: at least this many visible strings must change from English.
+// es/ko: at least this many visible strings must change from English. The
+// per-key mismatch check above this count is the real guard; this floor only
+// catches localization not applying at all. Recalibrated 25 -> 15 with the
+// 2026-08-01 homepage redesign, which removed duplicated copy (benefit-card
+// bodies, repeated CTAs) and so lowered the page's distinct translated-string
+// count to ~19 per locale.
+const MIN_TRANSLATED = 15;
 
 const MIME = new Map([
   [".html", "text/html; charset=utf-8"],

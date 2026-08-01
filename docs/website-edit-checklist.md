@@ -42,6 +42,7 @@ Current inventory (re-count with the grep below if in doubt):
 | `localization.js` | 22 pages |
 | `store-links.js` | 5 pages (`/`, `/s`, `/support`, `/business/thanks`, `/business/billing/checkout`) |
 | `launch-signup.js` | 1 page (`/`) |
+| `home-motion.js` | 1 page (`/`) |
 | `admin/admin-shell.js` | 22 admin entry pages (`app.html` is an injected fragment) |
 
 - [ ] Bump the `?v=` to `YYYYMMDD-shortslug` on **all** including pages, for
@@ -54,6 +55,10 @@ grep -rhoE '(href|src)="/[a-z-]+\.(css|js)\?v=[^"]+"' website --include=*.html |
 ```
 
 A file appearing twice with different versions means a page was missed.
+
+Images and fonts carry no `?v=`. When one's **content** changes, ship it under
+a **new filename** and update references — same-name replacement can keep
+serving the stale bytes from Cloudflare/Vercel edge caches indefinitely.
 
 > This step has failed in practice. On 2026-07-22 `store-links.js` was rewritten
 > to inject store badges, but only `styles.css` and `localization.js` got bumped.

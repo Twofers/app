@@ -1,5 +1,83 @@
+/* ---------------------------------------------------------------------------
+   Self-hosted fonts (2026-08-01 homepage redesign)
+   Bricolage Grotesque (display) + Inter (text), variable woff2 subsets served
+   from /assets/fonts/ with their OFL licenses alongside. latin-ext files only
+   download when a glyph in their unicode-range appears. The "* Fallback"
+   faces copy each font's vertical metrics onto the local system font so the
+   pre-swap frame occupies the same height (limits swap CLS). Korean text
+   falls through both latin faces to the system Korean font on purpose --
+   Hangul webfonts cost megabytes.
+--------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/fraunces-v38-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/fraunces-v38-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/inter-v20-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/inter-v20-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Metric-matched local fallbacks (values measured from the shipped files:
+   Fraunces upm 2000 asc 1956 desc 510; Inter upm 2048 asc 1984 desc 494). */
+@font-face {
+  font-family: "Fraunces Fallback";
+  src: local("Georgia"), local("Times New Roman"), local("Times");
+  ascent-override: 97.8%;
+  descent-override: 25.5%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Segoe UI"), local("Roboto"), local("Helvetica Neue"), local("Arial");
+  ascent-override: 96.88%;
+  descent-override: 24.12%;
+  line-gap-override: 0%;
+}
+
+/* Display face on the big public-page headings only -- h3s, the wordmark,
+   and every app-mimicking fragment stay on the body face so product UI still
+   looks like the product; admin pages keep the body font throughout. */
+.home-page h1,
+.home-page h2,
+.trial-page h1,
+.trial-page h2,
+.content-page h1,
+.content-page h2 {
+  font-family: var(--font-display);
+}
+
 :root {
   color-scheme: light;
+  --font-body: "Inter", "Inter Fallback", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-display: "Fraunces", "Fraunces Fallback", "Apple SD Gothic Neo", "Malgun Gothic", serif;
   --ink: #171c22;
   --muted: #6a7370;
   --line: #e3e7e2;
@@ -154,15 +232,19 @@
 }
 
 .home-page .hero.home-hero {
-  display: block;
+  display: grid;
   min-height: 0;
-  padding: 68px 0 58px;
-  text-align: center;
+  grid-template-columns: minmax(0, 1.04fr) minmax(320px, 0.96fr);
+  gap: 24px 48px;
+  align-items: center;
+  padding: 64px 0 0;
+  text-align: left;
 }
 
 .home-page .home-hero-copy {
-  max-width: 890px;
-  margin: 0 auto;
+  max-width: 640px;
+  margin: 0;
+  padding-bottom: 76px;
 }
 
 .home-page .status-pill {
@@ -177,24 +259,30 @@
 }
 
 .home-page .home-hero h1 {
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: 640px;
+  margin: 0;
   color: #fffdf8;
-  font-size: clamp(3.5rem, 7.1vw, 6.15rem);
-  font-weight: 450;
-  letter-spacing: -0.075em;
-  line-height: 0.94;
+  font-size: clamp(2.9rem, 4.9vw, 4.6rem);
+  font-weight: 590;
+  letter-spacing: -0.015em;
+  line-height: 1.04;
 }
 
 .home-page .home-hero h1 span {
   color: var(--home-coral);
+  white-space: nowrap;
+}
+
+/* The Korean accent span is a full clause -- let it wrap. */
+[lang="ko"] .home-page .home-hero h1 span {
+  white-space: normal;
 }
 
 .home-page .home-hero .lede {
-  max-width: 650px;
-  margin: 28px auto 0;
+  max-width: 500px;
+  margin: 24px 0 0;
   color: rgb(255 255 255 / 77%);
-  font-size: clamp(1.1rem, 1.8vw, 1.3rem);
+  font-size: clamp(1.05rem, 1.6vw, 1.2rem);
   line-height: 1.55;
 }
 
@@ -203,8 +291,8 @@
 }
 
 .home-page .home-hero .cta-row {
-  justify-content: center;
-  margin-top: 30px;
+  justify-content: flex-start;
+  margin-top: 28px;
 }
 
 .home-page .button {
@@ -252,11 +340,12 @@
 
 .home-page .home-trust-list {
   display: flex;
-  margin-top: 26px;
+  flex-wrap: wrap;
+  margin-top: 24px;
   padding: 0;
   align-items: center;
-  justify-content: center;
-  gap: 0;
+  justify-content: flex-start;
+  gap: 6px 0;
   color: rgb(255 255 255 / 62%);
   font-size: 12px;
   font-weight: 700;
@@ -279,56 +368,33 @@
 
 .home-page .hero-stage {
   position: relative;
-  display: grid;
-  min-height: 500px;
-  margin: 40px auto 0;
-  place-items: center;
+  align-self: end;
+  min-height: 0;
+  margin: 0;
 }
 
-.home-page .stage-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  pointer-events: none;
-}
-
-.home-page .stage-orb-one {
-  width: 470px;
-  height: 470px;
-  background: rgb(167 217 199 / 21%);
-}
-
-.home-page .stage-orb-two {
-  right: 14%;
-  bottom: 7%;
-  width: 220px;
-  height: 220px;
-  background: rgb(240 138 84 / 32%);
+.home-page .stage-frame {
+  position: relative;
+  width: min(100%, 368px);
+  margin: 26px auto -84px;
 }
 
 .home-page .hero-stage .phone-shell {
   z-index: 1;
   display: block;
-  width: min(100%, 390px);
+  width: 100%;
+  margin: 0;
   padding: 10px;
   border: 1px solid rgb(255 255 255 / 25%);
   border-radius: 38px;
   background: #06201a;
   box-shadow: 0 40px 80px rgb(0 0 0 / 36%);
-  transform: rotate(-4deg);
+  transform: rotate(-3deg);
 }
 
 .home-page .hero-stage .phone-screen {
-  min-height: 484px;
+  overflow: hidden;
   border-radius: 29px;
-}
-
-.home-page .hero-stage .app-offer-card {
-  border-radius: 16px;
-}
-
-.home-page .hero-stage .app-offer-card img {
-  height: 132px;
 }
 
 .home-page .stage-chip {
@@ -337,23 +403,17 @@
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 999px;
   padding: 10px 14px;
-  background: rgb(20 51 43 / 82%);
+  background: rgb(20 51 43 / 88%);
   box-shadow: 0 16px 36px rgb(0 0 0 / 18%);
   color: #fff;
   font-size: 13px;
   font-weight: 800;
 }
 
-.home-page .stage-chip-top {
-  top: 18%;
-  left: calc(50% - 300px);
-}
-
-.home-page .stage-chip-bottom {
-  right: calc(50% - 310px);
-  bottom: 20%;
-  color: var(--home-night);
-  background: var(--home-gold);
+/* Anchored to the phone frame, not to viewport math. */
+.home-page .stage-chip-live {
+  top: 11%;
+  left: -30px;
 }
 
 .home-page .section-band.home-story {
@@ -383,10 +443,10 @@
 .home-page .home-faq h2 {
   margin: 0;
   color: var(--home-night);
-  font-size: clamp(2.6rem, 5vw, 4.5rem);
-  font-weight: 480;
-  letter-spacing: -0.065em;
-  line-height: 0.98;
+  font-size: clamp(2.4rem, 4.3vw, 3.7rem);
+  font-weight: 570;
+  letter-spacing: -0.012em;
+  line-height: 1.08;
 }
 
 .home-page .story-panel {
@@ -421,102 +481,154 @@
 
 .home-page .customer-visual {
   position: relative;
+  display: grid;
   min-height: 100%;
   overflow: hidden;
+  padding: clamp(28px, 4.5vw, 56px);
+  place-items: center;
   background: var(--home-night-raised);
 }
 
-.home-page .customer-photo {
-  position: absolute;
+/* Warm grade shared by every photo on the page -- one temperature. */
+.home-page .photo-grade {
+  filter: saturate(1.05) sepia(0.07) contrast(0.98) brightness(1.02);
+}
+
+/* Lifelike app deal card, composed in DOM so it stays crisp and localized. */
+.home-page .deal-card {
+  width: min(100%, 350px);
   overflow: hidden;
-  border-radius: 26px;
-  box-shadow: 0 28px 60px rgb(0 0 0 / 25%);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 30px 64px rgb(0 0 0 / 30%);
+  color: var(--ink);
 }
 
-.home-page .customer-photo-large {
-  top: 9%;
-  right: 8%;
-  bottom: 9%;
-  left: 11%;
+.home-page .deal-card-media {
+  position: relative;
+  height: 218px;
 }
 
-.home-page .customer-photo img {
+.home-page .deal-card-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.home-page .customer-float-card {
+.home-page .deal-chip {
   position: absolute;
-  right: 4%;
-  bottom: 12%;
-  display: grid;
-  width: min(270px, 52%);
-  gap: 7px;
-  border: 1px solid rgb(255 255 255 / 65%);
-  border-radius: 20px;
-  padding: 18px;
-  background: rgb(255 253 248 / 93%);
-  box-shadow: 0 22px 44px rgb(0 0 0 / 20%);
-  color: var(--home-night);
-}
-
-.home-page .customer-float-card span {
-  color: var(--home-coral);
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 6px 10px;
   font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 850;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.home-page .customer-float-card strong {
-  font-size: 18px;
-  line-height: 1.12;
-}
-
-.home-page .customer-float-card small {
-  color: #61746d;
-  font-weight: 750;
-}
-
-.home-page .inline-cta {
-  margin-top: 30px;
-}
-
-.home-page .benefit-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.home-page .benefit-row article {
-  min-height: 205px;
-  border: 1px solid rgb(9 39 31 / 10%);
-  border-radius: 22px;
-  padding: 27px;
-  background: rgb(255 255 255 / 65%);
-}
-
-.home-page .benefit-row span {
-  color: var(--home-coral);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.home-page .benefit-row h3 {
-  margin: 28px 0 10px;
+.home-page .deal-chip-live {
+  left: 12px;
+  background: rgb(255 255 255 / 94%);
   color: var(--home-night);
-  font-size: 20px;
-  letter-spacing: -0.03em;
 }
 
-.home-page .benefit-row p {
+.home-page .deal-chip-live::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2e9e6b;
+  content: "";
+}
+
+.home-page .deal-chip-sample {
+  right: 12px;
+  background: var(--home-gold);
+  color: var(--home-night);
+}
+
+.home-page .deal-card-body {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px 18px;
+}
+
+.home-page .deal-card-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-page .deal-card-name strong {
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.home-page .deal-card-name small {
+  color: #6a7370;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-page .deal-card-offer {
   margin: 0;
-  color: #61746d;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.home-page .deal-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.home-page .deal-card-meta > span:first-child {
+  color: #b3591f;
+  font-size: 12.5px;
+  font-weight: 780;
+}
+
+.home-page .deal-card-claim {
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--home-coral);
+  color: var(--home-night);
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.home-page .customer-points {
+  display: grid;
+  gap: 11px;
+  margin: 26px 0 0;
+  padding: 0;
+  color: var(--home-night);
+  font-size: 14.5px;
+  font-weight: 750;
+  list-style: none;
+}
+
+.home-page .customer-points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-page .customer-points li::before {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--home-coral);
+  content: "";
 }
 
 .home-page .section-band.business-story {
@@ -605,39 +717,24 @@
 }
 
 .home-page .business-photo-band {
-  position: relative;
-  min-height: 390px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  gap: 34px;
+  align-items: center;
   margin-top: 18px;
   overflow: hidden;
   border-radius: var(--home-radius);
+  padding: clamp(30px, 4.6vw, 58px);
   background: var(--home-night-raised);
 }
 
-.home-page .business-photo-band::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgb(9 39 31 / 90%) 0%, rgb(9 39 31 / 35%) 65%, rgb(9 39 31 / 13%) 100%);
-  content: "";
-}
-
-.home-page .business-photo-band img {
-  width: 100%;
-  height: 390px;
-  object-fit: cover;
-}
-
-.home-page .business-photo-band > div {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  left: clamp(28px, 6vw, 76px);
+.home-page .band-copy {
   display: grid;
-  max-width: 480px;
+  max-width: 430px;
   gap: 14px;
-  transform: translateY(-50%);
 }
 
-.home-page .business-photo-band span {
+.home-page .band-copy span {
   color: var(--home-mint);
   font-size: 12px;
   font-weight: 900;
@@ -645,12 +742,109 @@
   text-transform: uppercase;
 }
 
-.home-page .business-photo-band strong {
+.home-page .band-copy strong {
   color: #fff;
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  font-weight: 500;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+}
+
+/* The input photo and the ad built from it, side by side. */
+.home-page .band-pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 24px);
+}
+
+.home-page .band-pair figure {
+  display: grid;
+  margin: 0;
+  gap: 11px;
+  justify-items: center;
+}
+
+.home-page .band-pair figcaption {
+  color: rgb(255 255 255 / 66%);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.home-page .band-input img {
+  width: clamp(150px, 15vw, 200px);
+  height: auto;
+  aspect-ratio: 4 / 5;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 22px 44px rgb(0 0 0 / 32%);
+}
+
+.home-page .band-arrow {
+  align-self: center;
+  margin-top: -28px;
+  color: var(--home-coral);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 700;
+}
+
+/* Sample ad poster, composed in DOM from the same croissant photo. Always
+   crisp, localized with the page, and never carries a stale date. */
+.home-page .ad-poster {
+  display: flex;
+  width: clamp(190px, 19vw, 246px);
+  flex-direction: column;
+  align-items: center;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 18px;
+  padding: 18px 16px 14px;
+  background:
+    linear-gradient(180deg, rgb(4 18 14 / 62%) 0%, rgb(4 18 14 / 14%) 40%, rgb(4 18 14 / 82%) 100%),
+    url("/assets/photo-bakery-croissants.jpg") center / cover no-repeat #241a12;
+  box-shadow: 0 26px 52px rgb(0 0 0 / 38%);
+  color: #fff;
+  text-align: center;
+}
+
+.home-page .ad-poster-biz {
+  color: rgb(255 255 255 / 88%);
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home-page .ad-poster-headline {
+  margin: auto 0;
+  font-family: var(--font-body);
+  font-size: clamp(1.4rem, 1.85vw, 1.75rem);
+  font-weight: 820;
+  letter-spacing: 0.015em;
+  line-height: 1.08;
+  text-transform: uppercase;
+}
+
+.home-page .ad-poster-offer {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-page .ad-poster-window {
+  width: 100%;
+  margin-top: 8px;
+  border-top: 1px solid rgb(255 255 255 / 26%);
+  padding-top: 9px;
+  color: var(--home-gold);
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .home-page .section-band.home-steps {
@@ -687,21 +881,122 @@
 }
 
 .home-page .step-grid article {
-  min-height: 260px;
+  min-height: 0;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 24px;
-  padding: 30px;
+  padding: 26px 30px 30px;
   background: rgb(255 255 255 / 6%);
 }
 
-.home-page .step-grid span {
+.home-page .step-grid article > span {
   color: var(--home-gold);
 }
 
 .home-page .step-grid h3 {
-  margin-top: 52px;
-  font-size: 22px;
-  letter-spacing: -0.035em;
+  margin-top: 12px;
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+
+/* Small product frames above each step -- app fragments, not decoration. */
+.home-page .step-visual {
+  display: grid;
+  min-height: 96px;
+  margin-bottom: 22px;
+  place-items: center;
+}
+
+.home-page .mini-ui {
+  display: flex;
+  width: 100%;
+  max-width: 252px;
+  align-items: center;
+  gap: 11px;
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: #fffdf8;
+  box-shadow: 0 16px 34px rgb(0 0 0 / 26%);
+  color: var(--ink);
+}
+
+/* Neutralize the page-level .step-grid span chip styling inside app frames. */
+.home-page .mini-ui span:not(.mini-copy) {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.home-page .mini-publish {
+  justify-content: space-between;
+}
+
+.home-page .mini-offer {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 780;
+}
+
+.home-page .mini-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgb(46 158 107 / 15%);
+  color: #1f7a4d;
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.home-page .mini-live img {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.home-page .mini-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  margin-bottom: 0;
+  color: var(--ink);
+}
+
+.home-page .mini-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-page .mini-copy small {
+  color: #6a7370;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-page .mini-meta {
+  flex: 0 0 auto;
+  color: #6a7370;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.home-page .mini-qr .mini-qr-code {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  color: var(--ink);
+}
+
+.home-page .mini-qr .mini-meta {
+  font-size: 12.5px;
+  font-weight: 780;
+  color: var(--ink);
+  white-space: normal;
 }
 
 .home-page .section-band.home-final-cta {
@@ -710,18 +1005,18 @@
 }
 
 .home-page .final-cta-panel {
-  display: flex;
-  gap: 36px;
-  min-height: 360px;
-  padding: clamp(32px, 6vw, 80px);
-  align-items: flex-end;
-  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  min-height: 320px;
+  padding: clamp(32px, 6vw, 76px);
   border-radius: var(--home-radius);
   background: var(--home-gold);
 }
 
 .home-page .final-cta-panel > div {
-  max-width: 720px;
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
 }
 
 .home-page .final-cta-panel .eyebrow {
@@ -732,12 +1027,20 @@
   max-width: 600px;
 }
 
-.home-page .final-cta-panel p:last-child {
-  max-width: 590px;
+.home-page .final-cta-panel > div > p:not(.eyebrow) {
+  max-width: 560px;
   margin: 22px 0 0;
   color: #365148;
   font-size: 17px;
   line-height: 1.55;
+}
+
+.home-page .final-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 24px;
+  margin-top: 30px;
 }
 
 .home-page .final-cta-panel .button {
@@ -752,6 +1055,30 @@
   border-color: #fff;
   background: #fff;
   color: var(--home-night);
+}
+
+.home-page .final-cta-alt {
+  color: #365148;
+  font-size: 14px;
+  font-weight: 780;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.home-page .final-cta-alt:hover,
+.home-page .final-cta-alt:focus-visible {
+  color: var(--home-night);
+}
+
+/* The mascot's one moment on the page. */
+.home-page .final-cta-mascot {
+  position: absolute;
+  right: clamp(20px, 4.5vw, 68px);
+  bottom: -12px;
+  width: clamp(120px, 15vw, 190px);
+  height: auto;
+  transform: rotate(-3deg);
+  pointer-events: none;
 }
 
 .home-page .section-band.home-faq {
@@ -771,6 +1098,12 @@
   border-color: rgb(9 39 31 / 12%);
   border-radius: 18px;
   background: rgb(255 255 255 / 56%);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.home-page .home-faq details:hover {
+  border-color: rgb(9 39 31 / 26%);
+  background: rgb(255 255 255 / 82%);
 }
 
 .home-page .home-faq summary {
@@ -783,8 +1116,19 @@
 }
 
 [lang="ko"] .home-page .home-hero h1 {
-  letter-spacing: -0.04em;
-  line-height: 1.06;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  word-break: keep-all;
+}
+
+/* Korean headings render in the system Korean face; ease the latin tracking. */
+[lang="ko"] .home-page .story-heading h2,
+[lang="ko"] .home-page .story-copy h2,
+[lang="ko"] .home-page .steps-heading h2,
+[lang="ko"] .home-page .final-cta-panel h2,
+[lang="ko"] .home-page .home-faq h2 {
+  letter-spacing: -0.01em;
+  line-height: 1.16;
   word-break: keep-all;
 }
 
@@ -793,7 +1137,75 @@
 }
 
 .home-page .footer-inner {
+  display: block;
   width: min(1240px, calc(100% - 48px));
+  padding: 64px 0 38px;
+  text-align: left;
+}
+
+.home-page .footer-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.35fr) repeat(3, minmax(150px, 1fr));
+  gap: 40px 32px;
+}
+
+.home-page .footer-brand-col {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.home-page .footer-brand-col p {
+  max-width: 300px;
+  margin: 0;
+  color: rgb(255 255 255 / 64%);
+  font-size: 13px;
+}
+
+.home-page .footer-brand-col > a:not(.brand) {
+  margin: 0;
+  color: rgb(255 255 255 / 86%);
+  font-size: 13px;
+}
+
+.home-page .footer-col {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+}
+
+.home-page .footer-col strong {
+  margin-bottom: 6px;
+  color: rgb(255 255 255 / 92%);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-page .footer-col a {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  color: rgb(255 255 255 / 72%);
+  font-size: 13.5px;
+  font-weight: 720;
+}
+
+.home-page .footer-col a:hover,
+.home-page .footer-col a:focus-visible {
+  color: var(--home-mint);
+  text-decoration: none;
+}
+
+.home-page .footer-inner small {
+  display: block;
+  margin-top: 46px;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  padding-top: 22px;
+  color: rgb(255 255 255 / 48%);
+  font-weight: 760;
 }
 
 .home-page .back-to-top {
@@ -812,16 +1224,38 @@
     justify-content: flex-start;
   }
 
-  .home-page .hero-stage {
-    min-height: 470px;
+  .home-page .hero.home-hero {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding-top: 52px;
+    text-align: center;
   }
 
-  .home-page .stage-chip-top {
-    left: calc(50% - 270px);
+  .home-page .home-hero-copy {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-bottom: 0;
   }
 
-  .home-page .stage-chip-bottom {
-    right: calc(50% - 275px);
+  .home-page .home-hero h1 {
+    margin: 0 auto;
+  }
+
+  .home-page .home-hero .lede {
+    margin: 22px auto 0;
+  }
+
+  .home-page .home-hero .cta-row,
+  .home-page .home-trust-list {
+    justify-content: center;
+  }
+
+  .home-page .stage-frame {
+    margin: 34px auto -64px;
+  }
+
+  .home-page .stage-chip-live {
+    left: -12px;
   }
 
   .home-page .story-panel {
@@ -833,7 +1267,8 @@
   }
 
   .home-page .customer-visual {
-    min-height: 400px;
+    min-height: 0;
+    padding: 34px 28px;
   }
 
   .home-page .business-console {
@@ -889,21 +1324,21 @@
   }
 
   .home-page .hero.home-hero {
-    padding: 48px 0 38px;
+    padding: 44px 0 0;
   }
 
   .home-page .home-hero h1 {
-    font-size: clamp(3.15rem, 14.5vw, 4.5rem);
-    line-height: 0.95;
+    font-size: clamp(2.55rem, 11vw, 3.4rem);
+    line-height: 1;
   }
 
   .home-page .home-hero .lede {
-    margin-top: 22px;
+    margin-top: 20px;
     font-size: 17px;
   }
 
   .home-page .home-hero .cta-row {
-    margin-top: 26px;
+    margin-top: 24px;
   }
 
   .home-page .home-trust-list {
@@ -917,31 +1352,13 @@
     display: none;
   }
 
-  .home-page .hero-stage {
-    min-height: 430px;
-    margin-top: 30px;
+  .home-page .stage-frame {
+    width: min(78vw, 330px);
+    margin: 30px auto -56px;
   }
 
   .home-page .hero-stage .phone-shell {
-    width: min(82vw, 340px);
     transform: rotate(-2deg);
-  }
-
-  .home-page .hero-stage .phone-screen {
-    min-height: 402px;
-  }
-
-  .home-page .hero-stage .app-offer-card {
-    padding: 10px;
-  }
-
-  .home-page .hero-stage .app-offer-card img {
-    height: 102px;
-  }
-
-  .home-page .stage-orb-one {
-    width: 330px;
-    height: 330px;
   }
 
   .home-page .stage-chip {
@@ -949,14 +1366,9 @@
     font-size: 11px;
   }
 
-  .home-page .stage-chip-top {
-    top: 13%;
-    left: 4%;
-  }
-
-  .home-page .stage-chip-bottom {
-    right: 3%;
-    bottom: 12%;
+  .home-page .stage-chip-live {
+    top: 8%;
+    left: -8px;
   }
 
   .home-page .section-band.home-story,
@@ -991,34 +1403,12 @@
   }
 
   .home-page .customer-visual {
-    min-height: 300px;
-  }
-
-  .home-page .customer-photo-large {
-    top: 8%;
-    right: 10%;
-    bottom: 8%;
-    left: 10%;
-  }
-
-  .home-page .customer-float-card {
-    right: 5%;
-    bottom: 10%;
-    width: min(240px, 64%);
-  }
-
-  .home-page .benefit-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .home-page .benefit-row article {
     min-height: 0;
-    padding: 23px;
+    padding: 26px 20px;
   }
 
-  .home-page .benefit-row h3 {
-    margin-top: 18px;
+  .home-page .deal-card-media {
+    height: 188px;
   }
 
   .home-page .business-console {
@@ -1026,19 +1416,26 @@
     padding: 20px;
   }
 
-  .home-page .business-photo-band,
-  .home-page .business-photo-band img {
-    min-height: 340px;
-    height: 340px;
+  .home-page .business-photo-band {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding: 28px 22px;
   }
 
-  .home-page .business-photo-band::after {
-    background: linear-gradient(90deg, rgb(9 39 31 / 88%), rgb(9 39 31 / 34%));
+  .home-page .band-pair {
+    flex-direction: column;
+    gap: 10px;
   }
 
-  .home-page .business-photo-band > div {
-    right: 28px;
-    left: 28px;
+  .home-page .band-arrow {
+    align-self: center;
+    margin: 0;
+    transform: rotate(90deg);
+  }
+
+  .home-page .band-input img,
+  .home-page .ad-poster {
+    width: min(66vw, 240px);
   }
 
   .home-page .section-band.home-final-cta {
@@ -1047,9 +1444,23 @@
 
   .home-page .final-cta-panel {
     min-height: 0;
-    flex-direction: column;
-    align-items: flex-start;
     border-radius: 24px;
+    padding-bottom: 120px;
+  }
+
+  .home-page .final-cta-mascot {
+    right: 18px;
+    bottom: -10px;
+    width: 108px;
+  }
+
+  .home-page .footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 30px 20px;
+  }
+
+  .home-page .footer-brand-col {
+    grid-column: 1 / -1;
   }
 
   .home-page .section-band.home-faq {
@@ -1067,12 +1478,11 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .home-page .hero-stage .phone-shell {
+  .home-page .stage-frame {
     animation: home-phone-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .home-page .story-panel,
-  .home-page .benefit-row article,
   .home-page .final-cta-panel {
     transition: transform 220ms ease, box-shadow 220ms ease;
   }
@@ -1082,21 +1492,17 @@
     transform: translateY(-4px);
     box-shadow: 0 25px 60px rgb(9 39 31 / 13%);
   }
-
-  .home-page .benefit-row article:hover {
-    transform: translateY(-3px);
-  }
 }
 
 @keyframes home-phone-enter {
   from {
     opacity: 0;
-    transform: rotate(-4deg) translateY(18px);
+    transform: translateY(18px);
   }
 
   to {
     opacity: 1;
-    transform: rotate(-4deg) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -1141,7 +1547,15 @@ body {
   margin: 0;
   background: var(--cream);
   color: var(--ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
+}
+
+/* Form controls do not inherit fonts by default; keep them on the body face. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 img {
@@ -1890,13 +2304,25 @@ summary::-webkit-details-marker {
 }
 
 summary::after {
-  content: "v";
-  color: var(--accent);
-  font-size: 12px;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-left: 14px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  content: "";
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 180ms ease;
 }
 
 details[open] summary::after {
-  transform: rotate(180deg);
+  transform: translateY(2px) rotate(225deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  summary::after {
+    transition: none;
+  }
 }
 
 details p {
@@ -5768,21 +6194,42 @@ body:not(.admin-shell) main.content-page .admin-panel {
   height: auto;
 }
 
-.home-page .business-photo-band img.band-app-shot {
-  position: absolute;
-  z-index: 1;
-  top: 24px;
-  right: clamp(16px, 5vw, 64px);
-  width: auto;
-  height: 342px;
-  border-radius: 16px;
-  box-shadow: 0 24px 48px rgb(0 0 0 / 40%);
-  object-fit: contain;
+/* ---------------------------------------------------------------------------
+   Homepage scroll reveals (home-motion.js)
+   Hidden states exist only after the script tags <html> with .motion-ready,
+   so no-JS and reduced-motion visitors always see every section. Reveals run
+   as animations, not transitions, so panel hover transitions stay snappy.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  html.motion-ready [data-reveal] {
+    opacity: 0;
+  }
+
+  html.motion-ready [data-reveal].revealed {
+    opacity: 1;
+    animation: home-reveal 640ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  html.motion-ready [data-reveal="1"].revealed {
+    animation-delay: 110ms;
+  }
+
+  html.motion-ready [data-reveal="2"].revealed {
+    animation-delay: 220ms;
+  }
 }
 
-@media (max-width: 980px) {
-  .home-page .business-photo-band img.band-app-shot {
-    display: none;
+@keyframes home-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+
+@media print {
+  html.motion-ready [data-reveal] {
+    opacity: 1 !important;
+    animation: none !important;
   }
 }
 
