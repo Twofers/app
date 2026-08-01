@@ -375,10 +375,9 @@ the new path).
   `npm run gate:release-state`.
 - Passed: focused admin dashboard, account-management, owner-email,
   business-application, QR-campaign, and prompt-registry source tests.
-- Full `npm test`: 2,112 passed and one unrelated existing assertion failed in
-  `lib/business-name-change.test.ts`. That assertion calls suspended, disabled,
-  and archived post-approval/locked while the current shared TypeScript and
-  SQL-backed source-of-truth list classifies them as non-public/unlocked.
+- Full `npm test`: all 2,113 tests pass across 296 test files. The stale
+  `lib/business-name-change.test.ts` lifecycle expectation was corrected to
+  match the current SQL-backed public-status predicate.
 - Verified cache-bust coverage: 44 HTML pages reference the current shared
   stylesheet version and all 22 admin HTML pages reference the current shared
   shell version.
