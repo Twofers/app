@@ -2,7 +2,7 @@
 
 ## App Name
 
-Twofer
+Twofer: Live Local Deals
 
 ## Subtitle
 

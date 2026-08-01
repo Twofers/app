@@ -6,7 +6,7 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## App
 
-- Version: `1.0.1`
+- Version: `1.0.2`
 - Android versionCode: `49`
 - iOS buildNumber (app.json): `not set in app.json (managed via EAS)`
 - Android package: `com.unvmex2.twoforone`
@@ -24,10 +24,12 @@ Docs should link here instead of restating these facts (audit F-012).
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
   - EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: `true`
   - EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS: `false`
+  - EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT: `true`
 - **production**
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
   - EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: `true`
   - EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS: `false`
+  - EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT: `true`
   - EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: `false`
 - **dev-client-apk**
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
@@ -37,8 +39,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `190`
-- Latest: `20260824145000_consume_business_claim_link_use_rpc.sql`
+- Count: `191`
+- Latest: `20260824150000_ios_trial_checkout_kill_switch.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 

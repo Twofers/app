@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
+import { SecondaryButton } from "../../components/ui/secondary-button";
 import { Banner } from "../../components/ui/banner";
 import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
@@ -26,6 +27,7 @@ import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-
 import { BusinessTermsGate } from "@/components/business-terms-gate";
 import { getBusinessOnboardingContext } from "@/lib/functions";
 import { CardShell } from "@/components/ui/card-shell";
+import { openSupportEmail } from "@/lib/support-contact";
 
 type TemplateRow = {
   id: string;
@@ -56,7 +58,12 @@ export default function CreateDeal() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
-  const { opening: activationOpening, start: startActivation } = useTrialActivation(businessId);
+  const {
+    checkoutEnabled: activationCheckoutEnabled,
+    failed: activationFailed,
+    opening: activationOpening,
+    start: startActivation,
+  } = useTrialActivation(businessId);
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const {
@@ -344,7 +351,11 @@ export default function CreateDeal() {
         </View>
       ) : blockedSubscription && !canShowPrepToolsWhileBlocked ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <MerchantAccessBlockedCard status={billingAccess.status} businessId={businessId} />
+          <MerchantAccessBlockedCard
+            status={billingAccess.status}
+            reason={billingAccess.reason}
+            businessId={businessId}
+          />
         </View>
       ) : termsRequired && businessId ? (
         <View style={{ marginTop: Spacing.lg }}>
@@ -372,10 +383,22 @@ export default function CreateDeal() {
                 <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
                   {t("createHub.setupApprovedBody")}
                 </Text>
-                <PrimaryButton
-                  title={activationOpening ? t("merchantAccess.startTrialOpening") : t("createHub.setupApprovedCta")}
-                  onPress={() => void startActivation()}
-                  disabled={activationOpening}
+                {activationCheckoutEnabled ? (
+                  <PrimaryButton
+                    title={activationOpening ? t("merchantAccess.startTrialOpening") : t("createHub.setupApprovedCta")}
+                    onPress={() => void startActivation()}
+                    disabled={activationOpening}
+                    style={{ borderRadius: Radii.md }}
+                  />
+                ) : null}
+                {activationFailed ? (
+                  <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
+                    {t("merchantAccess.checkoutUnavailable")}
+                  </Text>
+                ) : null}
+                <SecondaryButton
+                  title={t("merchantAccess.contactSupport")}
+                  onPress={() => void openSupportEmail()}
                   style={{ borderRadius: Radii.md }}
                 />
               </View>

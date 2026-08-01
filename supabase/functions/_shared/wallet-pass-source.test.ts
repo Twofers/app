@@ -113,9 +113,11 @@ describe("native wallet pass — issue endpoint", () => {
     expect(source).toMatch(/"feature_disabled"/);
   });
 
-  it("Apple returns 501 until the pkpass spike lands", () => {
+  it("Apple returns a signed pkpass instead of a parked response", () => {
     expect(source).toMatch(/body\.platform === "apple"/);
-    expect(source).toMatch(/501/);
+    expect(source).toMatch(/issueAppleWalletPass\(/);
+    expect(source).toMatch(/application\/vnd\.apple\.pkpass/);
+    expect(source).not.toMatch(/\b501\b|coming soon/i);
   });
 
   it("is registered in supabase/config.toml", () => {

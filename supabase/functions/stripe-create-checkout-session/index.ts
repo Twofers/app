@@ -17,7 +17,7 @@ import {
 } from "../_shared/stripe-business-billing.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
-type BillingSource = "admin" | "website" | "email";
+type BillingSource = "admin" | "website" | "email" | "native_ios";
 type CheckoutPurpose = "trial_start" | "admin_trial_conversion";
 type TrialCheckoutEligibility = {
   applicationId: string;
@@ -36,11 +36,13 @@ function jsonResponse(req: Request, body: Record<string, unknown>, status = 200)
 
 // Audit F-005: the request body may only *ask* for a source; the effective
 // source is derived server-side below (token => "email"; "admin" only with a
-// verified active admin role; everything else => "website"). "test" no longer
-// exists as a source.
+// verified active admin role; "native_ios" is separately kill-switched;
+// everything else => "website"). "test" no longer exists as a source.
 function billingSource(value: unknown): BillingSource {
   const source = safeGetString(value);
-  return source === "admin" || source === "website" || source === "email" ? source : "website";
+  return source === "admin" || source === "website" || source === "email" || source === "native_ios"
+    ? source
+    : "website";
 }
 
 function safeWebUrl(value: unknown, fallback: string): string {
@@ -272,6 +274,16 @@ async function approvedActivationGateEnabled(supabase: any): Promise<boolean> {
   return data?.enabled === true;
 }
 
+async function iosTrialCheckoutEnabled(supabase: any): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("feature_flags")
+    .select("enabled")
+    .eq("key", "ios_trial_checkout")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.enabled === true;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -336,14 +348,24 @@ serve(async (req) => {
       const authz = await userCanBillBusiness(supabaseAdmin, businessId, user.id, requestedSource, accessToken);
       if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
       adminRole = authz.adminRole;
-      // "admin" only with a founder-lock + MFA-verified admin session (H-2);
-      // everything else is the public website surface regardless of the body.
-      source = requestedSource === "admin" && authz.adminGranted ? "admin" : "website";
+      // "admin" requires the founder-lock + MFA bar. Native iOS remains an
+      // explicit source so it cannot fall through and bypass its kill switch.
+      source = requestedSource === "admin" && authz.adminGranted
+        ? "admin"
+        : requestedSource === "native_ios"
+          ? "native_ios"
+          : "website";
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);
     if (config.purchaseSurface !== "web_only" && source !== "admin") {
       return jsonResponse(req, { error: "Web billing conversion is not enabled." }, 403);
+    }
+    if (source === "native_ios" && !(await iosTrialCheckoutEnabled(supabaseAdmin))) {
+      return jsonResponse(req, {
+        error: "iOS trial Checkout is temporarily unavailable. Check your approval email or contact support.",
+        error_code: "IOS_TRIAL_CHECKOUT_DISABLED",
+      }, 503);
     }
     if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
       return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);

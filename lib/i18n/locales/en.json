@@ -623,8 +623,8 @@
     "reuseDeal": "Repeat a past deal",
     "reuseDealSub": "Relaunch a template or past offer",
     "setupApprovedTitle": "Approved for setup",
-    "setupApprovedBody": "Finish your profile and menu now. Your 30-day trial, AI tools, publishing, credits, and new claims unlock after secure Checkout.",
-    "setupApprovedCta": "Activate 30-day trial"
+    "setupApprovedBody": "Finish your profile and menu now. To activate, use your approval email or contact support. On eligible iPhone builds, secure Checkout may also be available.",
+    "setupApprovedCta": "Open secure Checkout"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -2286,13 +2286,14 @@
     "inactiveTitle": "Business account not active",
     "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
     "verifyTitle": "Approved for setup",
-    "verifyBody": "Finish setup now. Your 30-day trial starts only after Stripe confirms secure Checkout.",
+    "verifyBody": "Finish setup now. To activate, check your approval email or contact support. On eligible iPhone builds, secure Checkout may also be available.",
     "verifyEmailHint": "Approved account email:",
     "setupProgressProfile": "✓ Business profile and location are available",
     "setupProgressMenu": "✓ Menu tools and text-only drafts are available",
     "setupProgressLocked": "Locked until activation: AI, publishing, credits, and new claims",
-    "startTrialCta": "Continue on secure website",
+    "startTrialCta": "Open secure Checkout",
     "startTrialOpening": "Opening secure checkout...",
+    "checkoutUnavailable": "Checkout is unavailable right now. Use your approval email or contact support below.",
     "contactSupport": "Contact support"
   },
   "businessTerms": {

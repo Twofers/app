@@ -1,6 +1,6 @@
 {
   "app": {
-    "version": "1.0.1",
+    "version": "1.0.2",
     "androidVersionCode": 49,
     "iosBuildNumber": null,
     "androidPackage": "com.unvmex2.twoforone",
@@ -17,13 +17,15 @@
     "preview": {
       "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
       "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
-      "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false"
+      "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false",
+      "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true"
     },
     "ios-sim": {},
     "production": {
       "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
       "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
       "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false",
+      "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true",
       "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "false"
     },
     "dev-client-apk": {
@@ -36,8 +38,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 190,
-    "latest": "20260824145000_consume_business_claim_link_use_rpc.sql"
+    "count": 191,
+    "latest": "20260824150000_ios_trial_checkout_kill_switch.sql"
   },
   "edgeFunctions": {
     "count": 81,

@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { createTrialCheckoutUrl } from "@/lib/billing-activation";
-import { BUSINESS_START_TRIAL_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { createTrialCheckoutUrl, isIosTrialCheckoutEnabled } from "@/lib/billing-activation";
+import { openWebsiteUrl } from "@/lib/legal-urls";
 
 /**
  * Shared "activate my approved trial" action for the merchant surfaces that
@@ -15,28 +15,32 @@ import { BUSINESS_START_TRIAL_URL, openWebsiteUrl } from "@/lib/legal-urls";
  * on Stripe in one tap. Checkout stays on Stripe-hosted web; nothing is
  * collected in the app.
  *
- * Falls back to the website billing page whenever minting is not possible
- * (no business id yet, offline, activation gate off, already activated), so the
- * button never dead-ends.
+ * Any minting or URL-opening failure stays inside the app and exposes the
+ * localized approval-email/support guidance rendered by the caller. It never
+ * redirects to a different billing or pricing page.
  */
 export function useTrialActivation(businessId?: string | null) {
   const { i18n } = useTranslation();
   const [opening, setOpening] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const checkoutEnabled = isIosTrialCheckoutEnabled();
 
   const start = useCallback(async () => {
-    if (!businessId) {
-      await openWebsiteUrl(BUSINESS_START_TRIAL_URL);
-      return;
+    setFailed(false);
+    if (!checkoutEnabled || !businessId) {
+      setFailed(true);
+      return false;
     }
     setOpening(true);
     try {
       const result = await createTrialCheckoutUrl(businessId, i18n.language);
-      if (result.ok && (await openWebsiteUrl(result.url))) return;
-      await openWebsiteUrl(BUSINESS_START_TRIAL_URL);
+      if (result.ok && (await openWebsiteUrl(result.url))) return true;
+      setFailed(true);
+      return false;
     } finally {
       setOpening(false);
     }
-  }, [businessId, i18n.language]);
+  }, [businessId, checkoutEnabled, i18n.language]);
 
-  return { opening, start };
+  return { checkoutEnabled, failed, opening, start };
 }

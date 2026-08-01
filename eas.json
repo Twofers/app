@@ -40,6 +40,7 @@
         "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
         "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
         "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+        "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true",
         "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "false",
@@ -75,6 +76,7 @@
       "env": {
         "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
         "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
+        "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true",
         "EXPO_PUBLIC_ENABLE_SITE_IMPORT": "true",
         "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE": "false",
         "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA": "false",
@@ -164,6 +166,9 @@
   },
   "submit": {
     "production": {
+      "android": {
+        "track": "internal"
+      },
       "ios": {
         "ascAppId": "6765769303"
       }

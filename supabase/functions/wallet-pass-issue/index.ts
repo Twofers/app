@@ -3,8 +3,9 @@
  * POST { platform: "google" | "apple", locale?: "en" | "es" | "ko" }
  *
  * Google: upserts the user's pass row + Wallet object and returns a fresh
- * "Save to Google Wallet" URL. Apple: 501 until the Phase 3 pkpass spike lands.
- * Gated by the NATIVE_WALLET_PASS_ENABLED secret (instant server kill switch).
+ * "Save to Google Wallet" URL. Apple: returns a signed .pkpass for native
+ * PassKit presentation. Gated by the NATIVE_WALLET_PASS_ENABLED secret
+ * (instant server kill switch).
  * Plan: docs/plans/native-wallet-pass-plan.md.
  */
 
