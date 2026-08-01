@@ -359,3 +359,16 @@ passes, so same-name cache poisoning can't occur.
   not weakened for a proper noun.
 - **Checklist updated** (§3): new `home-motion.js` row + the new-filename
   rule for images/fonts.
+- **Display font swap (2026-08-01, after first deploy)**: Dan rejected
+  Bricolage Grotesque; display face is now **Fraunces** (variable v38, latin +
+  latin-ext + OFL, `--font-display` token swap + retuned weights/tracking for
+  a serif). Deliberate scope narrowing: only h1/h2 on public pages use the
+  display face — h3s, the "Twofer" wordmark, and the DOM poster headline
+  stay Inter so product-mimicking UI still looks like the app. Hero accent
+  span gets `white-space: nowrap` (KO excepted) so "happy hour." never
+  splits. Bricolage woff2 files retired in place (unreferenced, kept on disk
+  per the no-same-name-replacement rule). `styles.css?v=` re-bumped on all
+  44 pages (`20260801-display-fraunces`); preloads on the 4 pages updated.
+  Deployed to production 2026-08-01 ~13:38 CT and live-verified (new `?v=`
+  serving, both Fraunces files 200, prod e2e green en/es/ko, console clean,
+  Fraunces confirmed rendering the h1). Font-swap commit pending Dan.
