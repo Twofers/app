@@ -27,7 +27,9 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260728-account-growth" />
+    <link rel="preload" href="/assets/fonts/bricolage-grotesque-v9-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/inter-v20-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css?v=20260801-homepage-redesign" />
     <script defer src="/store-links.js?v=20260722-es-polish"></script>
     <script type="application/ld+json">
     {
@@ -81,7 +83,7 @@
         {
           "@type": "Question",
           "name": "What kinds of promotions can businesses create?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Businesses can create local offers, bonus item offers, and limited-time deals with controlled time windows and quantities." }
+          "acceptedAnswer": { "@type": "Answer", "text": "Two-for-one deals, bonus items, and limited-time discounts, each with a controlled time window, quantity, and terms." }
         },
         {
           "@type": "Question",
@@ -135,7 +137,7 @@
           <div class="hero-copy home-hero-copy">
             <p class="status-pill" data-i18n="home.status">Now live in Dallas-Fort Worth</p>
             <h1 data-i18n-html="home.hero">Make slow hours feel like <span>happy hour.</span></h1>
-            <p class="lede" data-i18n="home.lede">Twofer helps local businesses publish timely deals and helps nearby customers find them before they are gone.</p>
+            <p class="lede" data-i18n="home.lede">Local shops post real, limited-time deals. Nearby customers claim them before they're gone.</p>
             <div class="cta-row">
               <a class="store-badge-link" href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios" data-store-badge>Get Twofer for iPhone</a>
               <a class="store-badge-link" href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android" data-store-badge>Get Twofer for Android</a>
@@ -148,110 +150,165 @@
               </form>
             </div>
             <ul class="home-trust-list" aria-label="Twofer highlights" data-i18n-aria-label="a11y.twoferHighlights">
-              <li data-i18n="home.freeCustomers">Free for customers.</li>
+              <li data-i18n="home.freeCustomers">Free for customers on iPhone and Android</li>
               <li data-i18n="home.trustApproved">Real, approved local businesses</li>
               <li data-i18n="home.trustLang">Deals in English, Spanish, and Korean</li>
             </ul>
           </div>
 
           <aside class="hero-stage" aria-label="Twofer app preview" data-i18n-aria-label="a11y.appPreview">
-            <div class="stage-orb stage-orb-one" aria-hidden="true"></div>
-            <div class="stage-orb stage-orb-two" aria-hidden="true"></div>
-            <span class="stage-chip stage-chip-top" data-i18n="home.nearbyNow">Nearby now</span>
-            <aside class="phone-shell">
-              <div class="phone-screen phone-screen--shot">
-                <img src="/assets/app-home-feed.webp" alt="Twofer app home feed showing a live local deal" data-i18n-alt="a11y.appFeedShot" data-i18n-src="home.appFeedShotSrc" width="740" height="1334" loading="eager" fetchpriority="high" decoding="async" />
-              </div>
-            </aside>
-            <span class="stage-chip stage-chip-bottom" data-i18n="home.sample">Sample</span>
+            <div class="stage-frame">
+              <figure class="phone-shell">
+                <div class="phone-screen phone-screen--shot">
+                  <img src="/assets/app-home-feed.webp" alt="Twofer app home feed showing a live local deal" data-i18n-alt="a11y.appFeedShot" data-i18n-src="home.appFeedShotSrc" width="740" height="1334" loading="eager" fetchpriority="high" decoding="async" />
+                </div>
+              </figure>
+              <span class="stage-chip stage-chip-live" data-i18n="home.nearbyNow">Nearby now</span>
+            </div>
           </aside>
         </div>
       </section>
 
       <section id="for-customers" class="section-band home-story customer-story">
         <div class="container">
-          <div class="story-heading">
+          <div class="story-heading" data-reveal="0">
             <p class="eyebrow" data-i18n="home.customersEyebrow">For customers</p>
             <h2 data-i18n="home.customersTitle">Discover live local deals before they disappear</h2>
           </div>
-          <article class="story-panel customer-panel">
+          <article class="story-panel customer-panel" data-reveal="1">
             <div class="story-copy">
-              <p data-i18n="home.customersBody">Find nearby local offers, bonus item offers, and limited-time deals, claim from your phone, share with a friend, and redeem in store.</p>
-              <div class="inline-cta">
-                <a class="button" href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios">Get Twofer for iPhone</a>
-                <a class="button button-secondary" href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android">Get Twofer for Android</a>
-                <form class="launch-signup" data-launch-signup data-signup-source="website-customers" hidden novalidate>
-                  <label class="visually-hidden" aria-hidden="true"><span>Company website</span><input name="company_website" tabindex="-1" autocomplete="off" /></label>
-                  <input type="email" name="email" required maxlength="254" autocomplete="email" placeholder="you@email.com" data-i18n-placeholder="home.signupPlaceholder" aria-label="Email address" data-i18n-aria-label="home.signupAria" />
-                  <button class="button" type="submit" data-i18n="home.signupButton">Email me launch updates</button>
-                  <p class="status" data-signup-status role="status" aria-live="polite"></p>
-                </form>
-              </div>
+              <p data-i18n="home.customersBody">See what's live around you, claim in one tap, share one with a friend, and redeem in store with your QR code.</p>
+              <ul class="customer-points" aria-label="Customer benefits">
+                <li data-i18n="home.findTitle">Find live deals</li>
+                <li data-i18n="home.realtimeTitle">Real-time updates</li>
+                <li data-i18n="home.localTitle">Support local</li>
+              </ul>
             </div>
             <div class="customer-visual" aria-hidden="true">
-              <div class="customer-photo customer-photo-large"><img src="/assets/photo-cafe-coffee.jpg" alt="" loading="lazy" decoding="async" /></div>
-              <div class="customer-float-card"><span data-i18n="home.sample">Sample</span><strong data-i18n="home.offerColdBrew">40% off cold brew</strong><small>0.5 mi</small></div>
+              <div class="deal-card">
+                <div class="deal-card-media">
+                  <img class="photo-grade" src="/assets/photo-cafe-coffee.jpg" alt="" loading="lazy" decoding="async" />
+                  <span class="deal-chip deal-chip-live" data-i18n="home.cardLive">Live</span>
+                  <span class="deal-chip deal-chip-sample" data-i18n="home.sample">Sample</span>
+                </div>
+                <div class="deal-card-body">
+                  <div class="deal-card-name">
+                    <strong data-i18n="home.posterBizName">Cedar &amp; Bean</strong>
+                    <small data-i18n="home.cardDistance">0.5 mi</small>
+                  </div>
+                  <p class="deal-card-offer" data-i18n="home.offerColdBrew">40% off cold brew</p>
+                  <div class="deal-card-meta">
+                    <span data-i18n="home.cardEnds">Ends in 42 min</span>
+                    <span class="deal-card-claim" data-i18n="home.cardClaim">Claim deal</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </article>
-          <div class="benefit-row">
-            <article><span>01</span><h3 data-i18n="home.findTitle">Find Live Deals</h3><p data-i18n="home.findBody">See timely offers from local cafes, bakeries, coffee shops, and more.</p></article>
-            <article><span>02</span><h3 data-i18n="home.realtimeTitle">Real-Time Updates</h3><p data-i18n="home.realtimeBody">Sort by time, distance, availability, and location before the offer expires.</p></article>
-            <article><span>03</span><h3 data-i18n="home.localTitle">Support Local</h3><p data-i18n="home.localBody">Try nearby businesses and help local owners through their quiet hours.</p></article>
-          </div>
         </div>
       </section>
 
       <section id="for-businesses" class="section-band home-story business-story">
         <div class="container">
-          <article class="story-panel business-panel">
+          <article class="story-panel business-panel" data-reveal="0">
             <div class="story-copy">
               <p class="eyebrow" data-i18n="home.businessEyebrow">For businesses</p>
               <h2 data-i18n="home.businessTitle">Turn your slow hours into a reason to visit</h2>
-              <p data-i18n="home.businessBody">Create limited-time local offers, bonus item offers, or strong savings deals in under 2 minutes. You control the window, quantity, terms, and when it goes live.</p>
+              <p data-i18n="home.businessBody">Create two-for-one deals, bonus items, or big limited-time discounts in under 2 minutes. You control the window, quantity, terms, and when it goes live.</p>
               <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
             </div>
             <section class="business-console" aria-label="Sample business promotion workflow" data-i18n-aria-label="a11y.businessWorkflow">
-              <div class="console-topline"><span data-i18n="home.promoKicker">AI-assisted promotion setup</span><span class="console-status" data-i18n="home.sample">Sample</span></div>
-              <div class="console-feature"><span>01</span><div><strong data-i18n="home.generateTitle">Generate the Ad</strong><p data-i18n="home.generateBody">Upload a photo or describe the item; AI drafts clear promotion copy you can edit.</p></div></div>
-              <div class="console-feature"><span>02</span><div><strong data-i18n="home.controlTitle">Control the Offer</strong><p data-i18n="home.controlBody">Set the time window, quantity, terms, and pause or publish status.</p></div></div>
-              <div class="console-feature"><span>03</span><div><strong data-i18n="home.reviewTitle">Review and Publish</strong><p data-i18n="home.reviewBody">You review the AI draft, edit anything, and publish. Your deal goes live instantly.</p></div></div>
+              <div class="console-topline"><span data-i18n="home.promoKicker">AI-assisted promotion setup</span><span class="console-status" data-i18n="home.consolePreview">Preview</span></div>
+              <div class="console-feature"><span>01</span><div><strong data-i18n="home.generateTitle">Generate the ad</strong><p data-i18n="home.generateBody">Upload a photo or describe the item; AI drafts clear promotion copy you can edit.</p></div></div>
+              <div class="console-feature"><span>02</span><div><strong data-i18n="home.controlTitle">Control the offer</strong><p data-i18n="home.controlBody">Set the time window, quantity, terms, and pause or publish status.</p></div></div>
+              <div class="console-feature"><span>03</span><div><strong data-i18n="home.reviewTitle">Review and publish</strong><p data-i18n="home.reviewBody">You review the AI draft, edit anything, and publish. Your deal goes live instantly.</p></div></div>
             </section>
           </article>
-          <div class="business-photo-band">
-            <img src="/assets/photo-cafe-interior.jpg" alt="Interior of a local cafe" data-i18n-alt="a11y.businessCafeImage" width="1200" height="800" loading="lazy" decoding="async" onerror="this.closest('.business-photo-band').classList.add('media-unavailable'); this.remove();" />
-            <img class="band-app-shot" src="/assets/app-ai-poster.webp" alt="AI-generated poster for a cafe deal" data-i18n-alt="a11y.aiPosterShot" width="564" height="702" loading="lazy" decoding="async" onerror="this.remove();" />
-            <div><span data-i18n="home.promoKicker">AI-assisted promotion setup</span><strong data-i18n="home.promoText">From a quick photo to a finished ad. No designer needed.</strong></div>
+          <div class="business-photo-band" data-reveal="1">
+            <div class="band-copy">
+              <span data-i18n="home.bandKicker">Made with Twofer</span>
+              <strong data-i18n="home.promoText">From a quick photo to a finished ad. No designer needed.</strong>
+            </div>
+            <div class="band-pair">
+              <figure class="band-input">
+                <img class="photo-grade" src="/assets/photo-bakery-croissants.jpg" alt="Fresh croissants on a bakery tray" data-i18n-alt="a11y.heroBakeryImage" width="900" height="720" loading="lazy" decoding="async" />
+                <figcaption data-i18n="home.bandInputLabel">The quick photo</figcaption>
+              </figure>
+              <span class="band-arrow" aria-hidden="true">&rarr;</span>
+              <figure class="band-output">
+                <div class="ad-poster">
+                  <span class="ad-poster-biz" data-i18n="home.posterBizName">Cedar &amp; Bean</span>
+                  <strong class="ad-poster-headline" data-i18n="home.posterHeadline">2 for 1 croissants</strong>
+                  <span class="ad-poster-offer" data-i18n="home.posterOffer">Buy one, get one free</span>
+                  <span class="ad-poster-window" data-i18n="home.posterWindow">Today &middot; 2&ndash;5 PM</span>
+                </div>
+                <figcaption data-i18n="home.bandOutputLabel">The finished ad</figcaption>
+              </figure>
+            </div>
           </div>
         </div>
       </section>
 
       <section id="how-it-works" class="section-band dark-band home-steps">
         <div class="container">
-          <div class="steps-heading"><p class="eyebrow" data-i18n="home.flowTitle">Live local deals, made simple</p><h2 data-i18n="home.howTitle">How Twofer Works</h2></div>
+          <div class="steps-heading" data-reveal="0"><p class="eyebrow" data-i18n="home.flowTitle">Live local deals, made simple</p><h2 data-i18n="home.howTitle">How Twofer works</h2></div>
           <div class="step-grid">
-            <article><span>01</span><h3 data-i18n="home.step1Title">A business publishes a deal</h3><p data-i18n="home.step1Body">A local shop turns a quiet stretch into a limited-time offer, created and published in minutes.</p></article>
-            <article><span>02</span><h3 data-i18n="home.step2Title">Nearby customers see it live</h3><p data-i18n="home.step2Body">The deal shows up instantly for people nearby, sorted by time and distance.</p></article>
-            <article><span>03</span><h3 data-i18n="home.step3Title">Claim and redeem</h3><p data-i18n="home.step3Body">Claim in one tap, send one to a friend, and show your QR code in store before time runs out.</p></article>
+            <article data-reveal="0">
+              <div class="step-visual" aria-hidden="true">
+                <div class="mini-ui mini-publish">
+                  <span class="mini-offer" data-i18n="home.posterHeadline">2 for 1 croissants</span>
+                  <span class="mini-pill" data-i18n="home.miniPublished">Published</span>
+                </div>
+              </div>
+              <span>01</span><h3 data-i18n="home.step1Title">A business publishes a deal</h3><p data-i18n="home.step1Body">A local shop turns a quiet stretch into a limited-time offer, created and published in minutes.</p>
+            </article>
+            <article data-reveal="1">
+              <div class="step-visual" aria-hidden="true">
+                <div class="mini-ui mini-live">
+                  <img class="photo-grade" src="/assets/photo-bakery-croissants.jpg" alt="" loading="lazy" decoding="async" />
+                  <span class="mini-copy"><strong data-i18n="home.posterHeadline">2 for 1 croissants</strong><small data-i18n="home.posterBizName">Cedar &amp; Bean</small></span>
+                  <span class="mini-meta" data-i18n="home.cardDistance">0.5 mi</span>
+                </div>
+              </div>
+              <span>02</span><h3 data-i18n="home.step2Title">Nearby customers see it live</h3><p data-i18n="home.step2Body">The deal shows up instantly for people nearby, sorted by time and distance.</p>
+            </article>
+            <article data-reveal="2">
+              <div class="step-visual" aria-hidden="true">
+                <div class="mini-ui mini-qr">
+                  <svg class="mini-qr-code" viewBox="0 0 25 25" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path d="M0 0h7v1h-7zM8 0h1v1h-1zM10 0h1v1h-1zM13 0h1v1h-1zM15 0h2v1h-2zM18 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM14 1h1v1h-1zM16 1h1v1h-1zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h4v1h-4zM15 2h1v1h-1zM18 2h1v1h-1zM20 2h3v1h-3zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h1v1h-1zM10 3h7v1h-7zM18 3h1v1h-1zM20 3h3v1h-3zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h3v1h-3zM13 4h4v1h-4zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h3v1h-3zM13 5h2v1h-2zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h7v1h-7zM8 7h2v1h-2zM12 7h1v1h-1zM14 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1zM6 8h3v1h-3zM11 8h2v1h-2zM17 8h5v1h-5zM24 8h1v1h-1zM0 9h2v1h-2zM5 9h1v1h-1zM7 9h1v1h-1zM12 9h2v1h-2zM15 9h3v1h-3zM20 9h2v1h-2zM23 9h1v1h-1zM2 10h2v1h-2zM6 10h1v1h-1zM8 10h2v1h-2zM11 10h2v1h-2zM15 10h1v1h-1zM19 10h4v1h-4zM2 11h4v1h-4zM9 11h4v1h-4zM18 11h2v1h-2zM22 11h2v1h-2zM0 12h3v1h-3zM6 12h5v1h-5zM12 12h1v1h-1zM15 12h1v1h-1zM17 12h2v1h-2zM21 12h4v1h-4zM0 13h1v1h-1zM2 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM15 13h3v1h-3zM20 13h1v1h-1zM23 13h1v1h-1zM2 14h1v1h-1zM6 14h2v1h-2zM15 14h1v1h-1zM19 14h4v1h-4zM3 15h2v1h-2zM10 15h1v1h-1zM12 15h1v1h-1zM18 15h3v1h-3zM22 15h2v1h-2zM0 16h2v1h-2zM3 16h1v1h-1zM6 16h7v1h-7zM14 16h1v1h-1zM16 16h7v1h-7zM8 17h2v1h-2zM12 17h1v1h-1zM14 17h3v1h-3zM20 17h1v1h-1zM0 18h7v1h-7zM8 18h1v1h-1zM10 18h5v1h-5zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h1v1h-1zM11 19h2v1h-2zM16 19h1v1h-1zM20 19h3v1h-3zM0 20h1v1h-1zM2 20h3v1h-3zM6 20h1v1h-1zM8 20h2v1h-2zM11 20h2v1h-2zM16 20h7v1h-7zM0 21h1v1h-1zM2 21h3v1h-3zM6 21h1v1h-1zM9 21h3v1h-3zM13 21h2v1h-2zM18 21h2v1h-2zM22 21h3v1h-3zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h1v1h-1zM10 22h4v1h-4zM16 22h3v1h-3zM21 22h1v1h-1zM23 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM10 23h1v1h-1zM12 23h1v1h-1zM14 23h1v1h-1zM18 23h6v1h-6zM0 24h7v1h-7zM8 24h5v1h-5zM15 24h1v1h-1zM22 24h3v1h-3z" fill="currentColor"/></svg>
+                  <span class="mini-meta" data-i18n="home.miniShowQr">Show at the counter</span>
+                </div>
+              </div>
+              <span>03</span><h3 data-i18n="home.step3Title">Claim and redeem</h3><p data-i18n="home.step3Body">Claim in one tap, send one to a friend, and show your QR code in store before time runs out.</p>
+            </article>
           </div>
         </div>
       </section>
 
       <section class="section-band home-final-cta">
         <div class="container">
-          <div class="final-cta-panel">
-            <div><p class="eyebrow" data-i18n="home.businessEyebrow">For businesses</p><h2 data-i18n="home.ownBusiness">Own or manage a local business?</h2><p data-i18n="home.ownBusinessBody">New business accounts are reviewed before they can publish. Submit a business access request below or contact support@twoferapp.com.</p></div>
-            <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+          <div class="final-cta-panel" data-reveal="0">
+            <div>
+              <p class="eyebrow" data-i18n="home.businessEyebrow">For businesses</p>
+              <h2 data-i18n="home.ownBusiness">Own or manage a local business?</h2>
+              <p data-i18n="home.ownBusinessBody">New business accounts are reviewed before they can publish. Submit a business access request below or contact support@twoferapp.com.</p>
+              <div class="final-cta-actions">
+                <a class="button" href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+                <a class="final-cta-alt" href="#get-the-app" data-i18n="home.finalCustomerLine">Just want the deals? The app is free.</a>
+              </div>
+            </div>
+            <img class="final-cta-mascot" src="/assets/twofer-mascot-360.webp" alt="" width="263" height="360" loading="lazy" decoding="async" />
           </div>
         </div>
       </section>
 
       <section class="section-band faq-band home-faq">
-        <div class="faq-wrap">
-          <h2 data-i18n="home.faqTitle">Frequently Asked Questions</h2>
+        <div class="faq-wrap" data-reveal="0">
+          <h2 data-i18n="home.faqTitle">Frequently asked questions</h2>
           <details><summary data-i18n="home.faqQ1">What is Twofer?</summary><p data-i18n="home.faqA1">Twofer is a live local deals app for customers and an AI-assisted promotion tool for local businesses.</p></details>
           <details><summary data-i18n="home.faqQ2">Are the deals real?</summary><p data-i18n="home.faqA2">Yes. Deals in the app come from approved local businesses. The app screens and cards on this page show sample offers.</p></details>
           <details><summary data-i18n="home.faqQ3">Why do businesses need to be approved?</summary><p data-i18n="home.faqA3">New business accounts are reviewed to keep published deals tied to real local businesses.</p></details>
-          <details><summary data-i18n="home.faqQ4">What kinds of promotions can businesses create?</summary><p data-i18n="home.faqA4">Businesses can create local offers, bonus item offers, and limited-time deals with controlled time windows and quantities.</p></details>
+          <details><summary data-i18n="home.faqQ4">What kinds of promotions can businesses create?</summary><p data-i18n="home.faqA4">Two-for-one deals, bonus items, and limited-time discounts, each with a controlled time window, quantity, and terms.</p></details>
           <details><summary data-i18n="home.faqQ5">Is Twofer free for customers?</summary><p data-i18n="home.faqA5">Yes. Twofer is free for customers.</p></details>
           <details><summary data-i18n="home.faqQ6">Where is Twofer available?</summary><p data-i18n="home.faqA6">Twofer is live in the Dallas-Fort Worth area, with more cities planned.</p></details>
         </div>
@@ -260,27 +317,38 @@
 
     <footer class="site-footer">
       <div class="footer-inner">
-        <a class="brand footer-brand" href="/" aria-label="Twofer home">
-          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
-          <span>Twofer</span>
-        </a>
-        <p data-i18n="home.footerBody1">Live local deals for customers, with AI promotion tools and QR redemption controls for local businesses.</p>
-        <p data-i18n="home.footerBody2">Live in Dallas-Fort Worth. More cities planned.</p>
-        <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>
-        <div class="footer-stores">
-          <a href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios">Get Twofer for iPhone</a>
-          <a href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android">Get Twofer for Android</a>
-        </div>
-        <div class="footer-links">
-          <a href="/privacy" data-i18n="site.privacy">Privacy Policy</a>
-          <a href="/terms" data-i18n="site.terms">Terms of Service</a>
-          <a href="/support" data-i18n="nav.support">Support</a>
+        <div class="footer-grid">
+          <div class="footer-brand-col">
+            <a class="brand footer-brand" href="/" aria-label="Twofer home">
+              <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
+              <span>Twofer</span>
+            </a>
+            <p data-i18n="home.footerBody2">Live in Dallas-Fort Worth. More cities planned.</p>
+            <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>
+          </div>
+          <nav class="footer-col" aria-label="Get the app">
+            <strong data-i18n="home.footApp">Get the app</strong>
+            <a href="https://apps.apple.com/us/app/twofer-local-deals-on-demand/id6765769303" data-store-cta="ios">Get Twofer for iPhone</a>
+            <a href="https://play.google.com/store/apps/details?id=com.unvmex2.twoforone" data-store-cta="android">Get Twofer for Android</a>
+          </nav>
+          <nav class="footer-col" aria-label="For businesses">
+            <strong data-i18n="nav.businesses">For Businesses</strong>
+            <a href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+            <a href="/business-terms" data-i18n="home.footBizTerms">Business terms</a>
+          </nav>
+          <nav class="footer-col" aria-label="Company">
+            <strong data-i18n="home.footCompany">Company</strong>
+            <a href="/support" data-i18n="nav.support">Support</a>
+            <a href="/privacy" data-i18n="site.privacy">Privacy Policy</a>
+            <a href="/terms" data-i18n="site.terms">Terms of Service</a>
+          </nav>
         </div>
         <small>&copy; Twofer 2026</small>
       </div>
     </footer>
-    <a class="back-to-top" href="#top" aria-label="Back to top">^</a>
-    <script src="/localization.js?v=20260726-billing-copy"></script>
+    <a class="back-to-top" href="#top" aria-label="Back to top"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5.2 4 13.2l1.9 1.9 6.1-6 6.1 6 1.9-1.9z" fill="currentColor"/></svg></a>
+    <script src="/localization.js?v=20260801-homepage-redesign"></script>
     <script src="/launch-signup.js?v=20260707-launch-signup"></script>
+    <script defer src="/home-motion.js?v=20260801-homepage-redesign"></script>
   </body>
 </html>
