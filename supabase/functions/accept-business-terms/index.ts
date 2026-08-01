@@ -5,6 +5,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { CURRENT_BUSINESS_TERMS_VERSION } from "../_shared/business-onboarding-sync.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { sanitizeOrFilterValue } from "../_shared/postgrest-or-filter.ts";
 
 type DbClient = SupabaseClient<any, any, any, any, any>;
 
@@ -46,7 +47,7 @@ async function assertCanAccept(
     .from("business_members")
     .select("id,role,status")
     .eq("business_id", businessId)
-    .or(`user_id.eq.${userId},invited_email.eq.${email}`)
+    .or(`user_id.eq.${userId},invited_email.eq.${sanitizeOrFilterValue(email)}`)
     .maybeSingle();
   if (memberError) throw memberError;
   const memberRow = member as { status?: string; role?: string } | null;

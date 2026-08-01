@@ -3,7 +3,8 @@ export type AiQuotaScope =
   | "compose_offer"
   | "deal_copy"
   | "deal_suggestions"
-  | "deal_translate";
+  | "deal_translate"
+  | "studio_draft";
 
 export const AI_QUOTA_SCOPES: readonly AiQuotaScope[] = [
   "ad_generation",
@@ -11,6 +12,7 @@ export const AI_QUOTA_SCOPES: readonly AiQuotaScope[] = [
   "deal_copy",
   "deal_suggestions",
   "deal_translate",
+  "studio_draft",
 ] as const;
 
 export function isAiQuotaScope(value: unknown): value is AiQuotaScope {
@@ -37,10 +39,14 @@ export function requestTypesForQuotaScope(scope: AiQuotaScope): string[] {
       return ["deal_suggestions"];
     case "deal_translate":
       return ["deal_translate"];
+    case "studio_draft":
+      return ["ai_studio_draft"];
   }
 }
 
 function countOnlySuccessfulProviderCalls(scope: AiQuotaScope): boolean {
+  // studio_draft logs one row per successful generation (no failure-path rows),
+  // so counting by request_type alone already counts real generations.
   return scope === "ad_generation" || scope === "compose_offer";
 }
 

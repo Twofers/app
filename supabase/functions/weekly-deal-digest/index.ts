@@ -15,6 +15,7 @@ import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push
 import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "../_shared/digest-targeting.ts";
 import { buildDigestPushCopy, fetchProfileLocaleByUserId } from "../_shared/viewer-locale.ts";
 import { loadRepeatBlockedPairs, repeatBlockKey } from "../_shared/repeat-claim-audience.ts";
+import { constantTimeEqual } from "../_shared/constant-time-equal.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 
 const DIGEST_DAYS = 7;
@@ -39,7 +40,7 @@ serve(async (req) => {
   const provided = req.headers.get("x-cron-secret");
   let authorized = false;
   const envSecret = Deno.env.get("CRON_SECRET");
-  if (envSecret && provided && provided === envSecret) {
+  if (envSecret && provided && constantTimeEqual(provided, envSecret)) {
     authorized = true;
   }
   if (!authorized && provided) {

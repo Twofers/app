@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `189`
-- Latest: `20260824144000_revoke_nested_definer_helper_client_execute.sql`
+- Count: `190`
+- Latest: `20260824145000_consume_business_claim_link_use_rpc.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 

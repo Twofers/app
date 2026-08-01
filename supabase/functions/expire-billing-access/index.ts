@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { applyBusinessBillingAccessState } from "../_shared/business-location-entitlement-sync.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { constantTimeEqual } from "../_shared/constant-time-equal.ts";
 
 const MAX_CANDIDATES = 500;
 
@@ -35,7 +36,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 async function isAuthorized(admin: any, provided: string | null): Promise<boolean> {
   const envSecret = Deno.env.get("CRON_SECRET");
-  if (envSecret && provided && provided === envSecret) return true;
+  if (envSecret && provided && constantTimeEqual(provided, envSecret)) return true;
   if (!provided) return false;
   try {
     const { data } = await admin.rpc("verify_billing_reminder_secret", { p_secret: provided });

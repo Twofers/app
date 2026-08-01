@@ -183,8 +183,11 @@ describe("admin dashboard foundation", () => {
     expect(browserSession).not.toMatch(/Domain=/);
 
     const sessionEndpoint = read("website/api/admin/session.js");
-    expect(sessionEndpoint).toMatch(/issued_at: pending\.issued_at/);
-    expect(sessionEndpoint).toMatch(/absolute_expires_at: pending\.absolute_expires_at/);
+    // Web-attack review 2026-07-31, F4: the non-MFA login path must issue a FRESH
+    // session and must NOT read `pending` before its declaration (a temporal-dead-
+    // zone ReferenceError, and semantically wrong on a fresh login).
+    expect(sessionEndpoint).toMatch(/setState\(res, sessionState\(payload\.session\)\);/);
+    expect(sessionEndpoint).not.toMatch(/issued_at: pending\.issued_at/);
 
     const loginScript = read("website/admin/admin-login.js");
     const shellScript = read("website/admin/admin-shell.js");

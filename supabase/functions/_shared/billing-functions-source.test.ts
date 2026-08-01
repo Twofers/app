@@ -47,11 +47,13 @@ describe("billing edge function safety", () => {
     // Audit F-005: the request body must never choose the Stripe price or a
     // gate-bypassing source. The price is resolved server-side only; "test"
     // does not exist as a source; the token branch is pinned to "email"; and
-    // "admin" requires a verified active admin role.
+    // "admin" requires a verified admin session. Web-attack review 2026-07-31
+    // H-2 strengthened that bar to the shared founder-lock + MFA gate.
     expect(source).not.toMatch(/body\.price_id/);
     expect(source).not.toMatch(/=== "test"/);
     expect(source).toMatch(/source = "email"/);
-    expect(source).toMatch(/source = requestedSource === "admin" && adminCanCreateCheckout\(authz\.adminRole\) \? "admin" : "website"/);
+    expect(source).toMatch(/source = requestedSource === "admin" && authz\.adminGranted \? "admin" : "website"/);
+    expect(source).toMatch(/adminBillingAccessGranted/);
     // Audit F-006: token consumption goes through the atomic RPC; no JS-side
     // read-then-update on use_count may remain.
     expect(source).toMatch(/rpc\("consume_billing_token"/);

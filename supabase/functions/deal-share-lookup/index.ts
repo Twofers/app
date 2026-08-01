@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { enforceAnonReadRateLimit } from "../_shared/anon-read-rate-limit.ts";
 
 // Mirrors lib/deal-share-link.ts SHARE_CODE_RE and the RPC's own validation:
 // 7 chars from the crockford-ish alphabet (no 0/O/I/L/1).
@@ -71,6 +72,16 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       getServiceRoleKey(),
     );
+    // M-5: bound unauthenticated share-code lookups per IP (defence in depth on
+    // top of the RPC's per-row open-count throttle).
+    const { limited } = await enforceAnonReadRateLimit(supabase, req, {
+      surface: "deal-share-lookup",
+      actorLimit: 120,
+      globalLimit: 20000,
+      windowSeconds: 900,
+    });
+    if (limited) return jsonResponse(req, { error: "Too many requests. Please slow down." }, 429);
+
     const { data, error } = await supabase.rpc("lookup_deal_share", { lookup_code: code });
     if (error) {
       console.error("[deal-share-lookup] rpc failed:", error.message ?? error);

@@ -10,6 +10,7 @@ import {
   type QrDestinationType,
 } from "../_shared/qr-campaign.ts";
 import { tryGetServiceRoleKey } from "../_shared/service-role-key.ts";
+import { enforceAnonReadRateLimit } from "../_shared/anon-read-rate-limit.ts";
 
 type ActiveCampaign = {
   id: string;
@@ -86,6 +87,17 @@ Deno.serve(async (req) => {
   // HEAD requests are often preflight/link-preview probes. Redirect them but
   // do not treat them as a customer scan event.
   if (req.method === "HEAD") return redirect(destination.url);
+
+  // M-5: bound scan-telemetry writes per IP so a script cannot inflate scan
+  // counts / grow the table. If over budget, still redirect the human — just
+  // skip recording. Fails open when the abuse secret is unset.
+  const { limited: scanLimited } = await enforceAnonReadRateLimit(supabase, req, {
+    surface: "qr-campaign-redirect",
+    actorLimit: 60,
+    globalLimit: 50000,
+    windowSeconds: 900,
+  });
+  if (scanLimited) return redirect(destination.url);
 
   const ipHash = await dailyQrIpHash({
     ip: clientIpFromRequest(req),

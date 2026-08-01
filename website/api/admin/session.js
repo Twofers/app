@@ -53,10 +53,11 @@ module.exports = async function handler(req, res) {
         factor_id: payload.factor_id || null,
       });
     }
-    setState(res, sessionState(payload.session, {
-      issued_at: pending.issued_at,
-      absolute_expires_at: pending.absolute_expires_at,
-    }));
+    // A fresh password login that already satisfies MFA issues a NEW session on
+    // a fresh clock. (Previously this read `pending.*` before its declaration
+    // below — a temporal-dead-zone ReferenceError, and semantically wrong since
+    // no pending state exists on a fresh login. Web-attack review 2026-07-31, F4.)
+    setState(res, sessionState(payload.session));
     return send(res, 200, { ok: true, authenticated: true });
   }
 

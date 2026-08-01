@@ -10,6 +10,7 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { adminBillingAccessGranted, bearerTokenFromRequest } from "../_shared/stripe-admin-gate.ts";
 
 type PortalSource = "admin" | "merchant_web" | "email";
 
@@ -53,17 +54,23 @@ async function activeAdminRole(supabase: any, userId: string): Promise<string | 
   return data?.is_active ? safeGetString(data.role) : null;
 }
 
-function adminCanOpenPortal(role: string | null): boolean {
-  return role === "owner" || role === "admin" || role === "finance" || role === "support";
-}
-
-async function userCanOpenPortal(supabase: any, businessId: string, userId: string, source: PortalSource): Promise<{
+async function userCanOpenPortal(
+  supabase: any,
+  businessId: string,
+  userId: string,
+  source: PortalSource,
+  accessToken: string,
+): Promise<{
   ok: boolean;
   adminRole: string | null;
+  adminGranted: boolean;
 }> {
   const adminRole = await activeAdminRole(supabase, userId);
-  if (source === "admin") return { ok: adminCanOpenPortal(adminRole), adminRole };
-  if (adminRole && adminCanOpenPortal(adminRole)) return { ok: true, adminRole };
+  // Admin surface requires the full founder-lock + MFA bar (H-2), not just an
+  // active admin_users role.
+  const adminGranted = adminBillingAccessGranted({ userId, role: adminRole, accessToken });
+  if (source === "admin") return { ok: adminGranted, adminRole, adminGranted };
+  if (adminGranted) return { ok: true, adminRole, adminGranted };
 
   const { data: business, error: businessError } = await supabase
     .from("businesses")
@@ -71,7 +78,7 @@ async function userCanOpenPortal(supabase: any, businessId: string, userId: stri
     .eq("id", businessId)
     .maybeSingle();
   if (businessError) throw businessError;
-  if (business?.owner_id === userId) return { ok: true, adminRole: null };
+  if (business?.owner_id === userId) return { ok: true, adminRole: null, adminGranted: false };
 
   const { data: member, error: memberError } = await supabase
     .from("business_members")
@@ -82,7 +89,7 @@ async function userCanOpenPortal(supabase: any, businessId: string, userId: stri
     .in("role", ["owner", "manager"])
     .maybeSingle();
   if (memberError) throw memberError;
-  return { ok: Boolean(member?.id), adminRole: null };
+  return { ok: Boolean(member?.id), adminRole: null, adminGranted: false };
 }
 
 /**
@@ -162,13 +169,14 @@ serve(async (req) => {
       if (userError || !user) return jsonResponse(req, { error: "Unauthorized." }, 401);
       if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
       userId = user.id;
-      const authz = await userCanOpenPortal(supabaseAdmin, businessId, user.id, requestedSource);
+      const accessToken = bearerTokenFromRequest(req);
+      const authz = await userCanOpenPortal(supabaseAdmin, businessId, user.id, requestedSource, accessToken);
       if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
       adminRole = authz.adminRole;
-      // "admin" only with a verified active admin role; every other
-      // authenticated caller is the merchant web surface — the body cannot
+      // "admin" only with a founder-lock + MFA-verified admin session (H-2); every
+      // other authenticated caller is the merchant web surface — the body cannot
       // relabel a session as "email" (that is derived from the token branch).
-      source = requestedSource === "admin" && adminCanOpenPortal(authz.adminRole) ? "admin" : "merchant_web";
+      source = requestedSource === "admin" && authz.adminGranted ? "admin" : "merchant_web";
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);
