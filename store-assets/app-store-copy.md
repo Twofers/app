@@ -5,7 +5,7 @@
 ## iOS App Store
 
 ### App Name
-**Twofer**
+**Twofer: Live Local Deals**
 
 ### Subtitle *(30 chars max)*
 Live BOGO deals from local cafes
@@ -37,8 +37,8 @@ Twofer is built for the neighborhood spots that make your city worth living in. 
 ### Keywords *(100 chars max)*
 bogo,deals,local,cafe,coffee,bakery,discount,coupon,food,nearby,wallet,qr
 
-### What's New (v1.0)
-Twofer launches with full support for browsing, claiming, and redeeming live BOGO deals. Business owners can post deals manually or use AI Compose to generate polished offers from a photo or a few words.
+### What's New (v1.0.2)
+More dependable claiming and redemption, including improved manual redemption and wallet-to-app flows. Business owners also get a smoother publish experience, better fallback ads when photos are unavailable, menu-item promotion choices, and refined AI-assisted copy. Spanish and Korean deal messaging has been polished throughout.
 
 ---
 
@@ -85,6 +85,9 @@ Food & Drink
 
 ### Tags / Store Topics
 Deals, Coupons, Local Business, Coffee, Food, Restaurants
+
+### Release Notes (v1.0.2)
+More dependable claiming and redemption, improved wallet and manual-redemption flows, smoother business publishing, better fallback ads, menu-item promotion choices, refined AI-assisted copy, and polished Spanish and Korean deal messaging.
 
 ---
 

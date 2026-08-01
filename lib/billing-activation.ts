@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 import { supabase } from "./supabase";
 import { EDGE_FUNCTION_TIMEOUT_MS, getErrorCode, parseFunctionError } from "./functions";
 
@@ -22,6 +24,21 @@ import { EDGE_FUNCTION_TIMEOUT_MS, getErrorCode, parseFunctionError } from "./fu
 export type TrialCheckoutResult =
   | { ok: true; url: string }
   | { ok: false; message: string; code?: string };
+
+/** Dedicated client gate; Android remains closed even when the flag is true. */
+export function isIosTrialCheckoutEnabled(): boolean {
+  return Platform.OS === "ios" && process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT === "true";
+}
+
+/** Checkout sessions created by this flow must stay on Stripe's hosted origin. */
+export function isAllowedStripeCheckoutUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "checkout.stripe.com";
+  } catch {
+    return false;
+  }
+}
 
 // Mirrors readInvokeErrorBody in lib/business-terms.ts: edge functions return
 // `{ error, error_code }` JSON on non-2xx responses, but supabase-js wraps that
@@ -48,17 +65,28 @@ async function readInvokeErrorBody(error: unknown): Promise<{ message?: string; 
 /**
  * Mints a Stripe Checkout URL for the signed-in owner's approved trial.
  *
- * Never throws: callers fall back to opening the website billing page, which
- * explains the emailed-link path. `locale` is the app's current i18n language;
- * the server normalizes it to a Stripe locale.
+ * Never throws: callers remain on the localized approval-email/support path.
+ * `locale` is the app's current i18n language; the server normalizes it to a
+ * Stripe locale.
  */
 export async function createTrialCheckoutUrl(
   businessId: string,
   locale?: string,
 ): Promise<TrialCheckoutResult> {
+  if (!isIosTrialCheckoutEnabled()) {
+    return {
+      ok: false,
+      message: "Trial Checkout is not available on this device.",
+      code: "IOS_TRIAL_CHECKOUT_UNAVAILABLE",
+    };
+  }
+  if (!businessId) {
+    return { ok: false, message: "Business account is required.", code: "BUSINESS_ID_REQUIRED" };
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke("stripe-create-checkout-session", {
-      body: { business_id: businessId, ...(locale ? { locale } : {}) },
+      body: { business_id: businessId, source: "native_ios", ...(locale ? { locale } : {}) },
       timeout: EDGE_FUNCTION_TIMEOUT_MS,
     });
 
@@ -82,6 +110,13 @@ export async function createTrialCheckoutUrl(
 
     const url = typeof body.checkout_url === "string" ? body.checkout_url : "";
     if (!url) return { ok: false, message: "Checkout link was not returned." };
+    if (!isAllowedStripeCheckoutUrl(url)) {
+      return {
+        ok: false,
+        message: "Checkout returned an unsupported destination.",
+        code: "CHECKOUT_URL_NOT_ALLOWED",
+      };
+    }
     return { ok: true, url };
   } catch (err) {
     return { ok: false, message: parseFunctionError(err), code: getErrorCode(err) };

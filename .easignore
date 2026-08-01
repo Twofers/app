@@ -1,10 +1,6 @@
 # Sensitive local config and credentials
-.env
-.env*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+key.txt
 *.jks
 *.keystore
 *.p8
@@ -74,12 +70,25 @@ spanish_play_screenshots_*/
 ux_*/
 TWOFER_AI_*.md
 meeting minutes/
+ap store/
+deal_created_page_screenshot/
+final-owner-demo-visual-polish/
+findings/
+fn-check/
+ios-screenshots/
+s10-app-store-prep-*/
+testsprite_tests/
+twofer_post_fix_qa_*/
 docs/store-release-prep.md
 qa-screens/
 screenshots/
 .claude/
 .codex/
 .codex-remote-attachments/
+.agents/
+.cursor/
+.idea/
+.vscode/
 claude-history-export/
 project-knowledge/
 convert-claude-history.ps1
@@ -88,12 +97,25 @@ convert-claude-history.ps1
 penguinfalls-build-plan.md
 twofer-audit-setup.js
 
+# Non-mobile source trees are versioned in this repository but never belong in
+# the EAS upload context for a production native binary.
+website/
+docs/
+supabase/
+store-assets/
+/store.config.json
+/store/
+outdated/
+.github/
+
 # Local signing/credential helper scripts — must never upload to build servers
 set-signing-creds.ps1
 *-signing-creds.ps1
 
 # Stray local documents/exports that would otherwise bloat the EAS upload
 *.pdf
+AI_IMAGE_GEMINI_ACTIVATION_PLAN.md
+twofer-developer-handoff-spec.md
 
 # Common local junk
 .DS_Store

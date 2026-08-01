@@ -623,8 +623,8 @@
     "reuseDeal": "Repetir oferta anterior",
     "reuseDealSub": "Relanza una plantilla u oferta anterior",
     "setupApprovedTitle": "Aprobado para configurar",
-    "setupApprovedBody": "Termina tu perfil y menú ahora. Tu prueba de 30 días, herramientas de IA, publicación, créditos y reclamos nuevos se desbloquean después del Checkout seguro.",
-    "setupApprovedCta": "Activar prueba de 30 días"
+    "setupApprovedBody": "Termina tu perfil y menú ahora. Para activar, usa tu correo de aprobación o contacta a soporte. En versiones elegibles para iPhone, también puede estar disponible el Checkout seguro.",
+    "setupApprovedCta": "Abrir Checkout seguro"
   },
   "menuScan": {
     "title": "Escanear menú",
@@ -2286,13 +2286,14 @@
     "inactiveTitle": "La cuenta comercial no está activa",
     "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
     "verifyTitle": "Aprobado para configurar",
-    "verifyBody": "Termina la configuración ahora. Tu prueba de 30 días comienza solo cuando Stripe confirma el checkout seguro.",
+    "verifyBody": "Termina la configuración ahora. Para activar, revisa tu correo de aprobación o contacta a soporte. En versiones elegibles para iPhone, también puede estar disponible el Checkout seguro.",
     "verifyEmailHint": "Correo de la cuenta aprobada:",
     "setupProgressProfile": "✓ El perfil y la ubicación del negocio están disponibles",
     "setupProgressMenu": "✓ El menú y los borradores de texto están disponibles",
     "setupProgressLocked": "Bloqueado hasta activar: IA, publicación, créditos y reclamos nuevos",
-    "startTrialCta": "Continuar en el sitio seguro",
+    "startTrialCta": "Abrir Checkout seguro",
     "startTrialOpening": "Abriendo el pago seguro...",
+    "checkoutUnavailable": "Checkout no está disponible ahora. Usa tu correo de aprobación o contacta a soporte abajo.",
     "contactSupport": "Contactar soporte"
   },
   "businessTerms": {

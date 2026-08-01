@@ -95,6 +95,8 @@ set-signing-creds.ps1
 # Stray local documents and store assets at the repo root
 /*.pdf
 /ap store/
+/store.config.json
+/store/
 
 # Local credential material handed over for backup/recovery configuration.
 # This repository is PUBLIC and secret-scanning non-provider patterns are off,

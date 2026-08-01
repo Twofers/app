@@ -39,7 +39,7 @@ describe("launch signup intake", () => {
     expect(source).toMatch(/\},\s*429\)/);
     // The rate-limit gate must run BEFORE the row is written.
     const rateLimitIndex = source.indexOf("claimSubmissionSlot(supabase");
-    const insertIndex = source.indexOf('from("launch_signups")\n      .upsert');
+    const insertIndex = source.indexOf('from("launch_signups")');
     expect(rateLimitIndex).toBeGreaterThan(-1);
     expect(insertIndex).toBeGreaterThan(rateLimitIndex);
     // Duplicate submissions are silently ignored so the response never

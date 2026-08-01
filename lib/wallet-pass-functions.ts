@@ -35,7 +35,7 @@ function blobToBase64(blob: Blob): Promise<string> {
  * Apple Wallet: the .pkpass is BINARY, and supabase.functions.invoke decodes
  * unknown content-types as text (which corrupts it), so fetch the endpoint
  * directly and read it as a Blob. Returns the base64 pass bytes for writing to
- * a file + handing to PassKit via the iOS share sheet.
+ * a file and handing it to the native PassKit add-pass controller.
  */
 export async function fetchAppleWalletPassBase64(locale: string): Promise<string> {
   const {

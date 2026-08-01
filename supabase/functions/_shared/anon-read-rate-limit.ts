@@ -12,7 +12,7 @@
 import { anonymousRequestActorHash } from "./anonymous-request-hash.ts";
 
 export async function enforceAnonReadRateLimit(
-  admin: { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+  admin: { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
   req: Request,
   opts: {
     surface: string;

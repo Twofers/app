@@ -101,59 +101,59 @@ Decisions recorded 2026-08-01:
 - [x] Finish, commit, or separately preserve the in-progress website redesign.
       Done 2026-08-01: committed, pushed, and deployed from
       `website/homepage-redesign-2026-08-01`.
-- [ ] Merge `website/homepage-redesign-2026-08-01` into protected `main` via
+- [x] Merge `website/homepage-redesign-2026-08-01` into protected `main` via
       PR, then cut `release/1.0.2` from `main`. Mobile source is identical on
       both today — the seven branch-only commits are website, docs, and Edge
       Function hardening — so basing on `main` loses nothing mobile.
-- [ ] Remove unrelated website files, plans, fonts, screenshots, and local QA
+- [x] Remove unrelated website files, plans, fonts, screenshots, and local QA
       artifacts from the mobile release candidate and EAS upload context.
       `.easignore` already excludes keystores, `key.txt`, certificates, PDFs,
       and QA artifact directories; verify it still covers everything present
       in the working tree at build time.
-- [ ] Ship the accumulated mobile commits as they sit on the release base. Do
+- [x] Ship the accumulated mobile commits as they sit on the release base. Do
       not cherry-pick a subset; that would produce a combination no one has
       tested.
-- [ ] Identify the exact 1.0.1 build commit from EAS build metadata (no git
+- [x] Identify the exact 1.0.1 build commit from EAS build metadata (no git
       tag exists for it) and attach the commit inventory since that SHA to
       the build report. This inventory is what makes section 4 checkable.
-- [ ] Diff `eas.json`'s production profile between the 1.0.1 SHA and the
+- [x] Diff `eas.json`'s production profile between the 1.0.1 SHA and the
       release SHA and record the `EXPO_PUBLIC_*` flag changes that will bake
       into this binary.
-- [ ] Confirm `git status --short` is empty immediately before each EAS build.
-- [ ] Record the release commit SHA in the build report and git-tag it
+- [x] Confirm `git status --short` is empty immediately before each EAS build.
+- [x] Record the release commit SHA in the build report and git-tag it
       `v1.0.2`, so the next release can answer "what changed since the last
       binary" without EAS archaeology.
 
 ## 2. Version and build configuration
 
-- [ ] Set `expo.version` in `app.json` to `1.0.2`.
-- [ ] Set the root package version in `package.json` and `package-lock.json` to
+- [x] Set `expo.version` in `app.json` to `1.0.2`.
+- [x] Set the root package version in `package.json` and `package-lock.json` to
       `1.0.2`.
-- [ ] Regenerate release-state after the version bump (`npm run
+- [x] Regenerate release-state after the version bump (`npm run
       release:state`) before running the gate; a stale generated state has
       failed submission before.
-- [ ] Keep EAS remote app-version management and auto-increment enabled.
-- [ ] Keep debug, dev-client, QA publishing, and screenshot flags absent from
+- [x] Keep EAS remote app-version management and auto-increment enabled.
+- [x] Keep debug, dev-client, QA publishing, and screenshot flags absent from
       production builds.
-- [ ] Confirm production Supabase, legal/support URLs, Google Maps key, social
+- [x] Confirm production Supabase, legal/support URLs, Google Maps key, social
       auth client ids, bundle id, and Android package resolve as expected
       without printing secret values.
-- [ ] Add the dedicated iOS Checkout flag with Android fail-closed behavior.
+- [x] Add the dedicated iOS Checkout flag with Android fail-closed behavior.
       Per the recorded decision, production sets
       `EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT=true`; launch behavior is
       controlled entirely by the server kill switch, which ships OFF.
-- [ ] Add and verify the server kill switch before the build. It ships OFF
+- [x] Add and verify the server kill switch before the build. It ships OFF
       and is the only control that enables iOS Checkout later without a new
       binary.
 
 ## 3. Required code and policy corrections
 
-- [ ] Implement the platform-specific Checkout contract above.
-- [ ] Update the public privacy policy before submission — required, not
+- [x] Implement the platform-specific Checkout contract above.
+- [x] Update the public privacy policy before submission — required, not
       conditional, because the submitted binary carries the Checkout
       capability even while the server switch is off. Remove any statement
       that incorrectly says the submitted app cannot initiate web Checkout.
-- [ ] Update Apple review notes to explain that consumer use is free, merchant
+- [x] Update Apple review notes to explain that consumer use is free, merchant
       accounts are reviewed, what the merchant subscription enables, where the
       purchase occurs, and how reviewers can test without making a payment.
       State plainly that the Checkout path exists in the binary and is
@@ -161,18 +161,18 @@ Decisions recorded 2026-08-01:
 - [ ] Confirm App Store availability is limited to eligible storefronts before
       submission, and reconfirm before the server switch is ever turned on.
       If eligibility fails, the kill switch stays off.
-- [ ] Complete the Apple Wallet pass type registration and signing certificate
+- [x] Complete the Apple Wallet pass type registration and signing certificate
       (currently parked) so the iOS wallet button yields a valid pass.
       Fallback if this slips: hide the iOS wallet button for 1.0.2.
 - [ ] Keep Google Play listing/review notes free of any Android external-payment
       direction.
-- [ ] Fix the seven current Edge Function type errors before merging or
+- [x] Fix the seven current Edge Function type errors before merging or
       deploying the web-attack-hardening work. Those errors live in the
       hardening commit on `website/homepage-redesign-2026-08-01`, so
       `npm run typecheck:functions` may already pass on `main`; re-measure on
       the actual release base instead of trusting the snapshot below.
-- [ ] Fix the two current full-suite test failures.
-- [ ] Align `react-native-worklets` with the Expo SDK 54 expected version
+- [x] Fix the two current full-suite test failures.
+- [x] Align `react-native-worklets` with the Expo SDK 54 expected version
       (`0.5.1` unless Expo's supported version changes before the build).
 
 ## 4. Actual 1.0.2 mobile scope
@@ -188,15 +188,15 @@ application, and native dependency bumps including expo-splash-screen.
 Section 6 must exercise these paths, and store/review notes must not describe
 the release as claim/redeem-only.
 
-- [ ] Verify the section 1 commit inventory contains only reviewed work;
+- [x] Verify the section 1 commit inventory contains only reviewed work;
       anything unreviewed gets reviewed now, not silently shipped or reverted
       piecemeal.
-- [ ] Keep automatic local-session removal for suspended or archived accounts.
-- [ ] Keep consistent support-email behavior across customer and merchant
+- [x] Keep automatic local-session removal for suspended or archived accounts.
+- [x] Keep consistent support-email behavior across customer and merchant
       surfaces.
-- [ ] Confirm all merchant states remain recoverable: pending, approved but not
+- [x] Confirm all merchant states remain recoverable: pending, approved but not
       activated, active trial, paid, suspended, expired, and archived.
-- [ ] Do not add Sentry or another new native SDK solely to make this train.
+- [x] Do not add Sentry or another new native SDK solely to make this train.
       Existing first-party error reporting and the monitoring runbook remain
       the compensating control unless a separate SDK change is reviewed and
       device-tested.
@@ -205,17 +205,17 @@ the release as claim/redeem-only.
 
 Every command must pass against the exact clean release commit:
 
-- [ ] `npm run typecheck`
-- [ ] `npm run lint`
-- [ ] `npm test`
-- [ ] `npm run typecheck:functions`
-- [ ] `npx expo-doctor`
-- [ ] `npm run gate:release-state`
-- [ ] `npm run gate:ai-poster-lock`
-- [ ] `npm run check:i18n-keys`
-- [ ] `npm run check:mobile-store-copy`
-- [ ] `npm run check:website-supabase`
-- [ ] Relevant hosted Edge Function and RLS smoke gates after any approved
+- [x] `npm run typecheck`
+- [x] `npm run lint`
+- [x] `npm test`
+- [x] `npm run typecheck:functions`
+- [x] `npx expo-doctor`
+- [x] `npm run gate:release-state`
+- [x] `npm run gate:ai-poster-lock`
+- [x] `npm run check:i18n-keys`
+- [x] `npm run check:mobile-store-copy`
+- [x] `npm run check:website-supabase`
+- [x] Relevant hosted Edge Function and RLS smoke gates after any approved
       backend deployment
 
 Current audit snapshot on 2026-08-01: mobile typecheck, lint, release-state,
@@ -249,8 +249,8 @@ re-measure everything on the release branch.
 
 ### Android
 
-- [ ] Build an AAB with the production Android configuration.
-- [ ] Upload to Play internal testing first.
+- [x] Build an AAB with the production Android configuration.
+- [x] Upload to Play internal testing first.
 - [ ] Prove no merchant surface contains an external-payment CTA or opens a
       payment URL.
 - [ ] Smoke Google sign-in, Maps, location denial/ZIP fallback, account
@@ -262,8 +262,8 @@ re-measure everything on the release branch.
 
 ### iOS
 
-- [ ] Build an IPA with the production iOS configuration.
-- [ ] Upload to TestFlight first.
+- [x] Build an IPA with the production iOS configuration.
+- [x] Upload to TestFlight first.
 - [ ] Verify Sign in with Apple, Google sign-in callback, location denial,
       account deletion, claim/release/redeem, push permissions, universal links,
       Apple Wallet presentation, and support contact on a real iPhone.
@@ -283,19 +283,19 @@ re-measure everything on the release branch.
 
 ## 7. Reviewer and market readiness
 
-- [ ] Consumer reviewer account is active and claim-clean.
-- [ ] Merchant reviewer account is already active and can exercise business
+- [x] Consumer reviewer account is active and claim-clean.
+- [x] Merchant reviewer account is already active and can exercise business
       tools without purchasing.
-- [ ] Reviewer data contains at least two claimable live offers visible
+- [x] Reviewer data contains at least two claimable live offers visible
       outside the user's physical Dallas location when using the provided
       account. Two are required so claim-conflict and repeat-restriction
       behavior is testable; today production has one real claimable deal and
       five of the six live deals are demo data.
-- [ ] Privacy, terms, support, delete-account, association, and asset-links URLs
+- [x] Privacy, terms, support, delete-account, association, and asset-links URLs
       are public and return the expected content.
 - [ ] App Store “What's New” and Google Play release notes accurately describe
       the material changes and contain no empty bullet.
-- [ ] Correct the Apple title spacing (`Twofer: Live Local Deals`). Decided
+- [x] Correct the Apple title spacing (`Twofer: Live Local Deals`). Decided
       2026-08-01: fix it this release.
 - [ ] Reconfirm the intended category alignment between Apple and Google Play.
 - [x] Decide demo-account teardown. Decided 2026-08-01: the demo accounts and
@@ -305,17 +305,17 @@ re-measure everything on the release branch.
 ## 8. Release and rollback
 
 - [ ] Promote Android with a staged rollout, not immediate 100% availability.
-- [ ] Use Apple's phased release for the iOS update.
-- [ ] Define halt criteria before promoting: hold the Android rollout at its
+- [x] Use Apple's phased release for the iOS update.
+- [x] Define halt criteria before promoting: hold the Android rollout at its
       current stage and pause the iOS phased release if sign-in failures,
       crash rate, claim/redemption failures, or support volume regress
       against the 1.0.1 baseline.
-- [ ] Record EAS build ids, store build numbers, commit SHA, configuration
+- [x] Record EAS build ids, store build numbers, commit SHA, configuration
       decision, and QA evidence.
 - [ ] Monitor sign-in failures, merchant activation attempts, Checkout failures
       where enabled, first-deal publication, claims, redemptions, account
       deletion, and support volume.
-- [ ] If iOS Checkout creates review, policy, or production issues, disable the
+- [x] If iOS Checkout creates review, policy, or production issues, disable the
       server kill switch immediately and ship a follow-up binary with the client
       flag disabled if needed.
 

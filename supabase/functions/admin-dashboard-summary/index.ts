@@ -679,6 +679,7 @@ function quotaLimitForScope(scope: AiQuotaScope, supabaseAdmin: any, businessId:
     deal_copy: "AI_COPY_MONTHLY_LIMIT",
     deal_suggestions: "AI_INSIGHTS_MONTHLY_LIMIT",
     deal_translate: "AI_TRANSLATE_MONTHLY_LIMIT",
+    studio_draft: "AI_STUDIO_DRAFT_MONTHLY_LIMIT",
   }[scope];
   const value = Number(Deno.env.get(envName) ?? "30");
   return Number.isFinite(value) && value > 0 ? value : 30;

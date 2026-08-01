@@ -21,10 +21,9 @@ type MerchantAccessBlockedCardProps = {
   status?: string | null;
   reason?: string | null;
   /**
-   * Owner's business. When present the CTA mints a Stripe Checkout URL for this
-   * signed-in owner and opens Stripe directly; without it (or if minting fails)
-   * it falls back to the website billing page, which explains the emailed
-   * activation-link path.
+   * Owner's business. When present and both iOS gates permit it, the CTA mints
+   * and opens an allowlisted Stripe Checkout URL. Missing ids and failures stay
+   * on this approval-email/support card.
    */
   businessId?: string | null;
 };
@@ -34,7 +33,12 @@ export function MerchantAccessBlockedCard({ status, reason, businessId }: Mercha
   const { session } = useAuthSession();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const { opening: openingCheckout, start: startActivation } = useTrialActivation(businessId);
+  const {
+    checkoutEnabled,
+    failed: checkoutFailed,
+    opening: openingCheckout,
+    start: startActivation,
+  } = useTrialActivation(businessId);
 
   const email = session?.user?.email ?? null;
   const needsTrial =
@@ -73,12 +77,19 @@ export function MerchantAccessBlockedCard({ status, reason, businessId }: Mercha
             </View>
           ) : null}
           <View style={{ marginTop: Spacing.xs, gap: Spacing.sm }}>
-            <PrimaryButton
-              title={openingCheckout ? t("merchantAccess.startTrialOpening") : t("merchantAccess.startTrialCta")}
-              onPress={() => void startActivation()}
-              disabled={openingCheckout}
-              style={{ borderRadius: Radii.md }}
-            />
+            {checkoutEnabled ? (
+              <PrimaryButton
+                title={openingCheckout ? t("merchantAccess.startTrialOpening") : t("merchantAccess.startTrialCta")}
+                onPress={() => void startActivation()}
+                disabled={openingCheckout}
+                style={{ borderRadius: Radii.md }}
+              />
+            ) : null}
+            {checkoutFailed ? (
+              <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
+                {t("merchantAccess.checkoutUnavailable")}
+              </Text>
+            ) : null}
             <SecondaryButton
               title={t("merchantAccess.contactSupport")}
               onPress={() => void openSupportEmail()}

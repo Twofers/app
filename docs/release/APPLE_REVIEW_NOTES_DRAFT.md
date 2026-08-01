@@ -19,7 +19,9 @@ Merchant demo account:
 
 Twofer uses email/password login. Consumers discover live local offers, claim offers, and redeem in person by QR or staff verification. The first launch is Dallas-first, so the supplied reviewer accounts should be used to see seeded sample content.
 
-Twofer is free for consumers. Business accounts are created through direct merchant onboarding and are reviewed before activation. This iOS build does not include in-app subscription purchase, Stripe Checkout, pricing, or external payment links. The merchant demo account is already active so App Review can test business tools without billing.
+Twofer is free for consumers. Business accounts are reviewed before activation. A merchant subscription enables AI-assisted offer creation, offer publishing, claim credits, analytics, and redemption tools. Payment-card entry and subscription Checkout occur on Stripe's hosted website; Twofer does not collect card numbers.
+
+This 1.0.2 binary contains an iOS-only merchant activation path behind both a dedicated client flag and the server-controlled `ios_trial_checkout` kill switch. The server switch is OFF at launch, so the path returns the merchant to approval-email and Contact Support guidance and no usable Checkout URL is returned. Android cannot invoke or open this Checkout path. The merchant reviewer account is already active, so App Review can test every business tool without purchasing or entering payment details.
 
 ## Consumer Test Steps
 
@@ -29,8 +31,9 @@ Twofer is free for consumers. Business accounts are created through direct merch
 4. Open a deal detail screen.
 5. Claim the offer.
 6. Open Wallet and view the active ticket QR/code.
-7. Optionally favorite a business and enable alerts; notifications are optional.
-8. Use Settings to verify notification controls, legal links, and account deletion entry point.
+7. Open the second live offer to verify claim-conflict and repeat-restriction messaging while the first claim is active.
+8. Optionally favorite a business and enable alerts; notifications are optional.
+9. Use Settings to verify notification controls, legal links, and account deletion entry point.
 
 ## Merchant Test Steps
 
@@ -49,7 +52,7 @@ Twofer is free for consumers. Business accounts are created through direct merch
 - Account deletion: available in-app under consumer Settings and merchant Account.
 - AI-assisted offer creation: merchants review generated copy before publishing; deal facts remain authoritative.
 - Objectionable content & user safety: see "Content Moderation (Guideline 1.2)" below — report, hide/block, moderation queue, and terms acceptance are all in the build.
-- Billing: mobile billing, Stripe Checkout, pricing, subscription purchase, and external payment links are hidden/disabled in this review build.
+- Billing: the iOS-only Stripe-hosted merchant activation path exists in the binary but is remotely disabled at launch. The supplied merchant account is active and requires no purchase. Android has no Checkout or external-payment path.
 
 ## Content Moderation (Guideline 1.2)
 
@@ -67,8 +70,9 @@ Twofer's content producers are verified business owners, not anonymous users; cu
 - [ ] Consumer reviewer login works.
 - [ ] Merchant reviewer login works.
 - [ ] Merchant reviewer entitlement is active.
-- [ ] Consumer account sees at least one claimable live deal.
+- [ ] Consumer account sees at least two claimable live deals outside physical Dallas location.
 - [ ] Claim to Wallet QR/code works.
 - [ ] Merchant redeem works.
 - [ ] Support/privacy/terms URLs open successfully.
-- [ ] No billing/pricing/checkout CTA appears in the iOS build.
+- [ ] With `ios_trial_checkout` OFF, the iOS activation action returns to approval-email/support guidance and receives no usable Checkout URL.
+- [ ] Merchant reviewer access works without purchase or payment credentials.
