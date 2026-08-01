@@ -5,7 +5,9 @@ Status: DRAFT / NO-GO until every release gate below passes
 Current public version: 1.0.1 on iOS and Android  
 Target version: 1.0.2  
 Updated 2026-08-01: reviewed against actual repo state; QA scope expanded to
-match the real binary diff since 1.0.1 (sections 1, 4, 6, 7, 8).
+match the real binary diff since 1.0.1 (sections 1, 4, 6, 7, 8).  
+Founder decisions on iOS Checkout, Apple Wallet, demo teardown, and the Apple
+title recorded 2026-08-01 — see the end of the Founder decisions section.
 
 ## Objective
 
@@ -33,6 +35,25 @@ same repository.
    to use their approval email and a working Contact Support action.
 5. No additional features are required for 1.0.2. The release succeeds by
    making the existing customer and merchant loops more dependable.
+
+Decisions recorded 2026-08-01:
+
+- iOS Checkout ships capability-dark: the 1.0.2 binary sets the dedicated
+  iOS flag true, the server kill switch ships OFF, and enabling later is a
+  server-side action only — no new binary required. All four conditions in
+  item 2 must therefore be completed BEFORE submission, not before
+  enablement: the submitted binary contains the reachable feature, App
+  Review notes must disclose it (including that it is remotely disabled at
+  launch), and the privacy policy must already be accurate. Hiding it from
+  review is not an option.
+- Apple Wallet: unpark it. Complete the Apple pass type registration and
+  signing certificate before the build so the iOS wallet button produces a
+  working pass. If that work cannot finish in time, hide the iOS wallet
+  button for this release rather than shipping a dead-end tap; do not ship
+  it broken.
+- Demo accounts and demo deals stay for this release. Reviewer accounts ship
+  anyway; revisit teardown once real merchant deal supply grows.
+- Fix the Apple listing title spacing this release.
 
 ## Platform-specific Checkout contract
 
@@ -118,19 +139,31 @@ same repository.
       auth client ids, bundle id, and Android package resolve as expected
       without printing secret values.
 - [ ] Add the dedicated iOS Checkout flag with Android fail-closed behavior.
-- [ ] Add and verify the server kill switch before enabling the iOS flag.
+      Per the recorded decision, production sets
+      `EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT=true`; launch behavior is
+      controlled entirely by the server kill switch, which ships OFF.
+- [ ] Add and verify the server kill switch before the build. It ships OFF
+      and is the only control that enables iOS Checkout later without a new
+      binary.
 
 ## 3. Required code and policy corrections
 
 - [ ] Implement the platform-specific Checkout contract above.
-- [ ] Update the public privacy policy before submission if iOS Checkout is
-      enabled. Remove any statement that incorrectly says the submitted app
-      cannot initiate web Checkout.
+- [ ] Update the public privacy policy before submission — required, not
+      conditional, because the submitted binary carries the Checkout
+      capability even while the server switch is off. Remove any statement
+      that incorrectly says the submitted app cannot initiate web Checkout.
 - [ ] Update Apple review notes to explain that consumer use is free, merchant
       accounts are reviewed, what the merchant subscription enables, where the
       purchase occurs, and how reviewers can test without making a payment.
+      State plainly that the Checkout path exists in the binary and is
+      remotely disabled at launch.
 - [ ] Confirm App Store availability is limited to eligible storefronts before
-      enabling the link. If it is not, disable iOS Checkout for this release.
+      submission, and reconfirm before the server switch is ever turned on.
+      If eligibility fails, the kill switch stays off.
+- [ ] Complete the Apple Wallet pass type registration and signing certificate
+      (currently parked) so the iOS wallet button yields a valid pass.
+      Fallback if this slips: hide the iOS wallet button for 1.0.2.
 - [ ] Keep Google Play listing/review notes free of any Android external-payment
       direction.
 - [ ] Fix the seven current Edge Function type errors before merging or
@@ -234,11 +267,17 @@ re-measure everything on the release branch.
 - [ ] Verify Sign in with Apple, Google sign-in callback, location denial,
       account deletion, claim/release/redeem, push permissions, universal links,
       Apple Wallet presentation, and support contact on a real iPhone.
-- [ ] Decide the expected Apple Wallet result before QA: the Apple pass side
-      is parked, so define pass/fail up front (button hidden, or a graceful
-      error) instead of discovering the intended behavior mid-QA.
-- [ ] If iOS Checkout is enabled, test success, cancel, failure, double tap,
-      app background/return, already-active, and server-kill-switch behavior.
+- [ ] Apple Wallet QA expectation (decided 2026-08-01): the pass side gets
+      unparked before the build, so a tap must save and present a valid pass.
+      If the unpark work slipped and the button was hidden instead, verify
+      the button is absent.
+- [ ] Checkout on the TestFlight build: with the server switch off (the
+      launch state), verify no usable Checkout URL is returned and the
+      merchant lands on approval-email/support guidance. Then temporarily
+      enable the server switch against the TestFlight build only and test
+      success, cancel, failure, double tap, app background/return, and
+      already-active. Turn the switch back off before public release and
+      record both states in the QA evidence.
 - [ ] Reconfirm storefront availability and review-note/privacy accuracy against
       the exact submitted build.
 
@@ -256,12 +295,12 @@ re-measure everything on the release branch.
       are public and return the expected content.
 - [ ] App Store “What's New” and Google Play release notes accurately describe
       the material changes and contain no empty bullet.
-- [ ] Correct the Apple title spacing if desired (`Twofer: Live Local Deals`).
+- [ ] Correct the Apple title spacing (`Twofer: Live Local Deals`). Decided
+      2026-08-01: fix it this release.
 - [ ] Reconfirm the intended category alignment between Apple and Google Play.
-- [ ] Decide demo-account teardown: demo@demo.com removal has been waiting on
-      a reviewer-account build. If 1.0.2's reviewer accounts satisfy that,
-      schedule the teardown for after both stores approve; if not, record
-      that the demo accounts stay.
+- [x] Decide demo-account teardown. Decided 2026-08-01: the demo accounts and
+      demo deals stay for this release. Reviewer accounts ship anyway;
+      revisit teardown once real merchant deal supply grows.
 
 ## 8. Release and rollback
 
@@ -284,6 +323,8 @@ re-measure everything on the release branch.
 
 The build may be created for internal testing only after the repository is a
 clean, intentional release candidate and local gates are green. Public
-submission requires exact-binary device QA, accurate policy/privacy disclosures,
-reviewer accounts/data, and a recorded founder decision on the conditional iOS
-Checkout gate. Any ambiguity defaults to Checkout disabled.
+submission requires exact-binary device QA, accurate policy/privacy
+disclosures, and reviewer accounts/data. The iOS Checkout decision is
+recorded: the capability ships dark behind the server kill switch, and every
+disclosure condition must be complete before submission. Any ambiguity
+defaults to the kill switch staying off.
