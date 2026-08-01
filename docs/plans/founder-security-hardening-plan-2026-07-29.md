@@ -22,7 +22,7 @@ Bootstrap security alerts will use the separately controlled
 
 ## What remains (plain-English status, updated 2026-07-29)
 
-**Checklist progress: 44 completed / 29 remaining (recounted directly from the
+**Checklist progress: 45 completed / 28 remaining (recounted directly from the
 checkboxes with `grep -c "^- \[x\]"`, 2026-07-31 evening; every figure in this
 file's history that was written from prose rather than counted has been
 wrong).** The 2026-07-31 passes completed five items: CodeQL triage (`main` now
@@ -880,9 +880,46 @@ blast radius and were missing:
 
 ## Phase 6 — GitHub, Vercel, DNS, email
 
-- [ ] `[DAN]` Decide repo visibility (currently PUBLIC — full backend + admin design
-      exposed; note making it private does NOT scrub history, and gitleaks CI already
-      guards new commits).
+- [x] `[DAN]` Decide repo visibility. **DECIDED 2026-07-31: stay PUBLIC.**
+      The decision turned on a cost the item did not anticipate. Going private
+      on a Free personal account does not just hide the code — it **switches off
+      three of the controls enabled the same day**, verified against GitHub's
+      documentation rather than assumed:
+
+      | Control | Public (current) | Private, Free personal |
+      | --- | --- | --- |
+      | Actions minutes | free, unlimited on standard runners | 2,000/month, then paid |
+      | Secret scanning + push protection | free, automatic | needs GitHub Secret Protection (Team/Enterprise) |
+      | CodeQL code scanning | free | needs a GitHub Code Security license |
+      | Dependabot alerts + security updates | free | free — unaffected |
+
+      GitHub's wording: *"GitHub Actions usage is free for self-hosted runners
+      and for public repositories that use standard GitHub-hosted runners"*, and
+      *"If you want to use code scanning on private repositories, you need a
+      GitHub Code Security license."* `Twofers` is a personal User account, so
+      the Team route is not available without changing account type, and paying
+      for licences would breach the standing zero-added-cost policy.
+
+      So the trade is *hiding the architecture* against *keeping push
+      protection, secret scanning and CodeQL running* — and push protection is
+      the best-configured control in the repo, blocking a credential at commit
+      time rather than finding it afterwards. Privacy also does not deliver what
+      it appears to: it **does not scrub history**, anything already published
+      persists in clones and forks, and gitleaks CI guards new commits either
+      way.
+
+      Usage context for the Actions cap: ~96 workflow runs in the six days to
+      2026-07-31, at roughly 7–8 billable minutes per PR across five workflows.
+      A day like 2026-07-31 (twelve PRs) costs about 100 minutes, and the
+      nightly backup another ~90/month — comfortably inside 2,000 at normal
+      pace, but no longer unlimited.
+
+      **Revisit if** the account moves to Team/Enterprise, if a competitor
+      copying the architecture becomes a real commercial risk, or if CI volume
+      approaches the cap. The higher-value work meanwhile is auditing *what is
+      in* the public repo rather than sealing it — already done for signing
+      keys (never committed) and the one embedded API key (a client key that
+      ships in the APK regardless, pending restriction).
 - [x] `[DAN]` Protect `main` (include administrators): block force-push + deletion,
       require CI/tests/secret-scan/security gates.
       **Done 2026-07-31.** Ruleset `main-protection`, enforcement `active`,
