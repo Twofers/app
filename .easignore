@@ -103,6 +103,8 @@ website/
 docs/
 supabase/
 store-assets/
+/store.config.json
+/store/
 outdated/
 .github/
 
