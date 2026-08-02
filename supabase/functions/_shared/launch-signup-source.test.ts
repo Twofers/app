@@ -58,14 +58,20 @@ describe("launch signup intake", () => {
     expect(config).toMatch(/\[functions\.submit-launch-signup\][^[]*verify_jwt = false/);
   });
 
-  it("wires the website form to the function with graceful failure copy", () => {
+  // The website half of this feature was retired on 2026-08-02: the homepage
+  // form had been `hidden` since the app launched (the store badges replaced
+  // it), so it was dead markup plus a script every visitor downloaded. The
+  // form, website/launch-signup.js and the body endpoint attribute are gone.
+  //
+  // The backend above is deliberately kept — table, RLS, throttling and the
+  // public function still stand, so a future launch-notify form can be wired
+  // back up without redoing any of the security work. This guard exists so
+  // that rewiring is done deliberately and completely, rather than a stray
+  // half-form reappearing that posts nowhere.
+  it("no longer ships the retired signup form on the website", () => {
     const page = read("website/index.html");
-    expect(page).toMatch(/data-launch-signup-endpoint="https:\/\/[a-z]+\.supabase\.co\/functions\/v1\/submit-launch-signup"/);
-    expect(page).toMatch(/data-launch-signup /);
-    expect(page).toMatch(/name="company_website"/);
-    const script = read("website/launch-signup.js");
-    expect(script).toMatch(/home\.signupError/);
-    expect(script).toMatch(/support@twoferapp\.com/);
-    expect(script).toMatch(/response\.status === 429/);
+    expect(page).not.toMatch(/data-launch-signup/);
+    expect(page).not.toMatch(/launch-signup\.js/);
+    expect(() => read("website/launch-signup.js")).toThrow();
   });
 });

@@ -117,23 +117,32 @@ describe("interpretShareLookup", () => {
 
 describe("share-code fast-fail copies stay in sync across runtimes", () => {
   // The 7-char share-code alphabet is defined authoritatively by the
-  // lookup_deal_share RPC and lib/share-deal.ts generation; the web landing
-  // (website/s/index.html) and the deal-share-lookup edge function carry
-  // fast-fail copies because browser inline JS / Deno / RN share no build
-  // step. If the alphabet or length ever changes, these copies must move
-  // together or valid share links start rendering as "not available".
-  it("edge function and web landing embed the canonical pattern", async () => {
+  // lookup_deal_share RPC and lib/share-deal.ts generation; the web copies and
+  // the deal-share-lookup edge function carry fast-fail copies because browser
+  // JS / Deno / RN share no build step. If the alphabet or length ever
+  // changes, these copies must move together or valid share links start
+  // rendering as "not available".
+  //
+  // The web landing's copy used to be inline in website/s/index.html; it now
+  // lives in website/share-page.js (externalized so the public CSP can enforce
+  // script-src 'self', and served from the site root because Vercel's static
+  // resolution claims every path under /s/). website/api/_share-preview-core.js
+  // is a third copy: the server-side share-preview injector validates the code
+  // before it will rewrite any OG tag.
+  it("edge function and web copies embed the canonical pattern", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const canonical = "[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{7}";
-    const fnSource = readFileSync(
-      join(process.cwd(), "supabase", "functions", "deal-share-lookup", "index.ts"),
-      "utf8",
-    );
-    const pageSource = readFileSync(join(process.cwd(), "website", "s", "index.html"), "utf8");
-    expect(fnSource).toContain(canonical);
-    expect(pageSource).toContain(canonical);
-    // And both must match what the parser here accepts.
+    const sources = [
+      ["supabase", "functions", "deal-share-lookup", "index.ts"],
+      ["website", "share-page.js"],
+      ["website", "api", "_share-preview-core.js"],
+    ];
+    for (const parts of sources) {
+      const source = readFileSync(join(process.cwd(), ...parts), "utf8");
+      expect(source, `${parts.join("/")} must embed the canonical share-code pattern`).toContain(canonical);
+    }
+    // And all of them must match what the parser here accepts.
     expect(parseShareLink(`https://www.twoferapp.com/s/ABCD234`)).toEqual({ type: "code", code: "ABCD234" });
   });
 });

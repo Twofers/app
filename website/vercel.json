@@ -30,6 +30,15 @@
       ]
     },
     {
+      "source": "/((?!admin|quick-approve-trial|api/).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://kvodhiqhdqnptqovovia.supabase.co; font-src 'self'; connect-src 'self' https://kvodhiqhdqnptqovovia.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
       "source": "/admin(.*)",
       "headers": [
         {
@@ -119,6 +128,69 @@
       ]
     },
     {
+      "source": "/assets/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/styles.css",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/localization.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/store-links.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/home-motion.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/share-page.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/business/start-trial/apply.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/favicon.ico",
       "headers": [
         {
@@ -190,8 +262,20 @@
       "destination": "/quick-approve-trial/index.html"
     },
     {
+      "source": "/s",
+      "destination": "/api/share-preview"
+    },
+    {
+      "source": "/s/",
+      "destination": "/api/share-preview"
+    },
+    {
+      "source": "/s/:code",
+      "destination": "/api/share-preview?code=:code"
+    },
+    {
       "source": "/s/:path*",
-      "destination": "/s/index.html"
+      "destination": "/api/share-preview"
     },
     {
       "source": "/business",

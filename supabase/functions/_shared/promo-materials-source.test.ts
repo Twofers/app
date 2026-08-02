@@ -103,7 +103,10 @@ describe("promotional materials authorization (owner path)", () => {
     expect(form).toMatch(/name="promo_materials_authorized" type="checkbox"/);
     // Never required, never pre-checked.
     expect(form).not.toMatch(/name="promo_materials_authorized"[^>]*(required|checked)/);
-    expect(form).toMatch(/payload\.promo_materials_authorized = data\.get\("promo_materials_authorized"\) === "on"/);
+    // The form's submit handler moved out of the page into a page-local script
+    // so the public CSP can enforce script-src 'self' with no inline allowance.
+    const submitScript = read("website/business/start-trial/apply.js");
+    expect(submitScript).toMatch(/payload\.promo_materials_authorized = data\.get\("promo_materials_authorized"\) === "on"/);
   });
 
   it("adds a client helper outside the hash-locked AI wrapper", () => {
