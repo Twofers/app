@@ -14,28 +14,52 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const KEY = "twofer.recentPublish.v1";
 const TTL_MS = 30_000;
 
-type Payload = { title: string; ts: number };
+export type RecentPublish = {
+  title: string;
+  ts: number;
+  scheduledStartAt: string | null;
+};
 
-export async function markRecentPublish(title: string): Promise<void> {
+export function isFutureScheduledPublish(
+  scheduledStartAt: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!scheduledStartAt) return false;
+  const startMs = Date.parse(scheduledStartAt);
+  return Number.isFinite(startMs) && startMs > nowMs;
+}
+
+export async function markRecentPublish(
+  title: string,
+  scheduledStartAt: string | null = null,
+): Promise<void> {
   try {
-    const payload: Payload = { title: title.slice(0, 80), ts: Date.now() };
+    const payload: RecentPublish = {
+      title: title.slice(0, 80),
+      ts: Date.now(),
+      scheduledStartAt: isFutureScheduledPublish(scheduledStartAt) ? scheduledStartAt : null,
+    };
     await AsyncStorage.setItem(KEY, JSON.stringify(payload));
   } catch {
     // Non-fatal — losing the toast is far better than blocking the publish redirect.
   }
 }
 
-export async function consumeRecentPublish(): Promise<string | null> {
+export async function consumeRecentPublish(): Promise<RecentPublish | null> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return null;
     await AsyncStorage.removeItem(KEY);
-    const p = JSON.parse(raw) as Partial<Payload>;
+    const p = JSON.parse(raw) as Partial<RecentPublish>;
     const title = typeof p.title === "string" ? p.title : "";
     const ts = typeof p.ts === "number" ? p.ts : 0;
     if (!title || !ts) return null;
     if (Date.now() - ts > TTL_MS) return null;
-    return title;
+    return {
+      title,
+      ts,
+      scheduledStartAt: isFutureScheduledPublish(p.scheduledStartAt) ? p.scheduledStartAt! : null,
+    };
   } catch {
     return null;
   }

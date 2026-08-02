@@ -704,13 +704,14 @@ serve(async (req) => {
       }
     }
 
-    // 📊 Check max_claims limit (count all claims, not just redeemed)
+    // 📊 Check max_claims limit. Released and canceled claims free inventory;
+    // every cap-counting site uses this same exclusion list.
     if (deal.max_claims !== null && deal.max_claims > 0) {
       const { count, error: countError } = await supabase
         .from("deal_claims")
         .select("*", { count: "exact", head: true })
         .eq("deal_id", dealId)
-        .neq("claim_status", "canceled");
+        .not("claim_status", "in", "(canceled,released)");
 
       if (countError) {
         console.error("Error counting claims:", countError);
@@ -870,7 +871,7 @@ serve(async (req) => {
             .from("deal_claims")
             .select("*", { count: "exact", head: true })
             .eq("deal_id", dealId)
-            .neq("claim_status", "canceled");
+            .not("claim_status", "in", "(canceled,released)");
           claimCount = count;
         }
         const lastSentMs = pushRow.claim_push_last_sent_at

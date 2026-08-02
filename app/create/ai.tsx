@@ -4302,9 +4302,16 @@ export default function AiDealScreen() {
       // Hand off a one-shot success flash to whichever tab the owner lands on
       // (usually dashboard). Without this the redirect is silent — nervous pilots
       // need a "yes, it worked" moment.
+      const scheduledStartAt = !editingDealId && !isRecurring && start.getTime() > Date.now()
+        ? start.toISOString()
+        : null;
       const successMessage = editingDealId
         ? t("createAi.publishUpdateSuccessBody")
-        : t("createAi.publishSuccessBody");
+        : scheduledStartAt
+          ? t("createAi.publishScheduledSuccessBody", {
+              time: formatAppDateTime(scheduledStartAt, i18n.language),
+            })
+          : t("createAi.publishSuccessBody");
       setPublishing(false);
       setPublishStatus("success");
       publishIdempotencyKeyRef.current = null;
@@ -4355,7 +4362,7 @@ export default function AiDealScreen() {
           }),
         );
       }
-      await markRecentPublish(title.trim());
+      await markRecentPublish(title.trim(), scheduledStartAt);
       setAllowPostPublishNavigation(true);
       await new Promise((resolve) => setTimeout(resolve, 700));
       router.replace("/(tabs)/dashboard");

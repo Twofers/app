@@ -62,19 +62,19 @@ anymore. Sites, all must change in lockstep:
 | `claim-deal` owner-push count | `supabase/functions/claim-deal/index.ts:873` | Feeds `decideOwnerClaimPush` sold-out signal |
 | `deal_claim_counts` RPC | `20260716120000_deal_claim_counts_rpc.sql:22` | All consumer-facing "N claims available" / sold-out UI |
 
-- [ ] New migration: `CREATE OR REPLACE` both `enforce_deal_max_claims()` and
+- [x] New migration: `CREATE OR REPLACE` both `enforce_deal_max_claims()` and
       `deal_claim_counts(uuid[])` with
       `claim_status NOT IN ('canceled', 'released')`. Same signatures, body
       only — no overload risk (the PGRST203 trap applies only when adding
       DEFAULT params). Update the "match claim-deal's cap counting" comments
       on both so the invariant stays discoverable.
-- [ ] `claim-deal/index.ts` :713 and :873 → exclude both statuses
+- [x] `claim-deal/index.ts` :713 and :873 → exclude both statuses
       (`.not("claim_status", "in", "(canceled,released)")` or equivalent).
-- [ ] Add a source-sync test asserting all four sites agree on the exclusion
+- [x] Add a source-sync test asserting all four sites agree on the exclusion
       list — this bug existed precisely because the constraint gained a status
       and no counting site followed. Model it on the existing
       `wallet-pass-source.test.ts` guards.
-- [ ] Keep the release-dialog copy as-is (it becomes true). The existing
+- [x] Keep the release-dialog copy as-is (it becomes true). The existing
       `lib/wallet-release-confirm.test.ts` stays valid.
 - [ ] Apply migration to prod (`supabase db push` per runbook), redeploy
       `claim-deal` (Bash tool, one function per call — PowerShell is blocked
@@ -143,7 +143,7 @@ tap hides it for every account on the device.
 Observed: publishing at 12:04 for a 12:10–1:10 window showed "…is now live for
 customers" while the dashboard correctly showed Scheduled / 0 live.
 
-- [ ] Locate the publish-success copy in the AI-ads flow; when
+- [x] Locate the publish-success copy in the AI-ads flow; when
       `start_time > now`, say "scheduled for {time}" instead. All three
       locales + i18n key test.
 

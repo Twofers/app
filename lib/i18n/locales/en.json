@@ -1311,6 +1311,7 @@
     "refreshesLeft": "{{remaining}} of {{total}} revisions left",
     "generatingHint": "Writing your ad and preparing the image. This can take up to 90 seconds.",
     "generatingHintNoPhoto": "Writing your ad and creating a matching image. This can take up to 90 seconds.",
+    "publishScheduledSuccessBody": "Your deal is scheduled for {{time}}.",
     "generatingPhaseCopy": "Writing your ad...",
     "generatingPhaseImages": "Preparing the image...",
     "generatingPhaseFinishing": "Almost there — finishing up...",
@@ -2052,6 +2053,7 @@
     "errBulkDelete": "Could not delete some deals.",
     "exportAnalytics": "Export",
     "exportAllTitle": "Export deal analytics"
+  , "publishScheduledBanner": "{{title}} is scheduled for {{time}}."
   },
   "consumerProfile": {
     "navTitle": "Your profile",

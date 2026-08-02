@@ -1693,6 +1693,7 @@
     "exportAllTitle": "딜 분석 내보내기",
     "metricLiveDealsSub_one": "총 {{count}}개 딜",
     "metricLiveDealsSub_other": "총 {{count}}개 딜"
+  , "publishScheduledBanner": "{{title}} 딜은 {{time}}에 예정되어 있습니다."
   },
   "consumerProfile": {
     "navTitle": "내 프로필",
@@ -2010,6 +2011,7 @@
     "refreshesLeft": "재생성 남은 횟수: {{remaining}} / {{total}}",
     "generatingHint": "항목을 조사하고 문구와 이미지를 만듭니다. 최대 90초 정도 걸릴 수 있습니다.",
     "generatingHintNoPhoto": "광고 문구를 작성하고 어울리는 이미지를 만드는 중입니다. 최대 90초 정도 걸릴 수 있습니다.",
+    "publishScheduledSuccessBody": "이 딜은 {{time}}에 예정되어 있습니다.",
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "이미지 생성 중...",
     "generatingPhaseFinishing": "거의 완료되었습니다. 마무리 중...",

@@ -60,6 +60,7 @@ import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/an
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { consumeRecentPublish } from "@/lib/recent-publish";
+import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
@@ -798,15 +799,22 @@ export default function BusinessDashboard() {
       setPublishSuccessBanner(null);
       void (async () => {
         const metricsLoaded = await loadMetrics();
-        const title = await consumeRecentPublish();
-        if (!cancelled && metricsLoaded && title) {
-          setPublishSuccessBanner(t("offersDashboard.publishSuccessBanner", { title }));
+        const recentPublish = await consumeRecentPublish();
+        if (!cancelled && metricsLoaded && recentPublish) {
+          setPublishSuccessBanner(
+            recentPublish.scheduledStartAt
+              ? t("offersDashboard.publishScheduledBanner", {
+                  title: recentPublish.title,
+                  time: formatAppDateTime(recentPublish.scheduledStartAt, i18n.language),
+                })
+              : t("offersDashboard.publishSuccessBanner", { title: recentPublish.title }),
+          );
         }
       })();
       return () => {
         cancelled = true;
       };
-    }, [businessId, loadMetrics, t]),
+    }, [businessId, i18n.language, loadMetrics, t]),
   );
 
   // Show walkthrough only while the dashboard tab is focused.

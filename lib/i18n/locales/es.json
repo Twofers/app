@@ -1693,6 +1693,7 @@
     "exportAllTitle": "Exportar analíticas de ofertas",
     "metricLiveDealsSub_one": "{{count}} oferta en total",
     "metricLiveDealsSub_other": "{{count}} ofertas en total"
+  , "publishScheduledBanner": "{{title}} está programada para {{time}}."
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",
@@ -2010,6 +2011,7 @@
     "refreshesLeft": "Regeneraciones restantes: {{remaining}} de {{total}}",
     "generatingHint": "Investigando el articulo, redactando el texto y creando la imagen. Puede tardar hasta 90 segundos.",
     "generatingHintNoPhoto": "Escribiendo tu anuncio y creando una imagen que combine. Puede tardar hasta 90 segundos.",
+    "publishScheduledSuccessBody": "Tu oferta está programada para {{time}}.",
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "Creando la imagen...",
     "generatingPhaseFinishing": "Ya casi está; terminando...",
