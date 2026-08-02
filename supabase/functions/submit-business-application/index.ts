@@ -149,6 +149,9 @@ function isDfwLaunchArea(address: string | null, launchArea: string | null): boo
     "plano",
     "frisco",
     "irving",
+    "coppell",
+    "las colinas",
+    "valley ranch",
     "garland",
     "oak cliff",
     "bishop arts",
@@ -177,9 +180,14 @@ function scoreApplication(args: {
     riskReasons.push("phone_provided");
   }
 
+  // Weights rebalanced 2026-08-02: the website form no longer sends
+  // business_type, whose +10 target-category bonus was the only way past the
+  // 70-point quick-approval bar. Locality and web presence carry that weight
+  // now, so one-click approval requires email + phone + in-area address +
+  // website/social (15+10+20+10+20 = 75) and any missing signal fails it.
   const inLaunchArea = isDfwLaunchArea(args.address, args.launchArea);
   if (inLaunchArea) {
-    score += 15;
+    score += 20;
     riskReasons.push("dfw_launch_area_match");
   } else {
     score -= 40;
@@ -195,7 +203,7 @@ function scoreApplication(args: {
   }
 
   if (args.websiteOrInstagram) {
-    score += 15;
+    score += 20;
     riskReasons.push("website_or_social_provided");
   }
 
