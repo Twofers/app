@@ -1,11 +1,17 @@
 # Twofer production app 1.0.2 update plan
 
 Date: 2026-08-01  
-Status: DRAFT / NO-GO until every release gate below passes  
+Status: INTERNAL-CANDIDATE GO / PUBLIC-RELEASE NO-GO until the remaining
+physical-device, wallet, TestFlight Checkout, rollout, and monitoring gates
+below pass
 Current public version: 1.0.1 on iOS and Android  
 Target version: 1.0.2  
 Updated 2026-08-01: reviewed against actual repo state; QA scope expanded to
 match the real binary diff since 1.0.1 (sections 1, 4, 6, 7, 8).  
+Execution update 2026-08-01: replacement Android version code 61 and iOS build
+33 were built from `2451ff39fe22f97d730a0e25cde1bced2bce2497`, uploaded
+successfully, and the exact Android payload completed the shared functional QA
+listed below. Public release remains blocked on the unchecked gates.
 Founder decisions on iOS Checkout, Apple Wallet, demo teardown, and the Apple
 title recorded 2026-08-01 — see the end of the Founder decisions section.
 
@@ -158,14 +164,19 @@ Decisions recorded 2026-08-01:
       purchase occurs, and how reviewers can test without making a payment.
       State plainly that the Checkout path exists in the binary and is
       remotely disabled at launch.
-- [ ] Confirm App Store availability is limited to eligible storefronts before
+- [x] Confirm App Store availability is limited to eligible storefronts before
       submission, and reconfirm before the server switch is ever turned on.
-      If eligibility fails, the kill switch stays off.
+      If eligibility fails, the kill switch stays off. Verified through the
+      authenticated App Store Connect API: the United States is available,
+      South Korea is unavailable, and automatic availability in new territories
+      is disabled. Public storefront lookup agrees (US present, KR absent).
 - [x] Complete the Apple Wallet pass type registration and signing certificate
       (currently parked) so the iOS wallet button yields a valid pass.
       Fallback if this slips: hide the iOS wallet button for 1.0.2.
-- [ ] Keep Google Play listing/review notes free of any Android external-payment
-      direction.
+- [x] Keep Google Play listing/review notes free of any Android external-payment
+      direction. Verified against the authenticated Play listing and exact
+      internal version-code 61 release notes; no Checkout, billing, pricing,
+      subscription, Stripe, or external-payment direction is present.
 - [x] Fix the seven current Edge Function type errors before merging or
       deploying the web-attack-hardening work. Those errors live in the
       hardening commit on `website/homepage-redesign-2026-08-01`, so
@@ -218,44 +229,59 @@ Every command must pass against the exact clean release commit:
 - [x] Relevant hosted Edge Function and RLS smoke gates after any approved
       backend deployment
 
-Current audit snapshot on 2026-08-01: mobile typecheck, lint, release-state,
-localization, store-copy, website/Supabase, and poster-lock gates pass. The full
-test suite has two failures, Edge Function typechecking has seven errors, and
-Expo Doctor reports the `react-native-worklets` patch mismatch. This snapshot
-is evidence only, not permission to skip re-running every gate. It was also
-taken on `website/homepage-redesign-2026-08-01`, not the release base;
-re-measure everything on the release branch.
+Final audit on 2026-08-01: every gate above passed against clean exact binary
+source commit `2451ff39fe22f97d730a0e25cde1bced2bce2497`. The full suite
+passed 320 files / 2,218 tests; Edge Function typechecking passed 163 files;
+Expo Doctor passed 18/18; the worklets version is aligned at `0.5.1`.
 
 ## 6. Exact-binary QA
 
 ### Both platforms
 
-- [ ] Merchant publish loop end to end: create a deal, AI-generate the ad,
+- [x] Merchant publish loop end to end: create a deal, AI-generate the ad,
       publish. Include a same-item BOGO, an imageless/provider-refusal
       fallback case, and the promote-from-menu ad-format choice. This path
       changed heavily since 1.0.1 and today appears only in post-release
-      monitoring.
-- [ ] Manual redemption paths new since 1.0.1: double-tap-the-QR redemption
-      and the Use Deal pass manual redeem.
-- [ ] Claim-conflict messaging and repeat-restriction hiding, using the
-      second claimable live deal required by section 7.
-- [ ] Site-import onboarding: one pass through the in-app business
+      monitoring. Exercised on the exact Android v61 payload, including provider
+      refusal with manual image recovery, same-item BOGO, menu promotion/ad
+      format selection, accepted localization, and successful publication.
+- [x] Manual redemption paths new since 1.0.1: double-tap-the-QR redemption
+      and the Use Deal pass manual redeem. Exact v61 showed the double-tap
+      confirmation/cancel path, generated the Use Deal pass, and completed
+      merchant ticket-code redemption to the consumer Redeemed state.
+- [x] Claim-conflict messaging and repeat-restriction hiding, using the
+      second claimable live deal required by section 7. Exact v61 blocked a
+      second active claim with localized conflict copy; releasing the first
+      claim made the second offer claimable, and both claims were released.
+- [x] Site-import onboarding: one pass through the in-app business
       application with website import (`EXPO_PUBLIC_ENABLE_SITE_IMPORT` is on
       in the production profile, and merchant activation is a release
-      objective).
-- [ ] Spot-check the new claim/redemption strings on-device in Spanish and
+      objective). Completed with disposable production QA data on exact v61:
+      submitted the application in-app, observed the waitlist state, entered
+      approved setup, selected a verified Google Places result, and imported
+      three logo candidates plus two menu items with rights consent shown.
+      The disposable application, business, onboarding request, and auth user
+      were then deleted and verified absent.
+- [x] Spot-check the new claim/redemption strings on-device in Spanish and
       Korean; the key gate proves existence, not quality, and Spanish has
-      regressed on device before.
+      regressed on device before. Wallet/settings and conflict/release states
+      were visually checked in both languages on exact v61, then English was
+      restored.
 
 ### Android
 
 - [x] Build an AAB with the production Android configuration.
 - [x] Upload to Play internal testing first.
-- [ ] Prove no merchant surface contains an external-payment CTA or opens a
-      payment URL.
+- [x] Prove no merchant surface contains an external-payment CTA or opens a
+      payment URL. Inspected the full exact-v61 merchant Account surface in
+      dark mode; no Checkout, billing, pricing, subscription, or external-
+      payment CTA/URL was present.
 - [ ] Smoke Google sign-in, Maps, location denial/ZIP fallback, account
       deletion, customer claim/release, merchant QR redemption, push settings,
-      deep links, and support contact on a real Android device.
+      deep links, and support contact on a real Android device. The exact v61
+      payload passed broad emulator coverage (including ZIP fallback,
+      claim/release/redemption, deep links, and support surfaces), but an
+      emulator does not satisfy this physical-device gate.
 - [ ] Google Wallet: save the pass and open the app from the saved pass. The
       wallet-to-app route is new since 1.0.1, and the Google issuer was only
       approved after the last binary shipped.
@@ -278,8 +304,12 @@ re-measure everything on the release branch.
       success, cancel, failure, double tap, app background/return, and
       already-active. Turn the switch back off before public release and
       record both states in the QA evidence.
-- [ ] Reconfirm storefront availability and review-note/privacy accuracy against
-      the exact submitted build.
+- [x] Reconfirm storefront availability and review-note/privacy accuracy against
+      the exact submitted build. Authenticated App Store Connect metadata for
+      iOS build 33 confirms the eligible storefront posture (US available,
+      South Korea unavailable), review notes, privacy disclosure, manual
+      release, and phased release; the submitted build reports source commit
+      `2451ff39`.
 
 ## 7. Reviewer and market readiness
 
@@ -289,15 +319,19 @@ re-measure everything on the release branch.
 - [x] Reviewer data contains at least two claimable live offers visible
       outside the user's physical Dallas location when using the provided
       account. Two are required so claim-conflict and repeat-restriction
-      behavior is testable; today production has one real claimable deal and
-      five of the six live deals are demo data.
+      behavior is testable; exact v61 exercised two simultaneously claimable
+      offers and restored the reviewer consumer to a claim-clean state.
 - [x] Privacy, terms, support, delete-account, association, and asset-links URLs
       are public and return the expected content.
-- [ ] App Store “What's New” and Google Play release notes accurately describe
-      the material changes and contain no empty bullet.
+- [x] App Store “What's New” and Google Play release notes accurately describe
+      the material changes and contain no empty bullet. The exact Play internal
+      version-code 61 release received the final broad 1.0.2 note and was
+      re-read through the authenticated API.
 - [x] Correct the Apple title spacing (`Twofer: Live Local Deals`). Decided
       2026-08-01: fix it this release.
-- [ ] Reconfirm the intended category alignment between Apple and Google Play.
+- [x] Reconfirm the intended category alignment between Apple and Google Play.
+      Apple primary category and Google Play category both resolve to Food &
+      Drink.
 - [x] Decide demo-account teardown. Decided 2026-08-01: the demo accounts and
       demo deals stay for this release. Reviewer accounts ship anyway;
       revisit teardown once real merchant deal supply grows.
