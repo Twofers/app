@@ -74,10 +74,30 @@ sample poster copy (Cedar & Bean etc. — public-copy guard), robots.txt
 1. ~~Vercel: Framework Preset → "Other"~~ DONE 2026-08-02 (dashboard, with
    Dan signed in) + redeployed. Share previews are now live; see RESOLVED
    section below for the actual root cause.
-2. Cloudflare: Browser Cache TTL → "Respect existing headers" (currently 4h
-   override defeats the new immutable caching for repeat visitors).
-3. Cloudflare: allow AI *retrieval* crawlers (managed robots.txt currently
-   blocks GPTBot/ClaudeBot/etc. entirely); keep ai-train=no if desired.
+2. ~~Cloudflare: Browser Cache TTL → "Respect existing headers"~~ NOT NEEDED
+   — closed by the code change, verified 2026-08-02 with cache-busted probes:
+   styles.css, all five JS files and both fonts serve
+   `public, max-age=31536000, immutable` through Cloudflare, while HTML
+   correctly stays `max-age=0, must-revalidate`. The 4h value in the original
+   audit was Cloudflare filling in where the origin declared `max-age=0`;
+   explicit origin headers now pass straight through, so no dashboard change
+   is required. (Always probe with a `?cb=` buster — Cloudflare serves stale
+   headers by extension and this fooled the live-verify harness once.)
+3. ~~Cloudflare: allow AI *retrieval* crawlers~~ NO CHANGE NEEDED — the
+   original audit finding was WRONG and is retracted. Verified in the CF
+   dashboard 2026-08-02 (AI Crawl Control → Security + Signals):
+   - Nothing is blocked at the edge. Every "Block Crawler" toggle is off.
+   - The robots.txt Disallow list is *training* crawlers only (GPTBot,
+     ClaudeBot, Google-Extended, CCBot, Bytespider, Applebot-Extended,
+     Amazonbot, meta-externalagent). The *retrieval* agents that actually
+     answer user questions are not blocked and are actively crawling:
+     last 24h Claude-SearchBot 16, BingBot 9, ChatGPT-User 5, Googlebot 2,
+     OAI-SearchBot 1 — all allowed, 0 unsuccessful, 0 robots.txt violations.
+   - `Content-Signal: search=yes, ai-train=no, use=reference` already
+     expresses exactly the intended split (indexable + citable, not trainable).
+   - Cloudflare's own Agent Readiness scan scores **Bot Access Control 2/2
+     (100)**. The config is already ideal; touching it would only make things
+     worse.
 4. `Access-Control-Allow-Origin: *` is added outside the repo (CF or Vercel
    dashboard) — optional tightening.
 5. Git push of the release/1.0.2 website commits — held per checklist §10
