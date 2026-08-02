@@ -19,6 +19,14 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).not.toMatch(/Claim|Redeem|Only \d+ available|timeLabel|scarcity/i);
   });
 
+  it("deterministically fits every poster text slot before rendering", () => {
+    expect(source).toContain('from "@/lib/poster/posterTextFit"');
+    expect(source.split("fitPosterTextToBox({").length - 1).toBeGreaterThanOrEqual(6);
+    expect(source).not.toMatch(/minimumFontScale=\{0\.(?:5|56|58)\}/);
+    expect(source).toContain("minimumFontScale={0.1}");
+    expect(source).toContain("maxWidth: \"100%\"");
+  });
+
   it("keeps the production poster composed as full-bleed templates", () => {
     expect(source).toContain("function PosterBackground");
     expect(source).toContain("ImageBackground");

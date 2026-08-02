@@ -107,8 +107,12 @@ const POSTER_KNOWN_ITEM_WORDS = [
 function normalizePosterComparison(value: string): string {
   return cleanText(value)
     .toLowerCase()
+    // Keep possessives as one word. Replacing the apostrophe with whitespace turned
+    // "Captain's Reserve" into ["captain", "s", "reserve"]; the head-final fallback
+    // then kept the last two tokens and published "S RESERVE FOR LESS".
+    .replace(/[’]/g, "'")
     .replace(/&/g, " and ")
-    .replace(/[^a-z0-9\s+%-]/g, " ")
+    .replace(/[^a-z0-9'\s+%-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -162,10 +166,14 @@ function posterItemLabel(value: string, maxChars = POSTER_TEXT_LIMITS.headline -
   if (meaningful.length === 0) {
     return words.filter((word) => !POSTER_ITEM_CONNECTOR_WORDS.has(word)).slice(0, 2).join(" ");
   }
-  // Head-final tail, trimmed to what fits: "large cold brew" -> "cold brew".
-  let tail = meaningful.slice(-2).join(" ");
-  while (tail.length > maxChars && tail.includes(" ")) {
-    tail = tail.slice(tail.indexOf(" ") + 1);
+  // Head-final tail, keeping every preceding identity word that fits. A fixed
+  // `slice(-2)` silently dropped the first word even when the complete product name
+  // fit the budget; building backwards preserves the longest complete suffix.
+  let tail = meaningful[meaningful.length - 1];
+  for (let index = meaningful.length - 2; index >= 0; index -= 1) {
+    const candidate = `${meaningful[index]} ${tail}`;
+    if (candidate.length > maxChars) break;
+    tail = candidate;
   }
   return tail;
 }

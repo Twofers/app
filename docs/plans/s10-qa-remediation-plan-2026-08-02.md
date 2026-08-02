@@ -14,7 +14,7 @@ Convention: this plan file IS the tracker; check items off here as they land.
 | 3 | Releasing a claim never returns deal inventory (display AND cap enforcement) | High | Open — workstream A |
 | 4 | "Add to Google Wallet" badge hidden device-wide once any account taps it | Low | Open — workstream C |
 | 5 | Publish success banner says "now live" for a future-scheduled deal | Trivial | Open — workstream D |
-| 6 | AI poster headline rendered garbled/truncated on a live customer-facing deal | High (visibility) | Open — workstream E |
+| 6 | AI poster headline rendered garbled/truncated on a live customer-facing deal | High (visibility) | **FIXED IN CODE** — Edge deploy + app rebuild/device verify pending (workstream E) |
 
 Everything else on the ten Android gates passed on the exact vc61 payload; the
 QA report has the per-gate detail.
@@ -147,41 +147,51 @@ customers" while the dashboard correctly showed Scheduled / 0 live.
       `start_time > now`, say "scheduled for {time}" instead. All three
       locales + i18n key test.
 
-## Workstream E — AI poster headline garbled/truncated on a live deal (needs investigation before a fix)
+## Workstream E — AI poster headline garbled/truncated on a live deal (root-caused + fixed in code)
 
 Spotted live on device 2026-08-02 17:21: a real, non-demo, customer-claimable
-deal's AI-generated poster image showed **"S STRIPES FOR LESS"** where the
-intended headline was almost certainly something like "THE SERGEANT'S STRIPES
-FOR LESS" — the pattern (missing beginning, intact end) reads as the AI image
-model failing to render the full headline into the image pixels, not a string
-bug in app code. The one candidate app-side function
-(`ai-generate-ad-variants/index.ts:277` `clip()`) truncates from the end, the
-opposite pattern, and was ruled out. The deal's non-image data (title, price,
-overlay text) was correct throughout — this is specific to the baked poster
-image.
+deal's poster showed **"S STRIPES FOR LESS"** where a complete possessive item
+name was expected. The initial QA observation treated the poster as one baked
+AI image and therefore suspected the image model. The exact production
+`offer_versions.ad_spec` later disproved that diagnosis: the source image is
+text-free and the malformed string was already stored in the native poster
+headline slot. The separate deal title and offer lines stayed correct because
+they do not use the deterministic poster-headline fallback that failed here.
 
-- [ ] **Root-cause first, don't guess-fix.** Pull the exact `posterHeadlineText`
-      value and the exact prompt sent to the image model for this specific
-      deal (needs prod data access this session didn't have) to confirm
-      whether the input text was already correct (→ image-model rendering
-      defect) or already truncated before generation (→ app bug, different
-      fix).
-- [ ] If image-model rendering: this is the same category as prior
-      "headline invisible on dark photos" findings — check whether the
-      existing poster-quality harness (`docs/plans/poster-quality-plan...`
-      lineage, referenced in project memory) already covers headline-fidelity
-      checks, or needs a new automated check for baked-in-text accuracy
-      (e.g., OCR-diff the generated image against the intended headline before
-      allowing publish).
-- [ ] If confirmed as an image-fidelity failure with no cheap server-side fix:
-      at minimum, add a client or server sanity check comparing OCR'd poster
-      text against the intended headline before a merchant can publish, so a
-      garbled poster blocks publish instead of shipping to real customers.
-- [ ] Until root-caused, do not assume this is rare — it happened on the very
-      next AI-generated poster produced during this same QA session, from a
-      previously-working headline ("THE STRIPES ARE CALLING" rendered
-      correctly earlier the same session on a near-identical deal), so it is
-      not a one-off with obviously unusual input.
+- [x] **Root cause confirmed from the exact production rows.** The image model
+      did not render this text. Both the working and broken deals point to the
+      same text-free source image; the published poster spec has
+      `image_text_free = true` and `rendered_asset_path = null`. The broken
+      spec already stores headline `S STRIPES FOR LESS` and records
+      `copySource = DETERMINISTIC_FALLBACK`, while the prior spec stores
+      `THE STRIPES ARE CALLING`. The customer screen faithfully rendered the
+      bad stored string.
+- [x] Fix the pattern-level deterministic fallback bug in
+      `lib/poster/posterCopy.ts`. `normalizePosterComparison()` replaced the
+      apostrophe in a possessive item with whitespace, turning a name into
+      tokens like `["sergeant", "s", "stripes"]`; `posterItemLabel()` then
+      kept the final two tokens and produced `s stripes for less`. Apostrophes
+      now stay inside words, and the fitter keeps the longest complete
+      identity-bearing suffix that fits instead of always taking two tokens.
+- [x] Add lossless renderer-side fitting for every native poster text slot.
+      `fitPosterTextToBox()` balances complete words across the allowed lines,
+      reduces font size to the slot width without deleting characters, and
+      leaves React Native auto-shrink enabled at a lower minimum as a final
+      device-font safety net. Wired into V1/V2 business name, eyebrow,
+      headline, offer badge/lines, and schedule text.
+- [x] Automated regression coverage: possessive fallback cannot produce an
+      orphan `S` prefix; long one- and two-line poster copy preserves every
+      character; English and Korean short copy keep the intended size; all
+      poster copy fixtures remain valid. Focused tests 51/51, `typecheck`,
+      `typecheck:functions`, `copy:evaluate`, and the AI poster lock gate pass.
+- [x] Deploy `ai-generate-ad-variants` so newly generated deterministic
+      fallbacks use the corrected item-name logic. Deployed to production
+      (`kvodhiqhdqnptqovovia`) on 2026-08-02.
+- [ ] Ship an app rebuild so every poster surface uses deterministic text
+      fitting, then device-verify the possessive-name regression and the
+      existing max-length English/Spanish/Korean corpus. Existing immutable
+      poster specs that already store mangled text are not repairable by font
+      sizing alone and must be regenerated/re-published if still active.
 
 ## Optional hardening (no decision needed, cheap)
 

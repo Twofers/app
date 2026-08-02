@@ -18,6 +18,7 @@ import {
   isGenericPosterKicker,
   sanitizePosterCopy,
 } from "@/lib/poster/posterPolicy";
+import { fitPosterTextToBox } from "@/lib/poster/posterTextFit";
 import { posterCopyForLocale } from "@/lib/poster/posterAdSpec";
 import type { PosterCopyV1, PosterSpecV1, PosterTemplateId } from "@/lib/poster/posterTypes";
 import { isPosterLookV2Enabled, isPosterViewerLanguageEnabled } from "@/lib/runtime-env";
@@ -172,11 +173,18 @@ function PosterLine({
   weight?: "700" | "800" | "900";
   scale: (value: number) => number;
 }) {
+  const fitted = fitPosterTextToBox({
+    value,
+    boxWidth: width,
+    baseFontSize: size,
+    baseLineHeight: lineHeight,
+    maxLines: lines,
+  });
   return (
     <Text
       numberOfLines={lines}
       adjustsFontSizeToFit
-      minimumFontScale={0.58}
+      minimumFontScale={0.1}
       maxFontSizeMultiplier={1}
       style={{
         position: "absolute",
@@ -184,8 +192,8 @@ function PosterLine({
         top: scale(top),
         width: scale(width),
         color,
-        fontSize: scale(size),
-        lineHeight: scale(lineHeight),
+        fontSize: scale(fitted.fontSize),
+        lineHeight: scale(fitted.lineHeight),
         fontWeight: weight,
         textAlign: "center",
         letterSpacing: 0,
@@ -195,7 +203,7 @@ function PosterLine({
         zIndex: 6,
       }}
     >
-      {value}
+      {fitted.text}
     </Text>
   );
 }
@@ -375,6 +383,19 @@ function OfferBlock({
   const scheduleLine = posterText(liveScheduleLabel);
   const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
   const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
+  const primaryFit = fitPosterTextToBox({
+    value: primaryLine,
+    boxWidth: POSTER_COPY_WIDTH,
+    baseFontSize: POSTER_OFFER_TEXT_SIZE,
+    baseLineHeight: POSTER_OFFER_LINE_HEIGHT,
+  });
+  const secondaryFit = fitPosterTextToBox({
+    value: secondaryLine,
+    boxWidth: POSTER_COPY_WIDTH,
+    baseFontSize: POSTER_OFFER_TEXT_SIZE,
+    baseLineHeight: POSTER_OFFER_LINE_HEIGHT,
+    maxLines: 2,
+  });
 
   return (
     <>
@@ -405,13 +426,13 @@ function OfferBlock({
         <Text
           numberOfLines={1}
           adjustsFontSizeToFit
-          minimumFontScale={0.56}
+          minimumFontScale={0.1}
           maxFontSizeMultiplier={1}
           style={{
             width: "100%",
             color: theme.accent,
-            fontSize: scale(POSTER_OFFER_TEXT_SIZE),
-            lineHeight: scale(POSTER_OFFER_LINE_HEIGHT),
+            fontSize: scale(primaryFit.fontSize),
+            lineHeight: scale(primaryFit.lineHeight),
             fontWeight: "900",
             textAlign: "center",
             letterSpacing: 0,
@@ -420,19 +441,19 @@ function OfferBlock({
             textShadowRadius: scale(12),
           }}
         >
-          {primaryLine}
+          {primaryFit.text}
         </Text>
         <Text
           numberOfLines={2}
           adjustsFontSizeToFit
-          minimumFontScale={0.56}
+          minimumFontScale={0.1}
           maxFontSizeMultiplier={1}
           style={{
             width: "100%",
             marginTop: scale(28),
             color: secondaryColor,
-            fontSize: scale(POSTER_OFFER_TEXT_SIZE),
-            lineHeight: scale(POSTER_OFFER_LINE_HEIGHT),
+            fontSize: scale(secondaryFit.fontSize),
+            lineHeight: scale(secondaryFit.lineHeight),
             fontWeight: "900",
             textAlign: "center",
             letterSpacing: 0,
@@ -441,7 +462,7 @@ function OfferBlock({
             textShadowRadius: scale(12),
           }}
         >
-          {secondaryLine}
+          {secondaryFit.text}
         </Text>
       </View>
       {scheduleLine ? (
@@ -518,11 +539,19 @@ function PosterLineV2({
   fontFamily?: string;
   scale: (value: number) => number;
 }) {
+  const fitted = fitPosterTextToBox({
+    value,
+    boxWidth: width,
+    baseFontSize: size,
+    baseLineHeight: lineHeight,
+    maxLines: lines,
+    letterSpacing,
+  });
   return (
     <Text
       numberOfLines={lines}
       adjustsFontSizeToFit
-      minimumFontScale={0.58}
+      minimumFontScale={0.1}
       maxFontSizeMultiplier={1}
       style={{
         position: "absolute",
@@ -530,19 +559,19 @@ function PosterLineV2({
         top: scale(top),
         width: scale(width),
         color,
-        fontSize: scale(size),
-        lineHeight: scale(lineHeight),
+        fontSize: scale(fitted.fontSize),
+        lineHeight: scale(fitted.lineHeight),
         fontWeight: "900",
         fontFamily,
         textAlign: "center",
-        letterSpacing,
+        letterSpacing: scale(letterSpacing),
         textShadowColor: "rgba(0,0,0,0.35)",
         textShadowOffset: { width: 0, height: scale(2) },
         textShadowRadius: scale(6),
         zIndex: 6,
       }}
     >
-      {value}
+      {fitted.text}
     </Text>
   );
 }
@@ -650,6 +679,20 @@ function OfferBlockV2({
   const scheduleLine = posterText(liveScheduleLabel);
   const secondaryColor = onImage ? POSTER_ON_IMAGE_HEADLINE : theme.headline;
   const scheduleColor = onImage ? POSTER_ON_IMAGE_MUTED : theme.subline;
+  const badgeHorizontalPadding = 44 * 2;
+  const primaryFit = fitPosterTextToBox({
+    value: primaryLine,
+    boxWidth: POSTER_COPY_WIDTH - badgeHorizontalPadding,
+    baseFontSize: POSTER_V2_BADGE_TEXT_SIZE,
+    baseLineHeight: POSTER_V2_BADGE_LINE_HEIGHT,
+  });
+  const secondaryFit = fitPosterTextToBox({
+    value: secondaryLine,
+    boxWidth: POSTER_COPY_WIDTH,
+    baseFontSize: POSTER_V2_OFFER_LINE_TEXT_SIZE,
+    baseLineHeight: POSTER_V2_OFFER_LINE_LINE_HEIGHT,
+    maxLines: 2,
+  });
 
   return (
     <>
@@ -683,36 +726,37 @@ function OfferBlockV2({
             borderRadius: 999,
             paddingHorizontal: scale(44),
             paddingVertical: scale(16),
+            maxWidth: "100%",
           }}
         >
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.5}
+            minimumFontScale={0.1}
             maxFontSizeMultiplier={1}
             style={{
               color: POSTER_V2_BADGE_TEXT_COLOR,
-              fontSize: scale(POSTER_V2_BADGE_TEXT_SIZE),
-              lineHeight: scale(POSTER_V2_BADGE_LINE_HEIGHT),
+              fontSize: scale(primaryFit.fontSize),
+              lineHeight: scale(primaryFit.lineHeight),
               fontWeight: "900",
               fontFamily,
               textAlign: "center",
             }}
           >
-            {primaryLine}
+            {primaryFit.text}
           </Text>
         </View>
         <Text
           numberOfLines={2}
           adjustsFontSizeToFit
-          minimumFontScale={0.56}
+          minimumFontScale={0.1}
           maxFontSizeMultiplier={1}
           style={{
             width: "100%",
             marginTop: scale(24),
             color: secondaryColor,
-            fontSize: scale(POSTER_V2_OFFER_LINE_TEXT_SIZE),
-            lineHeight: scale(POSTER_V2_OFFER_LINE_LINE_HEIGHT),
+            fontSize: scale(secondaryFit.fontSize),
+            lineHeight: scale(secondaryFit.lineHeight),
             fontWeight: "900",
             fontFamily,
             textAlign: "center",
@@ -721,7 +765,7 @@ function OfferBlockV2({
             textShadowRadius: scale(6),
           }}
         >
-          {secondaryLine}
+          {secondaryFit.text}
         </Text>
       </View>
       {scheduleLine ? (

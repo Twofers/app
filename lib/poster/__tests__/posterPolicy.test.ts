@@ -334,6 +334,27 @@ describe("poster policy", () => {
     expect(copy.headline).toContain("HAIRCUT");
   });
 
+  it("keeps a possessive item name intact in the deterministic headline", () => {
+    // Apostrophes must stay inside the word. Splitting "Captain's" into
+    // ["captain", "s"] makes a head-final fallback emit "S RESERVE FOR LESS".
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "THE CAPTAIN'S RESERVE",
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Get 50% off THE CAPTAIN'S RESERVE",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.headline).toBe("CAPTAIN'S RESERVE FOR LESS");
+    expect(copy.headline).not.toMatch(/^S\s/);
+    expect(copy.headline.length).toBeLessThanOrEqual(POSTER_TEXT_LIMITS.headline);
+  });
+
   it("does not let percent-off mechanics become the poster hero", () => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
