@@ -71,10 +71,9 @@ sample poster copy (Cedar & Bean etc. — public-copy guard), robots.txt
 
 ## Dan follow-ups (dashboard-only, cannot be done from repo)
 
-1. **Vercel: Framework Preset → "Other"** (Project Settings → Build &
-   Development Settings), then redeploy. This activates deal-specific share
-   previews for link unfurls — everything else is already live. See
-   post-mortem below.
+1. ~~Vercel: Framework Preset → "Other"~~ DONE 2026-08-02 (dashboard, with
+   Dan signed in) + redeployed. Share previews are now live; see RESOLVED
+   section below for the actual root cause.
 2. Cloudflare: Browser Cache TTL → "Respect existing headers" (currently 4h
    override defeats the new immutable caching for repeat visitors).
 3. Cloudflare: allow AI *retrieval* crawlers (managed robots.txt currently
@@ -83,12 +82,13 @@ sample poster copy (Cedar & Bean etc. — public-copy guard), robots.txt
    dashboard) — optional tightening.
 5. Git push of the release/1.0.2 website commits — held per checklist §10
    ("never push without explicit approval").
-6. Heads-up (behavioral, server-side, unchanged code): with business_type
-   removed from the form, website applications max out at risk score 65 <
-   the 70 quick-approval threshold — every application now lands in
-   review_required and the admin alert email has no one-click approve link.
-   The 2026-07-13 security audit criticized that ≥70 path as forgeable, so
-   this may be desirable; revisit `_shared/admin-quick-approval.ts` if not.
+6. ~~Quick-approve unreachable~~ RESOLVED 2026-08-02 (commit 3bec8acc,
+   deployed): scoring rebalanced (in-area +20, website +20) so a complete
+   in-area application reaches 75 ≥ 70 and the admin email regains its
+   one-click approve link; requires email + phone + in-area address +
+   website, so the bar is as strict as before. Also added coppell /
+   las colinas / valley ranch to the launch-area list — Coppell addresses
+   previously auto-waitlisted (-40).
 
 ## Status — COMPLETE (one item pending a Dan dashboard toggle)
 
@@ -105,6 +105,34 @@ sample poster copy (Cedar & Bean etc. — public-copy guard), robots.txt
 - [x] Live verification: 28/28 harness checks pass; share page console-clean
       live in ES; fonts/styles/JS immutable confirmed with cache-busted probes
 - [x] Memory + this tracker updated
+
+## RESOLVED 2026-08-02 (commit 3b1e3e3f) — share previews are LIVE
+
+Both remaining items are done:
+- **Vercel Framework Preset flipped to "Other"** (dashboard, with Dan signed
+  in) and redeployed. Necessary, but it turned out NOT to be the blocker.
+- **Real root cause: Vercel resolves static files BEFORE any redirect or
+  rewrite in vercel.json.** The deployed `s/index.html` captured every
+  `/s/<code>` request, so the share code never reached the routing layer at
+  all. Proven by a loose bot-gated diagnostic redirect that fired with
+  `code=index.html` — the router only ever saw the literal `/s/index.html`.
+- Fix: the template is inlined into the function (`api/_share-template.js`,
+  generated + byte-drift-gated) and `scripts/prepare-deploy.mjs` prunes
+  `static/s/` between build and deploy, leaving `/s/*` free for the rewrites.
+  The pruner refuses to run unless the function and a fresh template exist.
+- Deploy sequence is now build → prepare-deploy → deploy --prebuilt.
+  Checklist §8 rewritten with the rationale; a plain `vercel deploy --prod`
+  would silently reintroduce the bug.
+- Live: 32/32 harness checks; every `/s` path returns
+  `x-share-preview-match: query` from the function with the full page intact.
+
+Residual (acceptable, stated plainly): the *injection* branch — a share code
+that resolves to a live deal — has not been exercised against production
+because prod currently has no live share code to test with. Extraction,
+lookup, fail-open fallbacks and the page itself are all verified live; the
+injection transform is unit- and mutation-tested against the real template
+and its output was demonstrated with a synthetic valid payload. It will
+exercise on the first real share.
 
 ## Post-mortem: the /s share-preview routing saga (2026-08-02)
 
