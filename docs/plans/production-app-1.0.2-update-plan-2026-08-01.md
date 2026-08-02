@@ -234,6 +234,33 @@ source commit `2451ff39fe22f97d730a0e25cde1bced2bce2497`. The full suite
 passed 320 files / 2,218 tests; Edge Function typechecking passed 163 files;
 Expo Doctor passed 18/18; the worklets version is aligned at `0.5.1`.
 
+**Re-measured 2026-08-02 on `b45860d5` (clean tree; `main` == `release/1.0.2`
+after PR #64). All 11 gates green again**, including the conditional hosted
+gate. Results: typecheck, lint, `npm test` (320 files / 2,218 tests),
+typecheck:functions, expo-doctor 18/18, gate:release-state,
+gate:ai-poster-lock, check:i18n-keys, check:mobile-store-copy,
+check:website-supabase, and `gate:edges` (7/7 hosted functions HEALTHY).
+
+**The binary is still accurately represented.** The 8 commits between
+`2451ff39` and this re-measurement touch only `website/**`, `docs/**`, three
+`*.test.ts` guards, `scripts/check-website-i18n.js`,
+`scripts/check-website-supabase-readiness.js`, and the
+`submit-business-application` Edge Function — no mobile app source, no
+`app.json`, `package.json`, `eas.json`, or native config. So the exact-binary
+QA in section 6 is not invalidated by this work and does not need redoing.
+
+Two gates had to be repaired to pass, both fallout from the website CSP work
+rather than product defects (commits `21efc019`, `b45860d5`): source-sync
+guards that read website HTML were repointed at the externalized
+`share-page.js` / `apply.js`, and `check:website-supabase` was stopped from
+walking `website/.vercel/output/**`, which now exists locally because deploys
+run `vercel build` first.
+
+Backend note: `submit-business-application` was redeployed 2026-08-02 with
+re-weighted intake scoring (see the website growth plan). Smoke-verified
+hosted: an empty payload returns HTTP 400 `Missing required fields.`, not a
+500.
+
 ## 6. Exact-binary QA
 
 ### Both platforms
