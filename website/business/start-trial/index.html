@@ -6,7 +6,7 @@
     <title data-i18n="trial.title">Bring in customers during your slow hours | Twofer</title>
     <meta
       name="description"
-      content="Request business access to Twofer and turn slow hours into timely local deals. Built for local businesses in Dallas-Fort Worth."
+      content="Request business access to Twofer and turn slow hours into timely local deals. Built for local businesses in Irving &amp; Coppell."
       data-i18n-content="trial.meta"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -58,10 +58,11 @@
             <p class="access-kicker" data-i18n="trial.kicker">For local businesses</p>
             <h1 data-i18n="trial.heading">Bring in customers during your slow hours</h1>
             <p class="access-lede" data-i18n="trial.lede">Publish limited-time deals during the hours you choose, and let nearby customers find you. Tell us about your business and we will review your access request.</p>
+            <p class="status-pill" data-i18n="trial.foundingNote">Now onboarding our founding businesses in Irving &amp; Coppell.</p>
             <ul class="access-proof" data-i18n-aria-label="a11y.businessAccessHighlights">
               <li data-i18n="trial.chip1">No payment details needed to apply</li>
               <li data-i18n="trial.chip2">Reviewed within 1-2 business days</li>
-              <li data-i18n="trial.chip3">Live in Dallas-Fort Worth</li>
+              <li data-i18n="trial.chip3">Live in Irving &amp; Coppell</li>
             </ul>
             <a class="button trial-jump" href="#business-application" data-i18n="trial.jump">Request business access</a>
           </div>
@@ -103,36 +104,13 @@
                   <span data-i18n="trial.phone">Phone number (optional)</span>
                   <input name="phone" autocomplete="tel" maxlength="40" />
                 </label>
-                <label>
-                  <span data-i18n="trial.type">Business type</span>
-                  <select name="business_type">
-                    <option value="" data-i18n="trial.typeEmpty">Select one</option>
-                    <option value="coffee_shop" data-i18n="trial.coffee">Coffee shop</option>
-                    <option value="cafe" data-i18n="trial.cafe">Cafe</option>
-                    <option value="bakery" data-i18n="trial.bakery">Bakery</option>
-                    <option value="restaurant" data-i18n="trial.restaurant">Restaurant</option>
-                    <option value="other_local_business" data-i18n="trial.other">Other local business</option>
-                  </select>
-                </label>
                 <label class="full">
                   <span data-i18n="trial.address">Business address</span>
-                  <input name="address" autocomplete="street-address" maxlength="240" />
+                  <input name="address" autocomplete="street-address" maxlength="240" required />
                 </label>
                 <label>
                   <span data-i18n="trial.web">Website or Instagram (optional)</span>
                   <input name="website_or_instagram" maxlength="180" />
-                </label>
-                <label>
-                  <span data-i18n="trial.launch">City or neighborhood</span>
-                  <input name="launch_area" maxlength="120" placeholder="Example: Dallas, Oak Cliff, Bishop Arts" data-i18n-placeholder="trial.launchPlaceholder" />
-                </label>
-                <label class="full">
-                  <span data-i18n="trial.slow">Your slowest hours (optional)</span>
-                  <textarea name="slow_hours" maxlength="500" placeholder="Example: Weekdays 2:00 - 5:00 PM" data-i18n-placeholder="trial.slowPlaceholder"></textarea>
-                </label>
-                <label class="full">
-                  <span data-i18n="trial.promote">What would you like to promote? (optional)</span>
-                  <textarea name="offer_interests" maxlength="500"></textarea>
                 </label>
                 <!--
                   Optional promotional-materials consent. Deliberately lives here,
@@ -230,84 +208,7 @@
       </div>
     </footer>
 
-    <script src="/localization.js?v=20260801-poster-copy"></script>
-    <script>
-      const form = document.querySelector("#business-application");
-      const statusEl = document.querySelector("#form-status");
-      const submitButton = form.querySelector("[data-submit-button]");
-      const applicationHeading = document.querySelector("#business-application-heading");
-
-      document.querySelector(".trial-jump")?.addEventListener("click", () => {
-        window.setTimeout(() => applicationHeading?.focus(), 0);
-      });
-
-      function msg(key) {
-        return window.TwoferI18n?.t(key) || "";
-      }
-
-      function setStatus(text, isError = false) {
-        statusEl.className = isError ? "status error" : "status";
-        statusEl.setAttribute("role", isError ? "alert" : "status");
-        statusEl.textContent = text;
-      }
-
-      function clearInvalid() {
-        for (const field of form.querySelectorAll(".invalid")) {
-          field.classList.remove("invalid");
-          field.removeAttribute("aria-invalid");
-        }
-      }
-
-      function markInvalid(name) {
-        const field = form.querySelector(`[name="${name}"]`);
-        if (!field) return;
-        field.classList.add("invalid");
-        field.setAttribute("aria-invalid", "true");
-        return field;
-      }
-
-      function validationMessage(data) {
-        if (!String(data.get("business_name") || "").trim()) return { field: markInvalid("business_name"), text: msg("trial.validationName") || "Enter your business name." };
-        if (!String(data.get("contact_name") || "").trim()) return { field: markInvalid("contact_name"), text: msg("trial.validationContact") || "Enter the owner or manager name." };
-        const email = String(data.get("email") || "").trim();
-        if (!email || !email.includes("@")) return { field: markInvalid("email"), text: msg("trial.validationEmail") || "Enter a valid business email." };
-        if (data.get("terms_accepted") !== "on") return { field: markInvalid("terms_accepted"), text: msg("trial.validationTerms") || "Please accept the Business Terms." };
-        if (data.get("privacy_acknowledged") !== "on") return { field: markInvalid("privacy_acknowledged"), text: msg("trial.validationPrivacy") || "Please acknowledge the Privacy Policy." };
-        return null;
-      }
-
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearInvalid();
-        const data = new FormData(form);
-        const invalid = validationMessage(data);
-        if (invalid) {
-          setStatus(invalid.text, true);
-          invalid.field?.focus();
-          return;
-        }
-        setStatus(msg("trial.submitting") || "Submitting...");
-        submitButton.disabled = true;
-        const payload = Object.fromEntries(data.entries());
-        payload.terms_accepted = data.get("terms_accepted") === "on";
-        payload.privacy_acknowledged = data.get("privacy_acknowledged") === "on";
-        // Optional: an unchecked box is absent from FormData, so this is false
-        // unless the business explicitly opted in.
-        payload.promo_materials_authorized = data.get("promo_materials_authorized") === "on";
-        try {
-          const response = await fetch(document.body.dataset.applicationEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-          if (response.status === 429) {
-            setStatus(msg("trial.rateLimited") || "You have reached the request limit for now. Please try again in about 30 minutes.", true);
-            return;
-          }
-          if (!response.ok) throw new Error("Request failed");
-          window.location.assign("/business/thanks/");
-        } catch {
-          setStatus(msg("trial.failure") || "We could not submit the request. Please try again, or email support@twoferapp.com.", true);
-        } finally {
-          submitButton.disabled = false;
-        }
-      });
-    </script>
+    <script src="/localization.js?v=20260802-irving-coppell"></script>
+    <script src="/business/start-trial/apply.js?v=20260802-irving-coppell"></script>
   </body>
 </html>

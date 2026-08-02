@@ -8,7 +8,7 @@
  *   3. Reports keys defined but never referenced (informational only).
  *
  * Failures 1 and 2 exit non-zero. Unused keys do not fail the build: some are
- * used from JS at runtime (form status strings, launch-signup states) rather
+ * used from JS at runtime (the start-trial form status strings) rather
  * than from a data-i18n attribute in markup.
  *
  * Note on parsing: locales are declared as a base block (`    en: {`) and then

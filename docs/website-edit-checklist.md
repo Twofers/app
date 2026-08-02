@@ -41,8 +41,9 @@ Current inventory (re-count with the grep below if in doubt):
 | `styles.css` | 44 pages |
 | `localization.js` | 22 pages |
 | `store-links.js` | 5 pages (`/`, `/s`, `/support`, `/business/thanks`, `/business/billing/checkout`) |
-| `launch-signup.js` | 1 page (`/`) |
 | `home-motion.js` | 1 page (`/`) |
+| `s/share.js` | 1 page (`/s`) |
+| `business/start-trial/apply.js` | 1 page (`/business/start-trial`) |
 | `admin/admin-shell.js` | 22 admin entry pages (`app.html` is an injected fragment) |
 
 - [ ] Bump the `?v=` to `YYYYMMDD-shortslug` on **all** including pages, for

@@ -3,6 +3,11 @@
   "buildCommand": "node scripts/check-i18n.mjs",
   "installCommand": null,
   "outputDirectory": ".",
+  "functions": {
+    "api/share-preview.js": {
+      "includeFiles": "s/index.html"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
@@ -26,6 +31,15 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+        }
+      ]
+    },
+    {
+      "source": "/((?!admin|quick-approve-trial|api/).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://kvodhiqhdqnptqovovia.supabase.co; font-src 'self'; connect-src 'self' https://kvodhiqhdqnptqovovia.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         }
       ]
     },
@@ -119,6 +133,69 @@
       ]
     },
     {
+      "source": "/assets/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/styles.css",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/localization.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/store-links.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/home-motion.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/s/share.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/business/start-trial/apply.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/favicon.ico",
       "headers": [
         {
@@ -188,6 +265,18 @@
     {
       "source": "/quick-approve-trial/",
       "destination": "/quick-approve-trial/index.html"
+    },
+    {
+      "source": "/s",
+      "destination": "/s/index.html"
+    },
+    {
+      "source": "/s/",
+      "destination": "/s/index.html"
+    },
+    {
+      "source": "/s/:code([A-Za-z2-9]{7})",
+      "destination": "/api/share-preview?code=:code"
     },
     {
       "source": "/s/:path*",
