@@ -19,41 +19,17 @@
  * what keep crawler storms off that budget.
  */
 
-const fs = require("node:fs");
-const path = require("node:path");
-
 const { SHARE_CODE_RE, injectShareMeta } = require("./_share-preview-core");
+// Inlined at build time from s/index.html (scripts/build-share-template.mjs).
+// Not read from disk: this function must serve the share page even when no
+// static s/index.html exists in the deployment, which is what lets the
+// function own /s/* instead of losing every request to static resolution.
+const SHARE_TEMPLATE = require("./_share-template");
 
 const LOOKUP_ENDPOINT =
   "https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/deal-share-lookup";
 const LOOKUP_TIMEOUT_MS = 2500;
 const CACHE_CONTROL = "public, max-age=0, s-maxage=120, stale-while-revalidate=600";
-
-let cachedTemplate = null;
-
-// vercel.json ships the template into this function's bundle via
-// functions["api/share-preview.js"].includeFiles, which places it at its
-// project-relative path -- i.e. process.cwd()/s/index.html, the documented
-// includeFiles access pattern. The __dirname sibling resolves to the same file
-// in a correct bundle and only matters if the runtime cwd is ever not the
-// project root; if neither exists the caller redirects to /s.
-function loadTemplate() {
-  if (cachedTemplate !== null) return cachedTemplate;
-  const candidates = [
-    path.join(process.cwd(), "s", "index.html"),
-    path.join(__dirname, "..", "s", "index.html"),
-  ];
-  let lastError;
-  for (const candidate of candidates) {
-    try {
-      cachedTemplate = fs.readFileSync(candidate, "utf8");
-      return cachedTemplate;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw lastError;
-}
 
 function sendHtml(req, res, html) {
   res.statusCode = 200;
@@ -96,6 +72,10 @@ function codeFromRequest(req) {
   if (req.query && typeof req.query.code === "string" && req.query.code) {
     return { code: req.query.code, sourceUsed: "query" };
   }
+  // The /s/:path* catch-all rewrite auto-appends its param as ?path=…
+  if (req.query && typeof req.query.path === "string" && req.query.path) {
+    return { code: req.query.path, sourceUsed: "query-path" };
+  }
   const matches = req.headers && req.headers["x-now-route-matches"];
   if (typeof matches === "string" && matches) {
     try {
@@ -120,15 +100,7 @@ module.exports = async function handler(req, res) {
     return res.end("Method not allowed.");
   }
 
-  let template;
-  try {
-    template = loadTemplate();
-  } catch {
-    res.statusCode = 302;
-    res.setHeader("Location", "/s");
-    res.setHeader("Cache-Control", "no-store");
-    return res.end();
-  }
+  const template = SHARE_TEMPLATE;
 
   const extracted = codeFromRequest(req);
   const code = String(extracted.code).trim().toUpperCase();

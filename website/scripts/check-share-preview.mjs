@@ -25,6 +25,7 @@ const require = createRequire(import.meta.url);
 const { escapeHtml, injectShareMeta } = require(path.join(SITE_ROOT, "api", "_share-preview-core.js"));
 
 const TEMPLATE = fs.readFileSync(path.join(SITE_ROOT, "s", "index.html"), "utf8");
+const INLINED_TEMPLATE = require(path.join(SITE_ROOT, "api", "_share-template.js"));
 const CODE = "ABCD234";
 
 let failures = 0;
@@ -230,6 +231,16 @@ runCase("multi-line merchant copy is flattened, $ patterns survive verbatim", ()
     html.slice(html.indexOf("<title"), html.indexOf("</title>") + 8),
   );
   check("no newline leaked into an attribute value", !/content="[^"]*\n/.test(html));
+});
+
+runCase("inlined api/_share-template.js matches s/index.html byte-for-byte", () => {
+  check(
+    "regenerate with: node website/scripts/build-share-template.mjs",
+    INLINED_TEMPLATE === TEMPLATE,
+    INLINED_TEMPLATE === TEMPLATE
+      ? ""
+      : `inlined ${INLINED_TEMPLATE.length} chars vs source ${TEMPLATE.length} chars`,
+  );
 });
 
 console.log("");

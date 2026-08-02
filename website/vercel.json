@@ -3,11 +3,6 @@
   "buildCommand": "node scripts/check-i18n.mjs",
   "installCommand": null,
   "outputDirectory": ".",
-  "functions": {
-    "api/share-preview.js": {
-      "includeFiles": "s/index.html"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
@@ -251,18 +246,6 @@
       "source": "/admon/:path*",
       "destination": "/admin/:path*",
       "permanent": false
-    },
-    {
-      "source": "/s/:code([A-Za-z2-9]{7})",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": "(?i).*(facebookexternalhit|facebot|twitterbot|slackbot|whatsapp|telegrambot|discordbot|linkedinbot|applebot|skypeuripreview|pinterestbot|redditbot|googlebot|bingbot).*"
-        }
-      ],
-      "destination": "/api/share-preview?code=:code",
-      "permanent": false
     }
   ],
   "rewrites": [
@@ -280,11 +263,11 @@
     },
     {
       "source": "/s",
-      "destination": "/s/index.html"
+      "destination": "/api/share-preview"
     },
     {
       "source": "/s/",
-      "destination": "/s/index.html"
+      "destination": "/api/share-preview"
     },
     {
       "source": "/s/:code",
@@ -292,7 +275,7 @@
     },
     {
       "source": "/s/:path*",
-      "destination": "/s/index.html"
+      "destination": "/api/share-preview"
     },
     {
       "source": "/business",

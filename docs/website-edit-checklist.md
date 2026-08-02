@@ -126,16 +126,32 @@ python -m http.server 4180 --directory website
 
 ## 8. Deploy (gated — Dan says go)
 
-Deploying is a hard gate. When approved:
+Deploying is a hard gate. When approved, run all three steps from `website/`:
 
 ```bash
-cd website
-npx vercel deploy --prod --yes
+npx vercel build --prod --yes && node scripts/prepare-deploy.mjs && npx vercel deploy --prebuilt --prod --yes
 ```
 
 - [ ] Run **from `website/`** — that's where `.vercel/project.json` lives, and
       deploys ship the directory you run them from (worktree-deploy rule).
 - [ ] Output shows `"readyState": "READY"` and `"target": "production"`.
+
+**Do not replace this with a plain `npx vercel deploy --prod`.** The middle
+step is load-bearing: `prepare-deploy.mjs` removes `static/s/` from the build
+output. Vercel resolves static files *before* any redirect or rewrite in
+`vercel.json`, so a deployed `s/index.html` silently captures every
+`/s/<code>` request and the share code never reaches the routing layer — which
+is exactly how deal-specific link unfurls broke (a diagnostic redirect proved
+the router only ever saw the literal path `/s/index.html`). With `static/s/`
+absent, `/s/*` rewrites reach `api/share-preview`, which serves the identical
+markup from `api/_share-template.js`. The script refuses to prune if that
+function or its inlined template is missing, so it cannot ship a site whose
+`/s/*` 404s. Building separately is also what makes the compiled route table
+inspectable before shipping (`.vercel/output/config.json`).
+
+- [ ] If you edited `website/s/index.html`, regenerate its inlined copy first:
+      `node website/scripts/build-share-template.mjs`. The drift gate in
+      `check-share-preview.mjs` fails while the two differ.
 
 ## 9. Post-deploy live verification (always after a deploy)
 
