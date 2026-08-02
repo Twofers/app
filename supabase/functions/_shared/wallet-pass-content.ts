@@ -266,7 +266,7 @@ export const WALLET_PASS_APP_URL = "https://twoferapp.com";
 export const WALLET_PASS_SUPPORT_EMAIL = "support@twoferapp.com";
 
 /** Production Android package. Dev builds use `.dev` and are never issued passes. */
-export const WALLET_PASS_ANDROID_PACKAGE = "com.unvmex2.twoferone";
+export const WALLET_PASS_ANDROID_PACKAGE = "com.unvmex2.twoforone";
 /**
  * Where the pass's app-link button lands: the wallet, with the claim's pass
  * sheet already open, so the double-tap manual redemption is one tap away.

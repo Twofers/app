@@ -103,6 +103,28 @@ describe("native wallet pass — sync helper contract", () => {
   });
 });
 
+describe("native wallet pass — Android app link targets the real installed app", () => {
+  // 1.0.2 device QA (2026-08-02): the constant said "twoferone", the installed
+  // package is "twoforone", and Google Wallet silently dropped the app-link
+  // button — the pass fell back to the marketing https link with no error
+  // anywhere. The unit test asserted the same hardcoded typo, so only a
+  // cross-file guard against app.json makes this failure unshippable again.
+  const appJson = JSON.parse(read("app.json"));
+  const contentSource = read("supabase/functions/_shared/wallet-pass-content.ts");
+
+  it("WALLET_PASS_ANDROID_PACKAGE equals expo.android.package in app.json", () => {
+    const declared = contentSource.match(/WALLET_PASS_ANDROID_PACKAGE = "([^"]+)"/)?.[1];
+    expect(declared).toBe(appJson.expo.android.package);
+  });
+
+  it("the pass deep link uses a scheme the app registers in app.json", () => {
+    const uri = contentSource.match(/WALLET_PASS_APP_DEEP_LINK = "([^"]+)"/)?.[1] ?? "";
+    const scheme = uri.split("://")[0];
+    expect(scheme).not.toBe("");
+    expect(appJson.expo.scheme).toContain(scheme);
+  });
+});
+
 describe("native wallet pass — issue endpoint", () => {
   const source = read("supabase/functions/wallet-pass-issue/index.ts");
 

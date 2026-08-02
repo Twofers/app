@@ -303,15 +303,117 @@ hosted: an empty payload returns HTTP 400 `Missing required fields.`, not a
       payment URL. Inspected the full exact-v61 merchant Account surface in
       dark mode; no Checkout, billing, pricing, subscription, or external-
       payment CTA/URL was present.
-- [ ] Smoke Google sign-in, Maps, location denial/ZIP fallback, account
+- [x] Smoke Google sign-in, Maps, location denial/ZIP fallback, account
       deletion, customer claim/release, merchant QR redemption, push settings,
       deep links, and support contact on a real Android device. The exact v61
       payload passed broad emulator coverage (including ZIP fallback,
       claim/release/redemption, deep links, and support surfaces), but an
       emulator does not satisfy this physical-device gate.
+      **CLOSED 2026-08-02 on a real S10 (SM-G973U1, Android 12) running the
+      exact Play internal vc61/1.0.2 payload — see
+      `docs/qa/S10_PRODUCTION_1.0.2_ANDROID_QA_2026-08-02.md`.** Every item in
+      this line passed on device: Google sign-in; Maps (production key renders
+      live tiles with correct attribution); location denial → ZIP fallback
+      including persistence; account deletion through both confirmation steps
+      (irreversible confirm deliberately not tapped, so deletion *execution*
+      remains unverified); customer claim **and** release; merchant QR
+      redemption; push settings; deep links (`www.twoferapp.com` verified, app
+      opens, invalid code gives a clean localized error); and support contact
+      (`mailto:` dispatches). No external-payment CTA exists on the consumer
+      **or** merchant surface, the latter checked with "+ More options"
+      expanded.
+      Production had no real claimable deal (all six live offers were Cedar &
+      Bean demo with a disabled "Demo offer" button), so a real non-demo deal
+      was published in-app from the merchant account to unblock — which also
+      re-verified the publish loop, the same-item BOGO acceptance, and poster
+      generation on device. Redemption ran through the Ticket code fallback
+      (single device, so a phone cannot scan its own QR); the scanner itself
+      was confirmed to open a live viewfinder after a clean permission grant.
+      Invalid codes and double-redeem were both correctly rejected with
+      distinct messages, and merchant dashboard + consumer wallet reconciled.
+      **CONFIRMED BUG (not a release blocker, but should be fixed): releasing a
+      claim never returns deal inventory, and this also affects cap
+      enforcement, not just the displayed count.** Reproduced clean on a fresh
+      10-claim deal: 10 available → claim → 9 → release → still 9 (dialog says
+      "returns it to the deal"). Root cause in source: `release-claim` writes
+      `claim_status = 'released'`
+      (`supabase/functions/release-claim/index.ts:119`), added to the
+      `deal_claims_claim_status_check` constraint by
+      `20260721120000_deal_wallet_redemption_rules.sql:138`, but all three
+      counting/enforcement sites still exclude only the no-longer-written
+      `'canceled'` status: the `deal_claim_counts` display RPC
+      (`20260716120000_deal_claim_counts_rpc.sql:22`), the DB-level cap trigger
+      (`20260704130000_enforce_max_claims_atomic.sql:36`), and `claim-deal`'s
+      own cap check (`supabase/functions/claim-deal/index.ts:713` and `:873`).
+      Because the enforcement path has the same gap, a deal can be fully
+      sold out by claim-then-release churn with zero actual redemptions. Not
+      fixed — needs a product decision (exclude `'released'` from the counts,
+      which changes claim semantics, vs. change the release-dialog copy) before
+      code changes.
 - [ ] Google Wallet: save the pass and open the app from the saved pass. The
       wallet-to-app route is new since 1.0.1, and the Google issuer was only
       approved after the last binary shipped.
+      **Tested on the S10 2026-08-02. SAVE PASSES; PASS-TO-APP FAILED.** The
+      "Add to Google Wallet" button saved a correctly branded pass carrying the
+      deal, business, redeem-by, QR, and claim code. But the pass's
+      **"Open Twofer"** action launched Chrome to the marketing homepage instead
+      of the app. Root cause: `wallet-pass-content.ts:269` declared the Android
+      package as `com.unvmex2.twoferone`; the real package is
+      `com.unvmex2.twoforone` (`app.json:208`, and the typo'd package resolves to
+      0 installed matches). Wallet cannot resolve an `appTarget` for a
+      non-existent package, so it silently drops the app-link button and falls
+      back to the https marketing link. `wallet-pass-content.test.ts:241`
+      asserted the same typo, so the guard was vacuous.
+      The rest of the route is sound: firing `twofer://wallet?pass=1` directly
+      opened the app straight to the staff pass sheet (SHOW STAFF, 24 s scan
+      window, QR, "Tap the QR twice to redeem", claim code).
+      **Fix applied to both files 2026-08-02**, plus a new cross-file guard in
+      `wallet-pass-source.test.ts` asserting the constant equals
+      `expo.android.package` in `app.json` (the old unit test asserted the
+      hardcoded typo, so it was vacuous). Full suite green after the change.
+      This is Edge Function source, **not mobile source — no new binary is
+      required**, only a function redeploy.
+      **Deploy COMPLETE 2026-08-02, verified via `supabase functions list`:**
+      all seven functions embedding the constant are ACTIVE on fixed source —
+      wallet-pass-issue v32, claim-deal v111, release-claim v68,
+      staff-redemption v67, redeem-token v113, complete-visual-redeem v98,
+      finalize-stale-redeems v94. All six lifecycle functions were required,
+      not just the issuer: `syncWalletPassForUser` re-upserts the whole Google
+      object on every claim/redeem/release, so a stale one would stamp the typo
+      back onto a freshly saved pass. `wallet-pass-webservice` (v28) needs no
+      redeploy. Post-deploy smoke on the S10 was clean.
+      **RETESTED 2026-08-02 — the app-link button still does not render, on a
+      genuine fresh pass CREATE (not just a PATCH of an old object). A second,
+      deeper bug found, root-caused against Google's live API docs, and it
+      changes the scope of this gate materially:**
+      `wallet-pass-content.ts:420-431` sets `appTarget.packageName` AND
+      `appTarget.targetUri` together inside `androidAppLinkInfo`, but per
+      Google's own reference, `appTarget` is a union field — only one may be
+      set. Worse, **`androidAppLinkInfo` cannot deep-link to a specific screen
+      at all**; Google's docs state plainly that reaching a specific view
+      requires `webAppLinkInfo` with a verified `https://` App Link target,
+      which the code never sets. The only currently-verified Android App Link
+      path is `/s/{code}`; a wallet-specific path (e.g. `/wallet`) would need
+      its own `autoVerify: true` intent-filter entry in `app.json`.
+      **Intent filters compile into the native AndroidManifest.xml — this
+      needs a new mobile binary, not just an Edge Function redeploy.** The
+      original "no new binary required" framing was correct only for the
+      package-name typo in isolation; it does not hold once this second bug
+      is factored in. Not fixed — this is a product/engineering scoping
+      decision (new App Link path + binary), not something to patch
+      unilaterally mid-QA.
+      **A third, smaller bug was found investigating this:** the client-side
+      "Add to Google Wallet" badge visibility (`add-to-wallet-button.tsx:48`)
+      is gated by a single global AsyncStorage key with no user id
+      (`lib/native-wallet-pass-storage.ts:9`), so once any account taps it
+      once on a device, every other account on that same device never sees
+      the badge again — a real defect, low real-world impact (most users
+      hold one account per device), flagged but not fixed.
+      **Remediation for this gate and every other QA finding is planned in
+      `docs/plans/s10-qa-remediation-plan-2026-08-02.md`** (that file is its
+      own tracker). Recommended path: ship vc61 as-is; the server-side
+      `appLinkData` schema fix (phase B1 there) may close this gate without a
+      binary; the true deep link, badge scoping, and banner copy ride 1.0.3.
 
 ### iOS
 

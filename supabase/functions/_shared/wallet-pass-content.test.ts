@@ -238,7 +238,10 @@ describe("Google Wallet object builder", () => {
     const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
     const android = (object.appLinkData as { androidAppLinkInfo?: Record<string, any> })?.androidAppLinkInfo;
     expect(android).toBeDefined();
-    expect(android?.appTarget?.packageName).toBe("com.unvmex2.twoferone");
+    // Must match `expo.android.package` in app.json exactly. A mismatch is
+    // invisible in Wallet: the app-link button silently never resolves and the
+    // pass falls back to the marketing https link (caught on-device 2026-08-02).
+    expect(android?.appTarget?.packageName).toBe("com.unvmex2.twoforone");
     expect(android?.appTarget?.targetUri?.uri).toBe("twofer://wallet?pass=1");
   });
 
