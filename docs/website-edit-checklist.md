@@ -42,7 +42,7 @@ Current inventory (re-count with the grep below if in doubt):
 | `localization.js` | 22 pages |
 | `store-links.js` | 5 pages (`/`, `/s`, `/support`, `/business/thanks`, `/business/billing/checkout`) |
 | `home-motion.js` | 1 page (`/`) |
-| `s/share.js` | 1 page (`/s`) |
+| `share-page.js` | 1 page (`/s`) — served from the root because rewrites shadow real files under `/s/` |
 | `business/start-trial/apply.js` | 1 page (`/business/start-trial`) |
 | `admin/admin-shell.js` | 22 admin entry pages (`app.html` is an injected fragment) |
 

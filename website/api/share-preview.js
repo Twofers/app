@@ -85,6 +85,32 @@ async function lookupShare(code) {
   }
 }
 
+// Which vercel.json rewrite wins for /s/<CODE> is empirically unstable
+// (the declared /s/:code rule loses to the later /s/:path* catch-all in
+// production, while elsewhere earlier rules win), so BOTH /s rules point
+// here and the code is recovered from whichever channel the winning rule
+// used: the ?code= query, or the `code` / `path` params that Vercel
+// surfaces in the urlencoded x-now-route-matches header. `sourceUsed` is
+// reported in an x-share-preview-match debug header.
+function codeFromRequest(req) {
+  if (req.query && typeof req.query.code === "string" && req.query.code) {
+    return { code: req.query.code, sourceUsed: "query" };
+  }
+  const matches = req.headers && req.headers["x-now-route-matches"];
+  if (typeof matches === "string" && matches) {
+    try {
+      const parsed = new URLSearchParams(matches);
+      const fromCode = parsed.get("code");
+      if (fromCode) return { code: fromCode, sourceUsed: "route-code" };
+      const fromPath = parsed.get("path");
+      if (fromPath) return { code: fromPath, sourceUsed: "route-path" };
+    } catch {
+      // fall through
+    }
+  }
+  return { code: "", sourceUsed: "none" };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.statusCode = 405;
@@ -104,7 +130,9 @@ module.exports = async function handler(req, res) {
     return res.end();
   }
 
-  const code = String((req.query && req.query.code) || "").trim().toUpperCase();
+  const extracted = codeFromRequest(req);
+  const code = String(extracted.code).trim().toUpperCase();
+  res.setHeader("x-share-preview-match", extracted.sourceUsed);
   if (!SHARE_CODE_RE.test(code)) return sendHtml(req, res, template);
 
   const share = await lookupShare(code);

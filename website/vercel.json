@@ -178,7 +178,7 @@
       ]
     },
     {
-      "source": "/s/share.js",
+      "source": "/share-page.js",
       "headers": [
         {
           "key": "Cache-Control",
@@ -251,6 +251,18 @@
       "source": "/admon/:path*",
       "destination": "/admin/:path*",
       "permanent": false
+    },
+    {
+      "source": "/s/:code([A-Za-z2-9]{7})",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(facebookexternalhit|facebot|twitterbot|slackbot|whatsapp|telegrambot|discordbot|linkedinbot|applebot|skypeuripreview|pinterestbot|redditbot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/share-preview?code=:code",
+      "permanent": false
     }
   ],
   "rewrites": [
@@ -275,7 +287,7 @@
       "destination": "/s/index.html"
     },
     {
-      "source": "/s/:code([A-Za-z2-9]{7})",
+      "source": "/s/:code",
       "destination": "/api/share-preview?code=:code"
     },
     {

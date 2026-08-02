@@ -71,24 +71,73 @@ sample poster copy (Cedar & Bean etc. — public-copy guard), robots.txt
 
 ## Dan follow-ups (dashboard-only, cannot be done from repo)
 
-- Cloudflare: Browser Cache TTL → "Respect existing headers" (currently 4h
-  override defeats the new immutable caching).
-- Cloudflare: allow AI *retrieval* crawlers (managed robots.txt currently
-  blocks GPTBot/ClaudeBot/etc. entirely); keep ai-train=no if desired.
-- `Access-Control-Allow-Origin: *` is added outside the repo (CF or Vercel
-  dashboard) — optional tightening.
-- Git push of the release/1.0.2 website commit — held per checklist §10
-  ("never push without explicit approval").
+1. **Vercel: Framework Preset → "Other"** (Project Settings → Build &
+   Development Settings), then redeploy. This activates deal-specific share
+   previews for link unfurls — everything else is already live. See
+   post-mortem below.
+2. Cloudflare: Browser Cache TTL → "Respect existing headers" (currently 4h
+   override defeats the new immutable caching for repeat visitors).
+3. Cloudflare: allow AI *retrieval* crawlers (managed robots.txt currently
+   blocks GPTBot/ClaudeBot/etc. entirely); keep ai-train=no if desired.
+4. `Access-Control-Allow-Origin: *` is added outside the repo (CF or Vercel
+   dashboard) — optional tightening.
+5. Git push of the release/1.0.2 website commits — held per checklist §10
+   ("never push without explicit approval").
+6. Heads-up (behavioral, server-side, unchanged code): with business_type
+   removed from the form, website applications max out at risk score 65 <
+   the 70 quick-approval threshold — every application now lands in
+   review_required and the admin alert email has no one-click approve link.
+   The 2026-07-13 security audit criticized that ≥70 path as forgeable, so
+   this may be desirable; revisit `_shared/admin-quick-approval.ts` if not.
 
-## Status
+## Status — COMPLETE (one item pending a Dan dashboard toggle)
 
 - [x] Plan written
-- [x] A: share-preview function (self-test green, mutation-tested; includeFiles + route pattern still need live-deploy proof)
+- [x] A: share-preview function (self-test green, mutation-tested)
 - [x] B: geo + copy sweep (11 keys ×3 locales, JSON-LD byte-matched, i18n gates green, browser pass ×3 langs ×2 widths)
-- [ ] C: form cut + hygiene
-- [ ] Gates green (i18n ×2, ui-crawl, e2e, ?v= inventory, JSON-LD)
-- [ ] Local visual pass EN/ES/KO
-- [ ] Committed (scope-guarded)
-- [ ] Deployed to production
-- [ ] Live verification (§9 + share OG + CSP + cache headers)
-- [ ] Memory + this tracker updated
+- [x] C: form cut + hygiene (all gates green; +main-session fix: address now
+      required client-side so applications can't auto-waitlist)
+- [x] Gates green (i18n ×2, ui-crawl 42 routes ×2 viewports, e2e ×3 langs,
+      ?v= inventory, JSON-LD parse, share-preview self-test)
+- [x] Local visual pass EN/ES/KO ×2 widths
+- [x] Committed 13bb6636 + routing-fix follow-up commit
+- [x] Deployed to production (final deploy prebuilt; checklist §8 updated advice below)
+- [x] Live verification: 28/28 harness checks pass; share page console-clean
+      live in ES; fonts/styles/JS immutable confirmed with cache-busted probes
+- [x] Memory + this tracker updated
+
+## Post-mortem: the /s share-preview routing saga (2026-08-02)
+
+Everything human-facing works. The ONE dormant piece: unfurl bots currently
+get the same generic share card as before (never worse). Root cause chain:
+
+1. The Vercel project (`v0-twofer-landing-page`, created by v0) has
+   **Framework Preset = "nextjs"** in its dashboard settings even though the
+   site is plain static + `/api` functions. `vercel.json`'s `framework: null`
+   does NOT override it at the edge.
+2. Under that preset, production EDGE routing rewrites `/s/<seg>` to
+   `/s/index.html` BEFORE user redirects/rewrites run (proven: a
+   pre-filesystem 307 redirect on `/s/:code` captured `code=index.html`;
+   identical on the CF-bypassing *.vercel.app alias, so NOT Cloudflare).
+   This mangling also swallowed the real file `/s/share.js` → relocated to
+   root `/share-page.js` (fixed live).
+3. Separately, the compiled route table appends `^/api(/.*)? → 404` after
+   user rewrites, so rewrite-into-function may dead-end even without (2).
+
+Current state is SELF-HEALING: a bot-UA 307 redirect `/s/:code` →
+`/api/share-preview?code=:code` is live in the redirects phase. Today the
+edge mangling makes it a no-op (bots see the generic card, humans see the
+normal page). The function itself is LIVE and correct at
+`/api/share-preview?code=<CODE>` (verified: injection, escaping, caching,
+`x-share-preview-match` debug header).
+
+**To activate deal-specific previews: Vercel dashboard → Project Settings →
+Build & Development Settings → Framework Preset → "Other", then redeploy.**
+Then verify: a `facebookexternalhit` UA fetch of `/s/<code>` should 307 to
+the function and return deal OG tags (`x-share-preview-match: query`).
+
+Deploy note: final deploys this session used `vercel build --prod --yes &&
+vercel deploy --prebuilt --prod --yes` from `website/` (deterministic — the
+deployed route table is exactly `.vercel/output/config.json`, inspectable
+locally before shipping). Plain `vercel deploy --prod` also works; prebuilt
+is preferred until the framework preset is fixed.

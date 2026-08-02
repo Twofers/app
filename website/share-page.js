@@ -1,4 +1,5 @@
-// Shared-offer preview state for /s/<CODE>.
+// Shared-offer preview state for /s/<CODE>. Served from the site root:
+// every /s/* path is claimed by rewrites, which shadow real files there.
 //
 // Page-local, not shared: this file exists as a separate script only so the
 // public Content-Security-Policy can enforce `script-src 'self'` with no
