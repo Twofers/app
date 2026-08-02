@@ -28,6 +28,17 @@ doesn't match the change. Commands run from the repo root unless noted.
       part of step 9 after a deploy).
 - [ ] If the change touched a Supabase endpoint URL, form action, or runtime
       config: `npm run check:website-supabase`.
+- [ ] `npm test` passes (the full vitest suite, ~100s).
+      **Do not skip this for a "website-only" change.** Several tests read
+      `website/**` HTML directly to keep cross-runtime copies in sync — the
+      share-code alphabet, the promo-materials consent wiring, the launch-signup
+      form. On 2026-08-02 three of them failed in CI after inline scripts were
+      externalized for the CSP; nothing in this section caught it because these
+      guards live in the app suite, not the website checks.
+
+> The gates above are the local baseline. CI additionally runs
+> `npm run check:i18n-keys` and `npm run gate:release-state` — cheap, and worth
+> running locally before you push rather than discovering them in a PR.
 
 ## 3. Cache-bust check (if you edited any versioned file)
 
