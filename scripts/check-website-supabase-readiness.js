@@ -90,10 +90,18 @@ function exists(rel) {
   return fs.existsSync(path.join(ROOT, rel));
 }
 
+// Build output and dependencies are not source. `.vercel/` in particular is
+// gitignored but now exists locally as a matter of course: the deploy flow is
+// `vercel build` -> prepare-deploy -> `deploy --prebuilt`, so a full copy of
+// the site sits under website/.vercel/output/static/ after any deploy. Walking
+// it made this gate fail on the built copies of admin pages.
+const WALK_SKIP_DIRS = new Set([".vercel", "node_modules", ".git"]);
+
 function walkFiles(relDir) {
   const absDir = path.join(ROOT, relDir);
   const files = [];
   for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && WALK_SKIP_DIRS.has(entry.name)) continue;
     const rel = path.join(relDir, entry.name).replace(/\\/g, "/");
     if (entry.isDirectory()) files.push(...walkFiles(rel));
     else files.push(rel);
@@ -263,10 +271,16 @@ if (failures.length === 0) {
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="company_website"', "business form must keep honeypot field");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="terms_accepted"', "business form must require terms acknowledgement");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="privacy_acknowledged"', "business form must require privacy acknowledgement");
-  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'window.location.assign("/business/thanks/")', "business form must redirect to thanks page");
+  // The submit handler lives in a page-local script, not inline: the public
+  // CSP enforces script-src 'self' with no inline-script allowance.
+  const startTrialScript = read("website/business/start-trial/apply.js");
+  assertIncludes("website/business/start-trial/apply.js", startTrialScript, 'window.location.assign("/business/thanks/")', "business form must redirect to thanks page");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, "/business/start-trial/apply.js", "business form must load its submit handler");
   assertIncludes("website/business/start-trial/index.html", startTrialPage, "/styles.css", "business onboarding must use the shared website stylesheet");
-  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'value="coffee_shop"', "business type options must submit stable values under localization");
-  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'value="other_local_business"', "business type options must submit stable values under localization");
+  // The business_type select was removed on 2026-08-02 (form cut from 10
+  // fields to 6); its stable-value assertions went with it. The form no
+  // longer has any select, so no localized label can change a submitted
+  // value. Reinstate an equivalent guard if a select is ever added back.
   assertNotIncludes("website/business/start-trial/index.html", startTrialPage, "<style>", "business onboarding must not use a one-off embedded stylesheet");
   assertIncludes("website/business-terms/index.html", read("website/business-terms/index.html"), "/styles.css", "business terms must use the shared website stylesheet");
   assertNotIncludes("website/business-terms/index.html", read("website/business-terms/index.html"), "<style>", "business terms must not use a one-off embedded stylesheet");
