@@ -21,14 +21,24 @@ type MerchantAccessBlockedCardProps = {
   status?: string | null;
   reason?: string | null;
   /**
-   * Owner's business. When present and both iOS gates permit it, the CTA mints
-   * and opens an allowlisted Stripe Checkout URL. Missing ids and failures stay
-   * on this approval-email/support card.
+   * Owner's business. When present and the server grants the Checkout
+   * capability, the CTA mints and opens an allowlisted Stripe Checkout URL.
+   * Missing ids and failures stay on this approval-email/support card.
    */
   businessId?: string | null;
+  /**
+   * `canActivateTrialCheckout` from the merchant access gate. Omitted means no
+   * button — never assume the capability from the platform.
+   */
+  canActivateTrialCheckout?: boolean;
 };
 
-export function MerchantAccessBlockedCard({ status, reason, businessId }: MerchantAccessBlockedCardProps) {
+export function MerchantAccessBlockedCard({
+  status,
+  reason,
+  businessId,
+  canActivateTrialCheckout = false,
+}: MerchantAccessBlockedCardProps) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -38,7 +48,7 @@ export function MerchantAccessBlockedCard({ status, reason, businessId }: Mercha
     failed: checkoutFailed,
     opening: openingCheckout,
     start: startActivation,
-  } = useTrialActivation(businessId);
+  } = useTrialActivation(businessId, canActivateTrialCheckout);
 
   const email = session?.user?.email ?? null;
   const needsTrial =

@@ -75,6 +75,7 @@ export function usePrimaryLocationBillingGate({
             canReceiveNewClaims: false,
             canRedeemExistingClaims: false,
             canManageBilling: false,
+            canActivateTrialCheckout: false,
             reason: "capability_unavailable",
           }
         : access,

@@ -10,6 +10,12 @@ export type CanonicalBusinessCapabilities = {
   can_receive_new_claims: boolean;
   can_redeem_existing_claims: boolean;
   can_manage_billing: boolean;
+  /**
+   * Server-driven visibility for the in-app trial Checkout button. Gated by the
+   * kill switch inside get_business_capabilities, so an older server that does
+   * not return the key parses as false and the button stays hidden.
+   */
+  can_activate_trial_checkout: boolean;
   reason_code: string;
   setup_menu_extractions_remaining: number | null;
 };
@@ -26,6 +32,7 @@ const BOOLEAN_KEYS = [
   "can_receive_new_claims",
   "can_redeem_existing_claims",
   "can_manage_billing",
+  "can_activate_trial_checkout",
 ] as const;
 
 export function parseBusinessCapabilities(value: unknown): CanonicalBusinessCapabilities | null {

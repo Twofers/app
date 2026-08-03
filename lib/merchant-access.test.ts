@@ -101,6 +101,7 @@ describe("merchant access status gate", () => {
           can_receive_new_claims: false,
           can_redeem_existing_claims: false,
           can_manage_billing: true,
+          can_activate_trial_checkout: true,
           reason_code: "approved_not_activated",
           setup_menu_extractions_remaining: 0,
         },
@@ -113,6 +114,9 @@ describe("merchant access status gate", () => {
       canCreateTextDraft: true,
       canGenerateAi: false,
       canPublishOffer: false,
+      // Only the capability path may grant this; the billing-summary fallback
+      // has no view of the kill switch and always reports false.
+      canActivateTrialCheckout: true,
       reason: "approved_not_activated",
     });
   });

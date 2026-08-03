@@ -17,15 +17,13 @@
     "preview": {
       "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
       "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
-      "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false",
-      "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true"
+      "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false"
     },
     "ios-sim": {},
     "production": {
       "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
       "EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS": "true",
       "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS": "false",
-      "EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT": "true",
       "EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED": "true"
     },
     "dev-client-apk": {
@@ -38,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 191,
-    "latest": "20260824150000_ios_trial_checkout_kill_switch.sql"
+    "count": 193,
+    "latest": "20260825120000_native_trial_checkout_capability.sql"
   },
   "edgeFunctions": {
     "count": 81,

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { createTrialCheckoutUrl, isIosTrialCheckoutEnabled } from "@/lib/billing-activation";
+import { createTrialCheckoutUrl, nativeCheckoutSource } from "@/lib/billing-activation";
 import { openWebsiteUrl } from "@/lib/legal-urls";
 
 /**
@@ -18,12 +18,20 @@ import { openWebsiteUrl } from "@/lib/legal-urls";
  * Any minting or URL-opening failure stays inside the app and exposes the
  * localized approval-email/support guidance rendered by the caller. It never
  * redirects to a different billing or pricing page.
+ *
+ * `canActivateTrialCheckout` comes from the server capability payload and is the
+ * authority on whether the button exists at all; the platform check only decides
+ * which native source to report. Callers that cannot supply the capability get
+ * no button, which is the correct fail-closed default.
  */
-export function useTrialActivation(businessId?: string | null) {
+export function useTrialActivation(
+  businessId?: string | null,
+  canActivateTrialCheckout = false,
+) {
   const { i18n } = useTranslation();
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
-  const checkoutEnabled = isIosTrialCheckoutEnabled();
+  const checkoutEnabled = canActivateTrialCheckout && nativeCheckoutSource() !== null;
 
   const start = useCallback(async () => {
     setFailed(false);

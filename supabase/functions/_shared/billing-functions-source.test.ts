@@ -47,15 +47,15 @@ describe("billing edge function safety", () => {
     // Audit F-005: the request body must never choose the Stripe price or a
     // gate-bypassing source. The price is resolved server-side only; "test"
     // does not exist as a source; the token branch is pinned to "email";
-    // "admin" requires a verified admin session; and native iOS is preserved
-    // as an explicit source so its independent server kill switch is applied.
+    // "admin" requires a verified admin session; and each native platform is
+    // preserved as an explicit source so the shared server kill switch applies.
     expect(source).not.toMatch(/body\.price_id/);
     expect(source).not.toMatch(/=== "test"/);
     expect(source).toMatch(/source = "email"/);
     expect(source).toMatch(/requestedSource === "admin" && authz\.adminGranted/);
-    expect(source).toMatch(/requestedSource === "native_ios"/);
-    expect(source).toMatch(/iosTrialCheckoutEnabled/);
-    expect(source).toMatch(/IOS_TRIAL_CHECKOUT_DISABLED/);
+    expect(source).toMatch(/isNativeSource\(requestedSource\)/);
+    expect(source).toMatch(/nativeTrialCheckoutEnabled/);
+    expect(source).toMatch(/NATIVE_TRIAL_CHECKOUT_DISABLED/);
     expect(source).toMatch(/adminBillingAccessGranted/);
     // Audit F-006: token consumption goes through the atomic RPC; no JS-side
     // read-then-update on use_count may remain.

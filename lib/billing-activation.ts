@@ -19,15 +19,31 @@ import { EDGE_FUNCTION_TIMEOUT_MS, getErrorCode, parseFunctionError } from "./fu
  * approved_activation_gate flag must be on, the business must still be
  * approved_not_activated with a claimed application, and the 30-day trial and
  * price are resolved server-side.
+ *
+ * VISIBILITY IS SERVER-DRIVEN. This module used to carry its own client gate
+ * (`Platform.OS === "ios" && EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT`), which was
+ * baked into the binary and could not agree with the server kill switch it was
+ * supposed to mirror — 1.0.2 shipped an iOS button the server refused, and no
+ * Android button at all. The single source of truth is now the
+ * `can_activate_trial_checkout` capability from get_business_capabilities;
+ * callers pass it in. Both native platforms are supported.
  */
 
 export type TrialCheckoutResult =
   | { ok: true; url: string }
   | { ok: false; message: string; code?: string };
 
-/** Dedicated client gate; Android remains closed even when the flag is true. */
-export function isIosTrialCheckoutEnabled(): boolean {
-  return Platform.OS === "ios" && process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT === "true";
+export type NativeCheckoutSource = "native_ios" | "native_android";
+
+/**
+ * The billing source this platform reports. Each native platform is explicit
+ * server-side so neither can fall through to "website" and skip the shared
+ * kill switch. Non-native platforms have no in-app Checkout path.
+ */
+export function nativeCheckoutSource(): NativeCheckoutSource | null {
+  if (Platform.OS === "ios") return "native_ios";
+  if (Platform.OS === "android") return "native_android";
+  return null;
 }
 
 /** Checkout sessions created by this flow must stay on Stripe's hosted origin. */
@@ -73,11 +89,12 @@ export async function createTrialCheckoutUrl(
   businessId: string,
   locale?: string,
 ): Promise<TrialCheckoutResult> {
-  if (!isIosTrialCheckoutEnabled()) {
+  const source = nativeCheckoutSource();
+  if (!source) {
     return {
       ok: false,
       message: "Trial Checkout is not available on this device.",
-      code: "IOS_TRIAL_CHECKOUT_UNAVAILABLE",
+      code: "NATIVE_TRIAL_CHECKOUT_UNAVAILABLE",
     };
   }
   if (!businessId) {
@@ -86,7 +103,7 @@ export async function createTrialCheckoutUrl(
 
   try {
     const { data, error } = await supabase.functions.invoke("stripe-create-checkout-session", {
-      body: { business_id: businessId, source: "native_ios", ...(locale ? { locale } : {}) },
+      body: { business_id: businessId, source, ...(locale ? { locale } : {}) },
       timeout: EDGE_FUNCTION_TIMEOUT_MS,
     });
 

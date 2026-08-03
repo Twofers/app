@@ -58,12 +58,6 @@ export default function CreateDeal() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
-  const {
-    checkoutEnabled: activationCheckoutEnabled,
-    failed: activationFailed,
-    opening: activationOpening,
-    start: startActivation,
-  } = useTrialActivation(businessId);
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const {
@@ -77,6 +71,15 @@ export default function CreateDeal() {
     isLoggedIn,
     bypass,
   });
+
+  // Must follow the billing gate: Checkout visibility is a server capability
+  // carried on billingAccess, not something this screen can decide locally.
+  const {
+    checkoutEnabled: activationCheckoutEnabled,
+    failed: activationFailed,
+    opening: activationOpening,
+    start: startActivation,
+  } = useTrialActivation(businessId, billingAccess.canActivateTrialCheckout);
 
   useEffect(() => {
     if (!isLoggedIn || bypass) {
@@ -355,6 +358,7 @@ export default function CreateDeal() {
             status={billingAccess.status}
             reason={billingAccess.reason}
             businessId={businessId}
+            canActivateTrialCheckout={billingAccess.canActivateTrialCheckout}
           />
         </View>
       ) : termsRequired && businessId ? (

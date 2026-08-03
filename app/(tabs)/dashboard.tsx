@@ -1275,6 +1275,7 @@ export default function BusinessDashboard() {
               status={billingGateAccess.status}
               reason={billingGateAccess.reason}
               businessId={businessId}
+              canActivateTrialCheckout={billingGateAccess.canActivateTrialCheckout}
             />
           </View>
         );
@@ -1494,6 +1495,7 @@ export default function BusinessDashboard() {
       billingBlocked,
       billingGateAccess.reason,
       billingGateAccess.status,
+      billingGateAccess.canActivateTrialCheckout,
       businessId,
       deals.length,
       dealFilter,

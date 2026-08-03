@@ -1025,6 +1025,7 @@ export default function AccountScreen() {
               status={merchantAccess.status}
               reason={merchantAccess.reason}
               businessId={businessId}
+              canActivateTrialCheckout={merchantAccess.canActivateTrialCheckout}
             />
           ) : null}
 

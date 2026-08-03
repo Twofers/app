@@ -24,12 +24,10 @@ Docs should link here instead of restating these facts (audit F-012).
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
   - EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: `true`
   - EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS: `false`
-  - EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT: `true`
 - **production**
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
   - EXPO_PUBLIC_ENABLE_NATIVE_WALLET_PASS: `true`
   - EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS: `false`
-  - EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT: `true`
   - EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: `true`
 - **dev-client-apk**
   - EXPO_PUBLIC_ENABLE_SHARE_DEAL: `true`
@@ -39,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `191`
-- Latest: `20260824150000_ios_trial_checkout_kill_switch.sql`
+- Count: `193`
+- Latest: `20260825120000_native_trial_checkout_capability.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 

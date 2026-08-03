@@ -12,6 +12,13 @@ export type MerchantAccessResult = {
   canReceiveNewClaims: boolean;
   canRedeemExistingClaims: boolean;
   canManageBilling: boolean;
+  /**
+   * Whether the in-app trial Checkout button may be shown. Only the capability
+   * path can grant this — the billing-summary fallback below has no view of the
+   * kill switch, so it always reports false and the merchant keeps the
+   * approval-email/support path.
+   */
+  canActivateTrialCheckout: boolean;
   status: string | null;
   reason: string | null;
 };
@@ -76,6 +83,7 @@ export function getMerchantAccessFromCapabilities(params: {
     canReceiveNewClaims: capabilities.can_receive_new_claims,
     canRedeemExistingClaims: capabilities.can_redeem_existing_claims,
     canManageBilling: capabilities.can_manage_billing,
+    canActivateTrialCheckout: capabilities.can_activate_trial_checkout,
     status: params.status,
     reason: capabilities.reason_code,
   };
@@ -99,6 +107,9 @@ export function getMerchantAccessForBillingSummary(params: {
     canReceiveNewClaims: false,
     canRedeemExistingClaims: false,
     canManageBilling: false,
+    // This whole builder is the no-capabilities fallback: it cannot read the
+    // Checkout kill switch, so it never claims the button is available.
+    canActivateTrialCheckout: false,
   };
   if (!params.isLoggedIn) {
     return { ...inactive, status: null, reason: "unauthenticated" };
@@ -115,6 +126,7 @@ export function getMerchantAccessForBillingSummary(params: {
       canReceiveNewClaims: true,
       canRedeemExistingClaims: true,
       canManageBilling: true,
+      canActivateTrialCheckout: false,
       status: params.summary.status,
       reason: "development_bypass",
     };
@@ -136,6 +148,7 @@ export function getMerchantAccessForBillingSummary(params: {
       canReceiveNewClaims: false,
       canRedeemExistingClaims: false,
       canManageBilling: true,
+      canActivateTrialCheckout: false,
       status: params.summary.status,
       reason: "approved_not_activated",
     };
@@ -152,6 +165,7 @@ export function getMerchantAccessForBillingSummary(params: {
       canReceiveNewClaims: true,
       canRedeemExistingClaims: true,
       canManageBilling: true,
+      canActivateTrialCheckout: false,
       status: params.summary.status,
       reason: null,
     };

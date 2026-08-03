@@ -623,7 +623,7 @@
     "reuseDeal": "Repetir oferta anterior",
     "reuseDealSub": "Relanza una plantilla u oferta anterior",
     "setupApprovedTitle": "Aprobado para configurar",
-    "setupApprovedBody": "Termina tu perfil y menú ahora. Para activar, usa tu correo de aprobación o contacta a soporte. En versiones elegibles para iPhone, también puede estar disponible el Checkout seguro.",
+    "setupApprovedBody": "Termina tu perfil y menú ahora. Para activar, usa tu correo de aprobación o contacta a soporte.",
     "setupApprovedCta": "Abrir Checkout seguro"
   },
   "menuScan": {
@@ -2288,7 +2288,7 @@
     "inactiveTitle": "La cuenta comercial no está activa",
     "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
     "verifyTitle": "Aprobado para configurar",
-    "verifyBody": "Termina la configuración ahora. Para activar, revisa tu correo de aprobación o contacta a soporte. En versiones elegibles para iPhone, también puede estar disponible el Checkout seguro.",
+    "verifyBody": "Termina la configuración ahora. Para activar, revisa tu correo de aprobación o contacta a soporte.",
     "verifyEmailHint": "Correo de la cuenta aprobada:",
     "setupProgressProfile": "✓ El perfil y la ubicación del negocio están disponibles",
     "setupProgressMenu": "✓ El menú y los borradores de texto están disponibles",

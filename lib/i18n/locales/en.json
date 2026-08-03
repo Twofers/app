@@ -623,7 +623,7 @@
     "reuseDeal": "Repeat a past deal",
     "reuseDealSub": "Relaunch a template or past offer",
     "setupApprovedTitle": "Approved for setup",
-    "setupApprovedBody": "Finish your profile and menu now. To activate, use your approval email or contact support. On eligible iPhone builds, secure Checkout may also be available.",
+    "setupApprovedBody": "Finish your profile and menu now. To activate, use your approval email or contact support.",
     "setupApprovedCta": "Open secure Checkout"
   },
   "menuScan": {
@@ -2288,7 +2288,7 @@
     "inactiveTitle": "Business account not active",
     "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
     "verifyTitle": "Approved for setup",
-    "verifyBody": "Finish setup now. To activate, check your approval email or contact support. On eligible iPhone builds, secure Checkout may also be available.",
+    "verifyBody": "Finish setup now. To activate, check your approval email or contact support.",
     "verifyEmailHint": "Approved account email:",
     "setupProgressProfile": "✓ Business profile and location are available",
     "setupProgressMenu": "✓ Menu tools and text-only drafts are available",

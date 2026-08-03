@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -35,7 +37,6 @@ describe("createTrialCheckoutUrl", () => {
   beforeEach(() => {
     mocks.invoke.mockReset();
     mocks.platform.os = "ios";
-    process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT = "true";
   });
 
   it("returns the Stripe checkout url on success", async () => {
@@ -58,7 +59,7 @@ describe("createTrialCheckoutUrl", () => {
     expect(fnName).toBe("stripe-create-checkout-session");
     expect(options.body).toEqual({ business_id: BUSINESS_ID, source: "native_ios", locale: "ko" });
     // The server resolves price and trial length; the only source marker the
-    // client may send is the dedicated, independently kill-switched iOS path.
+    // client may send is its own platform's dedicated, kill-switched path.
     expect(options.body).not.toHaveProperty("price_id");
     expect(options.body.source).toBe("native_ios");
     expect(options.body).not.toHaveProperty("billing_token");
@@ -116,27 +117,34 @@ describe("createTrialCheckoutUrl", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("never invokes Checkout on Android even when the iOS and generic billing flags are true", async () => {
+  it("reports the Android native source so it cannot fall through to the website surface", async () => {
     mocks.platform.os = "android";
-    process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT = "true";
-    process.env.EXPO_PUBLIC_ENABLE_MOBILE_STRIPE = "true";
+    mocks.invoke.mockResolvedValue({ data: { checkout_url: "https://checkout.stripe.com/x" }, error: null });
 
     const result = await createTrialCheckoutUrl(BUSINESS_ID);
 
-    expect(result).toMatchObject({ ok: false, code: "IOS_TRIAL_CHECKOUT_UNAVAILABLE" });
+    expect(result.ok).toBe(true);
+    expect(mocks.invoke.mock.calls[0][1].body.source).toBe("native_android");
+  });
+
+  it("never invokes Checkout on a non-native platform", async () => {
+    mocks.platform.os = "web";
+
+    const result = await createTrialCheckoutUrl(BUSINESS_ID);
+
+    expect(result).toMatchObject({ ok: false, code: "NATIVE_TRIAL_CHECKOUT_UNAVAILABLE" });
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("never invokes Checkout on iOS when the dedicated flag is absent or false", async () => {
-    delete process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT;
-
-    const absent = await createTrialCheckoutUrl(BUSINESS_ID);
-    process.env.EXPO_PUBLIC_ENABLE_IOS_TRIAL_CHECKOUT = "false";
-    const disabled = await createTrialCheckoutUrl(BUSINESS_ID);
-
-    expect(absent).toMatchObject({ ok: false, code: "IOS_TRIAL_CHECKOUT_UNAVAILABLE" });
-    expect(disabled).toMatchObject({ ok: false, code: "IOS_TRIAL_CHECKOUT_UNAVAILABLE" });
-    expect(mocks.invoke).not.toHaveBeenCalled();
+  it("carries no client-side kill switch — the server capability is the only gate", async () => {
+    // Regression guard for the 1.0.2 defect: a binary-baked env flag decided
+    // button visibility while the server decided success, so the two could
+    // disagree. Neither platform may consult an env flag here again.
+    const source = readFileSync(join(process.cwd(), "lib/billing-activation.ts"), "utf8");
+    // Asserts on env *reads*, not the words: the header comment names the
+    // retired flag on purpose so the history stays discoverable.
+    expect(source).not.toContain("process.env");
+    expect(source).not.toContain("export function isIosTrialCheckoutEnabled");
   });
 
   it("fails closed before invoking when the business id is missing", async () => {
