@@ -34,6 +34,7 @@ export type AdCopyStyleGateReason =
   | "INSTRUCTION_LEAK_PHRASE"
   | "TRUNCATED_FRAGMENT"
   | "QUANTITY_ARTICLE_COLLISION"
+  | "ARTICLE_SOUND_DISAGREEMENT"
   | "TOO_MANY_EXCLAMATIONS"
   | "EMOJI_IN_AI_COPY";
 
@@ -173,6 +174,55 @@ export function hasQuantityArticleCollision(text: string): boolean {
   return /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:a|an|the)\b/i.test(text ?? "");
 }
 
+/** Silent-h nouns take "an" despite the consonant letter. Mirrors articleFor(). */
+const SILENT_H_NOUN = /^(?:honest|honou?r|hour|heir|herb)/i;
+/**
+ * Vowel letters that open on a consonant SOUND, so they take "a": the "yoo" of
+ * "a user"/"a unique blend", the "wuh" of "a one-time deal", the "yoo" of
+ * "a euro". The first two branches mirror articleFor(); "eu"/"one"/"once" are
+ * additions the generators do not have, kept here so correct AI copy is never
+ * thrown away for a case the deterministic writer happens to get wrong.
+ */
+const SOUNDED_CONSONANT_VOWEL = /^(?:uni(?:[^nmd]|$)|user|useful|usual|utensil|ubiquit|u[bcfhjkqrst][a-z]|eu|ewe|one\b|once\b)/i;
+
+/**
+ * Letter-by-letter initialisms ("an XL", "a FAQ") are pronounced by letter name,
+ * which no spelling rule predicts. Treated as unknown rather than guessed at.
+ */
+function isLikelyInitialism(word: string): boolean {
+  const letters = word.replace(/[^\p{L}]/gu, "");
+  return letters.length > 0 && letters.length <= 4 && letters === letters.toUpperCase();
+}
+
+/** The article this word requires, or null when English genuinely allows either. */
+function expectedArticleFor(word: string): "a" | "an" | null {
+  if (!word || isLikelyInitialism(word)) return null;
+  if (SILENT_H_NOUN.test(word)) return "an";
+  if (SOUNDED_CONSONANT_VOWEL.test(word)) return "a";
+  if (/^[aeiou]/i.test(word)) return "an";
+  // "an historic" is a live stylistic variant, so h-words are never flagged.
+  if (/^h/i.test(word)) return null;
+  return "a";
+}
+
+/**
+ * "a" against a vowel sound, or "an" against a consonant one — observed live on
+ * a published poster as the headline "Half off a espresso" (2026-08-03, Cedar &
+ * Bean Cafe). The deterministic writers all pick the article with articleFor(),
+ * so only AI-authored copy reaches the gate carrying this mistake. Pattern-level
+ * by design; no item name is special-cased, and every genuinely ambiguous word
+ * class (initialisms, sounded-vowel openings, non-silent h) is skipped so a
+ * correct headline is never discarded.
+ */
+export function hasArticleSoundDisagreement(text: string): boolean {
+  const matches = (text ?? "").matchAll(/\b(an?)\s+([\p{L}][\p{L}'’-]*)/giu);
+  for (const match of matches) {
+    const expected = expectedArticleFor(match[2]);
+    if (expected && expected !== match[1].toLowerCase()) return true;
+  }
+  return false;
+}
+
 function shouldBypassStyleGate(provenance: AdSpecV3TextProvenance): boolean {
   return provenance === "merchant_typed" || provenance === "merchant_edited";
 }
@@ -190,6 +240,7 @@ function reasonsForField(text: string, requiredSpecificTerms: string[] | undefin
   if (hasAnyPattern(text, [...AD_COPY_INSTRUCTION_LEAK_PATTERNS])) reasons.push("INSTRUCTION_LEAK_PHRASE");
   if (endsInDanglingFunctionWord(text)) reasons.push("TRUNCATED_FRAGMENT");
   if (hasQuantityArticleCollision(text)) reasons.push("QUANTITY_ARTICLE_COLLISION");
+  if (hasArticleSoundDisagreement(text)) reasons.push("ARTICLE_SOUND_DISAGREEMENT");
   if (AD_COPY_HYPE_WORD_PATTERN.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
     reasons.push("HYPE_WITHOUT_SPECIFICITY");
   }

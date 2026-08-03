@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   endsInDanglingFunctionWord,
   evaluateAdCopyStyleGate,
+  hasArticleSoundDisagreement,
   hasQuantityArticleCollision,
   isFormulaicValueHeadline,
   selectStyleSafeCopyCandidate,
@@ -332,6 +333,46 @@ describe("hasQuantityArticleCollision (2026-07-26 corpus)", () => {
     expect(hasQuantityArticleCollision("Buy one, the second is free")).toBe(false);
     expect(hasQuantityArticleCollision("One of the best ways to start the day")).toBe(false);
     expect(hasQuantityArticleCollision("")).toBe(false);
+  });
+});
+
+describe("hasArticleSoundDisagreement (2026-08-03 live poster)", () => {
+  it("catches an article that disagrees with the following sound", () => {
+    // Shipped live on the Cedar & Bean Cafe poster as the hero headline.
+    expect(hasArticleSoundDisagreement("Half off a espresso")).toBe(true);
+    expect(hasArticleSoundDisagreement("Grab a iced americano")).toBe(true);
+    expect(hasArticleSoundDisagreement("Free with a order of fries")).toBe(true);
+    expect(hasArticleSoundDisagreement("Take an croissant home")).toBe(true);
+  });
+
+  it("accepts correct articles, including the sounds spelling gets wrong", () => {
+    expect(hasArticleSoundDisagreement("Half off an espresso")).toBe(false);
+    expect(hasArticleSoundDisagreement("Free with a croissant")).toBe(false);
+    // Vowel letters opening on a consonant sound.
+    expect(hasArticleSoundDisagreement("A one-time offer on a unique blend")).toBe(false);
+    expect(hasArticleSoundDisagreement("A user favorite for a euro")).toBe(false);
+    // Silent h takes "an"; sounded h is a stylistic choice we never flag.
+    expect(hasArticleSoundDisagreement("Ready in half an hour")).toBe(false);
+    expect(hasArticleSoundDisagreement("An historic roast")).toBe(false);
+    // Letter-name initialisms are unpredictable, so they are left alone.
+    expect(hasArticleSoundDisagreement("Upgrade to an XL cold brew")).toBe(false);
+    expect(hasArticleSoundDisagreement("Ask about a FAQ card")).toBe(false);
+    expect(hasArticleSoundDisagreement("")).toBe(false);
+  });
+
+  it("never fires on the deterministic writer's own article choice", () => {
+    // articleFor() in deal-offer-contract/localized-offer-renderer picks the
+    // article for fallback copy, and that fallback is itself run through this
+    // gate — if the two disagreed, a rejected AI candidate would fall back to
+    // copy that also fails.
+    const articleFor = (value: string): "a" | "an" => {
+      if (/^(?:honest|hour|heir|herb)\b/i.test(value)) return "an";
+      if (/^(?:uni([^nmd]|$)|user|useful|utensil|u[bcfhjkqrst][a-z])/i.test(value)) return "a";
+      return /^[aeiou]/i.test(value) ? "an" : "a";
+    };
+    for (const item of ["espresso", "iced latte", "apple turnover", "croissant", "hour-long tasting", "usual order"]) {
+      expect(hasArticleSoundDisagreement(`Free ${articleFor(item)} ${item}`)).toBe(false);
+    }
   });
 });
 
