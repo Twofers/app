@@ -47,7 +47,8 @@
     "loggedInAs": "로그인: {{email}}",
     "notLoggedIn": "로그인하지 않음",
     "statusClaiming": "받는 중…",
-    "statusClaimedShowQr": "받았습니다. QR을 보여 주세요."
+    "statusClaimedShowQr": "지갑에 저장되었습니다.",
+    "claimedInWallet": "지갑에 저장되었습니다. 카운터에서 열어 주세요."
   },
   "favorites": {
     "emptyTitle": "즐겨찾기가 없습니다",
@@ -1360,6 +1361,7 @@
     "releaseConfirmCta": "네, 해제할게요",
     "releaseKeepCta": "그대로 두기",
     "manualRedeemHint": "QR을 두 번 탭하면 사용 처리됩니다",
+    "passStaffDoubleTap": "직원용: QR을 두 번 탭하면 사용 처리됩니다",
     "manualRedeemBusy": "사용 처리 중...",
     "manualRedeemConfirmTitle": "지금 사용할까요?",
     "manualRedeemConfirmBody": "딜이 사용 완료로 표시되며 되돌릴 수 없습니다.",

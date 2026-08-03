@@ -25,7 +25,7 @@ import { getDealClaimDeadline, isDealActiveNow } from "@/lib/deal-time";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/banner";
-import { QrModal } from "@/components/qr-modal";
+import { ClaimSuccessToast } from "@/components/claim-success-toast";
 import { BrandedConfirmModal } from "@/components/ui/branded-confirm-modal";
 import { BusinessRowCard } from "@/components/business-row-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -33,7 +33,6 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { useBusiness } from "@/hooks/use-business";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import {
   mergeDealsById,
   readBusinessCoordinates,
@@ -44,7 +43,6 @@ import { dealCountdownLabel } from "@/lib/deal-countdown";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
 import { compactLocationLabel } from "@/lib/display-format";
 import { translateApiError } from "@/lib/i18n/api-messages";
-import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import {
   getConsumerPreferences,
@@ -211,23 +209,14 @@ export default function HomeScreen() {
   const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
   const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
   const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
-  const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [userGeo, setUserGeo] = useState<{ lat: number; lng: number } | null>(null);
-  const [qrToken, setQrToken] = useState<string | null>(null);
-  const [qrExpires, setQrExpires] = useState<string | null>(null);
-  const [qrShortCode, setQrShortCode] = useState<string | null>(null);
-  const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
-  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [claimingDealId, setClaimingDealId] = useState<string | null>(null);
-  const [refreshingQr, setRefreshingQr] = useState(false);
   const [refreshingFeed, setRefreshingFeed] = useState(false);
-  const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
-  const [lastClaimId, setLastClaimId] = useState<string | null>(null);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
   const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<string | null>(null);
   const [loadingDeals, setLoadingDeals] = useState(true);
@@ -755,7 +744,6 @@ export default function HomeScreen() {
         const out = await claimDeal(dealId);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) {
-          setClaimToastVariant("claimed");
           setClaimSuccessToastNonce((n) => n + 1);
         }
         trackAppAnalyticsEvent({
@@ -765,11 +753,8 @@ export default function HomeScreen() {
           business_id: businessIdForDeal,
         });
 
-        setQrToken(out.token);
-        setQrExpires(out.expires_at);
-        setQrShortCode(out.short_code ?? null);
-        setLastClaimDealId(dealId);
-        setLastClaimId(out.claim_id ?? null);
+        // Claiming files the deal in the wallet — the QR and short code stay hidden
+        // until the customer starts the Use Deal pass at the counter.
         setUserClaimsByDeal((prev) => {
           const next = new Map(prev);
           next.set(dealId, {
@@ -780,7 +765,6 @@ export default function HomeScreen() {
           return next;
         });
         setClaimingDealId(null);
-        setQrVisible(true);
         setClaimStatus((prev) => ({
           ...prev,
           [dealId]: { message: t("dealsBrowse.statusClaimedShowQr"), tone: "success" },
@@ -844,61 +828,6 @@ export default function HomeScreen() {
       localizedOfferRendererEnabled,
     ],
   );
-
-  const hideClaimQrModal = useCallback(() => {
-    setQrVisible(false);
-    setClaimingDealId(null);
-    void loadUserClaims(dealsRef.current.map((d) => d.id));
-  }, [loadUserClaims]);
-
-  // While the claim QR is on screen, watch it so a counter scan flips the deal card to
-  // redeemed and closes the modal on its own (redemption UPDATEs aren't broadcast via
-  // Realtime in this project — see the hook).
-  useClaimRedeemedWatch({
-    claimId: lastClaimId,
-    enabled: qrVisible && !!lastClaimId,
-    onRedeemed: () => {
-      const dealId = lastClaimDealId;
-      setClaimToastVariant("redeemed");
-      setClaimSuccessToastNonce((n) => n + 1);
-      setTimeout(() => {
-        setQrVisible(false);
-        if (dealId) {
-          setClaimStatus((prev) => {
-            const next = { ...prev };
-            delete next[dealId];
-            return next;
-          });
-        }
-        void loadUserClaims(dealsRef.current.map((d) => d.id));
-      }, 1400);
-    },
-    onEnded: () => {
-      setQrVisible(false);
-      void loadUserClaims(dealsRef.current.map((d) => d.id));
-    },
-  });
-
-  async function refreshQr() {
-    if (!lastClaimDealId) {
-      setBanner(t("consumerWallet.errNoDealForQr"));
-      return;
-    }
-    if (refreshingQr) return;
-    setRefreshingQr(true);
-    try {
-      const out = await claimDeal(lastClaimDealId);
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
-      setQrShortCode(out.short_code ?? null);
-      setLastClaimId(out.claim_id ?? null);
-    } catch (e: unknown) {
-      const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
-      setBanner(mapClaimError(msg));
-    } finally {
-      setRefreshingQr(false);
-    }
-  }
 
   const onSelectSortMode = useCallback((mode: ConsumerDealSortMode) => {
     setSortMode(mode);
@@ -1959,21 +1888,7 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      <QrModal
-        visible={qrVisible}
-        token={qrToken}
-        expiresAt={qrExpires}
-        shortCode={qrShortCode}
-        successToastNonce={claimSuccessToastNonce}
-        successToastVariant={claimToastVariant}
-        onHide={hideClaimQrModal}
-        onRefresh={refreshQr}
-        refreshing={refreshingQr}
-        claimId={lastClaimId}
-        dealId={lastClaimDealId}
-        businessId={dealsRef.current.find((d) => d.id === lastClaimDealId)?.business_id ?? null}
-        onManuallyRedeemed={() => void loadUserClaims(dealsRef.current.map((d) => d.id))}
-      />
+      <ClaimSuccessToast nonce={claimSuccessToastNonce} />
 
       <BrandedConfirmModal
         visible={alertDialog === "consent"}

@@ -248,23 +248,46 @@ export function WalletVisualPassModal({
           </Animated.View>
         ) : null}
 
-        {/* Manual fallback for when the staff scanner can't read the QR. Always
-            visible — no delay or countdown gating its discovery.
+        {/* Manual fallback for when the staff scanner can't read the QR. Addressed
+            to the employee, not the customer, and loud enough to be read across a
+            counter — this is the instruction that makes the gesture discoverable.
 
-            The hint only makes sense while the QR is tappable, but the ERROR must
+            The banner only makes sense while the QR is tappable, but the ERROR must
             outlive the 30s pass window. Gating both on `qrWindowActive` meant a
             failed redeem unmounted its own explanation the moment the countdown
             lapsed, so the tap looked like it did nothing at all. */}
         {(qrWindowActive && token) || manualRedeem.error ? (
-          <View style={{ alignItems: "center", marginBottom: 16, gap: 4 }}>
+          <View style={{ alignItems: "center", marginBottom: 16, gap: 8 }}>
             {qrWindowActive && token ? (
-              <Text
-                style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "700", textAlign: "center" }}
-                numberOfLines={2}
-                maxFontSizeMultiplier={1.15}
+              <View
+                style={{
+                  alignSelf: "stretch",
+                  backgroundColor: manualRedeem.busy ? "#166534" : "#fef3c7",
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: "#f59e0b",
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                }}
               >
-                {manualRedeem.busy ? t("consumerWallet.manualRedeemBusy") : manualRedeem.hintLabel}
-              </Text>
+                <Text
+                  style={{
+                    color: manualRedeem.busy ? "#fef3c7" : "#78350f",
+                    fontSize: 15,
+                    fontWeight: "900",
+                    textAlign: "center",
+                    letterSpacing: 0.2,
+                  }}
+                  numberOfLines={3}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.2}
+                >
+                  {manualRedeem.busy
+                    ? t("consumerWallet.manualRedeemBusy")
+                    : t("consumerWallet.passStaffDoubleTap")}
+                </Text>
+              </View>
             ) : null}
             {manualRedeem.error ? (
               <Text

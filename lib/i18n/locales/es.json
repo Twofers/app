@@ -47,7 +47,8 @@
     "loggedInAs": "Sesión: {{email}}",
     "notLoggedIn": "Sin iniciar sesión",
     "statusClaiming": "Reclamando...",
-    "statusClaimedShowQr": "Reclamado. Muestra el QR."
+    "statusClaimedShowQr": "Guardado en tu billetera.",
+    "claimedInWallet": "Guardado en tu billetera. Ábrela en el mostrador."
   },
   "favorites": {
     "emptyTitle": "Aún no hay favoritos",
@@ -1360,6 +1361,7 @@
     "releaseConfirmCta": "Sí, liberarla",
     "releaseKeepCta": "Conservarla",
     "manualRedeemHint": "Toca el QR dos veces para canjear",
+    "passStaffDoubleTap": "Personal: toca el QR dos veces para marcarla como usada",
     "manualRedeemBusy": "Marcando como usada...",
     "manualRedeemConfirmTitle": "¿Canjear ahora?",
     "manualRedeemConfirmBody": "Esto marca la oferta como usada. No se puede deshacer.",

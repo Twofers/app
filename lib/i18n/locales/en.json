@@ -47,7 +47,8 @@
     "loggedInAs": "Logged in: {{email}}",
     "notLoggedIn": "Not logged in",
     "statusClaiming": "Claiming...",
-    "statusClaimedShowQr": "Claimed. Show your QR."
+    "statusClaimedShowQr": "Saved to your wallet.",
+    "claimedInWallet": "Saved to your wallet. Open it at the counter."
   },
   "favorites": {
     "emptyTitle": "No favorites yet",
@@ -1720,6 +1721,7 @@
     "releaseConfirmCta": "Yes, release it",
     "releaseKeepCta": "Keep it",
     "manualRedeemHint": "Tap the QR twice to redeem",
+    "passStaffDoubleTap": "Staff: double-tap the QR to mark this deal used",
     "manualRedeemBusy": "Marking as used...",
     "manualRedeemConfirmTitle": "Redeem now?",
     "manualRedeemConfirmBody": "This marks the deal as used. It can't be undone.",

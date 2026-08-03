@@ -18,10 +18,10 @@ type ConfirmFn = (options: BrandedConfirmOptions) => void;
  * fumbled double-tap can't burn a claim; it is not a trust control. See
  * `lib/manual-redeem.ts` for the accepted trust trade-off.
  *
- * Shared by both QR surfaces (the Use Deal pass and the post-claim QR modal) so
- * the gesture, copy, and error handling can't drift between them. The caller
- * supplies `confirm` from its own `useBrandedConfirm` so each screen keeps
- * rendering exactly one confirm modal.
+ * The Use Deal pass is the only surface that renders a QR — claiming no longer
+ * reveals one — so this is the single home for the gesture, its confirm, and its
+ * error handling. The caller supplies `confirm` from its own `useBrandedConfirm`
+ * so the screen keeps rendering exactly one confirm modal.
  */
 export function useManualQrRedeem(params: {
   claimId: string | null;
@@ -93,8 +93,6 @@ export function useManualQrRedeem(params: {
     handleQrPress,
     busy,
     error,
-    /** Always-visible instruction. No delay — the fallback is discoverable up front. */
-    hintLabel: t("consumerWallet.manualRedeemHint"),
     /** Screen-reader equivalent for a gesture VoiceOver/TalkBack can't perform. */
     accessibilityProps: {
       accessibilityRole: "button" as const,

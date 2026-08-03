@@ -10,13 +10,12 @@ import { Colors, Gray, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
-import { claimDeal, releaseClaim } from "@/lib/functions";
+import { releaseClaim } from "@/lib/functions";
 import {
   DEFAULT_CLAIM_GRACE_MINUTES,
   getClaimRedeemDeadlineIso,
   isPastClaimRedeemDeadline,
 } from "@/lib/claim-redeem-deadline";
-import { buildClaimDealTelemetry } from "@/lib/claim-telemetry";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { logPostgrestError } from "@/lib/supabase-client-log";
@@ -24,7 +23,6 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { QrModal } from "@/components/qr-modal";
 import { AddToWalletButton } from "@/components/add-to-wallet-button";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
@@ -112,18 +110,6 @@ function claimNotRedeemable(row: ClaimRow, now: number) {
   return isPastClaimRedeemDeadline(row.expires_at, now, grace);
 }
 
-function classifyClaimBlockReason(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("already have an active claim") || m.includes("already have an active deal")) return "active_app_wide_claim";
-  if (m.includes("once per business per local day") && m.includes("redeemable")) return "business_daily_limit";
-  if (m.includes("once per business per day")) return "business_daily_limit"; // legacy fallback
-  if (m.includes("active claim from this business")) return "active_business_claim";
-  if (m.includes("active claim for this deal")) return "duplicate_deal_claim";
-  if (m.includes("reached its claim limit") || m.includes("sold out")) return "deal_sold_out";
-  if (m.includes("claiming has closed") || m.includes("expired")) return "deal_closed";
-  return "unknown";
-}
-
 type EndedKind = "redeemed" | "expired" | "canceled" | "released";
 
 type EndedListItem = { row: ClaimRow; kind: EndedKind };
@@ -155,23 +141,12 @@ export default function WalletScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [qrVisible, setQrVisible] = useState(false);
-  const [qrToken, setQrToken] = useState<string | null>(null);
-  const [qrShortCode, setQrShortCode] = useState<string | null>(null);
-  const [qrExpires, setQrExpires] = useState<string | null>(null);
-  const [qrClaimId, setQrClaimId] = useState<string | null>(null);
-  const [qrRedeemedNonce, setQrRedeemedNonce] = useState(0);
-  const [qrGraceMinutes, setQrGraceMinutes] = useState(DEFAULT_CLAIM_GRACE_MINUTES);
-  const [refreshingQr, setRefreshingQr] = useState(false);
-  const [activeDealId, setActiveDealId] = useState<string | null>(null);
-  const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
   const [releasingClaimId, setReleasingClaimId] = useState<string | null>(null);
   const { confirm, confirmModal } = useBrandedConfirm();
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
   const playRegisterSuccess = useRegisterSuccessSound();
   const [isSharing, setIsSharing] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
   const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
   const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
@@ -333,140 +308,12 @@ export default function WalletScreen() {
     return () => sub.remove();
   }, [loadClaims, userId]);
 
-  // While the QR modal is open, watch that claim so a counter scan (a redemption UPDATE,
-  // which Realtime does not broadcast in this project) makes the QR disappear on its own.
-  useClaimRedeemedWatch({
-    claimId: qrClaimId,
-    enabled: qrVisible && !!qrClaimId,
-    onRedeemed: ({ claimId }) => {
-      void playRegisterSuccess();
-      // Flash the in-modal "Redeemed" confirmation (confetti + toast), then close and
-      // reload — loadClaims() moves the card to Ended → Redeemed and fires the existing
-      // save-this-business prompt for the just-redeemed claim.
-      setQrRedeemedNonce((n) => n + 1);
-      void clearWalletClaimToken(claimId);
-      setTimeout(() => {
-        setQrVisible(false);
-        void loadClaims();
-      }, 1400);
-    },
-    onEnded: () => {
-      setQrVisible(false);
-      void loadClaims();
-    },
-  });
-
   async function onRefresh() {
     setRefreshing(true);
     try {
       await loadClaims();
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  function openVerifyForClaim(row: ClaimRow) {
-    if (isDemoOffer(row.deals)) {
-      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
-      return;
-    }
-    const dead = claimNotRedeemable(row, nowMs);
-    if (dead || row.redeemed_at) return;
-    if (row.claim_status === "redeeming") return;
-    if (!row.token) {
-      setBanner(t("consumerWallet.errRefreshQr", { defaultValue: "Could not load this QR code. Try refreshing your wallet." }));
-      return;
-    }
-    setShareError(null);
-    setQrToken(row.token);
-    setQrShortCode(row.short_code);
-    setQrExpires(row.expires_at);
-    setQrClaimId(row.id);
-    setQrGraceMinutes(row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES);
-    setActiveDealId(row.deal_id);
-    setQrVisible(true);
-  }
-
-  async function refreshQr() {
-    if (!activeDealId) {
-      setBanner(t("consumerWallet.errNoDealForQr"));
-      return;
-    }
-    const activeClaim = claims.find((c) => c.deal_id === activeDealId);
-    if (isDemoOffer(activeClaim?.deals)) {
-      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
-      return;
-    }
-    if (refreshingQr) return;
-    setRefreshingQr(true);
-    setBanner(null);
-    try {
-      const telem = await buildClaimDealTelemetry("unknown");
-      const out = await claimDeal(activeDealId, telem);
-      const businessIdForDeal = claims.find((c) => c.deal_id === activeDealId)?.deals?.business_id ?? null;
-      trackAppAnalyticsEvent({
-        event_name: "deal_claimed",
-        claim_id: out.claim_id ?? null,
-        deal_id: activeDealId,
-        business_id: businessIdForDeal,
-      });
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
-      setQrShortCode(out.short_code ?? null);
-      setQrClaimId(out.claim_id ?? null);
-      setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
-      await loadClaims();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : t("consumerWallet.errRefreshQr");
-      const businessIdForDeal = claims.find((c) => c.deal_id === activeDealId)?.deals?.business_id ?? null;
-      trackAppAnalyticsEvent({
-        event_name: "claim_blocked",
-        deal_id: activeDealId,
-        business_id: businessIdForDeal,
-        context: { reason: classifyClaimBlockReason(msg) },
-      });
-      setBanner(translateKnownApiMessage(msg, t));
-    } finally {
-      setRefreshingQr(false);
-    }
-  }
-
-  async function refreshClaimFromRow(row: ClaimRow) {
-    if (isDemoOffer(row.deals)) {
-      setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
-      return;
-    }
-    if (claimingRefreshId) return;
-    setClaimingRefreshId(row.id);
-    setBanner(null);
-    try {
-      const telem = await buildClaimDealTelemetry("unknown");
-      const out = await claimDeal(row.deal_id, telem);
-      trackAppAnalyticsEvent({
-        event_name: "deal_claimed",
-        claim_id: out.claim_id ?? null,
-        deal_id: row.deal_id,
-        business_id: row.deals?.business_id ?? null,
-      });
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
-      setQrShortCode(out.short_code ?? null);
-      setQrClaimId(out.claim_id ?? row.id);
-      setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
-      setActiveDealId(row.deal_id);
-      setQrVisible(true);
-      await loadClaims();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : t("consumerWallet.errRefreshQr");
-      trackAppAnalyticsEvent({
-        event_name: "claim_blocked",
-        deal_id: row.deal_id,
-        business_id: row.deals?.business_id ?? null,
-        context: { reason: classifyClaimBlockReason(msg) },
-      });
-      setBanner(translateKnownApiMessage(msg, t));
-    } finally {
-      setClaimingRefreshId(null);
     }
   }
 
@@ -489,7 +336,6 @@ export default function WalletScreen() {
     }
     setIsSharing(true);
     setBanner(null);
-    setShareError(null);
     try {
       const { buildShareCopy, getOrCreateShareCode, openShareSheet } = await import("@/lib/share-deal");
       const code = await getOrCreateShareCode(row.deal_id);
@@ -501,9 +347,7 @@ export default function WalletScreen() {
       });
       await openShareSheet(copy);
     } catch {
-      const message = t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." });
-      setShareError(message);
-      setBanner(message);
+      setBanner(t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." }));
     } finally {
       setIsSharing(false);
     }
@@ -715,10 +559,6 @@ export default function WalletScreen() {
       remainingMs <= 15 * 60 * 1000;
     const rowIsDemo = isDemoOffer(row.deals);
 
-    const shortLabel = row.short_code
-      ? `${row.short_code.slice(0, 3)} ${row.short_code.slice(3)}`
-      : t("consumerWallet.codeLegacyQrOnly");
-
     const pillStatus =
       bucket === "active"
         ? isRedeeming
@@ -731,7 +571,6 @@ export default function WalletScreen() {
             : bucket === "released"
               ? ("released" as const)
               : ("expired" as const);
-    const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
     const activeClaim = bucket === "active" && !redeemed && !tokenDead;
     const posterWidth = activeClaim ? 72 : 88;
     const posterHeight = activeClaim ? 88 : 110;
@@ -903,59 +742,6 @@ export default function WalletScreen() {
               onPress={() => void startUseDealFlow(row)}
               disabled={rowIsDemo || useDealBusy}
             />
-            <NativePressable
-              onPress={() => openVerifyForClaim(row)}
-              disabled={verifyDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
-              style={({ pressed }) => ({
-                width: "100%",
-                minHeight: 108,
-                borderRadius: Radii.md,
-                borderWidth: 1,
-                borderColor: pressed ? theme.primary : "#fed7aa",
-                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
-                padding: Spacing.md,
-                justifyContent: "center",
-                opacity: verifyDisabled ? 0.45 : 1,
-              })}
-            >
-              <View pointerEvents="none">
-                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0, color: "#9a3412" }}>
-                  {t("consumerWallet.scanQrAtCounter")}
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
-                  <View
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: Radii.md,
-                      borderWidth: 2,
-                      borderColor: Gray[900],
-                      borderStyle: "dashed",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: Gray[50],
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "800", opacity: 0.7, color: "#9a3412" }}>QR</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
-                      {t("consumerWallet.verifyCodeLabel")}
-                    </Text>
-                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 0, marginTop: 2, color: Gray[900] }}>
-                      {shortLabel}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
-                  {t("consumerWallet.note")}
-                </Text>
-              </View>
-            </NativePressable>
             {!rowIsDemo ? <AddToWalletButton /> : null}
             {shareDealEnabled ? (
               <NativePressable
@@ -1020,16 +806,6 @@ export default function WalletScreen() {
             ) : null}
           </View>
         ) : null}
-        {bucket === "active" && tokenDead && !redeemed ? (
-          <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text }}>{t("consumerWallet.qrExpired")}</Text>
-            <PrimaryButton
-              title={rowIsDemo ? t("demoOffer.label", { defaultValue: "Demo offer" }) : claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
-              onPress={() => void refreshClaimFromRow(row)}
-              disabled={rowIsDemo || claimingRefreshId !== null}
-            />
-          </View>
-        ) : null}
       </View>
     );
   }
@@ -1049,7 +825,6 @@ export default function WalletScreen() {
   const showSlideModal = useDealState !== null && !useDealState.confirmed;
   const showPassModal = useDealState !== null && useDealState.confirmed;
   const passRow = showPassModal ? useDealState.row : null;
-  const activeQrClaim = activeDealId ? claims.find((c) => c.deal_id === activeDealId) ?? null : null;
 
   useClaimRedeemedWatch({
     claimId: passRow?.id ?? null,
@@ -1213,26 +988,6 @@ export default function WalletScreen() {
           onManuallyRedeemed={() => void loadClaims()}
         />
       ) : null}
-
-      <QrModal
-        visible={qrVisible}
-        token={qrToken}
-        shortCode={qrShortCode}
-        expiresAt={qrExpires}
-        graceMinutes={qrGraceMinutes}
-        successToastNonce={qrRedeemedNonce}
-        successToastVariant="redeemed"
-        onHide={() => setQrVisible(false)}
-        onRefresh={refreshQr}
-        refreshing={refreshingQr}
-        onShare={shareDealEnabled && activeQrClaim ? () => void shareWalletDeal(activeQrClaim) : undefined}
-        sharing={shareDealEnabled ? isSharing : undefined}
-        shareError={shareDealEnabled ? shareError : undefined}
-        claimId={qrClaimId}
-        dealId={activeQrClaim?.deal_id ?? null}
-        businessId={activeQrClaim?.deals?.business_id ?? null}
-        onManuallyRedeemed={() => void loadClaims()}
-      />
 
       {saveBusinessPromptElement}
       {confirmModal}

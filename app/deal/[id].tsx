@@ -14,7 +14,7 @@ import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { ScreenHeader } from "../../components/ui/screen-header";
-import { QrModal } from "../../components/qr-modal";
+import { ClaimSuccessToast } from "../../components/claim-success-toast";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
 import { useSaveBusinessPrompt } from "../../hooks/use-save-business-prompt";
@@ -53,7 +53,6 @@ import {
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
-import { useClaimRedeemedWatch } from "@/hooks/use-claim-redeemed-watch";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { hideBusiness } from "@/lib/hidden-businesses";
@@ -167,17 +166,11 @@ export default function DealDetail() {
   const [deal, setDeal] = useState<Deal | null>(null);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "failed">("loading");
   const { isLoggedIn, userId, loading: authLoading } = useBusiness();
-  const [qrToken, setQrToken] = useState<string | null>(null);
-  const [qrExpires, setQrExpires] = useState<string | null>(null);
-  const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [activeClaim, setActiveClaim] = useState<ActiveClaim | null>(null);
-  const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
-  const [claimToastVariant, setClaimToastVariant] = useState<"claimed" | "redeemed">("claimed");
   const [isClaiming, setIsClaiming] = useState(false);
-  const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  // Return path: after a fresh claim, offer to save the business once the QR modal closes.
+  // Return path: after a fresh claim, offer to save the business once the claim toast clears.
   const pendingSaveBusinessPromptRef = useRef(false);
   const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
@@ -202,7 +195,6 @@ export default function DealDetail() {
   const [repeatBlocked, setRepeatBlocked] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
   const [customerDealLocalization, setCustomerDealLocalization] = useState<CustomerDealLocalization | null>(null);
   const [customerDealPosterSpec, setCustomerDealPosterSpec] = useState<CustomerDealPosterSpec | null>(null);
   const shareDealEnabled = isShareDealEnabled();
@@ -261,8 +253,10 @@ export default function DealDetail() {
     });
   }, [deal, userId, brandedConfirm, performHideBusiness, goBack, setBanner, t]);
 
-  const handleQrHide = useCallback(() => {
-    setQrVisible(false);
+  // Claiming no longer opens a QR modal, so the save-business prompt has no modal
+  // dismissal to hang off. Fire it once the claim toast has run its course, so the
+  // two don't stack on screen.
+  const flushSaveBusinessPrompt = useCallback(() => {
     if (!pendingSaveBusinessPromptRef.current) return;
     pendingSaveBusinessPromptRef.current = false;
     if (!deal) return;
@@ -277,10 +271,6 @@ export default function DealDetail() {
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (qrVisible) {
-        handleQrHide();
-        return true;
-      }
       if (reportVisible) {
         setReportVisible(false);
         return true;
@@ -289,7 +279,7 @@ export default function DealDetail() {
       return true;
     });
     return () => sub.remove();
-  }, [goBack, handleQrHide, qrVisible, reportVisible]);
+  }, [goBack, reportVisible]);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,43 +373,20 @@ export default function DealDetail() {
     return null;
   }, []);
 
-  function openClaimQr(claim: { id?: string; token: string; expires_at: string; short_code?: string | null }, showSuccessToast: boolean) {
-    setQrToken(claim.token);
-    setQrExpires(claim.expires_at);
-    setQrShortCode(claim.short_code ?? null);
+  // Claiming confirms and files the deal in the wallet — it deliberately does not
+  // reveal the QR or short code. Those stay hidden until the customer starts the
+  // Use Deal pass at the counter.
+  function recordClaimSuccess(claim: { id?: string; token: string; expires_at: string; short_code?: string | null }) {
     setActiveClaim({
       id: claim.id,
       token: claim.token,
       expires_at: claim.expires_at,
       short_code: claim.short_code ?? null,
     });
-    if (showSuccessToast) {
-      setClaimToastVariant("claimed");
-      setClaimSuccessToastNonce((n) => n + 1);
-    }
-    setQrVisible(true);
+    setClaimSuccessToastNonce((n) => n + 1);
+    // Let the toast finish before the save-business sheet takes over.
+    setTimeout(flushSaveBusinessPrompt, 3400);
   }
-
-  // While the claim QR is on screen, watch it so a counter scan flips the "View QR" action
-  // off and closes the modal on its own — redemption UPDATEs aren't broadcast via Realtime
-  // in this project (see the hook), so a manual refresh would otherwise be required.
-  useClaimRedeemedWatch({
-    claimId: activeClaim?.id ?? null,
-    enabled: qrVisible && !!activeClaim?.id,
-    onRedeemed: () => {
-      setClaimToastVariant("redeemed");
-      setClaimSuccessToastNonce((n) => n + 1);
-      setTimeout(() => {
-        handleQrHide(); // closes the modal and fires the pending save-business prompt
-        setActiveClaim(null); // a redeemed claim must not reopen via "View QR"
-        if (deal?.id) void loadClaimCount(deal.id);
-      }, 1400);
-    },
-    onEnded: () => {
-      setQrVisible(false);
-      setActiveClaim(null);
-    },
-  });
 
   const loadDeal = useCallback(async () => {
     if (!id) {
@@ -616,7 +583,7 @@ export default function DealDetail() {
         });
       }
       if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
-      openClaimQr(out, true);
+      recordClaimSuccess(out);
       void loadClaimCount(deal.id);
     } catch (e: unknown) {
       const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
@@ -626,7 +593,7 @@ export default function DealDetail() {
         if (existing) {
           setBanner(null);
           if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
-          openClaimQr(existing, true);
+          recordClaimSuccess(existing);
           void loadClaimCount(deal.id);
           return;
         }
@@ -640,33 +607,14 @@ export default function DealDetail() {
     }
   }
 
-  async function viewQr() {
+  // An already-claimed deal lives in the wallet now — the QR and code are only
+  // revealed there, once the customer starts the Use Deal pass at the counter.
+  function goToWalletForClaim() {
     if (deal && isDemoOffer(deal)) {
       setBanner(t("demoOffer.detailExplanation", { defaultValue: DEMO_OFFER_DETAIL_EXPLANATION }));
       return;
     }
-    if (activeClaim) {
-      openClaimQr(activeClaim, false);
-      return;
-    }
-    if (!deal || !userId) return;
-    if (refreshingQr) return;
-    setRefreshingQr(true);
-    try {
-      // Look up existing active claim instead of creating a new one.
-      const existing = await loadActiveClaimForDeal(deal.id, userId);
-      if (existing) {
-        setActiveClaim(existing);
-        openClaimQr(existing, false);
-      } else {
-        setBanner(t("dealDetail.noActiveClaim"));
-      }
-    } catch (e: unknown) {
-      const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
-      setBanner(translateKnownApiMessage(msg, t));
-    } finally {
-      setRefreshingQr(false);
-    }
+    router.push("/(tabs)/wallet" as Href);
   }
 
   function currentDealDisplayTitle() {
@@ -705,7 +653,6 @@ export default function DealDetail() {
     }
     setIsSharing(true);
     setBanner(null);
-    setShareError(null);
     try {
       const { buildShareCopy, getOrCreateShareCode, openShareSheet } = await import("@/lib/share-deal");
       const code = await getOrCreateShareCode(deal.id);
@@ -717,9 +664,7 @@ export default function DealDetail() {
       });
       await openShareSheet(copy);
     } catch {
-      const message = t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." });
-      setShareError(message);
-      setBanner(message);
+      setBanner(t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." }));
     } finally {
       setIsSharing(false);
     }
@@ -864,7 +809,7 @@ export default function DealDetail() {
           ? t("dealDetail.claiming")
           : t("dealDetail.claim");
   const ctaDisabled = actionState.kind === "claiming" || actionState.kind === "unavailable";
-  const ctaPress = actionState.kind === "active_claimed" ? viewQr : doClaim;
+  const ctaPress = actionState.kind === "active_claimed" ? goToWalletForClaim : doClaim;
   const biz = deal.businesses;
   const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
   const directionsAvailable = hasDirectionsTarget(biz);
@@ -1230,27 +1175,7 @@ export default function DealDetail() {
 
       {confirmModal}
 
-      <QrModal
-        visible={qrVisible}
-        token={qrToken}
-        expiresAt={qrExpires}
-        shortCode={qrShortCode}
-        successToastNonce={claimSuccessToastNonce}
-        successToastVariant={claimToastVariant}
-        onHide={handleQrHide}
-        onRefresh={viewQr}
-        refreshing={refreshingQr}
-        onShare={shareDealEnabled ? handleShare : undefined}
-        sharing={shareDealEnabled ? isSharing : undefined}
-        shareError={shareDealEnabled ? shareError : undefined}
-        claimId={activeClaim?.id ?? null}
-        dealId={deal.id}
-        businessId={deal.business_id}
-        onManuallyRedeemed={() => {
-          setActiveClaim(null);
-          void loadClaimCount(deal.id);
-        }}
-      />
+      <ClaimSuccessToast nonce={claimSuccessToastNonce} />
 
       {saveBusinessPromptElement}
     </View>
