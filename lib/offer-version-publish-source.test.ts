@@ -19,11 +19,18 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).toMatch(/errPresentationApprovalRequired/);
     expect(fullCreateSource).toMatch(/invalidateAcceptedAdDraft/);
 
+    // The new-deal branch reaches the versioned publish endpoint through the
+    // shared runVersionedPublish helper, which the edit-revise path also uses so
+    // both build the same ad_spec. Assert the branch routes into that helper, and
+    // that the helper is the thing calling publishOfferVersionedDeal.
     const newDealBranch = fullCreateSource.indexOf("const locTargets =");
-    const versionedPublish = fullCreateSource.indexOf("publishOfferVersionedDeal", newDealBranch);
+    const versionedPublish = fullCreateSource.indexOf("runVersionedPublish(rows)", newDealBranch);
+    const helper = fullCreateSource.indexOf("const runVersionedPublish");
 
     expect(newDealBranch).toBeGreaterThan(-1);
     expect(versionedPublish).toBeGreaterThan(newDealBranch);
+    expect(helper).toBeGreaterThan(-1);
+    expect(fullCreateSource.indexOf("publishOfferVersionedDeal", helper)).toBeGreaterThan(helper);
     expect(fullCreateSource).not.toMatch(/OFFER_VERSION_PUBLISH_ENABLED/);
     expect(fullCreateSource).not.toMatch(/insertDealsWithCompatibility/);
   });

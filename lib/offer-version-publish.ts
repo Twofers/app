@@ -51,6 +51,14 @@ export type PublishOfferVersionedDealBody = {
   deal_rows: OfferVersionPublishDealRow[];
   idempotency_key: string;
   ad_spec?: OfferVersionPublishAdSpec | null;
+  /**
+   * Set to revise an ALREADY PUBLISHED deal instead of creating new ones: the
+   * server appends a new offer version carrying this ad_spec and repoints the
+   * deal at it. Creative only reaches live customers through that repoint —
+   * updating the deals row alone leaves the customer poster spec on the old
+   * version. Exactly one deal row may accompany it.
+   */
+  deal_id?: string;
 };
 
 export type PublishOfferVersionedDealResult = {
