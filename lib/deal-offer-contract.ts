@@ -398,10 +398,25 @@ function stripLeadingArticle(value: string): string {
 // item typed as "any coffee drink" collides into "one any coffee drink" --
 // startsWithDeterminer() already treats "any" as a determiner (see above), but
 // stripLeadingArticle() deliberately doesn't strip it everywhere it's used
-// (e.g. "Buy any large coffee" reads fine). Scoped to just the two percent-off
-// offer-line composers below, where "one" already carries the quantity.
+// (e.g. "Buy any large coffee" reads fine).
 function stripLeadingAnyForCountedPhrase(value: string): string {
   return stripLeadingArticle(value).replace(/^any\s+/i, "");
+}
+
+// The single-unit item phrase every percent-off composer shares. Assembled here
+// rather than inline because those composers must agree byte for byte:
+// stripDuplicateLeadingLine() in ad-variants.ts only strips a restated offer
+// line out of the terms when the two match exactly, so a call site that dropped
+// the lowerFirst() would reintroduce the duplicated-line bug silently.
+//
+// This resolves the "one any X" collision by keeping "one" and dropping "any".
+// formatCountedItem() below resolves the same collision the OPPOSITE way -- it
+// keeps "any" and drops "one" -- and the two must stay divergent: percent-off
+// terms state a per-customer quantity limit, so the count has to survive, while
+// a purchase condition ("Buy any large coffee") is about which items qualify,
+// so the choice word has to survive.
+function formatOneItemPhrase(itemName: string): string {
+  return `one ${lowerFirst(stripLeadingAnyForCountedPhrase(itemName))}`;
 }
 
 function startsWithQuantityPhrase(value: string): boolean {
@@ -454,6 +469,11 @@ function formatPurchasePhrase(quantity: number, itemName: string): string {
   return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
 }
 
+// Deliberately the mirror image of formatOneItemPhrase() above: a merchant's
+// "any" survives here and the "one" is dropped, because this builds the
+// purchase CONDITION of a free-item offer ("Buy any large coffee and get one
+// free"), where "any" tells the customer which items qualify. See that helper
+// for why the percent-off side has to make the opposite choice.
 function formatCountedItem(quantity: number, itemName: string): string {
   const item = stripLeadingArticle(itemName);
   if (!item) return "";
@@ -524,7 +544,7 @@ export function buildCanonicalHeadlineFromFacts(facts: NormalizedDealFacts): str
   const item = cleanText(facts.buyItem);
   const value = facts.rewardValue;
   if (item && typeof value === "number" && Number.isFinite(value)) {
-    return `Get ${Math.round(value)}% off one ${lowerFirst(stripLeadingAnyForCountedPhrase(item))}`;
+    return `Get ${Math.round(value)}% off ${formatOneItemPhrase(item)}`;
   }
   return "Review offer details";
 }
@@ -561,7 +581,7 @@ function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
     const item = cleanText(facts.buyItem);
     const value = facts.rewardValue;
     if (item && typeof value === "number" && Number.isFinite(value)) {
-      return `Save ${Math.round(value)}% on one ${lowerFirst(stripLeadingAnyForCountedPhrase(item))}.`;
+      return `Save ${Math.round(value)}% on ${formatOneItemPhrase(item)}.`;
     }
     return "Review the offer details before publishing.";
   }
@@ -647,8 +667,9 @@ function canonicalPercentTerms(
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
   const location = stripEndingPunctuation(locationName);
-  const displayItem = lowerFirst(stripLeadingAnyForCountedPhrase(itemName));
-  return sentence(`Get ${discountPercent}% off one ${displayItem}. Redeem only at ${location}. ${quantity}`);
+  return sentence(
+    `Get ${discountPercent}% off ${formatOneItemPhrase(itemName)}. Redeem only at ${location}. ${quantity}`,
+  );
 }
 
 export function buildDealOfferContract(
@@ -1206,10 +1227,10 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
 
   const item = contract.singleItemDiscount?.itemName ?? "item";
   const discount = contract.singleItemDiscount?.discountPercent ?? 40;
-  const displayItem = lowerFirst(stripLeadingAnyForCountedPhrase(item));
+  const itemPhrase = formatOneItemPhrase(item);
   return [
-    `Get ${discount}% off one ${displayItem}.`,
-    `Save ${discount}% on one ${displayItem}.`,
+    `Get ${discount}% off ${itemPhrase}.`,
+    `Save ${discount}% on ${itemPhrase}.`,
   ];
 }
 

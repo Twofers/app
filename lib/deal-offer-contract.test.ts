@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildCanonicalHeadlineFromFacts,
   buildDealOfferContract,
+  buildDeterministicDealChannelCopy,
   buildHeadlineCandidates,
   buildOfferCopyCandidates,
   buildRequiredVisualItems,
@@ -30,6 +31,16 @@ function contractFor(input: DealEligibilityInput): DealOfferContract {
   });
   if (!contract) throw new Error("expected valid contract");
   return contract;
+}
+
+function anyCoffeeDrinkContract(): DealOfferContract {
+  return contractFor({
+    dealType: "PERCENT_OFF_SINGLE_ITEM",
+    appliesTo: "SINGLE_ITEM",
+    discountPercent: 50,
+    itemDescription: "Any coffee drink",
+    itemRetailValueCents: 600,
+  });
 }
 
 const coffeeBagelContract = contractFor({
@@ -328,16 +339,58 @@ describe("buildDealOfferContract", () => {
     // "...one Any coffee drink." -- ungrammatical, and case-mismatched between
     // the two composers. "any" is dropped entirely; "one" already states the
     // quantity, so "any coffee drink" and "one coffee drink" mean the same thing.
-    const contract = contractFor({
-      dealType: "PERCENT_OFF_SINGLE_ITEM",
-      appliesTo: "SINGLE_ITEM",
-      discountPercent: 50,
-      itemDescription: "Any coffee drink",
-      itemRetailValueCents: 600,
-    });
+    const contract = anyCoffeeDrinkContract();
 
     expect(contract.canonicalOfferLine).toBe("Get 50% off one coffee drink");
     expect(contract.canonicalShortTerms).toContain("Get 50% off one coffee drink.");
+  });
+
+  it("phrases the counted item identically across every percent-off composer", () => {
+    // All four composers assemble "one <item>" from the same merchant string,
+    // and stripDuplicateLeadingLine() in ad-variants.ts only strips a restated
+    // offer line out of the terms when the two match EXACTLY -- a composer that
+    // skipped the shared helper (or its lowerFirst) would put the offer line
+    // back into the stored description twice, which is the bug that was
+    // reported on device. Pin every composer, not just the contract fields.
+    const contract = anyCoffeeDrinkContract();
+    const channelCopy = buildDeterministicDealChannelCopy(contract);
+
+    expect(channelCopy.headline).toBe("Get 50% off one coffee drink");
+    expect(channelCopy.description).toBe("Save 50% on one coffee drink.");
+    expect(buildOfferCopyCandidates(contract)).toEqual([
+      "Get 50% off one coffee drink.",
+      "Save 50% on one coffee drink.",
+    ]);
+
+    for (const line of [
+      channelCopy.headline,
+      channelCopy.description,
+      contract.canonicalOfferLine,
+      contract.canonicalShortTerms,
+      ...buildOfferCopyCandidates(contract),
+    ]) {
+      expect(line).not.toMatch(/\bone any\b/i);
+      expect(line).not.toMatch(/\bone Coffee\b/);
+    }
+  });
+
+  it("keeps a leading 'any' in free-item purchase conditions", () => {
+    // The mirror of the case above, pinned so the two "any" policies can't be
+    // "unified" later: a purchase condition is about which items qualify, so
+    // "any" has to survive there even though percent-off terms drop it.
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Any large coffee",
+      requiredItemRetailValueCents: 500,
+      freeItemQuantity: 1,
+      freeItemRetailValueCents: 500,
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.canonicalOfferLine).toBe("Buy any large coffee and get one free");
+    expect(contract.canonicalShortTerms).toContain("any large coffee");
   });
 
   it("returns null for invalid deals before AI generation", () => {
