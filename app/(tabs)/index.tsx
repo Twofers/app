@@ -414,9 +414,10 @@ export default function HomeScreen() {
       }
       const { data, error } = await supabase
         .from("deal_claims")
-        .select("deal_id,redeemed_at,expires_at,created_at,grace_period_minutes")
+        .select("deal_id,redeemed_at,expires_at,created_at,grace_period_minutes,claim_status")
         .eq("user_id", userId)
         .in("deal_id", dealIds)
+        .not("claim_status", "in", "(canceled,released)")
         .order("created_at", { ascending: false });
       if (error) {
         setUserClaimsByDeal(new Map());

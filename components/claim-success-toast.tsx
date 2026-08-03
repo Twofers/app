@@ -1,23 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
 import { useTranslation } from "react-i18next";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 
 /**
- * Claim/redeem celebration overlay.
+ * Claim/redeem celebration — a big dancing penguin throwing confetti across
+ * the whole screen. Claiming a deal should feel like a small win, not just
+ * flip a button.
  *
- * Lifted out of `qr-modal.tsx` so the confetti survives that modal's removal:
- * claiming no longer reveals a QR (the code is held back until the customer
- * starts the Use Deal pass), but it still deserves a confirmation.
- *
- * Renders absolutely-positioned at the top of whatever it is mounted in, and is
- * pointer-transparent, so it never blocks the screen underneath.
+ * Rendered in a native `Modal` (same pattern as BrandedConfirmModal /
+ * DancingPenguinProgressOverlay) rather than an absolutely-positioned sibling
+ * View: a Modal owns its own native window, so it can't get lost behind
+ * FlatList/Animated.View layering the way a plain overlay View can.
  */
 type ClaimSuccessToastProps = {
-  /** Bump to replay. `0` renders nothing — no toast on first mount. */
+  /** Bump to replay. `0` renders nothing — no celebration on first mount. */
   nonce: number;
   variant?: "claimed" | "redeemed";
   /** Line under the heading. Defaults to the "it's in your wallet" copy. */
@@ -30,20 +38,25 @@ type ConfettiParticleSpec = {
   size: number;
   rotate: number;
   color: string;
+  delay: number;
 };
 
-const TOAST_DISPLAY_MS = 3000;
+const CELEBRATION_DISPLAY_MS = 2600;
+const PENGUIN_SOURCE = require("../assets/images/penguin-master-transparent-1024.png");
+const CONFETTI_COLORS = ["#FF9F1C", "#FFD166", "#FDE68A", "#FFFFFF", "#FFE6C7", "#FB923C"];
+const CONFETTI_COUNT = 46;
 
 function ConfettiParticle({ p, progress }: { p: ConfettiParticleSpec; progress: SharedValue<number> }) {
   const rStyle = useAnimatedStyle(() => {
-    const tVal = progress.value;
+    const raw = (progress.value - p.delay) / (1 - p.delay);
+    const t = Math.max(0, Math.min(1, raw));
     return {
-      opacity: 1 - tVal,
+      opacity: t <= 0 ? 0 : 1 - t * t,
       transform: [
-        { translateX: p.dx * tVal },
-        { translateY: p.dy * tVal },
-        { rotate: `${p.rotate * tVal}deg` },
-        { scale: 1 - tVal * 0.25 },
+        { translateX: p.dx * t },
+        { translateY: p.dy * t + 260 * t * t },
+        { rotate: `${p.rotate * t}deg` },
+        { scale: 0.6 + 0.4 * (1 - t) },
       ],
     };
   });
@@ -66,68 +79,128 @@ function ConfettiParticle({ p, progress }: { p: ConfettiParticleSpec; progress: 
 
 export function ClaimSuccessToast({ nonce, variant = "claimed", subtitle }: ClaimSuccessToastProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
-  const theme = Colors[colorScheme];
+  const reducedMotion = useReducedMotion();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const [visible, setVisible] = useState(false);
-  const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(-14);
+  const bounce = useSharedValue(0);
+  const sway = useSharedValue(0);
+  const step = useSharedValue(0);
+  const danceScale = useSharedValue(1);
+  const entrance = useSharedValue(0);
   const confettiProgress = useSharedValue(0);
 
-  const particles = useMemo(() => {
-    const colors = ["#FF9F1C", "#FFD166", "#FDE68A", "#FFFFFF", "#FFE6C7"];
-    const count = 12;
-    return Array.from({ length: count }, (_, idx) => {
-      const angle = (idx / count) * Math.PI * 2;
-      const radius = 46 + (idx % 6) * 6;
-      const dx = Math.cos(angle) * radius;
-      const dy = Math.sin(angle) * radius - 12;
-      const size = 4 + (idx % 4);
-      const rotate = (idx * 27) % 360;
-      return { dx, dy, size, rotate, color: colors[idx % colors.length] };
-    });
-  }, []);
+  // Fill nearly the whole width and most of the height reserved for the
+  // penguin (the text card below gets its own fixed space, see the flex
+  // layout in the render below).
+  const penguinSize = Math.min(screenW * 0.98, screenH * 0.66, 900);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
+  const particles = useMemo(() => {
+    return Array.from({ length: CONFETTI_COUNT }, (_, idx) => {
+      // Thrown outward from the penguin, spreading across the full screen —
+      // some short bursts near the penguin, some flung all the way to the edges.
+      const angle = (idx / CONFETTI_COUNT) * Math.PI * 2 + (idx % 3) * 0.35;
+      const radius = screenW * (0.22 + (idx % 9) * 0.09);
+      const dx = Math.cos(angle) * radius;
+      const dyBase = Math.sin(angle) * radius * 0.55 - screenH * 0.1;
+      const size = 6 + (idx % 5) * 3;
+      const rotate = (idx * 53) % 360;
+      const delay = (idx % 10) * 0.04;
+      return { dx, dy: dyBase, size, rotate, color: CONFETTI_COLORS[idx % CONFETTI_COLORS.length], delay };
+    });
+  }, [screenW, screenH]);
+
+  const stageStyle = useAnimatedStyle(() => ({
+    opacity: entrance.value,
+  }));
+
+  const penguinStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: step.value },
+      { translateY: bounce.value },
+      { rotate: `${sway.value}deg` },
+      { scale: danceScale.value * (0.7 + 0.3 * entrance.value) },
+    ],
   }));
 
   useEffect(() => {
     if (!nonce) return;
 
-    if (showTimerRef.current) clearTimeout(showTimerRef.current);
-    showTimerRef.current = null;
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = null;
-
     setVisible(true);
-    opacity.value = 0;
-    translateY.value = -14;
+    entrance.value = 0;
     confettiProgress.value = 0;
+    bounce.value = 0;
+    sway.value = 0;
+    step.value = 0;
+    danceScale.value = 1;
 
-    opacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
-    translateY.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
-    confettiProgress.value = withTiming(1, { duration: 650, easing: Easing.out(Easing.quad) });
+    entrance.value = withSequence(
+      withTiming(1, { duration: 260, easing: Easing.out(Easing.back(1.6)) }),
+      withTiming(1, { duration: CELEBRATION_DISPLAY_MS - 260 - 260 }),
+      withTiming(0, { duration: 260, easing: Easing.in(Easing.cubic) }),
+    );
+    confettiProgress.value = withTiming(1, { duration: CELEBRATION_DISPLAY_MS - 300, easing: Easing.out(Easing.quad) });
 
-    showTimerRef.current = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
-      translateY.value = withTiming(-10, { duration: 180, easing: Easing.in(Easing.cubic) });
-      hideTimerRef.current = setTimeout(() => setVisible(false), 220);
-    }, TOAST_DISPLAY_MS);
+    if (!reducedMotion) {
+      const cycles = Math.max(1, Math.round(CELEBRATION_DISPLAY_MS / 740));
+      bounce.value = withRepeat(
+        withSequence(
+          withTiming(-30, { duration: 200, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: 210, easing: Easing.in(Easing.quad) }),
+          withTiming(-18, { duration: 180, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: 190, easing: Easing.in(Easing.quad) }),
+        ),
+        cycles,
+        false,
+      );
+      sway.value = withRepeat(
+        withSequence(
+          withTiming(-14, { duration: 200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(14, { duration: 230, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-9, { duration: 190, easing: Easing.inOut(Easing.sin) }),
+          withTiming(9, { duration: 200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 170, easing: Easing.inOut(Easing.sin) }),
+        ),
+        cycles,
+        false,
+      );
+      step.value = withRepeat(
+        withSequence(
+          withTiming(-16, { duration: 210, easing: Easing.inOut(Easing.sin) }),
+          withTiming(16, { duration: 240, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 180, easing: Easing.inOut(Easing.sin) }),
+        ),
+        cycles,
+        false,
+      );
+      danceScale.value = withRepeat(
+        withSequence(
+          withTiming(1.12, { duration: 200, easing: Easing.out(Easing.quad) }),
+          withTiming(0.94, { duration: 210, easing: Easing.inOut(Easing.quad) }),
+          withTiming(1, { duration: 180, easing: Easing.inOut(Easing.quad) }),
+        ),
+        cycles,
+        false,
+      );
+    }
+
+    const hideTimer = setTimeout(() => {
+      cancelAnimation(bounce);
+      cancelAnimation(sway);
+      cancelAnimation(step);
+      cancelAnimation(danceScale);
+      setVisible(false);
+    }, CELEBRATION_DISPLAY_MS);
 
     return () => {
-      if (showTimerRef.current) clearTimeout(showTimerRef.current);
-      showTimerRef.current = null;
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
+      clearTimeout(hideTimer);
+      cancelAnimation(bounce);
+      cancelAnimation(sway);
+      cancelAnimation(step);
+      cancelAnimation(danceScale);
     };
-  }, [nonce, opacity, translateY, confettiProgress]);
-
-  if (!visible) return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nonce, reducedMotion]);
 
   const heading = variant === "redeemed" ? t("dealStatus.redeemed") : t("dealStatus.claimed");
   const sub =
@@ -137,95 +210,75 @@ export function ClaimSuccessToast({ nonce, variant = "claimed", subtitle }: Clai
       : t("dealsBrowse.claimedInWallet", { defaultValue: "Saved to your wallet. Open it at the counter." }));
 
   return (
-    <Animated.View
-      style={[
-        {
-          position: "absolute",
-          top: Math.max(12, insets.top + 10),
-          left: 16,
-          right: 16,
-          alignItems: "center",
-          pointerEvents: "none",
-          zIndex: 50,
-        },
-        animatedStyle,
-      ]}
-    >
-      <View
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          borderRadius: 18,
-          backgroundColor: "#11181C",
-          borderWidth: 1,
-          borderColor: "rgba(255,159,28,0.35)",
-          paddingVertical: 12,
-          paddingHorizontal: 14,
-        }}
-        accessibilityLiveRegion="polite"
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={() => setVisible(false)}>
+      <Pressable
+        onPress={() => setVisible(false)}
+        style={{ flex: 1, backgroundColor: "rgba(10,10,14,0.55)" }}
+        accessibilityRole="button"
+        accessibilityLabel={heading}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Animated.View style={[{ flex: 1 }, stageStyle]}>
           <View
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 12,
-              backgroundColor: "rgba(255,159,28,0.14)",
-              borderWidth: 1,
-              borderColor: "rgba(255,159,28,0.35)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               alignItems: "center",
               justifyContent: "center",
-              overflow: "hidden",
             }}
           >
-            <Image
-              source={require("../assets/images/twofer-mark-512.png")}
-              style={{ width: 26, height: 26 }}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.78}
-              maxFontSizeMultiplier={1.15}
-            >
-              {heading}
-            </Text>
-            <Text
-              style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }}
-              numberOfLines={2}
-              maxFontSizeMultiplier={1.15}
-            >
-              {sub}
-            </Text>
-          </View>
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 999,
-              backgroundColor: theme.primary,
-            }}
-          >
-            <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-              {t("commonUi.ok")}
-            </Text>
-          </View>
-        </View>
-
-        {/* Confetti burst */}
-        <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: 10, alignItems: "center", pointerEvents: "none" }}>
-          <View renderToHardwareTextureAndroid style={{ position: "absolute", top: 2, width: 1, height: 1 }}>
             {particles.map((p, idx) => (
               <ConfettiParticle key={idx} p={p} progress={confettiProgress} />
             ))}
           </View>
-        </View>
-      </View>
-    </Animated.View>
+
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <Animated.View style={penguinStyle}>
+              <Image
+                source={PENGUIN_SOURCE}
+                style={{ width: penguinSize, height: penguinSize }}
+                contentFit="contain"
+                accessibilityIgnoresInvertColors
+              />
+            </Animated.View>
+          </View>
+
+          <View style={{ alignItems: "center", paddingBottom: 36 }}>
+            <View
+              style={{
+                maxWidth: screenW * 0.82,
+                borderRadius: 20,
+                backgroundColor: "#11181C",
+                borderWidth: 1,
+                borderColor: "rgba(255,159,28,0.4)",
+                paddingVertical: 14,
+                paddingHorizontal: 24,
+                alignItems: "center",
+              }}
+              accessibilityLiveRegion="polite"
+            >
+              <Text
+                style={{ color: "#fff", fontWeight: "900", fontSize: 24, textAlign: "center" }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                maxFontSizeMultiplier={1.15}
+              >
+                {heading}
+              </Text>
+              <Text
+                style={{ color: "rgba(255,255,255,0.8)", marginTop: 4, fontSize: 14, fontWeight: "700", textAlign: "center" }}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.15}
+              >
+                {sub}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+      </Pressable>
+    </Modal>
   );
 }

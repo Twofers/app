@@ -143,6 +143,25 @@ describe("poster policy", () => {
     });
   });
 
+  it("reorders a short-format parenthetical item name for the poster only", () => {
+    // Menu imports legitimately keep a short qualifier attached to the name
+    // (see splitMenuItemDescription), so a catalog item can be stored as
+    // "Shot (Espresso)" — format, then product. That reads backwards as
+    // poster marketing copy, so the offer line flips it to product-then-format;
+    // the stored item name elsewhere in the app is untouched by this helper.
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "Shot (Espresso)",
+    });
+
+    expect(buildPosterOfferLinesFromOfferDefinition(definition)).toEqual({
+      offer_line_1: "50% OFF",
+      offer_line_2: "ESPRESSO SHOT",
+    });
+  });
+
   it("keeps the product noun when a long item name will not fit the offer line", () => {
     // R9: offer lines are the poster's FACT channel, but clampPosterText fills from the
     // FRONT, so a head-final item name keeps its modifiers and loses its noun. Observed on

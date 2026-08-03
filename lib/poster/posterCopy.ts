@@ -436,6 +436,28 @@ function purchaseContextLine(locale: SupportedLocale, paidName: string, paidQuan
   return paidQuantity === 1 ? `WITH ${paidName}` : `WITH ${quantity} ${paidName}`;
 }
 
+// Menu imports keep a short parenthetical qualifier attached to an item's
+// name rather than splitting it off (see splitMenuItemDescription), so a
+// catalog item can legitimately be stored as "Shot (Espresso)". That reads
+// backwards as poster marketing copy — a shopper expects product-then-format
+// ("Espresso Shot"), not format-then-product. Flip it ONLY for the poster
+// offer line; the stored display name is untouched everywhere else (menus,
+// receipts, admin). English-only: other locales' word order isn't this.
+const POSTER_SHORT_FORMAT_WORDS = new Set([
+  "shot", "cup", "glass", "mug", "scoop", "slice", "bowl", "plate",
+  "pint", "bottle", "can", "stick", "bar", "piece", "cone", "ball",
+]);
+
+function posterFriendlyItemName(name: string, locale: SupportedLocale): string {
+  if (locale !== "en-US") return name;
+  const match = /^([A-Za-z]+)\s*\(([^)]+)\)$/.exec(name.trim());
+  if (!match) return name;
+  const [, format, product] = match;
+  if (!POSTER_SHORT_FORMAT_WORDS.has(format.toLowerCase())) return name;
+  if (product.trim().split(/\s+/).length > 2) return name;
+  return `${product.trim()} ${format.trim()}`;
+}
+
 export function buildPosterOfferLinesFromOfferDefinition(
   definition: OfferDefinitionV1,
   locale: SupportedLocale = "en-US",
@@ -443,8 +465,14 @@ export function buildPosterOfferLinesFromOfferDefinition(
   const localizedOffer = renderLocalizedOfferBundleFromDefinition(definition)[locale];
   const paidTerm = localizedPaidTerm(definition, locale);
   const rewardTerm = localizedRewardTerm(definition, locale);
-  const firstItem = singularItem(posterTermDisplayName(paidTerm) || definition.qualifyingItems[0]?.displayName || "");
-  const rewardItem = singularItem(posterTermDisplayName(rewardTerm) || definition.reward.displayNames[0] || firstItem);
+  const firstItem = posterFriendlyItemName(
+    singularItem(posterTermDisplayName(paidTerm) || definition.qualifyingItems[0]?.displayName || ""),
+    locale,
+  );
+  const rewardItem = posterFriendlyItemName(
+    singularItem(posterTermDisplayName(rewardTerm) || definition.reward.displayNames[0] || firstItem),
+    locale,
+  );
 
   if (definition.reward.rule === "percent_off_single_item") {
     return {

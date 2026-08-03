@@ -117,7 +117,7 @@ const DEAL_DETAIL_SELECT = `${DEAL_DETAIL_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY
 
 type ActiveClaim = {
   id?: string;
-  token: string;
+  token: string | null;
   expires_at: string;
   short_code: string | null;
 };
@@ -367,7 +367,10 @@ export default function DealDetail() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (data?.token) return data as ActiveClaim;
+      // token is intentionally NULL until the customer starts the Use Deal pass
+      // in the wallet (QR/short code stay hidden until then) — an active claim
+      // row's existence, not a live token, is what "already claimed" means here.
+      if (data) return data as ActiveClaim;
       if (i < attempts - 1) await sleep(800);
     }
     return null;
@@ -376,7 +379,7 @@ export default function DealDetail() {
   // Claiming confirms and files the deal in the wallet — it deliberately does not
   // reveal the QR or short code. Those stay hidden until the customer starts the
   // Use Deal pass at the counter.
-  function recordClaimSuccess(claim: { id?: string; token: string; expires_at: string; short_code?: string | null }) {
+  function recordClaimSuccess(claim: { id?: string; token: string | null; expires_at: string; short_code?: string | null }) {
     setActiveClaim({
       id: claim.id,
       token: claim.token,
