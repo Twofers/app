@@ -123,7 +123,16 @@ All three phases are built. Gates: `typecheck` 0, `typecheck:functions` 0,
   invokes" to "reports native_android"; `merchant-access.test.ts`,
   `billing-functions-source.test.ts` updated.
 
-**Three things Dan must do (all gated on him):**
+**FLAG FLIPPED 2026-08-02 (Dan: "flip it").** `20260825130000_enable_native_trial_checkout.sql`
+applied to prod (guarded `UPDATE ... WHERE key = 'ios_trial_checkout'` with a
+`NOT FOUND` exception, following the same pattern as
+`20260822191000_enable_production_stripe_billing.sql`). Ledger drift after: 0/194.
+Committed `f762f8c6`. **Native trial Checkout is now live for approved-but-
+not-activated merchants on both iOS and Android.** Not yet device/click-
+verified end-to-end (would need a real approved-not-activated merchant
+session — Dan-gated, no test credentials available here).
+
+**Original three action items below, all now closed except #3:**
 1. Apply `20260825120000` in prod. Until then the client reads no capability,
    `can_activate_trial_checkout` parses false, and the button stays hidden —
    fail-closed, so applying late is safe, not breaking.

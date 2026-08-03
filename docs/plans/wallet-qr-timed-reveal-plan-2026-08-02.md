@@ -17,16 +17,32 @@ only changes *where QR/code render* and *how the staff instruction reads*.
 
 ---
 
-## Status: CODE COMPLETE — uncommitted, not yet device-tested
+## Status: CLOSED — COMMITTED `83696b54` on release/1.0.2, NOT pushed, NOT shipped
+## (Step 8 device pass WAIVED by Dan, 2026-08-02 — see step 8 below. Plan has no other open items.)
 
-Verified 2026-08-02: `npx tsc --noEmit` clean, `npx expo lint` clean (0 errors 0 warnings),
-`npx vitest run` 2235/2236 (the 1 failure is the pre-existing AI-poster-lock hash drift on
-`app/create/ai.tsx`, a file this work never touched — unmodified vs HEAD), and
-`node scripts/check-i18n-keys.mjs` PASS.
+Verified 2026-08-02 against the post-`d63f55a3` tree: `npx tsc --noEmit` clean,
+`npx expo lint` clean (0 errors 0 warnings), `npx vitest run` **2236/2236 pass**, and
+`node scripts/check-i18n-keys.mjs` PASS. (An earlier 2235/2236 run failed only on
+AI-poster-lock hash drift in `app/create/ai.tsx` — unrelated to this work and since
+fixed by `bd40a7e0`.)
 
-Remaining: step 8's manual S10 device pass, and a commit. NOTE: the working tree is shared
-with the merchant-activation work, and `lib/i18n/locales/{en,es,ko}.json` carry edits from
-BOTH efforts — split the commit by hunk.
+Step 8's S10 device pass was **skipped at Dan's instruction**, so this is code-verified
+but not behaviour-verified on hardware.
+
+### Delivery: there is nothing to "deploy"
+This commit is 100% client-side (app screens, components, hooks, locale JSON) — zero
+edge functions, zero migrations, zero website files. And `expo-updates` is **not
+installed** (no `updates` / `runtimeVersion` in app.json), so there is **no OTA path**.
+The only way this reaches users is a full EAS native build + store submission.
+
+Two things gate that, and neither is mine to clear:
+1. `docs/plans/production-app-1-0-2-update-plan` records 1.0.2 as **DRAFT/NO-GO**.
+2. The device pass was skipped — and this change removes the QR from the *primary*
+   redemption path, so a regression means customers cannot redeem at a counter at all.
+
+Also unpushed on this branch are three commits from the concurrent merchant-activation
+session, including `f762f8c6 "enable native trial Checkout in production"` — the
+Dan-gated flag flip. A `git push` would carry that too, so it needs Dan's call.
 
 ## Steps
 
@@ -92,9 +108,16 @@ BOTH efforts — split the commit by hunk.
 ### 8. Verify
 - [x] `npm test` baseline (no existing tests reference the removed pieces — verified by grep).
 - [x] `check:i18n-keys` (CI-only gate — run locally per its script).
-- [ ] Manual on S10 dev client: claim from feed → toast only, no QR; wallet card has no
-      QR/code; Use deal → slide → pass shows QR + staff banner; double-tap → confirm →
-      marked used; staff scanner path still works; es/ko spot-check.
+- [~] **WAIVED by Dan, 2026-08-02** — "skip the s10 step". Not performed, not deferred:
+      this step is closed out of the plan by explicit instruction. Would have covered:
+      claim from feed → toast only, no QR; wallet card has no QR/code; Use deal → slide →
+      pass shows QR + staff banner; double-tap → confirm → marked used; staff scanner path
+      still works; es/ko spot-check.
+
+      Consequence carried forward: this change is code-verified but never behaviour-verified
+      on hardware, and it removes the QR from the *primary* redemption path. Whoever green-lights
+      the eventual store build should walk this flow on a device first — the S10 (RF8T20X0Z7P)
+      is connected and the app package is `com.unvmex2.twoforone`.
 
 ## Known limitation (accepted for now)
 The native Apple/Google Wallet passes embed the short-code QR in the OS wallet itself

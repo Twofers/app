@@ -37,8 +37,8 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## Database migrations (supabase/migrations)
 
-- Count: `193`
-- Latest: `20260825120000_native_trial_checkout_capability.sql`
+- Count: `194`
+- Latest: `20260825130000_enable_native_trial_checkout.sql`
 
 ## Edge Functions (supabase/functions, 81 local)
 
