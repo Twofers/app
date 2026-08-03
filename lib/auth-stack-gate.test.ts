@@ -20,6 +20,17 @@ describe("shouldBypassAuthStackGate", () => {
     expect(shouldBypassAuthStackGate({ root: "(tabs)", isDev: false })).toBe(false);
     expect(shouldBypassAuthStackGate({ root: "deal", isDev: false })).toBe(false);
   });
+
+  it("stands down while a user-initiated sign-out is routing itself", () => {
+    // Otherwise the gate captures the signed-out-from screen as `next` and the
+    // next login lands there (e.g. Settings) instead of the role's home surface.
+    expect(
+      shouldBypassAuthStackGate({ root: "(tabs)", isDev: false, userInitiatedSignOut: true }),
+    ).toBe(true);
+    expect(
+      shouldBypassAuthStackGate({ root: "(tabs)", isDev: false, userInitiatedSignOut: false }),
+    ).toBe(false);
+  });
 });
 
 describe("buildNextFromRoute", () => {

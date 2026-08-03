@@ -7,9 +7,19 @@ const PUBLIC_ROOTS = new Set([
   "reset-password",
 ]);
 
-export function shouldBypassAuthStackGate({ root, isDev }: { root: string; isDev: boolean }) {
+export function shouldBypassAuthStackGate({
+  root,
+  isDev,
+  userInitiatedSignOut = false,
+}: {
+  root: string;
+  isDev: boolean;
+  /** A sign-out the user asked for already owns the redirect — see lib/auth-sign-out-intent. */
+  userInitiatedSignOut?: boolean;
+}) {
   if (PUBLIC_ROOTS.has(root)) return true;
   if (isDev && root === "debug-diagnostics") return true;
+  if (userInitiatedSignOut) return true;
   return false;
 }
 

@@ -28,12 +28,15 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import { signOutAndRedirectToAuthLanding } from "./auth-app-sign-out";
+import { clearUserInitiatedSignOut, isUserInitiatedSignOutPending } from "./auth-sign-out-intent";
 
 beforeEach(() => {
   h.removePushTokensForUser.mockClear();
   h.clearCachedRole.mockClear();
   h.clearOwnerUnlockGrace.mockClear();
   h.signOut.mockClear();
+  h.signOut.mockImplementation(async (_opts?: { scope?: string }) => ({ error: null }));
+  clearUserInitiatedSignOut();
 });
 
 describe("signOutAndRedirectToAuthLanding", () => {
@@ -58,5 +61,32 @@ describe("signOutAndRedirectToAuthLanding", () => {
     expect(h.clearCachedRole).toHaveBeenCalledTimes(1);
     expect(h.clearOwnerUnlockGrace).toHaveBeenCalledTimes(1);
     expect(h.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("flags the sign-out as user-initiated before the session is cleared", async () => {
+    // AuthStackGate reads this while the sign-out is in flight; if it is not set by
+    // then, the gate redirects with `next` pointing at the screen being left and the
+    // next login reopens it (the log-out-from-Settings-lands-on-Settings bug).
+    h.signOut.mockImplementationOnce(async () => {
+      expect(isUserInitiatedSignOutPending()).toBe(true);
+      return { error: null };
+    });
+
+    await expect(
+      signOutAndRedirectToAuthLanding({ userId: "user_1", replace: vi.fn() }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("hands routing back to the gate when sign-out fails", async () => {
+    const replace = vi.fn();
+    h.signOut.mockRejectedValueOnce(new Error("network down"));
+
+    await expect(signOutAndRedirectToAuthLanding({ userId: "user_1", replace })).resolves.toEqual({
+      ok: false,
+      message: "network down",
+    });
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(isUserInitiatedSignOutPending()).toBe(false);
   });
 });
