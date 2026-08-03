@@ -394,6 +394,16 @@ function stripLeadingArticle(value: string): string {
   return cleanText(value).replace(/^(?:a|an|the)\s+/i, "");
 }
 
+// "Get 50% off one X" already supplies the quantity word ("one"), so a merchant
+// item typed as "any coffee drink" collides into "one any coffee drink" --
+// startsWithDeterminer() already treats "any" as a determiner (see above), but
+// stripLeadingArticle() deliberately doesn't strip it everywhere it's used
+// (e.g. "Buy any large coffee" reads fine). Scoped to just the two percent-off
+// offer-line composers below, where "one" already carries the quantity.
+function stripLeadingAnyForCountedPhrase(value: string): string {
+  return stripLeadingArticle(value).replace(/^any\s+/i, "");
+}
+
 function startsWithQuantityPhrase(value: string): boolean {
   const clean = cleanText(value).toLowerCase();
   if (!clean) return false;
@@ -514,7 +524,7 @@ export function buildCanonicalHeadlineFromFacts(facts: NormalizedDealFacts): str
   const item = cleanText(facts.buyItem);
   const value = facts.rewardValue;
   if (item && typeof value === "number" && Number.isFinite(value)) {
-    return `Get ${Math.round(value)}% off one ${lowerFirst(stripLeadingArticle(item))}`;
+    return `Get ${Math.round(value)}% off one ${lowerFirst(stripLeadingAnyForCountedPhrase(item))}`;
   }
   return "Review offer details";
 }
@@ -551,7 +561,7 @@ function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
     const item = cleanText(facts.buyItem);
     const value = facts.rewardValue;
     if (item && typeof value === "number" && Number.isFinite(value)) {
-      return `Save ${Math.round(value)}% on one ${lowerFirst(stripLeadingArticle(item))}.`;
+      return `Save ${Math.round(value)}% on one ${lowerFirst(stripLeadingAnyForCountedPhrase(item))}.`;
     }
     return "Review the offer details before publishing.";
   }
@@ -637,7 +647,8 @@ function canonicalPercentTerms(
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
   const location = stripEndingPunctuation(locationName);
-  return sentence(`Get ${discountPercent}% off one ${itemName}. Redeem only at ${location}. ${quantity}`);
+  const displayItem = lowerFirst(stripLeadingAnyForCountedPhrase(itemName));
+  return sentence(`Get ${discountPercent}% off one ${displayItem}. Redeem only at ${location}. ${quantity}`);
 }
 
 export function buildDealOfferContract(
@@ -1195,9 +1206,10 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
 
   const item = contract.singleItemDiscount?.itemName ?? "item";
   const discount = contract.singleItemDiscount?.discountPercent ?? 40;
+  const displayItem = lowerFirst(stripLeadingAnyForCountedPhrase(item));
   return [
-    `Get ${discount}% off one ${item}.`,
-    `Save ${discount}% on one ${item}.`,
+    `Get ${discount}% off one ${displayItem}.`,
+    `Save ${discount}% on one ${displayItem}.`,
   ];
 }
 

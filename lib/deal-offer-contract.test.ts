@@ -322,6 +322,24 @@ describe("buildDealOfferContract", () => {
     expect(contract.canonicalShortTerms).toContain("Get 40% off one latte.");
   });
 
+  it("drops a leading 'any' so it doesn't collide with the quantity word 'one'", () => {
+    // A merchant-typed item like "Any coffee drink" (auto-capitalized by the
+    // keyboard) used to render "Get 50% off one any coffee drink" /
+    // "...one Any coffee drink." -- ungrammatical, and case-mismatched between
+    // the two composers. "any" is dropped entirely; "one" already states the
+    // quantity, so "any coffee drink" and "one coffee drink" mean the same thing.
+    const contract = contractFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "Any coffee drink",
+      itemRetailValueCents: 600,
+    });
+
+    expect(contract.canonicalOfferLine).toBe("Get 50% off one coffee drink");
+    expect(contract.canonicalShortTerms).toContain("Get 50% off one coffee drink.");
+  });
+
   it("returns null for invalid deals before AI generation", () => {
     const input: DealEligibilityInput = {
       dealType: "PERCENT_OFF_SINGLE_ITEM",
