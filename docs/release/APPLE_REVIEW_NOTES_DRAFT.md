@@ -9,19 +9,25 @@ Consumer demo account:
 - Email: `[ADD REVIEWER CONSUMER EMAIL]`
 - Password: `[ADD IN APP STORE CONNECT ONLY]`
 
-Merchant demo account:
+Merchant demo account (active, no purchase needed):
 
 - Email: `[ADD REVIEWER MERCHANT EMAIL]`
 - Password: `[ADD IN APP STORE CONNECT ONLY]`
 - Required backend state: active merchant entitlement such as `trial_active`, `admin_trial_active`, `pro_active`, or `paid_active`.
 
+Second merchant account, approved but not yet activated (optional — only needed if the reviewer wants to see the trial-activation Checkout entry point described below):
+
+- Email: `[ADD REVIEWER MERCHANT EMAIL 2]`
+- Password: `[ADD IN APP STORE CONNECT ONLY]`
+- Required backend state: `approved_not_activated` with a claimed business application.
+
 ## Overview
 
 Twofer uses email/password login. Consumers discover live local offers, claim offers, and redeem in person by QR or staff verification. The first launch is Dallas-first, so the supplied reviewer accounts should be used to see seeded sample content.
 
-Twofer is free for consumers. Business accounts are reviewed before activation. A merchant subscription enables AI-assisted offer creation, offer publishing, claim credits, analytics, and redemption tools. Payment-card entry and subscription Checkout occur on Stripe's hosted website; Twofer does not collect card numbers.
+Twofer is free for consumers. Business accounts are manually reviewed and approved before they can activate. Deals are real-world, in-person food and retail offers redeemed at the merchant's physical location — Twofer's own service to the merchant (offer creation, publishing, analytics, and redemption tooling) is a business subscription, not a digital unlock consumed inside the app by the end consumer, so it is sold outside Apple's In-App Purchase system per Guideline 3.1.3(a)/(b) (real-world services and business-to-business tools). Payment-card entry and subscription Checkout occur entirely on Stripe's hosted website; Twofer's app never collects or stores card numbers.
 
-This 1.0.2 binary contains an iOS-only merchant activation path behind both a dedicated client flag and the server-controlled `ios_trial_checkout` kill switch. The server switch is OFF at launch, so the path returns the merchant to approval-email and Contact Support guidance and no usable Checkout URL is returned. Android cannot invoke or open this Checkout path. The merchant reviewer account is already active, so App Review can test every business tool without purchasing or entering payment details.
+An approved-but-not-activated merchant can start their subscription in one of two ways: a single-use activation link emailed at approval time, or — as of this build — an in-app "Activate" action visible on both iOS and Android that opens the same Stripe-hosted Checkout in the device browser/webview and returns to the app on completion. This in-app path is gated by a server-side switch (`ios_trial_checkout`, historically iOS-only in name, now shared by both platforms) that Twofer can disable remotely at any time without a new binary; it is currently enabled in production. The primary merchant reviewer account supplied above is already active, so App Review can test every business tool (offer creation, publishing, redemption, analytics) without going through Checkout or entering any payment details at all. The optional second account lets a reviewer see the in-app Checkout entry point itself if desired; tapping it opens Stripe's hosted page, and no purchase is required to complete the review.
 
 ## Consumer Test Steps
 
@@ -52,7 +58,7 @@ This 1.0.2 binary contains an iOS-only merchant activation path behind both a de
 - Account deletion: available in-app under consumer Settings and merchant Account.
 - AI-assisted offer creation: merchants review generated copy before publishing; deal facts remain authoritative.
 - Objectionable content & user safety: see "Content Moderation (Guideline 1.2)" below — report, hide/block, moderation queue, and terms acceptance are all in the build.
-- Billing: the iOS-only Stripe-hosted merchant activation path exists in the binary but is remotely disabled at launch. The supplied merchant account is active and requires no purchase. Android has no Checkout or external-payment path.
+- Billing: Stripe-hosted merchant activation Checkout is available in-app on both iOS and Android for approved-but-not-activated merchants only, behind a remote server switch Twofer can disable at any time. The supplied primary merchant account is already active and requires no purchase to review any business feature. Deals themselves are real-world, in-person offers; the merchant subscription is a business tool, not a consumer digital unlock, so it is intentionally outside Apple's In-App Purchase system (Guideline 3.1.3).
 
 ## Content Moderation (Guideline 1.2)
 
@@ -74,5 +80,6 @@ Twofer's content producers are verified business owners, not anonymous users; cu
 - [ ] Claim to Wallet QR/code works.
 - [ ] Merchant redeem works.
 - [ ] Support/privacy/terms URLs open successfully.
-- [ ] With `ios_trial_checkout` OFF, the iOS activation action returns to approval-email/support guidance and receives no usable Checkout URL.
 - [ ] Merchant reviewer access works without purchase or payment credentials.
+- [ ] (Optional) With the approved-not-activated second account, the in-app "Activate" action opens Stripe-hosted Checkout on both iOS and Android and does not require completing a purchase to finish review.
+- [ ] `ios_trial_checkout` is confirmed enabled in production before pasting this draft — if Dan has disabled it since this build shipped, remove the second-account section above and revert to the emailed-link-only description.
