@@ -22,6 +22,14 @@ type PublishOfferVersionBody = {
   deal_rows?: unknown;
   idempotency_key?: unknown;
   ad_spec?: unknown;
+  /**
+   * Present only when an ALREADY PUBLISHED deal is being revised (merchant "Edit
+   * deal" → regenerated creative). Absent means the create path: new deals are
+   * inserted. A revision appends a new offer version to this deal and repoints it,
+   * which is the only way regenerated creative can reach live customers — the
+   * poster projection reads ad_spec through deals.offer_version_id.
+   */
+  deal_id?: unknown;
 };
 
 type OfferDefinitionPayload = {
@@ -424,9 +432,27 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Missing idempotency_key" }, 400);
     }
 
+    const reviseDealId = typeof body.deal_id === "string" ? body.deal_id.trim() : "";
+    if (reviseDealId && !isUuid(reviseDealId)) {
+      return jsonResponse(req, { error: "Invalid deal_id" }, 400);
+    }
+
     const dealRows = coerceDealRows(body.deal_rows);
     if (dealRows.length < 1) {
       return jsonResponse(req, { error: "deal_rows must be a non-empty array" }, 400);
+    }
+    // A revision targets exactly one existing deal. Fanning one revision across
+    // several rows would need several deals to repoint, which no caller wants and
+    // the RPC does not model.
+    if (reviseDealId && dealRows.length !== 1) {
+      return jsonResponse(
+        req,
+        {
+          error: "A deal revision must send exactly one deal row.",
+          error_code: "INVALID_REVISE_DEAL_ROWS",
+        },
+        400,
+      );
     }
     if (dealRows.some((row) => row.business_id !== businessId)) {
       return jsonResponse(req, { error: "Deal row business_id mismatch" }, 403);
@@ -466,6 +492,28 @@ serve(async (req) => {
       .maybeSingle();
     if (businessError || !business || business.owner_id !== user.id) {
       return jsonResponse(req, { error: "Business not found for owner" }, 403);
+    }
+
+    if (reviseDealId) {
+      // The RPC re-checks this under the deal's row lock; checking here too is
+      // what turns "someone else's deal id" into a clear client error instead of
+      // a generic publish failure.
+      const { data: existingDeal, error: existingDealError } = await admin
+        .from("deals")
+        .select("id, business_id")
+        .eq("id", reviseDealId)
+        .maybeSingle();
+      if (existingDealError) throw existingDealError;
+      if (!existingDeal || existingDeal.business_id !== businessId) {
+        return jsonResponse(
+          req,
+          {
+            error: "That deal is no longer available to edit.",
+            error_code: "REVISE_DEAL_NOT_FOUND",
+          },
+          403,
+        );
+      }
     }
 
     const capabilities = await getBusinessCapabilities(admin as any, businessId);
@@ -531,20 +579,31 @@ serve(async (req) => {
       );
     }
 
-    const { data, error } = await admin.rpc("publish_offer_versioned_deal", {
-      p_business_id: businessId,
-      p_owner_user_id: user.id,
-      p_offer_definition: offerDefinition,
-      p_deal_rows: dealRows,
-      p_idempotency_key: idempotencyKey,
-      p_ad_spec: adSpec,
-    });
+    const rpcName = reviseDealId ? "revise_offer_versioned_deal" : "publish_offer_versioned_deal";
+    const { data, error } = reviseDealId
+      ? await admin.rpc("revise_offer_versioned_deal", {
+          p_business_id: businessId,
+          p_owner_user_id: user.id,
+          p_deal_id: reviseDealId,
+          p_offer_definition: offerDefinition,
+          p_deal_row: dealRows[0],
+          p_idempotency_key: idempotencyKey,
+          p_ad_spec: adSpec,
+        })
+      : await admin.rpc("publish_offer_versioned_deal", {
+          p_business_id: businessId,
+          p_owner_user_id: user.id,
+          p_offer_definition: offerDefinition,
+          p_deal_rows: dealRows,
+          p_idempotency_key: idempotencyKey,
+          p_ad_spec: adSpec,
+        });
 
     if (error) {
       const message = String(error.message ?? "");
       const missingRpc =
         error.code === "42883" ||
-        message.includes("publish_offer_versioned_deal") ||
+        message.includes(rpcName) ||
         message.toLowerCase().includes("could not find the function");
       if (missingRpc) {
         return jsonResponse(
@@ -556,7 +615,7 @@ serve(async (req) => {
           503,
         );
       }
-      console.error("[publish-offer-version] rpc failed", error);
+      console.error(`[publish-offer-version] ${rpcName} failed`, error);
       return jsonResponse(
         req,
         {
@@ -622,6 +681,7 @@ serve(async (req) => {
         business_id: businessId,
         deal_id: typeof firstDeal?.deal_id === "string" ? firstDeal.deal_id : null,
         context: {
+          publish_mode: reviseDealId ? "revise" : "create",
           deal_count: publishedDeals.length,
           ad_spec_version:
             typeof adSpecForContext?.adSpecVersion === "number" ? adSpecForContext.adSpecVersion : null,

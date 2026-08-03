@@ -3657,11 +3657,24 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errPublishFailed"));
       return;
     }
+    // Creative reaches customers ONLY through an offer version's ad_spec — the
+    // customer poster projection reads it off deals.offer_version_id. A plain
+    // deals UPDATE cannot mint one, so an edit carrying regenerated creative has
+    // to take the versioned publish path or the merchant's new ad is silently
+    // dropped while the save reports success. `generatedAd` is cleared when the
+    // editor loads a deal and after every save, so a non-null value here means
+    // "this session produced new creative", which is exactly the trigger.
+    const revisingCreative = Boolean(editingDealId) && generatedAd != null && offerDefinition != null;
+    // Whatever guards a published creative on the create path has to guard a
+    // revision too: a revision replaces the art on an ALREADY LIVE deal, so an
+    // unapproved or QA-blocked preview is worse there, not better. Edits with no
+    // new creative publish no ad_spec and keep skipping these.
+    const publishingCreative = !editingDealId || revisingCreative;
     if (usePhotoAsFinal && !merchantOriginalWarningAcknowledged) {
       showPublishError(t("createAi.errOriginalPhotoAckRequired"), "warning");
       return;
     }
-    if (!editingDealId && generatedAd && composedExactPresentationApprovalEnabled) {
+    if (publishingCreative && generatedAd && composedExactPresentationApprovalEnabled) {
       if (!adAccepted || !composedPresentationApprovalMatches) {
         trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
           screen: "create_ai",
@@ -3679,7 +3692,7 @@ export default function AiDealScreen() {
         return;
       }
     }
-    if (!editingDealId && automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
+    if (publishingCreative && automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
       const localizationApprovalMatches =
         selectedLocalizationApproval?.approved === true &&
         approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash;
@@ -3704,7 +3717,7 @@ export default function AiDealScreen() {
         return;
       }
     }
-    if (!editingDealId && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
+    if (publishingCreative && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
       trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
         screen: "create_ai",
         reason: "composite_qa_block",
@@ -3721,7 +3734,7 @@ export default function AiDealScreen() {
       );
       return;
     }
-    if (!editingDealId && selectedComposedScreenshotQaRequired) {
+    if (publishingCreative && selectedComposedScreenshotQaRequired) {
       trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
         screen: "create_ai",
         reason: "screenshot_qa_required",
@@ -4018,7 +4031,7 @@ export default function AiDealScreen() {
         reviewContext: publishPresentationReviewContext,
       });
       if (
-        !editingDealId &&
+        publishingCreative &&
         reviewGeneratedAd &&
         (composedExactPresentationApprovalEnabled ||
           (automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable)) &&
@@ -4070,7 +4083,7 @@ export default function AiDealScreen() {
       const composedScreenshotQaRequiredForPublish = ownerLanguagePreviewAvailable
         ? selectedComposedScreenshotQaRequired
         : publishComposedScreenshotQaRequired;
-      if (!editingDealId && composedCompositeQaForPublish.decision === "block") {
+      if (publishingCreative && composedCompositeQaForPublish.decision === "block") {
         showPublishError(
           t("createAi.errCompositeQaBlocked", {
             defaultValue: "This ad preview failed layout checks. Try another style or change the photo.",
@@ -4079,7 +4092,7 @@ export default function AiDealScreen() {
         );
         return;
       }
-      if (!editingDealId && composedScreenshotQaRequiredForPublish) {
+      if (publishingCreative && composedScreenshotQaRequiredForPublish) {
         showPublishError(
           t("createAi.errCompositeScreenshotQaRequired", {
             defaultValue: "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
@@ -4202,17 +4215,14 @@ export default function AiDealScreen() {
         quality_tier: quality.tier,
         ...eligibilityColumns,
       };
-      if (editingDealId) {
-        const updateRow = { ...baseRow, location_id: publishLocationIds[0] ?? null };
-        const updateResult = await updateDealWithCompatibility(updateRow);
-        if (updateResult.error) throw updateResult.error;
-        if (translationFallbackUsed) {
-          void translateDeal(editingDealId, sourceLocaleForPublish);
-        }
-      } else {
-        const locTargets =
-          publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
-        const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
+      // Shared by the create and revise paths so a revision can never publish a
+      // differently-built ad_spec than the one the create path would have.
+      // `reviseDealId` switches the server from inserting new deals to appending
+      // a version onto this one and repointing it.
+      const runVersionedPublish = async (
+        rows: (Record<string, unknown> & { business_id: string })[],
+        reviseDealId?: string,
+      ): Promise<PublishOfferVersionedDealResult> => {
         if (!offerDefinition) throw new Error("Missing offer definition for versioned publish.");
         const publishAdSpecOptions = {
           composedCard: composedCardPublishSpec,
@@ -4226,10 +4236,10 @@ export default function AiDealScreen() {
           idempotency_key:
             publishIdempotencyKeyRef.current ??
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
+          ...(reviseDealId ? { deal_id: reviseDealId } : {}),
         };
-        let versionedResult: PublishOfferVersionedDealResult;
         try {
-          versionedResult = await publishOfferVersionedDeal({
+          return await publishOfferVersionedDeal({
             ...publishBodyBase,
             ad_spec: buildOfferVersionPublishAdSpec(
               "create_ai",
@@ -4245,7 +4255,7 @@ export default function AiDealScreen() {
           trackEvent("deal_publish_poster_spec_fallback_used", {
             businessId,
             reason_codes: publishReasonCodes(publishErr).join(","),
-            source: "create_ai",
+            source: reviseDealId ? "edit_ai" : "create_ai",
           });
           const standardCardAdForPublish = adForPublishSpecWithPoster
             ? {
@@ -4253,7 +4263,7 @@ export default function AiDealScreen() {
                 poster: undefined,
               }
             : null;
-          versionedResult = await publishOfferVersionedDeal({
+          return await publishOfferVersionedDeal({
             ...publishBodyBase,
             ad_spec: buildOfferVersionPublishAdSpec(
               "create_ai",
@@ -4263,6 +4273,26 @@ export default function AiDealScreen() {
             ),
           });
         }
+      };
+      if (editingDealId) {
+        const updateRow = { ...baseRow, location_id: publishLocationIds[0] ?? null };
+        if (revisingCreative) {
+          // The deal is already live and its audience was notified when it first
+          // published, so a revision stays silent — re-pushing on every creative
+          // fix would train customers to ignore the channel.
+          await runVersionedPublish([updateRow], editingDealId);
+        } else {
+          const updateResult = await updateDealWithCompatibility(updateRow);
+          if (updateResult.error) throw updateResult.error;
+        }
+        if (translationFallbackUsed) {
+          void translateDeal(editingDealId, sourceLocaleForPublish);
+        }
+      } else {
+        const locTargets =
+          publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
+        const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
+        const versionedResult = await runVersionedPublish(rows);
         const dealsOut = versionedResult.deals.map((row) => ({
           id: row.deal_id,
           shouldNotify: row.idempotency_replayed !== true,
