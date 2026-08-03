@@ -6,7 +6,7 @@ Docs should link here instead of restating these facts (audit F-012).
 
 ## App
 
-- Version: `1.0.2`
+- Version: `1.0.3`
 - Android versionCode: `49`
 - iOS buildNumber (app.json): `not set in app.json (managed via EAS)`
 - Android package: `com.unvmex2.twoforone`
