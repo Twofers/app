@@ -450,12 +450,17 @@ const POSTER_SHORT_FORMAT_WORDS = new Set([
 
 function posterFriendlyItemName(name: string, locale: SupportedLocale): string {
   if (locale !== "en-US") return name;
-  const match = /^([A-Za-z]+)\s*\(([^)]+)\)$/.exec(name.trim());
+  // The format word is the last word before the parenthetical, not necessarily
+  // the only one: a real catalog name carries the shop's own branding in front
+  // of it ("The Colonel's Shot (Espresso)"). The leading group is empty or ends
+  // on whitespace so a word merely ENDING in a format word cannot be split
+  // ("Bigshot (Espresso)" stays put).
+  const match = /^((?:.*\s)?)([A-Za-z]+)\s*\(([^)]+)\)$/.exec(name.trim());
   if (!match) return name;
-  const [, format, product] = match;
+  const [, prefix, format, product] = match;
   if (!POSTER_SHORT_FORMAT_WORDS.has(format.toLowerCase())) return name;
   if (product.trim().split(/\s+/).length > 2) return name;
-  return `${product.trim()} ${format.trim()}`;
+  return `${prefix}${product.trim()} ${format.trim()}`;
 }
 
 export function buildPosterOfferLinesFromOfferDefinition(

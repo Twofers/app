@@ -162,6 +162,35 @@ describe("poster policy", () => {
     });
   });
 
+  it("reorders a branded short-format item name, and leaves lookalikes alone", () => {
+    // The first cut of this rule only matched a BARE "Shot (Espresso)", but a
+    // real catalog name carries the shop's branding in front of the format word.
+    // Measured against production on 2026-08-03: the live Cedar & Bean deal
+    // stored "The Colonel's Shot (Espresso)" and still printed the backwards
+    // "SHOT (ESPRESSO)", because the name never matched and the clamp merely
+    // shortened it.
+    const branded = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 75,
+      itemDescription: "The Colonel's Shot (Espresso)",
+    });
+    expect(buildPosterOfferLinesFromOfferDefinition(branded)).toEqual({
+      offer_line_1: "75% OFF",
+      offer_line_2: "COLONEL'S ESPRESSO SHOT",
+    });
+
+    // A word that merely ENDS in a format word is not a format word, so the
+    // leading group only matches on a word boundary.
+    const lookalike = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 75,
+      itemDescription: "Bigshot (Espresso)",
+    });
+    expect(buildPosterOfferLinesFromOfferDefinition(lookalike).offer_line_2).toBe("BIGSHOT (ESPRESSO)");
+  });
+
   it("keeps the product noun when a long item name will not fit the offer line", () => {
     // R9: offer lines are the poster's FACT channel, but clampPosterText fills from the
     // FRONT, so a head-final item name keeps its modifiers and loses its noun. Observed on
