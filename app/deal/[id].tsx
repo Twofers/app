@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Platform, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { getStackFooterMetrics, useScreenInsets, Spacing, type TabBarPlatform } from "../../lib/screen-layout";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -167,6 +167,7 @@ export default function DealDetail() {
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "failed">("loading");
   const { isLoggedIn, userId, loading: authLoading } = useBusiness();
   const [activeClaim, setActiveClaim] = useState<ActiveClaim | null>(null);
+  const claimCheckedDealIdRef = useRef<string | null>(null);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -363,7 +364,7 @@ export default function DealDetail() {
         .select("id,token,expires_at,short_code")
         .eq("deal_id", dealId)
         .eq("user_id", ownerUserId)
-        .eq("claim_status", "active")
+        .in("claim_status", ["active", "redeeming"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -477,19 +478,31 @@ export default function DealDetail() {
     return () => { cancelled = true; };
   }, [userId, deal?.business_id]);
 
-  useEffect(() => {
-    if (!userId || !deal?.id) {
-      setActiveClaim(null);
-      return;
-    }
-    let cancelled = false;
-    setActiveClaim(null);
-    (async () => {
-      const existing = await loadActiveClaimForDeal(deal.id, userId);
-      if (!cancelled) setActiveClaim(existing);
-    })();
-    return () => { cancelled = true; };
-  }, [deal?.id, loadActiveClaimForDeal, userId]);
+  // Re-checked on focus rather than on mount alone: this screen stays mounted
+  // behind the wallet (goToWalletForClaim pushes), so a claim released there
+  // would otherwise leave the CTA offering "View your deal" for a claim that no
+  // longer exists. The home feed refreshes its claim map the same way.
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId || !deal?.id) {
+        setActiveClaim(null);
+        return;
+      }
+      let cancelled = false;
+      // Blank the CTA only when the deal itself changed. On a refocus the known
+      // state stays put so the button doesn't flicker back to "Claim" and invite
+      // a second claim while the re-check is still in flight.
+      if (claimCheckedDealIdRef.current !== deal.id) {
+        claimCheckedDealIdRef.current = deal.id;
+        setActiveClaim(null);
+      }
+      void (async () => {
+        const existing = await loadActiveClaimForDeal(deal.id, userId);
+        if (!cancelled) setActiveClaim(existing);
+      })();
+      return () => { cancelled = true; };
+    }, [deal?.id, loadActiveClaimForDeal, userId]),
+  );
 
   useEffect(() => {
     if (!deal?.id || !customerLocaleResolutionEnabled) {
