@@ -114,8 +114,28 @@ describe("buildDeterministicRevisionFallbackCopy", () => {
       avoidHeadlines: ["Get 50% off one breakfast sandwich"],
     });
 
-    expect(copy.headline).toBe("50% sandwich savings");
+    expect(copy.headline).toBe("Save 50% on sandwich");
     expect(copy.short_description).toContain("50% on one breakfast sandwich");
+    expect(validateAiCopyAgainstOffer(copy, contract)).toMatchObject({ valid: true });
+  });
+
+  it("never falls back to a formulaic 'X% item savings' headline (regression for the live 'MAJOR'S MUG'/'50% LATTE SAVINGS' case, 2026-08-05)", () => {
+    const contract = contractFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "latte",
+      itemRetailValueCents: 500,
+    });
+
+    const copy = buildDeterministicRevisionFallbackCopy({
+      contract,
+      feedback: "Change the top headline so it sounds like a real ad based on the full offer.",
+      avoidHeadlines: [],
+    });
+
+    expect(copy.headline.toLowerCase()).not.toMatch(/\bsavings\b/);
+    expect(copy.headline).toBe("Save 50% on latte");
     expect(validateAiCopyAgainstOffer(copy, contract)).toMatchObject({ valid: true });
   });
 });

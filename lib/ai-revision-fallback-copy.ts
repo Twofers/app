@@ -5,6 +5,7 @@ import {
   type AiDealCopyVariant,
   type DealOfferContract,
 } from "./deal-offer-contract.ts";
+import { isFormulaicValueHeadline } from "./ad-copy-style-gate.ts";
 
 const ITEM_LABEL_STOP_WORDS = new Set([
   "a",
@@ -243,7 +244,14 @@ export function buildDeterministicRevisionFallbackCopy(params: {
   const candidates = buildHeadlineCandidates(params.contract, params.feedback);
   const validCandidates = candidates
     .map((headline) => buildCandidate(params.contract, headline))
-    .filter((candidate) => validateAiCopyAgainstOffer(candidate, params.contract).valid);
+    .filter((candidate) => validateAiCopyAgainstOffer(candidate, params.contract).valid)
+    // Never ship a formulaic "X% item savings"-style headline from this fallback —
+    // it's exactly the pattern the normal AI-copy path's POSTER_HEADLINE_FORMULAIC_VALUE
+    // gate rejects (lib/ad-copy-style-gate.ts), but this deterministic path only checked
+    // offer-fact correctness, not style, so it slipped through live (observed on-device
+    // 2026-08-05: "50% LATTE SAVINGS"). The candidate list already has a non-formulaic
+    // option ("X for less"); this just stops the formulaic one from being chosen.
+    .filter((candidate) => !isFormulaicValueHeadline(candidate.headline));
 
   const changed = validCandidates.find((candidate) => !avoided.has(normalize(candidate.headline)));
   if (changed) return changed;
