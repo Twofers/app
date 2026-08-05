@@ -46,6 +46,11 @@ export interface StructuredGenerationRequest<TSchema> {
   generationRunId: string;
   promptVersion: string;
   reasoningLevel?: AiReasoningLevel;
+  // Gemini-only sampling temperature (see AI_GEMINI_QA_TEMPERATURE below). Never
+  // read by the OpenAI path — gpt-5 family rejects a non-default temperature
+  // (see chatCompletionTuning in openai-chat-model.ts). Populated by the router,
+  // not by callers.
+  temperature?: number;
 }
 
 export interface ProviderAttempt {
@@ -94,6 +99,13 @@ export type AiTextProviderConfig = {
   fallbackTimeoutMs: number;
   transientRetryMax: number;
   retryAfterFullTimeout: boolean;
+  // Optional (not required) so pre-existing hand-built AiTextProviderConfig
+  // object literals elsewhere (e.g. ai-generate-ad-variants/index.ts's
+  // makeImageQaConfig, which is under docs/ai-poster-core-lock.json and out of
+  // scope for this change) keep typechecking without adding this field.
+  // Treated as false when omitted — see the `?? false` read in
+  // generateStructuredText's retry decision.
+  retryOutputInvalidEnabled?: boolean;
 };
 
 export type AiTextProviderDeps = {
@@ -121,6 +133,13 @@ function envNumber(env: EnvReader, name: string, fallback: number): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
 }
 
+function envOptionalNumber(env: EnvReader, name: string): number | undefined {
+  const raw = env.get(name);
+  if (raw == null || raw.trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function parseProvider(value: string | null | undefined, fallback: AiProviderName): AiProviderName {
   const normalized = (value ?? "").trim().toLowerCase();
   return normalized === "gemini" || normalized === "openai" ? normalized : fallback;
@@ -143,8 +162,25 @@ export function resolveAiTextProviderConfig(env: EnvReader = edgeEnv()): AiTextP
     fallbackTimeoutMs: envNumber(env, "AI_TEXT_FALLBACK_TIMEOUT_MS", 14_000),
     transientRetryMax: Math.min(1, envNumber(env, "AI_TRANSIENT_RETRY_MAX", 1)),
     retryAfterFullTimeout: envFlag(env, "AI_RETRY_AFTER_FULL_TIMEOUT", false),
+    // Default false: errorClass "provider_output_invalid" (empty content / JSON
+    // parse failure) historically neither retried nor fell back. When enabled,
+    // it becomes eligible for one same-provider retry, still bounded by the
+    // existing transientRetryMax ceiling above. See the retry decision in
+    // generateStructuredText.
+    retryOutputInvalidEnabled: envFlag(env, "AI_RETRY_OUTPUT_INVALID_ENABLED", false),
   };
 }
+
+// Operations whose provider call is treated as an LLM-judge rather than a
+// creative generation. AI_GEMINI_QA_TEMPERATURE, when set, is applied to
+// these only (and only when the resolved provider for the attempt is
+// Gemini) — judge-style calls benefit from a lower, more deterministic
+// temperature than default creative generation.
+const GEMINI_QA_TEMPERATURE_OPERATIONS = new Set<AiOperation>([
+  "candidate_judge",
+  "image_qa",
+  "translation_qa",
+]);
 
 export function operationCapability(operation: AiOperation): AiProviderCapability {
   if (operation === "candidate_judge" || operation === "translation_qa") return "candidate_judging";
@@ -224,6 +260,9 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
   const primaryModel = providerModel(config, primaryProvider);
   const attempts: ProviderAttempt[] = [];
   let fallbackReason: AiProviderErrorClass | undefined;
+  const geminiQaTemperature = GEMINI_QA_TEMPERATURE_OPERATIONS.has(request.operation)
+    ? envOptionalNumber(env, "AI_GEMINI_QA_TEMPERATURE")
+    : undefined;
 
   const runWithBreaker = async (provider: AiProviderName, timeoutMs: number, isFallback: boolean) => {
     const model = providerModel(config, provider);
@@ -233,6 +272,7 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
       systemPrompt: request.systemPrompt,
       userPrompt: request.userPrompt,
       maxOutputTokens: request.maxOutputTokens,
+      reasoningLevel: request.reasoningLevel,
       completedCostUsd: deps.completedCostUsd,
       isRevision: deps.isRevision,
       budget,
@@ -273,7 +313,21 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
     // AI_JUDGE_TIMEOUT_MS via the judge's config override) so they can be changed
     // without a deploy. Callers that appear to set their own timeout are documenting
     // intent only — see the ad-copy call in ai-generate-ad-variants/index.ts.
-    const providerRequest = { ...request, timeoutMs };
+    const providerRequest = {
+      ...request,
+      timeoutMs,
+      // Only threaded onto the Gemini path — see the field comment on
+      // StructuredGenerationRequest.temperature and the openai-chat-model.ts
+      // gpt-5-family temperature rejection this deliberately avoids.
+      temperature: provider === "gemini" ? geminiQaTemperature : undefined,
+    };
+    // Hoisted above the provider call (rather than computed inside the catch
+    // block) so a FAILED attempt's latencyMs reflects real elapsed time. It
+    // previously read Date.now() inside the catch, after the call had already
+    // failed, so every failed attempt logged ~0ms latency regardless of how
+    // long the provider actually took.
+    const startedAt = new Date().toISOString();
+    const startedMs = Date.now();
     try {
       const result = await runProvider({
         provider,
@@ -295,14 +349,13 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
             errorClass: "unknown",
             message: `${provider} ${capability} request failed before a typed provider error was returned.`,
           });
-      const startedAt = new Date().toISOString();
       attempts.push(
         makeFailedAttempt({
           request: providerRequest,
           provider,
           model,
           startedAt,
-          startedMs: Date.now(),
+          startedMs,
           error: providerError,
           estimatedCostUsd: 0,
         }),
@@ -342,9 +395,12 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
               errorClass: "unknown",
               message: `${primaryProvider} ${capability} request failed before a typed provider error was returned.`,
             });
+        const retryEligible =
+          isRetryableTransientError(primaryError.errorClass) ||
+          ((config.retryOutputInvalidEnabled ?? false) && primaryError.errorClass === "provider_output_invalid");
         if (
           attemptIndex + 1 < maxAttempts &&
-          isRetryableTransientError(primaryError.errorClass) &&
+          retryEligible &&
           (primaryError.errorClass !== "timeout" || config.retryAfterFullTimeout)
         ) {
           await delay(150 + Math.floor(Math.random() * 125));

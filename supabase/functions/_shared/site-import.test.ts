@@ -354,6 +354,59 @@ describe("htmlToMenuText", () => {
     const text = htmlToMenuText(`<!-- <script> --><p>Espresso $4</p>`);
     expect(text).toContain("Espresso");
   });
+
+  describe("AI_MENU_TEXT_V2_ENABLED flag", () => {
+    it("defaults to v1 (single-line) behavior when no override is passed (no Deno global under vitest)", () => {
+      const html = `<h1>Menu</h1><p>Latte</p><p>Espresso</p>`;
+      expect(htmlToMenuText(html)).toBe(htmlToMenuText(html, { v2Enabled: false }));
+      expect(htmlToMenuText(html)).not.toContain("\n");
+    });
+
+    it("v2Enabled: false collapses ALL whitespace to a single line (byte-identical current behavior)", () => {
+      const html = `
+        <h1>Espresso &amp; Milk</h1>
+        <p>Latte &#8212; $5</p>
+        <div>Section A<ul><li>Item one</li><li>Item two</li></ul></div>`;
+      const text = htmlToMenuText(html, { v2Enabled: false });
+      expect(text).not.toContain("\n");
+      expect(text).toBe(text.replace(/\s+/g, " "));
+      expect(text).toContain("Espresso & Milk");
+      expect(text).toContain("Item one");
+      expect(text).toContain("Item two");
+    });
+
+    it("v2Enabled: true emits newlines at block-element boundaries", () => {
+      const html = `<h1>Menu</h1><p>Latte $5</p><div>Section A</div><ul><li>Item one</li><li>Item two</li></ul>`;
+      const text = htmlToMenuText(html, { v2Enabled: true });
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      expect(lines).toEqual(["Menu", "Latte $5", "Section A", "Item one", "Item two"]);
+    });
+
+    it("v2Enabled: true still collapses intra-line whitespace (multiple spaces/tabs -> one space)", () => {
+      const html = `<p>Latte   \t  with   extra   spaces</p>`;
+      const text = htmlToMenuText(html, { v2Enabled: true });
+      expect(text).toBe("Latte with extra spaces");
+    });
+
+    it("v2Enabled: true collapses 3+ consecutive newlines down to 2", () => {
+      const html = `<p>A</p><br><br><br><br><p>B</p>`;
+      const text = htmlToMenuText(html, { v2Enabled: true });
+      expect(text).not.toMatch(/\n{3,}/);
+      expect(text).toBe("A\n\nB");
+    });
+
+    it("v2Enabled: true does not put a newline before block boundaries introduced by inline tags", () => {
+      // Inline tags (not in the block list) still collapse to a space, not a newline.
+      const html = `<p>Latte <b>with</b> <em>foam</em></p>`;
+      const text = htmlToMenuText(html, { v2Enabled: true });
+      expect(text).toBe("Latte with foam");
+    });
+
+    it("v2Enabled: true still caps at MAX_MENU_TEXT_CHARS", () => {
+      const html = "<p>" + "word ".repeat(10000) + "</p>";
+      expect(htmlToMenuText(html, { v2Enabled: true }).length).toBeLessThanOrEqual(MAX_MENU_TEXT_CHARS);
+    });
+  });
 });
 
 describe("clampMenuPromptText", () => {

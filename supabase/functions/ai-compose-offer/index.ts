@@ -13,11 +13,19 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { formatRepairInstruction, validateComposeOutput } from "./validate-output.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const DEFAULT_COOLDOWN_SEC = SHARED_COOLDOWN;
 const DEFAULT_DEDUP_SEC = Number(Deno.env.get("AI_DEDUP_WINDOW_SECONDS") ?? "600");
+
+/**
+ * Master gate for output validation + repair re-ask, menu grounding/tone, and
+ * Whisper vocabulary bias. Default OFF: with this unset (or not "true"), behavior
+ * is byte-identical to the pre-hardening function.
+ */
+const COMPOSE_V2_GATES_ENABLED = Deno.env.get("AI_COMPOSE_V2_GATES_ENABLED") === "true";
 
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
@@ -175,7 +183,54 @@ function estimateAudioSecondsFromBase64(base64Audio: string): number {
   return Math.max(1, Math.ceil(approxBytes / 16_000));
 }
 
-async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<{
+type ComposeMenuItem = { name: string; price_text: string | null; size_options: string[] };
+
+/**
+ * Owner's saved menu items ground compose in real merchant items (mirrors the
+ * pattern in ai-generate-ad-variants/index.ts) and, when AI_COMPOSE_V2_GATES_ENABLED
+ * is on, bias Whisper transcription toward the business's real item names.
+ * Best-effort: a fetch failure must never block generation.
+ */
+async function fetchComposeMenuItems(admin: any, businessId: string): Promise<ComposeMenuItem[]> {
+  try {
+    const { data: menuRows } = await admin
+      .from("business_menu_items")
+      .select("name,price_text,size_options")
+      .eq("business_id", businessId)
+      .order("sort_order", { ascending: true })
+      .limit(30);
+    return (menuRows ?? [])
+      .map((row: Record<string, unknown>) => ({
+        name: typeof row?.name === "string" ? row.name.trim() : "",
+        price_text: typeof row?.price_text === "string" && row.price_text.trim() ? row.price_text.trim() : null,
+        size_options: Array.isArray(row?.size_options)
+          ? (row.size_options as unknown[]).filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          : [],
+      }))
+      .filter((item: ComposeMenuItem) => item.name.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function formatComposeMenuBlock(items: ComposeMenuItem[]): string {
+  if (items.length === 0) return "";
+  const lines = items.slice(0, 30).map((item) => {
+    const sizePart = item.size_options.length > 0 ? ` (${item.size_options.join(", ")})` : "";
+    const pricePart = item.price_text ? ` - ${item.price_text}` : "";
+    return `- ${item.name}${sizePart}${pricePart}`;
+  });
+  return ["Known menu items:", ...lines].join("\n");
+}
+
+/** Business name + item names as OpenAI Whisper's vocabulary-bias `prompt` field. Capped ~800 chars. */
+function formatWhisperVocabularyPrompt(businessName: string, items: ComposeMenuItem[]): string {
+  const names = items.map((item) => item.name).filter(Boolean).slice(0, 30);
+  const prompt = [businessName, ...names].filter(Boolean).join(", ");
+  return prompt.length > 800 ? prompt.slice(0, 800) : prompt;
+}
+
+async function transcribeAudio(openAiKey: string, base64Audio: string, vocabularyPrompt?: string): Promise<{
   text: string;
   usage: AiUsageInput | null;
   openaiRequestId: string | null;
@@ -189,6 +244,9 @@ async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<
     const form = new FormData();
     form.append("file", blob, "clip.m4a");
     form.append("model", WHISPER_MODEL);
+    if (vocabularyPrompt) {
+      form.append("prompt", vocabularyPrompt);
+    }
     return form;
   };
   const { response: res } = await fetchOpenAiWithFallback({
@@ -329,6 +387,12 @@ serve(async (req) => {
     const transcribeOnly = body.transcribe_only === true;
     const generate_poster_image = body.generate_poster_image === true;
 
+    // Fetched only under the flag: menu grounding (compose prompt) and Whisper
+    // vocabulary bias (transcription) both read from this same list.
+    const composeMenuItems: ComposeMenuItem[] = COMPOSE_V2_GATES_ENABLED
+      ? await fetchComposeMenuItems(admin, business_id)
+      : [];
+
     if (transcribeOnly) {
       if (!audioBase64 || audioBase64.length > 700_000) {
         return new Response(
@@ -386,7 +450,10 @@ serve(async (req) => {
         requestGroupId: crypto.randomUUID(),
       };
       try {
-        const txResult = await transcribeAudio(openAiKey, audioBase64);
+        const vocabularyPrompt = COMPOSE_V2_GATES_ENABLED
+          ? formatWhisperVocabularyPrompt(typeof biz.name === "string" ? biz.name : "", composeMenuItems)
+          : undefined;
+        const txResult = await transcribeAudio(openAiKey, audioBase64, vocabularyPrompt);
         await logComposeCost(costContext, {
           feature: "voice_transcription",
           model: WHISPER_MODEL,
@@ -699,9 +766,19 @@ serve(async (req) => {
       "- recommended_offer: offer_type, item_name, display_offer (short plain sentence describing the deal clearly).",
     ].join("\n");
 
+    const composeMenuBlock = COMPOSE_V2_GATES_ENABLED ? formatComposeMenuBlock(composeMenuItems) : "";
+    const composeToneLine = COMPOSE_V2_GATES_ENABLED && typeof biz.tone === "string" && biz.tone.trim()
+      ? `Tone preference: ${biz.tone.trim()}`
+      : "";
+
     const userPrompt = [
       `Business: ${biz.name}. Category: ${biz.category ?? "n/a"}. Location: ${biz.location}.`,
       biz.short_description ? `About: ${biz.short_description}` : "",
+      composeToneLine,
+      composeMenuBlock,
+      composeMenuBlock
+        ? "Map any detected or typed item onto a real menu item name above when it clearly matches. If nothing above matches, keep the owner's wording and set low_confidence: true."
+        : "",
       combinedText ? `Owner request:\n${combinedText}` : "No text request; infer from image only.",
     ]
       .filter(Boolean)
@@ -759,17 +836,109 @@ serve(async (req) => {
       );
     }
 
-    const parsed = generation.value && typeof generation.value === "object"
+    let parsed = generation.value && typeof generation.value === "object"
       ? generation.value as Record<string, unknown>
       : {};
-    const usageAttempt = representativeAttempt(generation.attempts);
-    const inTok = usageAttempt?.inputTokens ?? null;
-    const outTok = usageAttempt?.outputTokens ?? null;
-    const estCost = usageAttempt?.estimatedCostUsd ?? null;
+    let usageAttempt = representativeAttempt(generation.attempts);
+    let inTok = usageAttempt?.inputTokens ?? null;
+    let outTok = usageAttempt?.outputTokens ?? null;
+    let estCost = usageAttempt?.estimatedCostUsd ?? null;
 
-    const variants = parsed.ad_variants;
-    const offer = parsed.recommended_offer as Record<string, unknown> | undefined;
+    let variants = parsed.ad_variants;
+    let offer = parsed.recommended_offer as Record<string, unknown> | undefined;
+
+    // AI_COMPOSE_V2_GATES_ENABLED: validate the parsed shape against the prompt's own
+    // stated rules (offer_type allow-list, length limits, banned terms, strong-deal-only)
+    // and do ONE cheap repair re-ask naming exactly the violations. A repair that still
+    // fails validation falls through to the existing INVALID_AI_SHAPE path below — no loop.
+    let composeV2InitialViolationCodes: string[] | null = null;
+    let composeV2FinalViolationCodes: string[] | null = null;
+    let composeV2Repaired = false;
+
+    const composeV2BasicShapeOk = (v: unknown, o: Record<string, unknown> | undefined): boolean =>
+      Array.isArray(v) && v.length === 2 && !!o?.offer_type;
+
+    if (COMPOSE_V2_GATES_ENABLED && composeV2BasicShapeOk(variants, offer)) {
+      const initialValidation = validateComposeOutput({
+        offerTypes: OFFER_TYPES,
+        offer: offer ?? null,
+        variants,
+      });
+      if (!initialValidation.ok) {
+        composeV2InitialViolationCodes = initialValidation.violations.map((v) => v.code);
+        try {
+          const repairUserPrompt = [
+            userPrompt,
+            "",
+            "Previous output (JSON):",
+            JSON.stringify({ recommended_offer: offer, ad_variants: variants }),
+            "",
+            formatRepairInstruction(initialValidation.violations),
+          ].join("\n");
+          const repairGeneration = await generateStructuredText<typeof COMPOSE_OFFER_SCHEMA, Record<string, unknown>>({
+            operation: "compose_offer",
+            systemPrompt,
+            userPrompt: repairUserPrompt,
+            imageInputs: imageInput ? [imageInput] : undefined,
+            jsonSchema: COMPOSE_OFFER_SCHEMA,
+            maxOutputTokens: 1200,
+            timeoutMs: 12_000,
+            generationRunId: costContext.requestGroupId,
+            promptVersion: PROMPT_VERSION,
+            reasoningLevel: "medium",
+          }, {
+            openAiApiKey: openAiKey,
+            geminiApiKey,
+            admin,
+            config: providerConfig,
+          });
+          await logComposeProviderAttempts({ ctx: costContext, attempts: repairGeneration.attempts });
+
+          const repairedParsed = repairGeneration.value && typeof repairGeneration.value === "object"
+            ? repairGeneration.value as Record<string, unknown>
+            : {};
+          const repairedVariants = repairedParsed.ad_variants;
+          const repairedOffer = repairedParsed.recommended_offer as Record<string, unknown> | undefined;
+
+          const repairedValidation = composeV2BasicShapeOk(repairedVariants, repairedOffer)
+            ? validateComposeOutput({ offerTypes: OFFER_TYPES, offer: repairedOffer ?? null, variants: repairedVariants })
+            : null;
+
+          if (repairedValidation?.ok) {
+            parsed = repairedParsed;
+            variants = repairedVariants;
+            offer = repairedOffer;
+            const repairUsageAttempt = representativeAttempt(repairGeneration.attempts);
+            usageAttempt = repairUsageAttempt;
+            inTok = repairUsageAttempt?.inputTokens ?? null;
+            outTok = repairUsageAttempt?.outputTokens ?? null;
+            estCost = repairUsageAttempt?.estimatedCostUsd ?? null;
+            composeV2Repaired = true;
+          } else {
+            composeV2FinalViolationCodes = repairedValidation
+              ? repairedValidation.violations.map((v) => v.code)
+              : ["REPAIR_SHAPE_INVALID"];
+            // Force the existing shape gate below to reject, without discarding the
+            // original `parsed` used for the failure log's response_payload.
+            variants = [];
+            offer = undefined;
+          }
+        } catch {
+          composeV2FinalViolationCodes = ["REPAIR_REQUEST_FAILED"];
+          variants = [];
+          offer = undefined;
+        }
+      }
+    }
+
     if (!Array.isArray(variants) || variants.length !== 2 || !offer?.offer_type) {
+      const composeV2FailurePayload = (composeV2InitialViolationCodes || composeV2FinalViolationCodes)
+        ? {
+          ...parsed,
+          compose_v2_initial_violation_codes: composeV2InitialViolationCodes,
+          compose_v2_final_violation_codes: composeV2FinalViolationCodes,
+        }
+        : parsed;
       await admin.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
@@ -785,7 +954,7 @@ serve(async (req) => {
         input_token_count: inTok,
         output_token_count: outTok,
         estimated_cost_usd: estCost,
-        response_payload: parsed,
+        response_payload: composeV2FailurePayload,
       });
       return new Response(
         JSON.stringify({
@@ -799,6 +968,12 @@ serve(async (req) => {
     const low = !!parsed.low_confidence;
     const offerType = String(offer.offer_type);
     const logPayload = { ...parsed, input_type: input_mode } as Record<string, unknown>;
+    if (COMPOSE_V2_GATES_ENABLED) {
+      logPayload.compose_v2_repaired = composeV2Repaired;
+      if (composeV2InitialViolationCodes) {
+        logPayload.compose_v2_initial_violation_codes = composeV2InitialViolationCodes;
+      }
+    }
 
     const poster_storage_path: string | null = null;
     if (generate_poster_image) {

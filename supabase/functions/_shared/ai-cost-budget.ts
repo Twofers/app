@@ -34,6 +34,32 @@ const TEXT_PRICING: Record<string, TextPricing> = {
   "openai:gpt-5.4-nano": { inputPer1M: 0.2, cachedInputPer1M: 0.02, outputPer1M: 1.6, reasoningPer1M: 1.6 },
   "openai:gpt-4o-mini": { inputPer1M: 0.15, cachedInputPer1M: 0.075, outputPer1M: 0.6 },
   "gemini:gemini-3.5-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
+  // gemini-3.1-flash / gemini-3-flash / gemini-2.5-flash are allowlisted text
+  // models (see GEMINI_TEXT_MODEL_ALLOWLIST in gemini-text-provider.ts) but had
+  // no entry here, so estimateTextGenerationCostUsd/projectStructuredTextCost
+  // silently returned $0 for them (no pricing -> no budget enforcement, no
+  // spend visibility). Exact published per-token rates for these specific
+  // variants were not sourced when this entry was added; mirroring the
+  // gemini-3.5-flash rates as a conservative (non-zero) placeholder closes the
+  // accounting gap. Update with exact published rates when available.
+  "gemini:gemini-3.1-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
+  "gemini:gemini-3-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
+  "gemini:gemini-2.5-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
+};
+
+// Mirrors GPT5_REASONING_RESERVE_TOKENS in openai-chat-model.ts and
+// GEMINI_THINKING_RESERVE_TOKENS in gemini-text-provider.ts: both providers
+// reserve headroom above the caller's visible-output budget for
+// reasoning/thinking tokens, and that reserve is real spend the caller will
+// be billed for if the model uses it. A local literal union (rather than
+// importing AiReasoningLevel from ai-text-provider.ts) avoids a value/type
+// import cycle between the two modules.
+type ReasoningLevel = "none" | "low" | "medium" | "high";
+const REASONING_RESERVE_TOKENS: Record<ReasoningLevel, number> = {
+  none: 0,
+  low: 512,
+  medium: 2048,
+  high: 4096,
 };
 
 function edgeEnv(): EnvReader {
@@ -97,16 +123,23 @@ export function projectStructuredTextCost(params: {
   systemPrompt: string;
   userPrompt: string;
   maxOutputTokens: number;
+  reasoningLevel?: ReasoningLevel;
   completedCostUsd?: number;
   isRevision?: boolean;
   budget?: AiCostBudgetConfig;
 }): AiCostProjection {
   const inputTokens = estimateTokensFromText(`${params.systemPrompt}\n${params.userPrompt}`);
+  // The provider call reserves reasoning/thinking headroom on top of
+  // maxOutputTokens (see chatCompletionTuning / geminiMaxOutputTokens) and is
+  // billed for whatever portion of that reserve it actually spends. The
+  // projection previously ignored the reserve entirely, undercounting the
+  // worst-case projected cost used for budget gating.
+  const reasoningReserve = REASONING_RESERVE_TOKENS[params.reasoningLevel ?? "medium"] ?? REASONING_RESERVE_TOKENS.medium;
   const estimatedCostUsd = estimateTextGenerationCostUsd({
     provider: params.provider,
     model: params.model,
     inputTokens,
-    outputTokens: params.maxOutputTokens,
+    outputTokens: params.maxOutputTokens + reasoningReserve,
   });
   const budget = params.budget ?? {
     enabled: false,

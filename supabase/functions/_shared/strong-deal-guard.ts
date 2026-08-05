@@ -75,3 +75,34 @@ export function validateStrongDealOnly(input: {
 
   return { ok: true };
 }
+
+/**
+ * Detects only POSITIVE weak-deal signals in free text — never the absence of
+ * strong language. Unlike validateStrongDealOnly (which requires a strong-language
+ * match and therefore rejects any text that doesn't explicitly say "BOGO"/"free"/etc,
+ * including a perfectly legitimate free-item offer phrased without that vocabulary),
+ * this only flags text that positively describes a weak mechanic: a second-item
+ * discount, an entire-order discount, or an explicit sub-40% figure. Additive export;
+ * does not change validateStrongDealOnly's behavior or any existing export.
+ *
+ * Returns a short human-readable reason when a weak signal is found, else null.
+ */
+export function findWeakDealSignal(text: string): string | null {
+  const normalized = (text ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+
+  if (SECOND_ITEM_DISCOUNT_PATTERNS.some((p) => p.test(normalized))) {
+    return "describes a second-item discount rather than a free item or 40%+ off";
+  }
+
+  if (ENTIRE_ORDER_DISCOUNT_PATTERNS.some((p) => p.test(normalized))) {
+    return "describes an entire-order discount rather than a free item or 40%+ off";
+  }
+
+  const weakPercent = extractPercents(normalized).find((p) => p < 40);
+  if (typeof weakPercent === "number") {
+    return `${weakPercent}% off is below the 40% strong-deal threshold`;
+  }
+
+  return null;
+}

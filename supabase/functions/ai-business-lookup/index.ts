@@ -44,6 +44,56 @@ const TYPE_MAP: Record<string, string> = {
   store: "Store",
 };
 
+// Specific Google Places API (New) type ids (see the "Table A" food/drink list
+// and the beauty/automotive/fitness tables at
+// https://developers.google.com/maps/documentation/places/web-service/place-types),
+// checked BEFORE the generic TYPE_MAP above so e.g. mexican_restaurant reads as
+// "Mexican restaurant" instead of degrading to the generic "Restaurant". Every
+// key here is a real Places API (New) type id, not an invented one.
+const SPECIFIC_TYPE_MAP: Record<string, string> = {
+  american_restaurant: "American restaurant",
+  bagel_shop: "Bagel shop",
+  breakfast_restaurant: "Breakfast restaurant",
+  brewery: "Brewery",
+  brunch_restaurant: "Brunch restaurant",
+  cake_shop: "Cake shop",
+  chinese_restaurant: "Chinese restaurant",
+  cocktail_bar: "Cocktail bar",
+  coffee_roastery: "Coffee roastery",
+  dessert_shop: "Dessert shop",
+  diner: "Diner",
+  donut_shop: "Donut shop",
+  fast_food_restaurant: "Fast food restaurant",
+  ice_cream_shop: "Ice cream shop",
+  indian_restaurant: "Indian restaurant",
+  italian_restaurant: "Italian restaurant",
+  japanese_restaurant: "Japanese restaurant",
+  juice_shop: "Juice shop",
+  korean_restaurant: "Korean restaurant",
+  mediterranean_restaurant: "Mediterranean restaurant",
+  mexican_restaurant: "Mexican restaurant",
+  pastry_shop: "Pastry shop",
+  pizza_restaurant: "Pizza restaurant",
+  sandwich_shop: "Sandwich shop",
+  seafood_restaurant: "Seafood restaurant",
+  sports_bar: "Sports bar",
+  steak_house: "Steakhouse",
+  sushi_restaurant: "Sushi restaurant",
+  taco_restaurant: "Taco restaurant",
+  tea_house: "Tea house",
+  thai_restaurant: "Thai restaurant",
+  vegan_restaurant: "Vegan restaurant",
+  vegetarian_restaurant: "Vegetarian restaurant",
+  vietnamese_restaurant: "Vietnamese restaurant",
+  wine_bar: "Wine bar",
+  barber_shop: "Barber shop",
+  hair_salon: "Hair salon",
+  nail_salon: "Nail salon",
+  gym: "Gym",
+  car_wash: "Car wash",
+  car_repair: "Car repair",
+};
+
 const DFW_LAT = 32.85;
 const DFW_LNG = -96.97;
 // Per-account rate limit for the un-onboarded applicant lookup path only.
@@ -94,6 +144,15 @@ function finiteNumber(value: unknown): number | null {
 
 function mapCategory(types: unknown): string {
   if (!Array.isArray(types)) return "Local business";
+  // Prefer the most specific match: scan for a SPECIFIC_TYPE_MAP hit across the
+  // whole types array first (Google returns types loosely ordered by relevance,
+  // and a generic type like "restaurant" is often present alongside a specific
+  // one like "mexican_restaurant"), then fall back to the generic TYPE_MAP.
+  for (const t of types) {
+    if (typeof t !== "string") continue;
+    const mapped = SPECIFIC_TYPE_MAP[t];
+    if (mapped) return mapped;
+  }
   for (const t of types) {
     if (typeof t !== "string") continue;
     const mapped = TYPE_MAP[t];

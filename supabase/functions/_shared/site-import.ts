@@ -560,12 +560,55 @@ function decodeEntities(text: string): string {
 }
 
 /**
+ * Env flag gate for the htmlToMenuText line-break rewrite (WI-2 follow-up).
+ * Reads the edge-runtime env only; false under vitest/node (no `Deno` global)
+ * and whenever unset, so the default stays byte-identical to pre-flag output.
+ * `typeof Deno` never throws for an undeclared identifier, so this is safe to
+ * call from a unit-tested pure function (same pattern as openai-fetch.ts).
+ */
+export function menuTextV2FlagEnabled(): boolean {
+  try {
+    return typeof Deno !== "undefined" && Deno.env.get("AI_MENU_TEXT_V2_ENABLED") === "true";
+  } catch {
+    return false;
+  }
+}
+
+export type HtmlToMenuTextOptions = {
+  /** Overrides the env-read flag; used by tests to exercise both branches deterministically. */
+  v2Enabled?: boolean;
+};
+
+/**
+ * Collapse V2 output: multiple spaces/tabs -> one space (intra-line only),
+ * whitespace hugging a newline is trimmed off, and 3+ consecutive newlines
+ * collapse to 2 (paragraph-style spacing without a wall of blank lines).
+ */
+function collapseMenuTextWhitespaceV2(text: string): string {
+  return text
+    .replace(/[ \t]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
  * Reduce raw HTML to readable text for the menu-structuring LLM: drop scripts,
  * styles, noscript, comments and tags; decode basic entities; collapse
  * whitespace; cap at MAX_MENU_TEXT_CHARS.
+ *
+ * Flag-gated (AI_MENU_TEXT_V2_ENABLED, default/off = current behavior): when
+ * off, every block-element boundary and every remaining tag collapses to a
+ * single space, producing one giant line. When on, block-element boundaries
+ * (p/div/br/li/tr/td/th/h1-6/section/article/ul/ol/table) become '\n' instead,
+ * so buildSiteMenuPrompt's "or on the next line" guidance is actually true of
+ * the text the model sees; only intra-line whitespace is collapsed. Pass
+ * `options.v2Enabled` to override the env read directly (used by tests).
  */
-export function htmlToMenuText(html: string): string {
+export function htmlToMenuText(html: string, options?: HtmlToMenuTextOptions): string {
+  const v2Enabled = options?.v2Enabled ?? menuTextV2FlagEnabled();
   const source = typeof html === "string" ? html : "";
+  const blockBoundaryReplacement = v2Enabled ? "\n" : " ";
   const stripped = source
     // Comments first: one may contain an unbalanced "<script", which the
     // unterminated-block rule below would otherwise read as swallowing the page.
@@ -583,11 +626,17 @@ export function htmlToMenuText(html: string): string {
     // remove only its angle brackets and keep the body. Dropping the remainder
     // is the fail-closed direction — worst case we extract less menu text.
     .replace(/<(?:script|style|noscript)\b[^>]*>[\s\S]*$/i, " ")
-    // Turn block boundaries into spaces so words don't fuse across tags.
-    .replace(/<\/?(p|div|br|li|tr|td|th|h[1-6]|section|article|ul|ol|table)\b[^>]*>/gi, " ")
+    // Turn block boundaries into spaces (flag off) or newlines (flag on) so
+    // words don't fuse across tags.
+    .replace(
+      /<\/?(p|div|br|li|tr|td|th|h[1-6]|section|article|ul|ol|table)\b[^>]*>/gi,
+      blockBoundaryReplacement,
+    )
     .replace(/<[^>]+>/g, " ");
   const decoded = decodeEntities(stripped);
-  const collapsed = decoded.replace(/\s+/g, " ").trim();
+  const collapsed = v2Enabled
+    ? collapseMenuTextWhitespaceV2(decoded)
+    : decoded.replace(/\s+/g, " ").trim();
   return collapsed.slice(0, MAX_MENU_TEXT_CHARS);
 }
 

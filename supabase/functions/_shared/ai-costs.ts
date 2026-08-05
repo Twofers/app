@@ -9,12 +9,14 @@ export type AiUsageInput = {
   input_tokens_details?: UsageDetails;
   output_tokens_details?: UsageDetails;
   prompt_tokens_details?: UsageDetails;
+  completion_tokens_details?: UsageDetails;
 };
 
 export type NormalizedAiUsage = {
   input_tokens: number;
   cached_input_tokens: number;
   output_tokens: number;
+  reasoning_tokens: number;
   image_input_tokens: number;
   image_output_tokens: number;
   image_text_input_tokens: number;
@@ -151,11 +153,17 @@ export function normalizeAiUsage(input: {
   const imageInput = getDetailsNumber(inputDetails, "image_tokens");
   const imageTextInput = getDetailsNumber(inputDetails, "text_tokens");
   const imageOutput = getDetailsNumber(outputDetails, "image_tokens");
+  // OpenAI chat-completions usage breaks reasoning tokens out of
+  // completion_tokens via completion_tokens_details.reasoning_tokens (they are
+  // already included in completion_tokens/output_tokens for billing purposes;
+  // this is diagnostic detail only, not an additive cost component).
+  const reasoningTokens = getDetailsNumber(usage.completion_tokens_details, "reasoning_tokens");
 
   return {
     input_tokens: num(usage.input_tokens ?? usage.prompt_tokens),
     cached_input_tokens: cachedInput,
     output_tokens: num(usage.output_tokens ?? usage.completion_tokens),
+    reasoning_tokens: reasoningTokens,
     image_input_tokens: imageInput,
     image_output_tokens: imageOutput,
     image_text_input_tokens: imageTextInput,

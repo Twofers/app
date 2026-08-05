@@ -234,6 +234,12 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
             thinkingConfig: {
               thinkingLevel: geminiThinkingLevel(params.request.reasoningLevel),
             },
+            // Only set when the router resolved a QA temperature for this
+            // operation (see AI_GEMINI_QA_TEMPERATURE in ai-text-provider.ts).
+            // Omitted entirely when unset, matching prior behavior exactly.
+            ...(typeof params.request.temperature === "number"
+              ? { temperature: params.request.temperature }
+              : {}),
           },
         }),
         signal: AbortSignal.timeout(params.request.timeoutMs),

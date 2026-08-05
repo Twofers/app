@@ -122,6 +122,27 @@ describe("calculateAiCost", () => {
     expect(usage.cached_input_tokens).toBe(250);
   });
 
+  it("reads reasoning tokens from completion_tokens_details when present", () => {
+    const usage = normalizeAiUsage({
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 400,
+        completion_tokens_details: { reasoning_tokens: 320 },
+      },
+    });
+
+    expect(usage.output_tokens).toBe(400);
+    expect(usage.reasoning_tokens).toBe(320);
+  });
+
+  it("defaults reasoning tokens to 0 when completion_tokens_details is absent", () => {
+    const usage = normalizeAiUsage({
+      usage: { prompt_tokens: 100, completion_tokens: 40 },
+    });
+
+    expect(usage.reasoning_tokens).toBe(0);
+  });
+
   it("logs explicit Gemini image cost estimates without usage warnings", async () => {
     const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
     const admin = {

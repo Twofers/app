@@ -62,6 +62,12 @@ jobs:
       - name: Test
         run: npm run test
 
+      # Deterministic AI-copy fixture eval: pure functions over checked-in
+      # fixtures (fixtures/ai-promotional-copy-offers.json, ai-poster-copy-offers.json,
+      # ai-revision-feedback-cases.json), no network calls, no secrets required.
+      - name: AI promotional copy evaluation
+        run: npm run copy:evaluate
+
       # Audit F-012: fail when docs/release-audit/generated-state.* no longer
       # match the code (versions, migration count, function list, flags).
       - name: Release-state drift check

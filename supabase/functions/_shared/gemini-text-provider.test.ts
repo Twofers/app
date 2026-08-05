@@ -1,8 +1,26 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { geminiMaxOutputTokens, geminiResponseSchema } from "./gemini-text-provider.ts";
+import {
+  generateGeminiStructuredJson,
+  geminiMaxOutputTokens,
+  geminiResponseSchema,
+} from "./gemini-text-provider.ts";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function geminiJsonSuccess(value: unknown = { ok: true }) {
+  return new Response(
+    JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
 
 describe("geminiMaxOutputTokens", () => {
   it("adds a thinking reserve on top of the caller's visible-output budget", () => {
@@ -63,6 +81,47 @@ describe("geminiResponseSchema", () => {
     expect((out as any).properties.items.items.additionalProperties).toBeUndefined();
     // Every required entry has a matching property (the invariant Gemini enforces).
     for (const key of itemReq) expect(itemProps[key]).toBeDefined();
+  });
+});
+
+describe("generateGeminiStructuredJson temperature passthrough", () => {
+  const baseRequest = {
+    operation: "candidate_judge" as const,
+    systemPrompt: "Judge these.",
+    userPrompt: "Candidates.",
+    jsonSchema: { type: "object", properties: {}, additionalProperties: true },
+    maxOutputTokens: 200,
+    timeoutMs: 5000,
+    generationRunId: "11111111-1111-4111-8111-111111111111",
+    promptVersion: "test",
+  };
+
+  it("includes generationConfig.temperature when request.temperature is set", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiJsonSuccess());
+
+    await generateGeminiStructuredJson({
+      apiKey: "gemini-test-key",
+      model: "gemini-3.5-flash",
+      request: { ...baseRequest, temperature: 0.15 },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.generationConfig.temperature).toBe(0.15);
+  });
+
+  it("omits generationConfig.temperature entirely when request.temperature is undefined", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiJsonSuccess());
+
+    await generateGeminiStructuredJson({
+      apiKey: "gemini-test-key",
+      model: "gemini-3.5-flash",
+      request: { ...baseRequest },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.generationConfig).not.toHaveProperty("temperature");
   });
 });
 

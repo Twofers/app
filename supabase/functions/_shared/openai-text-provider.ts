@@ -144,14 +144,23 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
     const json = await res.json();
     const content = json?.choices?.[0]?.message?.content ?? "";
     const text = typeof content === "string" ? content.trim() : "";
+    // finish_reason "length" means the model exhausted max_completion_tokens
+    // before emitting (or finishing) structured content — distinguishable from
+    // a model returning genuinely garbled/empty output. Mirrors the Gemini
+    // provider's MAX_TOKENS handling (geminiFinishReason). errorClass stays
+    // "provider_output_invalid" in both cases so downstream retry/fallback
+    // classification is unaffected; only the message/errorCode differ.
+    const truncated = json?.choices?.[0]?.finish_reason === "length";
     if (!text) {
       throw new AiProviderError({
         provider: "openai",
         model: params.model,
         requestId,
         errorClass: "provider_output_invalid",
-        errorCode: "OPENAI_EMPTY_CONTENT",
-        message: "OpenAI returned no structured content.",
+        errorCode: truncated ? "OPENAI_EMPTY_CONTENT_TRUNCATED" : "OPENAI_EMPTY_CONTENT",
+        message: truncated
+          ? "OpenAI returned no structured content (finish_reason=length; output token budget exhausted)."
+          : "OpenAI returned no structured content.",
       });
     }
     let value: unknown;
@@ -163,8 +172,10 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
         model: params.model,
         requestId,
         errorClass: "provider_output_invalid",
-        errorCode: "OPENAI_JSON_PARSE_FAILED",
-        message: "OpenAI returned invalid JSON.",
+        errorCode: truncated ? "OPENAI_JSON_PARSE_FAILED_TRUNCATED" : "OPENAI_JSON_PARSE_FAILED",
+        message: truncated
+          ? "OpenAI returned truncated JSON (finish_reason=length; output token budget exhausted)."
+          : "OpenAI returned invalid JSON.",
       });
     }
     const usage = normalizeAiUsage({ usage: json?.usage ?? null });
@@ -182,7 +193,7 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
         requestId: requestId ?? undefined,
         inputTokens: usage.input_tokens,
         cachedInputTokens: usage.cached_input_tokens,
-        reasoningTokens: 0,
+        reasoningTokens: usage.reasoning_tokens,
         outputTokens: usage.output_tokens,
         estimatedCostUsd: cost.estimated_cost_usd,
       },

@@ -379,4 +379,387 @@ describe("text provider source guards", () => {
     expect(routerSource).toMatch(/AI provider router failed before a typed provider error was returned/);
     expect(routerSource).not.toMatch(/message:\s*String\(error\)/);
   });
+
+  it("never reads request.temperature on the OpenAI path (gpt-5 family rejects a non-default temperature)", () => {
+    expect(openAiProviderSource).not.toMatch(/request\.temperature/);
+  });
+});
+
+function openAiEmptyContent(finishReason?: string) {
+  return new Response(
+    JSON.stringify({
+      choices: [
+        {
+          ...(finishReason ? { finish_reason: finishReason } : {}),
+          message: { content: "" },
+        },
+      ],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+describe("provider_output_invalid retry flag (AI_RETRY_OUTPUT_INVALID_ENABLED)", () => {
+  it("does not retry when the flag is unset (default = current behavior)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiEmptyContent());
+    const noFallbackEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: noFallbackEnv,
+        config: resolveAiTextProviderConfig(noFallbackEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry when the flag is explicitly false", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiEmptyContent());
+    const flagOffEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false", AI_RETRY_OUTPUT_INVALID_ENABLED: "false" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: flagOffEnv,
+        config: resolveAiTextProviderConfig(flagOffEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once on the same provider when the flag is enabled, then succeeds", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiEmptyContent())
+      .mockResolvedValueOnce(openAiSuccess());
+    const retryEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false", AI_RETRY_OUTPUT_INVALID_ENABLED: "true" });
+
+    const result = await generateStructuredText({
+      operation: "creative_candidates",
+      systemPrompt: "System rules.",
+      userPrompt: "Offer facts.",
+      jsonSchema: schema,
+      maxOutputTokens: 650,
+      timeoutMs: 12000,
+      generationRunId: "11111111-1111-4111-8111-111111111111",
+      promptVersion: "test",
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: retryEnv,
+      config: resolveAiTextProviderConfig(retryEnv),
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(result.fallbackUsed).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.errorClass).toBe("provider_output_invalid");
+  }, 10_000);
+
+  it("still bounds the retry to the existing transientRetryMax ceiling of 1 (fails after 2 attempts)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiEmptyContent())
+      .mockResolvedValueOnce(openAiEmptyContent());
+    const retryEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false", AI_RETRY_OUTPUT_INVALID_ENABLED: "true" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: retryEnv,
+        config: resolveAiTextProviderConfig(retryEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 10_000);
+});
+
+describe("OpenAI finish_reason and reasoning_tokens diagnostics", () => {
+  it("surfaces finish_reason=length in the thrown error's message and errorCode without changing errorClass", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiEmptyContent("length"));
+    const noFallbackEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: noFallbackEnv,
+        config: resolveAiTextProviderConfig(noFallbackEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      errorClass: "provider_output_invalid",
+      errorCode: "OPENAI_EMPTY_CONTENT_TRUNCATED",
+    });
+    expect(String((caught as Error).message)).toMatch(/finish_reason=length/);
+  });
+
+  it("does not mark errors as truncated when finish_reason is absent/other", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiEmptyContent("stop"));
+    const noFallbackEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: noFallbackEnv,
+        config: resolveAiTextProviderConfig(noFallbackEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid", errorCode: "OPENAI_EMPTY_CONTENT" });
+    expect(String((caught as Error).message)).not.toMatch(/finish_reason/);
+  });
+
+  it("captures OpenAI reasoning tokens from completion_tokens_details onto the attempt", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ variants: [{ headlineAlternative: "x" }] }) } }],
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 400,
+            completion_tokens_details: { reasoning_tokens: 320 },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await generateStructuredText({
+      operation: "creative_candidates",
+      systemPrompt: "System rules.",
+      userPrompt: "Offer facts.",
+      jsonSchema: schema,
+      maxOutputTokens: 650,
+      timeoutMs: 12000,
+      generationRunId: "11111111-1111-4111-8111-111111111111",
+      promptVersion: "test",
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: env(baseEnv),
+      config: resolveAiTextProviderConfig(env(baseEnv)),
+    });
+
+    expect(result.attempts[0]?.reasoningTokens).toBe(320);
+    expect(result.attempts[0]?.outputTokens).toBe(400);
+  });
+});
+
+describe("failed-attempt latency", () => {
+  it("records real elapsed time for a failed attempt instead of ~0ms", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return new Response(
+        JSON.stringify({ error: { code: "server_error_boom", message: "temporary provider failure" } }),
+        { status: 500 },
+      );
+    });
+    const noRetryEnv = env({ ...baseEnv, AI_TEXT_FALLBACK_ENABLED: "false", AI_TRANSIENT_RETRY_MAX: "0" });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: noRetryEnv,
+        config: resolveAiTextProviderConfig(noRetryEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    const attempts = (caught as { attempts?: Array<{ latencyMs: number; success: boolean }> }).attempts ?? [];
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.success).toBe(false);
+    // Previously computed Date.now() inside the catch block (after the failed
+    // call already completed), so this always logged ~0ms.
+    expect(attempts[0]?.latencyMs).toBeGreaterThanOrEqual(30);
+  });
+});
+
+describe("AI_GEMINI_QA_TEMPERATURE (Gemini-only, QA operations only)", () => {
+  const qaRequest = (operation: "candidate_judge" | "image_qa" | "translation_qa" | "creative_candidates") => ({
+    operation,
+    systemPrompt: "System rules.",
+    userPrompt: "Offer facts.",
+    jsonSchema: schema,
+    maxOutputTokens: 650,
+    timeoutMs: 12000,
+    generationRunId: "11111111-1111-4111-8111-111111111111",
+    promptVersion: "test",
+    reasoningLevel: "medium" as const,
+  });
+
+  it("sends no temperature field when the env var is unset (default, identical to today)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiSuccess());
+    const geminiEnv = env({
+      ...baseEnv,
+      AI_TEXT_PRIMARY_PROVIDER: "gemini",
+      AI_TEXT_FALLBACK_ENABLED: "false",
+    });
+
+    await generateStructuredText(qaRequest("candidate_judge"), {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: geminiEnv,
+      config: resolveAiTextProviderConfig(geminiEnv),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.generationConfig).not.toHaveProperty("temperature");
+  });
+
+  it("sets temperature on Gemini requests for candidate_judge/image_qa/translation_qa when the env var is set", async () => {
+    for (const operation of ["candidate_judge", "image_qa", "translation_qa"] as const) {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiSuccess());
+      const geminiEnv = env({
+        ...baseEnv,
+        AI_TEXT_PRIMARY_PROVIDER: "gemini",
+        AI_TEXT_FALLBACK_ENABLED: "false",
+        AI_GEMINI_QA_TEMPERATURE: "0.15",
+      });
+
+      await generateStructuredText(qaRequest(operation), {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: geminiEnv,
+        config: resolveAiTextProviderConfig(geminiEnv),
+      });
+
+      const [, init] = fetchMock.mock.calls[0] ?? [];
+      const body = JSON.parse(String((init as RequestInit).body));
+      expect(body.generationConfig.temperature).toBe(0.15);
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("does not set temperature for non-QA operations even when the env var is set", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiSuccess());
+    const geminiEnv = env({
+      ...baseEnv,
+      AI_TEXT_PRIMARY_PROVIDER: "gemini",
+      AI_TEXT_FALLBACK_ENABLED: "false",
+      AI_GEMINI_QA_TEMPERATURE: "0.15",
+    });
+
+    await generateStructuredText(qaRequest("creative_candidates"), {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: geminiEnv,
+      config: resolveAiTextProviderConfig(geminiEnv),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.generationConfig).not.toHaveProperty("temperature");
+  });
+
+  it("never sends a temperature field to OpenAI even when the env var is set for a QA operation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
+    const openAiEnv = env({
+      ...baseEnv,
+      AI_TEXT_FALLBACK_ENABLED: "false",
+      AI_GEMINI_QA_TEMPERATURE: "0.15",
+    });
+
+    await generateStructuredText(qaRequest("candidate_judge"), {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: openAiEnv,
+      config: resolveAiTextProviderConfig(openAiEnv),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body).not.toHaveProperty("temperature");
+  });
 });

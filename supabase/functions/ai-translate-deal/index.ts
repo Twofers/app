@@ -12,6 +12,11 @@ import {
 } from "../_shared/ai-text-provider.ts";
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
+import { applyDealTranslationOutputGate } from "./output-gate.ts";
+
+function translateDealV2Enabled(): boolean {
+  return Deno.env.get("AI_TRANSLATE_DEAL_V2_ENABLED") === "true";
+}
 
 type AppLocale = "en" | "es" | "ko";
 
@@ -26,6 +31,10 @@ type TranslationResult = {
 };
 
 const PROMPT_VERSION = "deal_translation_provider_router_v1";
+const PROMPT_VERSION_V2 = "deal_translation_protected_terms_v2";
+
+// Mirrors _shared/ai-localization-provider.ts BANNED_SHORTHAND.
+const BANNED_SHORTHAND = ["BOGO", "2-for-1", "2x1", "1+1", "Same-Item"];
 
 const DEAL_TRANSLATIONS_SCHEMA = {
   name: "deal_translations",
@@ -213,10 +222,13 @@ serve(async (req) => {
         ? body.request_group_id.trim()
         : crypto.randomUUID();
 
+    const v2Enabled = translateDealV2Enabled();
+
     let title = "";
     let description = "";
     let businessId = "";
     let sourceLocale = normalizeLocale(body.source_locale) ?? "en";
+    let dealOfferVersionId: string | null = null;
 
     if (directMode) {
       businessId = businessIdFromBody;
@@ -226,11 +238,17 @@ serve(async (req) => {
       if (!dealId) {
         return jsonResponse({ error: "Missing deal_id or business_id/title/description." }, 400, corsHeaders);
       }
-      const { data: deal, error: dealErr } = await admin
-        .from("deals")
-        .select("id, title, description, business_id, source_locale")
-        .eq("id", dealId)
-        .single();
+      const { data: deal, error: dealErr } = v2Enabled
+        ? await admin
+          .from("deals")
+          .select("id, title, description, business_id, source_locale, offer_version_id")
+          .eq("id", dealId)
+          .single()
+        : await admin
+          .from("deals")
+          .select("id, title, description, business_id, source_locale")
+          .eq("id", dealId)
+          .single();
 
       if (dealErr || !deal) {
         return jsonResponse({ error: "Deal not found." }, 404, corsHeaders);
@@ -239,13 +257,20 @@ serve(async (req) => {
       description = deal.description ?? "";
       businessId = deal.business_id;
       sourceLocale = normalizeLocale(body.source_locale) ?? normalizeLocale(deal.source_locale) ?? "en";
+      dealOfferVersionId = v2Enabled ? ((deal as { offer_version_id?: string | null }).offer_version_id ?? null) : null;
     }
 
-    const { data: biz } = await admin
-      .from("businesses")
-      .select("owner_id")
-      .eq("id", businessId)
-      .single();
+    const { data: biz } = v2Enabled
+      ? await admin
+        .from("businesses")
+        .select("owner_id, name")
+        .eq("id", businessId)
+        .single()
+      : await admin
+        .from("businesses")
+        .select("owner_id")
+        .eq("id", businessId)
+        .single();
 
     if (!biz || biz.owner_id !== user.id) {
       return jsonResponse({ error: "You do not own this business." }, 403, corsHeaders);
@@ -345,18 +370,71 @@ serve(async (req) => {
       );
     }
 
-    const systemPrompt = [
-      "You translate short promotional deal copy for a local business mobile app.",
-      "Supported output locales are English (en), Spanish (es), and Korean (ko).",
-      "The owner source locale is provided. For that locale, copy the original text exactly.",
-      "For the other locales, translate naturally and preserve the promotional meaning.",
-      "Keep translations punchy, mobile-friendly, and similar in length.",
-      "Do not add or remove deal terms.",
-      "Return JSON only with: title_en, title_es, title_ko, description_en, description_es, description_ko.",
-      "If a field is empty, return an empty string for each language version of that field.",
-    ].join(" ");
+    // Protected terms (business name + branded item display names) are only
+    // fetched when the richer v2 prompt is enabled, to keep flag-off behavior
+    // byte-identical to today (no extra queries, no extra prompt content).
+    // Deferred until just before the prompt is built so a request rejected by
+    // the capability/quota/provider-config checks above never pays for it.
+    let protectedTerms: string[] = [];
+    if (v2Enabled) {
+      const businessName = textField((biz as { name?: string | null }).name);
+      if (businessName) protectedTerms.push(businessName);
+      if (dealOfferVersionId) {
+        const { data: offerVersion } = await admin
+          .from("offer_versions")
+          .select("offer_definition")
+          .eq("id", dealOfferVersionId)
+          .single();
+        const definition = (offerVersion as { offer_definition?: Record<string, unknown> } | null)
+          ?.offer_definition;
+        if (definition && typeof definition === "object") {
+          const qualifyingItems = Array.isArray((definition as { qualifyingItems?: unknown }).qualifyingItems)
+            ? (definition as { qualifyingItems: Array<{ displayName?: unknown }> }).qualifyingItems
+            : [];
+          for (const item of qualifyingItems) {
+            const name = textField(item?.displayName);
+            if (name) protectedTerms.push(name);
+          }
+          const reward = (definition as { reward?: { displayNames?: unknown } }).reward;
+          const rewardDisplayNames = Array.isArray(reward?.displayNames) ? reward!.displayNames : [];
+          for (const name of rewardDisplayNames) {
+            const clean = textField(name);
+            if (clean) protectedTerms.push(clean);
+          }
+        }
+      }
+      protectedTerms = [...new Set(protectedTerms.filter(Boolean))];
+    }
 
-    const userPrompt = `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`;
+    const systemPrompt = v2Enabled
+      ? [
+        "You translate short promotional deal copy for a local business mobile app.",
+        "Supported output locales are English (en), Spanish (es), and Korean (ko).",
+        "The owner source locale is provided. For that locale, copy the original text exactly.",
+        "For the other locales, translate naturally and preserve the promotional meaning.",
+        "Keep translations punchy, mobile-friendly, and similar in length.",
+        "Do not add or remove deal terms.",
+        "Preserve protected merchant names, business names, branded item names, and exact item names character-for-character.",
+        `Banned shorthand in every locale: ${BANNED_SHORTHAND.join(", ")}.`,
+        "Return JSON only with: title_en, title_es, title_ko, description_en, description_es, description_ko.",
+        "If a field is empty, return an empty string for each language version of that field.",
+      ].join(" ")
+      : [
+        "You translate short promotional deal copy for a local business mobile app.",
+        "Supported output locales are English (en), Spanish (es), and Korean (ko).",
+        "The owner source locale is provided. For that locale, copy the original text exactly.",
+        "For the other locales, translate naturally and preserve the promotional meaning.",
+        "Keep translations punchy, mobile-friendly, and similar in length.",
+        "Do not add or remove deal terms.",
+        "Return JSON only with: title_en, title_es, title_ko, description_en, description_es, description_ko.",
+        "If a field is empty, return an empty string for each language version of that field.",
+      ].join(" ");
+
+    const userPrompt = v2Enabled
+      ? `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}\nProtected terms:\n${
+        protectedTerms.length ? protectedTerms.map((term) => `- ${term}`).join("\n") : "- (none supplied)"
+      }`
+      : `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`;
 
     let generation;
     try {
@@ -368,8 +446,8 @@ serve(async (req) => {
         maxOutputTokens: 1400,
         timeoutMs: 12_000,
         generationRunId: requestGroupId,
-        promptVersion: PROMPT_VERSION,
-        reasoningLevel: "medium",
+        promptVersion: v2Enabled ? PROMPT_VERSION_V2 : PROMPT_VERSION,
+        reasoningLevel: v2Enabled ? "low" : "medium",
       }, {
         openAiApiKey: openAiKey,
         geminiApiKey,
@@ -415,7 +493,28 @@ serve(async (req) => {
     }
 
     const usageAttempt = representativeAttempt(generation.attempts);
-    const result = normalizeAiResult(generation.value, title, description, sourceLocale);
+    let result = normalizeAiResult(generation.value, title, description, sourceLocale);
+
+    if (v2Enabled) {
+      const gateOutcome = applyDealTranslationOutputGate({
+        title_en: result.title_en,
+        title_es: result.title_es,
+        title_ko: result.title_ko,
+        description_en: result.description_en,
+        description_es: result.description_es,
+        description_ko: result.description_ko,
+      });
+      if (gateOutcome.blankedFields.length > 0) {
+        console.log(JSON.stringify({
+          tag: "ai_translate_deal",
+          event: "output_gate_blanked_fields",
+          dealId: dealId || null,
+          businessId,
+          blankedFields: gateOutcome.blankedFields,
+        }));
+      }
+      result = { ...result, ...gateOutcome.fields };
+    }
 
     if (!directMode) {
       const { error: updateErr } = await admin.from("deals").update(result).eq("id", dealId);
