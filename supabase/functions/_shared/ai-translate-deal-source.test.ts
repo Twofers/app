@@ -95,4 +95,32 @@ describe("ai-translate-deal source guards", () => {
     expect(configErrorBlock).not.toMatch(/String\(err\)/);
     expect(outerErrorBlock).not.toMatch(/err:\s*String\(err\)/);
   });
+
+  describe("AI_SHARED_GLOSSARY_ENABLED: LOCALIZED TERM SNAPSHOT block", () => {
+    it("defaults off, reading a dedicated env flag independent of AI_TRANSLATE_DEAL_V2_ENABLED", () => {
+      expect(source).toMatch(
+        /function sharedGlossaryEnabled\(\): boolean \{\s*\n\s*return Deno\.env\.get\("AI_SHARED_GLOSSARY_ENABLED"\) === "true";/,
+      );
+    });
+
+    it("imports the shared glossary from lib/localization-glossary.ts", () => {
+      expect(source).toMatch(
+        /import \{ localizationGlossaryAsPromptTerms \} from "\.\.\/\.\.\/\.\.\/lib\/localization-glossary\.ts";/,
+      );
+    });
+
+    it("only appends the LOCALIZED TERM SNAPSHOT block to the prompt when the flag is on", () => {
+      expect(source).toMatch(
+        /const userPrompt = sharedGlossaryEnabled\(\)\s*\n\s*\? `\$\{baseUserPrompt\}\\n\\n\$\{localizedTermSnapshotBlock\(\)\}`\s*\n\s*: baseUserPrompt;/,
+      );
+    });
+
+    it("builds the snapshot block from the same glossary the localization provider uses", () => {
+      const blockFnIndex = source.indexOf("function localizedTermSnapshotBlock(");
+      expect(blockFnIndex).toBeGreaterThan(-1);
+      const blockFnBlock = source.slice(blockFnIndex, blockFnIndex + 300);
+      expect(blockFnBlock).toContain("localizationGlossaryAsPromptTerms()");
+      expect(blockFnBlock).toContain("LOCALIZED TERM SNAPSHOT:");
+    });
+  });
 });

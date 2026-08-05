@@ -13,9 +13,32 @@ import {
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 import { applyDealTranslationOutputGate } from "./output-gate.ts";
+import { localizationGlossaryAsPromptTerms } from "../../../lib/localization-glossary.ts";
 
 function translateDealV2Enabled(): boolean {
   return Deno.env.get("AI_TRANSLATE_DEAL_V2_ENABLED") === "true";
+}
+
+/**
+ * Master gate for the shared bilingual glossary snapshot (independent of
+ * AI_TRANSLATE_DEAL_V2_ENABLED above). Default OFF: with this unset (or not
+ * "true"), the prompt this function builds stays byte-identical to today.
+ */
+function sharedGlossaryEnabled(): boolean {
+  return Deno.env.get("AI_SHARED_GLOSSARY_ENABLED") === "true";
+}
+
+/**
+ * AI_SHARED_GLOSSARY_ENABLED only: the app's own core-vocabulary es/ko
+ * renderings (lib/localization-glossary.ts), appended to the prompt as an
+ * anchor so a translation stays consistent with what the app already prints
+ * elsewhere for these terms.
+ */
+function localizedTermSnapshotBlock(): string {
+  const lines = localizationGlossaryAsPromptTerms().map(
+    (row) => `- ${row.term}: es="${row.es}", ko="${row.ko}"`,
+  );
+  return ["LOCALIZED TERM SNAPSHOT:", ...lines].join("\n");
 }
 
 type AppLocale = "en" | "es" | "ko";
@@ -430,11 +453,15 @@ serve(async (req) => {
         "If a field is empty, return an empty string for each language version of that field.",
       ].join(" ");
 
-    const userPrompt = v2Enabled
+    const baseUserPrompt = v2Enabled
       ? `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}\nProtected terms:\n${
         protectedTerms.length ? protectedTerms.map((term) => `- ${term}`).join("\n") : "- (none supplied)"
       }`
       : `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`;
+
+    const userPrompt = sharedGlossaryEnabled()
+      ? `${baseUserPrompt}\n\n${localizedTermSnapshotBlock()}`
+      : baseUserPrompt;
 
     let generation;
     try {

@@ -93,10 +93,58 @@ function normalizeTerm(value: string): string {
     .trim();
 }
 
+/**
+ * Connector/stop words stripped from a required term before checking specificity
+ * overlap. Mirrors the STOP_WORDS set in lib/ad-candidate-diversity.ts (:43-59) —
+ * duplicated locally rather than imported so this module's behavior doesn't
+ * silently shift if that list changes for diversity-checking reasons.
+ */
+const SPECIFIC_TERM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "at",
+  "for",
+  "get",
+  "grab",
+  "one",
+  "order",
+  "the",
+  "to",
+  "with",
+  "when",
+  "you",
+  "your",
+]);
+
+function contentWordsOfTerm(term: string): string[] {
+  return term.split(" ").filter((word) => word.length > 1 && !SPECIFIC_TERM_STOP_WORDS.has(word));
+}
+
+/**
+ * Requiring the entire normalized item name as a literal substring was a false
+ * reject: "12 ounce bag of whole bean coffee" vs. copy "whole bean coffee,
+ * roasted this week" counted as non-specific, so any hype word alongside it
+ * triggered HYPE_WITHOUT_SPECIFICITY even though the copy plainly named the
+ * item. Content-word overlap fixes this: a multi-word term is "present" once
+ * the copy contains two consecutive content words from it (stop/connector
+ * words stripped first); a term that reduces to a single content word still
+ * requires that word itself, so bare hype words never pass on their own.
+ */
 function hasSpecificTerm(text: string, requiredSpecificTerms: string[] | undefined): boolean {
   const lower = text.toLowerCase();
   const terms = (requiredSpecificTerms ?? []).map(normalizeTerm).filter((term) => term.length >= 3);
-  return terms.length === 0 || terms.some((term) => lower.includes(term));
+  if (terms.length === 0) return true;
+  return terms.some((term) => {
+    const words = contentWordsOfTerm(term);
+    if (words.length <= 1) {
+      return lower.includes(words[0] ?? term);
+    }
+    for (let index = 0; index + 1 < words.length; index += 1) {
+      if (lower.includes(`${words[index]} ${words[index + 1]}`)) return true;
+    }
+    return false;
+  });
 }
 
 function hasAnyPattern(text: string, patterns: RegExp[]): boolean {

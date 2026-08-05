@@ -27,6 +27,14 @@ const DEFAULT_DEDUP_SEC = Number(Deno.env.get("AI_DEDUP_WINDOW_SECONDS") ?? "600
  */
 const COMPOSE_V2_GATES_ENABLED = Deno.env.get("AI_COMPOSE_V2_GATES_ENABLED") === "true";
 
+/**
+ * Master gate for the regenerate-for-variety path. Default OFF: with this
+ * unset (or not "true"), a `regenerate: true` body field is ignored, the
+ * request_hash is unsalted, and the dedup-cache short-circuit behaves exactly
+ * as before (byte-identical).
+ */
+const COMPOSE_REGENERATE_ENABLED = Deno.env.get("AI_COMPOSE_REGENERATE_ENABLED") === "true";
+
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
 
@@ -213,6 +221,41 @@ async function fetchComposeMenuItems(admin: any, businessId: string): Promise<Co
   }
 }
 
+/** COMPOSE_REGENERATE_ENABLED only: headline strings pulled out of a stored compose response_payload. */
+function extractComposeHeadlines(payload: unknown): string[] {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const variants = Array.isArray(record.ad_variants) ? record.ad_variants : [];
+  return variants
+    .map((variant) => {
+      const row = variant && typeof variant === "object" ? variant as Record<string, unknown> : {};
+      return typeof row.headline_en === "string" ? row.headline_en.trim() : "";
+    })
+    .filter((headline): headline is string => headline.length > 0);
+}
+
+/**
+ * COMPOSE_REGENERATE_ENABLED only: the previous compose result's headlines for
+ * this business, used as a "don't repeat this" hint on a regenerate request.
+ * Best-effort: a lookup failure must never block generation.
+ */
+async function fetchPreviousComposeHeadlines(admin: any, businessId: string): Promise<string[]> {
+  try {
+    const { data } = await admin
+      .from("ai_generation_logs")
+      .select("response_payload")
+      .eq("business_id", businessId)
+      .eq("request_type", "compose_offer")
+      .eq("success", true)
+      .not("response_payload", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return extractComposeHeadlines(data?.response_payload);
+  } catch {
+    return [];
+  }
+}
+
 function formatComposeMenuBlock(items: ComposeMenuItem[]): string {
   if (items.length === 0) return "";
   const lines = items.slice(0, 30).map((item) => {
@@ -386,6 +429,7 @@ serve(async (req) => {
     const audioBase64 = typeof body.audio_base64 === "string" ? body.audio_base64.trim() : "";
     const transcribeOnly = body.transcribe_only === true;
     const generate_poster_image = body.generate_poster_image === true;
+    const regenerateRequested = COMPOSE_REGENERATE_ENABLED && body.regenerate === true;
 
     // Fetched only under the flag: menu grounding (compose prompt) and Whisper
     // vocabulary bias (transcription) both read from this same list.
@@ -562,11 +606,16 @@ serve(async (req) => {
       providerConfig.primaryProvider === "gemini" ? providerConfig.geminiTextModel : providerConfig.openAiModel;
 
     const input_mode = hasImage && hasText ? "mixed" : hasImage ? "image_only" : "text_only";
+    // COMPOSE_REGENERATE_ENABLED + regenerate:true: salt the hash so the
+    // dedup-cache lookup below always misses for this request (a fresh
+    // generation, not the cached prior payload) while the separate
+    // cooldown/quota checks further down are untouched and still apply.
     const request_hash = await sha256Hex(
       JSON.stringify({
         b: business_id,
         i: hasImage ? await sha256Hex(imageBase64.slice(0, 2000)) : "",
         t: combinedText.slice(0, 4000),
+        ...(regenerateRequested ? { regen: crypto.randomUUID() } : {}),
       }),
     );
 
@@ -771,6 +820,25 @@ serve(async (req) => {
       ? `Tone preference: ${biz.tone.trim()}`
       : "";
 
+    // COMPOSE_REGENERATE_ENABLED + regenerate:true: prefer client-supplied
+    // previous_headlines (the headlines currently on screen) and fall back to
+    // the last stored compose result for this business.
+    let regenerateVarietyLine = "";
+    if (regenerateRequested) {
+      const clientPreviousHeadlines = Array.isArray(body.previous_headlines)
+        ? (body.previous_headlines as unknown[])
+          .filter((h): h is string => typeof h === "string" && h.trim().length > 0)
+          .map((h) => h.trim())
+          .slice(0, 6)
+        : [];
+      const previousHeadlines = clientPreviousHeadlines.length > 0
+        ? clientPreviousHeadlines
+        : await fetchPreviousComposeHeadlines(admin, business_id);
+      if (previousHeadlines.length > 0) {
+        regenerateVarietyLine = `Produce meaningfully different framing than these previous suggestions: ${previousHeadlines.join("; ")}`;
+      }
+    }
+
     const userPrompt = [
       `Business: ${biz.name}. Category: ${biz.category ?? "n/a"}. Location: ${biz.location}.`,
       biz.short_description ? `About: ${biz.short_description}` : "",
@@ -779,6 +847,7 @@ serve(async (req) => {
       composeMenuBlock
         ? "Map any detected or typed item onto a real menu item name above when it clearly matches. If nothing above matches, keep the owner's wording and set low_confidence: true."
         : "",
+      regenerateVarietyLine,
       combinedText ? `Owner request:\n${combinedText}` : "No text request; infer from image only.",
     ]
       .filter(Boolean)
@@ -973,6 +1042,9 @@ serve(async (req) => {
       if (composeV2InitialViolationCodes) {
         logPayload.compose_v2_initial_violation_codes = composeV2InitialViolationCodes;
       }
+    }
+    if (regenerateRequested) {
+      logPayload.regenerate_requested = true;
     }
 
     const poster_storage_path: string | null = null;

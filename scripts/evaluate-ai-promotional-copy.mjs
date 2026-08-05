@@ -28,8 +28,12 @@ const {
 } = await import("../lib/deal-offer-contract.ts");
 const { validateDealEligibility } = await import("../lib/deal-eligibility.ts");
 const { buildOfferDefinitionV1FromContract } = await import("../lib/offer-definition.ts");
-const { buildPosterCopyFromOfferDefinition } = await import("../lib/poster/posterCopy.ts");
+const {
+  buildPosterCopyFromOfferDefinition,
+  buildPosterOfferLinesFromOfferDefinition,
+} = await import("../lib/poster/posterCopy.ts");
 const { copyOnlyRevisionTargetForFeedback } = await import("../lib/ai-revision-target.ts");
+const { resolveLocalizedOfferTerm, hasVerifiedLocalizedName } = await import("../lib/localized-offer-terms.ts");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
@@ -60,6 +64,30 @@ function normalizedItem(value) {
 
 function sameItem(a, b) {
   return normalizedItem(a) === normalizedItem(b);
+}
+
+// Generalized regression check for the 2026-08-05 fitLocalizedItem fix: an item with no
+// dictionary translation for a locale (`!hasVerifiedLocalizedName`) still renders in the
+// ORIGINAL English text there — see resolveLocalizedOfferTerm's preserved-term fallback.
+// English is head-final, so trimming that text must never drop its LAST word (the head
+// noun): "12 ounce bag of whole bean coffee" -> "12 OUNCE BAG OF WHOLE" lost "coffee"
+// entirely without leaving a dangling connector at all, which is why the existing
+// DANGLING_RE_BY_LOCALE checks below did not already catch this bug shape. Requiring the
+// head word to survive is independent of which trimming algorithm produced the line, so it
+// generalizes to any future untranslated item, not just this fixture.
+function lastWord(value) {
+  const words = clean(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  return words[words.length - 1] ?? "";
+}
+
+function containsWord(haystack, word) {
+  if (!word) return true;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(haystack);
 }
 
 function newHeadline(fixture) {
@@ -175,6 +203,90 @@ function validatePosterFixture(fixture) {
   return errors;
 }
 
+// Ported from the gitignored S1 post-deploy smoke
+// (artifacts/poster-quality/2026-07-20-run2/harness/smoke-s1.mjs), which existed because the
+// GRATIS-deletion and dangling-determiner bugs are invisible in English: a stale-code deploy
+// looked fine on every surface anyone normally checks, so English regressing was never the
+// risk — Spanish silently regressing was. Generalized here to run against every poster
+// fixture in BOTH locales, independent of and in addition to the en-US-only assertions above,
+// so any future change to the offer-line composer trips this without a dedicated smoke run.
+const FREE_WORD_BY_LOCALE = { "es-US": "GRATIS", "ko-KR": "무료" };
+// es-US: the exact denylist from smoke-s1 (S1/S3's observed live failures — "AL COMPRAR 1
+// CUALQUIER", "...SANDWICH DE") plus the rest of posterCopy.ts's own ES_TRAILING_FUNCTION_WORDS
+// set, duplicated independently on purpose: a regression test should not trust the
+// implementation it is pinning.
+const ES_DANGLING_RE =
+  /\s(DE|DEL|CON|Y|A|AL|EN|PARA|TU|SU|LA|EL|LOS|LAS|UN|UNA|UNOS|UNAS|TUS|SUS|MI|MIS|CUALQUIERA?)$/i;
+// ko-KR has no documented dangling-particle bug, but "never end on a determiner/connector"
+// generalizes as: a Korean offer line must never trail off on a bare LEFTOVER English
+// connector/stop word either (the shape this whole bug family takes) — which would mean an
+// untranslated item name was truncated by the wrong locale's fitter.
+const KO_DANGLING_RE = /\s(AND|OR|PLUS|WITH|OF|A|AN|THE|ONE|YOUR|ANY)$/i;
+const DANGLING_RE_BY_LOCALE = { "es-US": ES_DANGLING_RE, "ko-KR": KO_DANGLING_RE };
+const LOCALE_SUFFIX = { "es-US": "Es", "ko-KR": "Ko" };
+
+// Classic 1-for-1 same-item BOGO states its value as "2 FOR 1" / "2 POR 1" / a Korean
+// counter phrase, never the word free/GRATIS/무료, in ANY locale (including en-US's
+// own "2 FOR 1" offer_line_1) — that is correct, existing, intentional copy, not a
+// regression. The free-word assertion below only applies once the reward is stated as an
+// actual "free <item>", which is every other shape (a different reward item, or a same-item
+// reward at non-classic quantities).
+function isClassicSameItemBogo(fixture) {
+  return (
+    fixture.rewardType !== "percent_off" &&
+    sameItem(fixture.buyItem, fixture.rewardItem) &&
+    (fixture.buyQuantity ?? 1) === 1 &&
+    (fixture.rewardQuantity ?? 1) === 1
+  );
+}
+
+function validatePosterLocaleFixture(fixture) {
+  const errors = [];
+  const statesFreeReward = fixture.rewardType !== "percent_off" && !isClassicSameItemBogo(fixture);
+  const rewardSourceItem =
+    fixture.rewardType === "percent_off" ? fixture.buyItem : fixture.rewardItem ?? fixture.buyItem;
+  for (const locale of ["es-US", "ko-KR"]) {
+    const lines = buildPosterOfferLinesFromOfferDefinition(posterDefinitionForFixture(fixture), locale);
+    const suffix = LOCALE_SUFFIX[locale];
+    const expected1 = fixture[`expectedOfferLine1${suffix}`];
+    const expected2 = fixture[`expectedOfferLine2${suffix}`];
+    if (expected1 != null && lines.offer_line_1 !== expected1) {
+      errors.push(`offer_line_1_${locale}_changed:${lines.offer_line_1}`);
+    }
+    if (expected2 != null && lines.offer_line_2 !== expected2) {
+      errors.push(`offer_line_2_${locale}_changed:${lines.offer_line_2}`);
+    }
+    if (statesFreeReward) {
+      const combined = `${lines.offer_line_1} ${lines.offer_line_2}`;
+      if (!combined.includes(FREE_WORD_BY_LOCALE[locale])) {
+        errors.push(`missing_free_word_${locale}:${combined}`);
+      }
+    }
+    const dangling = DANGLING_RE_BY_LOCALE[locale];
+    for (const [field, value] of [["offer_line_1", lines.offer_line_1], ["offer_line_2", lines.offer_line_2]]) {
+      if (dangling.test(value)) {
+        errors.push(`dangling_connector_${locale}_${field}:${value}`);
+      }
+    }
+    const combinedLines = `${lines.offer_line_1} ${lines.offer_line_2}`;
+    const buyTerm = resolveLocalizedOfferTerm({ sourceDisplayName: fixture.buyItem ?? "", locale });
+    if (!hasVerifiedLocalizedName(buyTerm)) {
+      const word = lastWord(fixture.buyItem);
+      if (!containsWord(combinedLines, word)) {
+        errors.push(`head_noun_lost_${locale}_buyItem:${combinedLines}`);
+      }
+    }
+    const rewardTerm = resolveLocalizedOfferTerm({ sourceDisplayName: rewardSourceItem ?? "", locale });
+    if (!hasVerifiedLocalizedName(rewardTerm)) {
+      const word = lastWord(rewardSourceItem);
+      if (!containsWord(combinedLines, word)) {
+        errors.push(`head_noun_lost_${locale}_rewardItem:${combinedLines}`);
+      }
+    }
+  }
+  return errors;
+}
+
 function validateRevisionFixture(fixture) {
   const errors = [];
   const actualTarget = copyOnlyRevisionTargetForFeedback(fixture.selectedTarget, fixture.feedback);
@@ -213,6 +325,11 @@ const posterRows = posterFixtures.map((fixture) => {
   };
 });
 const failedPosterRows = posterRows.filter((row) => !row.valid);
+const posterLocaleRows = posterFixtures.map((fixture) => {
+  const errors = validatePosterLocaleFixture(fixture);
+  return { id: fixture.id, valid: errors.length === 0, errors };
+});
+const failedPosterLocaleRows = posterLocaleRows.filter((row) => !row.valid);
 const revisionRows = revisionFixtures.map((fixture) => {
   const errors = validateRevisionFixture(fixture);
   const target = copyOnlyRevisionTargetForFeedback(fixture.selectedTarget, fixture.feedback);
@@ -234,6 +351,9 @@ console.log(`invalid: ${failed.length}`);
 console.log(`poster fixtures: ${posterRows.length}`);
 console.log(`poster valid: ${posterRows.length - failedPosterRows.length}`);
 console.log(`poster invalid: ${failedPosterRows.length}`);
+console.log(`poster locale fixtures (es-US + ko-KR each): ${posterLocaleRows.length}`);
+console.log(`poster locale valid: ${posterLocaleRows.length - failedPosterLocaleRows.length}`);
+console.log(`poster locale invalid: ${failedPosterLocaleRows.length}`);
 console.log(`revision fixtures: ${revisionRows.length}`);
 console.log(`revision valid: ${revisionRows.length - failedRevisionRows.length}`);
 console.log(`revision invalid: ${failedRevisionRows.length}`);
@@ -259,6 +379,15 @@ if (failedPosterRows.length > 0) {
   console.log("");
   console.log("Poster failures:");
   for (const row of failedPosterRows) {
+    console.log(`- ${row.id}: ${row.errors.join(", ")}`);
+  }
+  process.exitCode = 1;
+}
+
+if (failedPosterLocaleRows.length > 0) {
+  console.log("");
+  console.log("Poster locale failures:");
+  for (const row of failedPosterLocaleRows) {
     console.log(`- ${row.id}: ${row.errors.join(", ")}`);
   }
   process.exitCode = 1;

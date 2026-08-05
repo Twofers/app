@@ -36,8 +36,8 @@
     "apk": {}
   },
   "migrations": {
-    "count": 194,
-    "latest": "20260825130000_enable_native_trial_checkout.sql"
+    "count": 195,
+    "latest": "20260825140000_offer_version_revise_rpc.sql"
   },
   "edgeFunctions": {
     "count": 81,

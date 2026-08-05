@@ -44,7 +44,11 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     const inspectBlock = source.slice(inspectIndex, sourceAwareIndex);
     expect(inspectBlock).toMatch(/generateStructuredText<typeof QUICK_DEAL_IMAGE_QA_SCHEMA, QuickDealImageQaResult>/);
     expect(inspectBlock).toMatch(/operation:\s*"image_qa"/);
-    expect(inspectBlock).toMatch(/imageInputs:\s*\[\{ bytes: params\.imageBytes, mimeType: "image\/png" \}\]/);
+    // FLAG 1 (AI_ADS_PIPELINE_V8_ENABLED, task 3, 2026-08-05): real fetched
+    // mime is threaded through for merchant photo QA; safeImageMime(undefined)
+    // still resolves to "image/png" for every AI-generated call site, so this
+    // stays byte-identical there.
+    expect(inspectBlock).toMatch(/imageInputs:\s*\[\{ bytes: params\.imageBytes, mimeType: safeImageMime\(params\.mimeType\) \}\]/);
     expect(inspectBlock).toMatch(/QUICK_DEAL_IMAGE_QA_SCHEMA/);
     expect(inspectBlock).toMatch(/config:\s*makeImageQaConfig\(\)/);
     expect(inspectBlock).toMatch(/logTextProviderAttempts\(params\.costContext, "image_qa", result\.attempts\)/);

@@ -143,6 +143,48 @@ describe("calculateAiCost", () => {
     expect(usage.reasoning_tokens).toBe(0);
   });
 
+  it("reads reasoning tokens from output_tokens_details when present (Responses API shape)", () => {
+    const usage = normalizeAiUsage({
+      usage: {
+        input_tokens: 120,
+        output_tokens: 400,
+        output_tokens_details: { reasoning_tokens: 320 },
+      },
+    });
+
+    expect(usage.output_tokens).toBe(400);
+    expect(usage.reasoning_tokens).toBe(320);
+  });
+
+  it("prefers completion_tokens_details.reasoning_tokens over output_tokens_details when both are present", () => {
+    const usage = normalizeAiUsage({
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 400,
+        completion_tokens_details: { reasoning_tokens: 320 },
+        output_tokens_details: { reasoning_tokens: 999 },
+      },
+    });
+
+    expect(usage.reasoning_tokens).toBe(320);
+  });
+
+  it("normalizes cached input tokens from input_tokens_details.cached_tokens (Responses API shape)", () => {
+    const usage = normalizeAiUsage({
+      usage: {
+        input_tokens: 120,
+        output_tokens: 60,
+        input_tokens_details: { cached_tokens: 15 },
+        output_tokens_details: { reasoning_tokens: 40 },
+      },
+    });
+
+    expect(usage.input_tokens).toBe(120);
+    expect(usage.cached_input_tokens).toBe(15);
+    expect(usage.output_tokens).toBe(60);
+    expect(usage.reasoning_tokens).toBe(40);
+  });
+
   it("logs explicit Gemini image cost estimates without usage warnings", async () => {
     const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
     const admin = {

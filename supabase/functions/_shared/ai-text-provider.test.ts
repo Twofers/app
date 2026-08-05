@@ -6,6 +6,7 @@ import {
   generateStructuredText,
   resolveAiTextProviderConfig,
 } from "./ai-text-provider.ts";
+import { generateOpenAiStructuredJson } from "./openai-text-provider.ts";
 
 function env(values: Record<string, string | undefined>) {
   return {
@@ -77,6 +78,44 @@ function openAiSuccess(value = { variants: [{ headlineAlternative: "Buy a latte,
       },
     }),
     { status: 200, headers: { "Content-Type": "application/json", "x-request-id": "req_success" } },
+  );
+}
+
+function openAiResponsesSuccess(
+  value: unknown = { variants: [{ headlineAlternative: "Buy a latte, get one free" }] },
+  usageOverrides: Record<string, unknown> = {},
+) {
+  return new Response(
+    JSON.stringify({
+      id: "resp_test",
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [{ type: "output_text", text: JSON.stringify(value) }],
+        },
+      ],
+      usage: {
+        input_tokens: 120,
+        output_tokens: 60,
+        input_tokens_details: { cached_tokens: 15 },
+        output_tokens_details: { reasoning_tokens: 40 },
+        ...usageOverrides,
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", "x-request-id": "req_responses_success" } },
+  );
+}
+
+function openAiResponsesIncomplete(reason = "max_output_tokens") {
+  return new Response(
+    JSON.stringify({
+      id: "resp_incomplete",
+      status: "incomplete",
+      incomplete_details: { reason },
+      output: [],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }
 
@@ -761,5 +800,241 @@ describe("AI_GEMINI_QA_TEMPERATURE (Gemini-only, QA operations only)", () => {
     const [, init] = fetchMock.mock.calls[0] ?? [];
     const body = JSON.parse(String((init as RequestInit).body));
     expect(body).not.toHaveProperty("temperature");
+  });
+});
+
+describe("generateOpenAiStructuredJson: Responses API opt-in (AI_OPENAI_RESPONSES_API_ENABLED)", () => {
+  const baseRequest = {
+    operation: "creative_candidates" as const,
+    systemPrompt: "System rules.",
+    userPrompt: "Offer facts.",
+    jsonSchema: schema,
+    maxOutputTokens: 650,
+    timeoutMs: 12000,
+    generationRunId: "11111111-1111-4111-8111-111111111111",
+    promptVersion: "test",
+    reasoningLevel: "medium" as const,
+  };
+
+  it("flag off: gpt-5.5 still posts to /v1/chat/completions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
+
+    await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: baseRequest,
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "false" }),
+    });
+
+    const [url] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+  });
+
+  it("defaults to disabled when the env var is unset at all (byte-identical current behavior)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
+
+    // No `env` override passed — exercises the production Deno.env fallback,
+    // which resolves to null under node/vitest and so must default to off.
+    await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: baseRequest,
+    });
+
+    const [url] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+  });
+
+  it("flag on + gpt-5.5: posts to /v1/responses with json_schema format + reasoning effort", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiResponsesSuccess());
+
+    const result = await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: baseRequest,
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.model).toBe("gpt-5.5");
+    expect(body.instructions).toBe("System rules.");
+    expect(body.input).toEqual([
+      { role: "user", content: [{ type: "input_text", text: "Offer facts." }] },
+    ]);
+    expect(body.text.format).toMatchObject({ type: "json_schema", name: "deal_copy", strict: true });
+    expect(body.reasoning).toEqual({ effort: "medium" });
+    // 650 caller budget + 2048 medium-effort reasoning reserve (chatCompletionTuning).
+    expect(body.max_output_tokens).toBe(650 + 2048);
+    expect(result.value).toEqual({ variants: [{ headlineAlternative: "Buy a latte, get one free" }] });
+  });
+
+  it("flag on + gpt-4o-mini: still uses chat.completions (Responses API is gpt-5-family only)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
+
+    const result = await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-4o-mini",
+      request: baseRequest,
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.messages).toBeDefined();
+    expect(result.value).toEqual({ variants: [{ headlineAlternative: "Buy a latte, get one free" }] });
+  });
+
+  it("maps image inputs to input_image content parts on the Responses API path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiResponsesSuccess());
+
+    await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: {
+        ...baseRequest,
+        imageInputs: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" }],
+      },
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.input[0].content).toEqual([
+      { type: "input_text", text: "Offer facts." },
+      { type: "input_image", image_url: "data:image/jpeg;base64,AQID", detail: "high" },
+    ]);
+  });
+
+  it("status 'incomplete' with reason 'max_output_tokens' throws provider_output_invalid / OPENAI_RESPONSES_TRUNCATED", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiResponsesIncomplete());
+
+    let caught: unknown;
+    try {
+      await generateOpenAiStructuredJson({
+        apiKey: "openai-test-key",
+        model: "gpt-5.5",
+        request: baseRequest,
+        env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      errorClass: "provider_output_invalid",
+      errorCode: "OPENAI_RESPONSES_TRUNCATED",
+    });
+    expect(String((caught as Error).message)).toMatch(/max_output_tokens/);
+  });
+
+  it("does not mark other incomplete reasons as OPENAI_RESPONSES_TRUNCATED", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiResponsesIncomplete("content_filter"));
+
+    let caught: unknown;
+    try {
+      await generateOpenAiStructuredJson({
+        apiKey: "openai-test-key",
+        model: "gpt-5.5",
+        request: baseRequest,
+        env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid", errorCode: "OPENAI_EMPTY_CONTENT" });
+  });
+
+  it("missing/empty output text throws OPENAI_EMPTY_CONTENT", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ id: "resp_empty", status: "completed", output: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    let caught: unknown;
+    try {
+      await generateOpenAiStructuredJson({
+        apiKey: "openai-test-key",
+        model: "gpt-5.5",
+        request: baseRequest,
+        env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid", errorCode: "OPENAI_EMPTY_CONTENT" });
+  });
+
+  it("JSON parse failure throws OPENAI_JSON_PARSE_FAILED", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "resp_bad_json",
+          status: "completed",
+          output: [{ type: "message", content: [{ type: "output_text", text: "{not valid json" }] }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    let caught: unknown;
+    try {
+      await generateOpenAiStructuredJson({
+        apiKey: "openai-test-key",
+        model: "gpt-5.5",
+        request: baseRequest,
+        env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ errorClass: "provider_output_invalid", errorCode: "OPENAI_JSON_PARSE_FAILED" });
+  });
+
+  it("reads output_text convenience field when present instead of walking output[]", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "resp_convenience",
+          status: "completed",
+          output_text: JSON.stringify({ variants: [{ headlineAlternative: "Convenience field wins" }] }),
+          output: [],
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: baseRequest,
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+    });
+
+    expect(result.value).toEqual({ variants: [{ headlineAlternative: "Convenience field wins" }] });
+  });
+
+  it("normalizes usage from the Responses API shape (reasoning + cached tokens) onto the attempt", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiResponsesSuccess());
+
+    const result = await generateOpenAiStructuredJson({
+      apiKey: "openai-test-key",
+      model: "gpt-5.5",
+      request: baseRequest,
+      env: env({ AI_OPENAI_RESPONSES_API_ENABLED: "true" }),
+    });
+
+    expect(result.attempt.inputTokens).toBe(120);
+    expect(result.attempt.outputTokens).toBe(60);
+    expect(result.attempt.cachedInputTokens).toBe(15);
+    expect(result.attempt.reasoningTokens).toBe(40);
   });
 });

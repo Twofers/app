@@ -9,6 +9,7 @@ import { resolveGeminiTextModel } from "./gemini-text-provider.ts";
 import {
   buildQaCheckedAdLocalizationBundle,
 } from "../../../lib/ad-localization.ts";
+import { localizationGlossaryAsPromptTerms } from "../../../lib/localization-glossary.ts";
 import type {
   AdLocalizationBundle,
   AdTranslationQaHardFailReason,
@@ -400,6 +401,58 @@ function edgeEnv() {
   return Deno.env;
 }
 
+type MinimalEnvReader = { get(name: string): string | undefined | null };
+
+/**
+ * Default env reader for the prompt builders below. Unlike edgeEnv() above
+ * (only ever reached when a caller omits `deps.env`, which every real caller
+ * supplies), this one is exercised directly by buildAdLocalizationPrompt/
+ * buildAdLocalizationRepairPrompt's own unit tests calling them with no env
+ * argument at all — so it must not throw when the `Deno` global doesn't exist
+ * (vitest/node). Mirrors the typeof-guard pattern in site-import.ts's
+ * menuTextV2FlagEnabled/menuLinksV2FlagEnabled.
+ */
+function safeEdgeEnv(): MinimalEnvReader {
+  return {
+    get(name: string): string | undefined {
+      try {
+        return typeof Deno !== "undefined" ? Deno.env.get(name) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}
+
+/**
+ * Master gate for the shared bilingual glossary fallback. Default OFF: with
+ * this unset (or not "true"), resolveLocalizedTermsForPrompt below returns the
+ * caller's localizedTerms untouched, so every prompt this file builds stays
+ * byte-identical to today.
+ */
+function sharedGlossaryEnabled(env: MinimalEnvReader): boolean {
+  return env.get("AI_SHARED_GLOSSARY_ENABLED") === "true";
+}
+
+/**
+ * AI_SHARED_GLOSSARY_ENABLED only: every call site into this module passes
+ * localizedTerms: [] today (see ai-generate-ad-variants/index.ts, out of
+ * scope for this change) — there is no real "localized term snapshot" data
+ * source wired up yet. When the flag is on and the caller supplied an empty
+ * (or omitted) list, fill that prompt slot with the shared glossary instead
+ * of leaving it empty, so the model has at least the app's own core-vocabulary
+ * renderings to anchor against. A caller that does pass real terms is never
+ * overridden.
+ */
+function resolveLocalizedTermsForPrompt(
+  localizedTerms: unknown[] | null | undefined,
+  env: MinimalEnvReader,
+): unknown[] {
+  if (Array.isArray(localizedTerms) && localizedTerms.length > 0) return localizedTerms;
+  if (!sharedGlossaryEnabled(env)) return localizedTerms ?? [];
+  return localizationGlossaryAsPromptTerms();
+}
+
 export function resolveAdLocalizationSemanticQaConfig(
   env: { get(name: string): string | undefined | null } = edgeEnv(),
 ): AiTextProviderConfig {
@@ -453,7 +506,10 @@ export function adLocalizationOfferFactsFromDefinition(
   };
 }
 
-export function buildAdLocalizationPrompt(input: AdLocalizationProviderRequest): {
+export function buildAdLocalizationPrompt(
+  input: AdLocalizationProviderRequest,
+  env: MinimalEnvReader = safeEdgeEnv(),
+): {
   systemPrompt: string;
   userPrompt: string;
   jsonSchema: typeof AD_LOCALIZATION_JSON_SCHEMA;
@@ -461,6 +517,7 @@ export function buildAdLocalizationPrompt(input: AdLocalizationProviderRequest):
 } {
   const targetLocales = normalizeTargetLocales(input.sourceLocale, input.targetLocales);
   const protectedTerms = uniqueClean(input.protectedTerms);
+  const localizedTerms = resolveLocalizedTermsForPrompt(input.localizedTerms, env);
   return {
     targetLocales,
     jsonSchema: AD_LOCALIZATION_JSON_SCHEMA,
@@ -504,7 +561,7 @@ export function buildAdLocalizationPrompt(input: AdLocalizationProviderRequest):
       promptJson(input.offerFacts),
       "",
       "LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:",
-      promptJson(input.localizedTerms ?? []),
+      promptJson(localizedTerms),
       "",
       "MERCHANT CREATIVE PROFILE:",
       promptJson(input.merchantProfile ?? {}),
@@ -521,7 +578,10 @@ export function isRepairableAdLocalizationFailure(reasonCodes: readonly AdLocali
   );
 }
 
-export function buildAdLocalizationRepairPrompt(input: AdLocalizationRepairRequest): {
+export function buildAdLocalizationRepairPrompt(
+  input: AdLocalizationRepairRequest,
+  env: MinimalEnvReader = safeEdgeEnv(),
+): {
   systemPrompt: string;
   userPrompt: string;
   jsonSchema: typeof AD_LOCALIZATION_REPAIR_JSON_SCHEMA;
@@ -530,6 +590,7 @@ export function buildAdLocalizationRepairPrompt(input: AdLocalizationRepairReque
 } {
   const targetLocale = input.targetLocale;
   const protectedTerms = uniqueClean(input.protectedTerms);
+  const localizedTerms = resolveLocalizedTermsForPrompt(input.localizedTerms, env);
   if (targetLocale === input.sourceLocale) {
     return {
       repairable: false,
@@ -608,7 +669,7 @@ export function buildAdLocalizationRepairPrompt(input: AdLocalizationRepairReque
       promptJson(input.offerFacts),
       "",
       "LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:",
-      promptJson(input.localizedTerms ?? []),
+      promptJson(localizedTerms),
       "",
       "MERCHANT CREATIVE PROFILE:",
       promptJson(input.merchantProfile ?? {}),
@@ -805,7 +866,7 @@ export async function generateAdLocalizationTranscreations(
   request: AdLocalizationProviderRequest,
   deps: AiTextProviderDeps,
 ): Promise<AdLocalizationProviderResult> {
-  const prompt = buildAdLocalizationPrompt(request);
+  const prompt = buildAdLocalizationPrompt(request, deps.env);
   if (prompt.targetLocales.length === 0) {
     return {
       targetCreatives: {},
@@ -850,7 +911,7 @@ export async function repairAdLocalizationTranscreation(
   request: AdLocalizationRepairRequest,
   deps: AiTextProviderDeps,
 ): Promise<AdLocalizationProviderResult> {
-  const prompt = buildAdLocalizationRepairPrompt(request);
+  const prompt = buildAdLocalizationRepairPrompt(request, deps.env);
   if (!prompt.repairable) {
     return noProviderResult({
       promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,

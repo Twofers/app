@@ -166,6 +166,23 @@ export type GenerateValidatedDealCopyParams = {
     attemptNumber: 1 | 2;
     reasonCodes: string[];
   }) => void | Promise<void>;
+  /**
+   * Additive, optional. When true, scoring for candidate selection skips the
+   * urgency/scarcity regex bonus (see ScoreCopyOptions). Absent/false leaves
+   * scoring byte-identical to prior behavior.
+   */
+  suppressUrgencyBonus?: boolean;
+};
+
+/** Additive options for {@link scoreCopy} / {@link selectBestValidAiCopy}. */
+export type ScoreCopyOptions = {
+  /**
+   * When true, skips the +1 bonus for urgency/scarcity phrasing
+   * (/\blimited\b|\bonly\s+\d+\b|\bavailable\b/), which otherwise rewards
+   * copy that contradicts the fact-safety rule against inventing
+   * urgency/scarcity. Absent/false = current (byte-identical) scoring.
+   */
+  suppressUrgencyBonus?: boolean;
 };
 
 type BuildDealOfferContractParams = {
@@ -1352,7 +1369,7 @@ export function parseAiDealCopyVariants(content: string): AiDealCopyVariant[] {
     .slice(0, 5);
 }
 
-function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract): number {
+function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract, options?: ScoreCopyOptions): number {
   const text = normalizeForSearch(copyText(copy));
   let score = 0;
   for (const item of contract.aiRules.mustUseExactItemNames) {
@@ -1367,7 +1384,7 @@ function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract): number
     score += 2;
   }
   if (containsItem(text, contract.businessName)) score += 1;
-  if (/\blimited\b|\bonly\s+\d+\b|\bavailable\b/.test(text)) score += 1;
+  if (!options?.suppressUrgencyBonus && /\blimited\b|\bonly\s+\d+\b|\bavailable\b/.test(text)) score += 1;
   if (/\bamazing\b|\bdelicious treat\b|\bdont miss out\b|\bspecial offer\b/.test(text)) score -= 2;
   if (copy.headline && copy.short_description.toLowerCase().startsWith(copy.headline.toLowerCase())) score -= 1;
   if (typeof copy.preliminary_score === "number" && Number.isFinite(copy.preliminary_score)) {
@@ -1382,6 +1399,7 @@ function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract): number
 export function selectBestValidAiCopy(
   variants: readonly AiDealCopyVariant[],
   contract: DealOfferContract,
+  options?: ScoreCopyOptions,
 ): {
   copy: AiDealCopyVariant | null;
   selectedVariantIndex: number | null;
@@ -1400,7 +1418,7 @@ export function selectBestValidAiCopy(
       continue;
     }
     validCount += 1;
-    const score = scoreCopy(variant, contract);
+    const score = scoreCopy(variant, contract, options);
     if (!best || score > best.score) best = { copy: variant, index, score };
   }
 
@@ -1513,7 +1531,9 @@ export async function generateValidatedDealCopy(
       `MODEL_REQUEST_FAILED:${String(err).slice(0, 80)}`,
     );
   }
-  const firstSelection = selectBestValidAiCopy(firstVariants, params.contract);
+  const firstSelection = selectBestValidAiCopy(firstVariants, params.contract, {
+    suppressUrgencyBonus: params.suppressUrgencyBonus,
+  });
   if (firstSelection.copy) {
     return lockCopy(
       firstSelection.copy,
@@ -1550,7 +1570,9 @@ export async function generateValidatedDealCopy(
       `MODEL_RETRY_FAILED:${String(err).slice(0, 80)}`,
     );
   }
-  const secondSelection = selectBestValidAiCopy(secondVariants, params.contract);
+  const secondSelection = selectBestValidAiCopy(secondVariants, params.contract, {
+    suppressUrgencyBonus: params.suppressUrgencyBonus,
+  });
   if (secondSelection.copy) {
     return lockCopy(
       secondSelection.copy,

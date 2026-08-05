@@ -16,7 +16,11 @@
     "expectedPosterHeadline": "COFFEE + COOKIE BREAK",
     "expectedPosterKicker": "TRY OUR",
     "expectedOfferLine1": "FREE COOKIE OF YOUR CHOICE",
-    "expectedOfferLine2": "WITH ANY LARGE COFFEE DRINK"
+    "expectedOfferLine2": "WITH ANY LARGE COFFEE DRINK",
+    "expectedOfferLine1Es": "GALLETA GRATIS",
+    "expectedOfferLine2Es": "AL COMPRAR 1 BEBIDA DE CAFÉ",
+    "expectedOfferLine1Ko": "원하는 쿠키 무료",
+    "expectedOfferLine2Ko": "모든 라지 커피 음료 X 1 구매 시"
   },
   {
     "id": "latte-same-item-poster",
@@ -52,5 +56,92 @@
     "expectedPosterKicker": "BAKERY PICK",
     "expectedOfferLine1": "40% OFF",
     "expectedOfferLine2": "CROISSANT"
+  },
+  {
+    "id": "loaded-nachos-percent-off-poster",
+    "merchantName": "The Filling Station",
+    "businessCategory": "Restaurant",
+    "buyQuantity": 1,
+    "buyItem": "loaded nachos",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "rejectedHeadlines": [
+      "Try the loaded nachos",
+      "40% off loaded nachos"
+    ],
+    "expectedPosterHeadline": "LOADED NACHOS FOR LESS",
+    "expectedOfferLine1": "40% OFF",
+    "expectedOfferLine2": "LOADED NACHOS"
+  },
+  {
+    "id": "haircut-fade-percent-off-poster",
+    "merchantName": "The Colonel's Cuts",
+    "businessCategory": "Barber shop",
+    "buyQuantity": 1,
+    "buyItem": "Haircut and fade",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "rejectedHeadlines": [
+      "Try the Haircut and fade",
+      "40% off Haircut and fade"
+    ],
+    "expectedPosterHeadline": "HAIRCUT FADE FOR LESS",
+    "expectedOfferLine1": "40% OFF",
+    "expectedOfferLine2": "HAIRCUT AND FADE"
+  },
+  {
+    "id": "large-cold-brew-percent-off-poster",
+    "merchantName": "The Colonel's Brew",
+    "businessCategory": "Cafe",
+    "buyQuantity": 1,
+    "buyItem": "large cold brew",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "rejectedHeadlines": [
+      "Try the large cold brew",
+      "40% off large cold brew"
+    ],
+    "expectedPosterHeadline": "COLD BREW FOR LESS",
+    "expectedOfferLine1": "40% OFF",
+    "expectedOfferLine2": "LARGE COLD BREW"
+  },
+  {
+    "id": "whole-bean-coffee-bag-percent-off-poster",
+    "merchantName": "Test Cafe",
+    "businessCategory": "Cafe",
+    "buyQuantity": 1,
+    "buyItem": "12 ounce bag of whole bean coffee",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "rejectedHeadlines": [
+      "Try the 12 ounce bag of whole bean coffee",
+      "40% off 12 ounce bag of whole bean coffee"
+    ],
+    "expectedPosterHeadline": "WHOLE BEAN COFFEE FOR LESS",
+    "expectedOfferLine1": "40% OFF",
+    "expectedOfferLine2": "BAG OF WHOLE BEAN COFFEE",
+    "expectedOfferLine1Es": "40% DE DESCUENTO",
+    "expectedOfferLine2Es": "BAG OF WHOLE BEAN COFFEE"
+  },
+  {
+    "id": "breakfast-sandwich-hash-brown-poster",
+    "merchantName": "The Colonel's Brew",
+    "businessCategory": "Cafe",
+    "buyQuantity": 1,
+    "buyItem": "breakfast sandwich",
+    "rewardQuantity": 1,
+    "rewardItem": "hash brown",
+    "rewardType": "free",
+    "rejectedHeadlines": [
+      "Try our breakfast sandwich",
+      "Buy 1 breakfast sandwich and get 1 hash brown"
+    ],
+    "expectedPosterHeadline": "SANDWICH + BROWN BREAK",
+    "expectedOfferLine1": "FREE HASH BROWN",
+    "expectedOfferLine2": "WITH BREAKFAST SANDWICH",
+    "expectedOfferLine1Es": "HASH BROWN GRATIS",
+    "expectedOfferLine2Es": "AL COMPRAR 1 SÁNDWICH",
+    "expectedOfferLine1Ko": "HASH BROWN 무료",
+    "expectedOfferLine2Ko": "아침 샌드위치 X 1 구매 시"
   }
 ]

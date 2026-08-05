@@ -429,7 +429,11 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("reviseSuggestionTopHeadlineFeedback");
     expect(createAiSource).toContain("applyRevisionSuggestion");
     expect(createAiSource).toContain("setRevisionTarget(suggestion.target)");
-    expect(createAiSource).toContain("setRevisionFeedback(suggestion.feedback)");
+    // Chips append (deduped) to any existing feedback instead of overwriting it —
+    // 2026-08-05 change (Dan-approved): tapping a chip used to silently discard
+    // whatever the merchant had already typed into the feedback box.
+    expect(createAiSource).toContain("appendRevisionFeedback(current, suggestion.feedback)");
+    expect(createAiSource).toContain("setPendingRevisionPreset(revisionPresetForSuggestion(suggestion.key) ?? null)");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_SUGGESTION_SELECTED");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_TAPPED");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_SUCCEEDED");

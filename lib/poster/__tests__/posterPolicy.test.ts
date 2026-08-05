@@ -216,6 +216,53 @@ describe("poster policy", () => {
     expect(lines.offer_line_2.length).toBeLessThanOrEqual(24);
   });
 
+  // 2026-08-05 fix. "12 ounce bag of whole bean coffee" has no GENERIC_LOCALIZED_TERM_DICTIONARY
+  // entry, so resolveLocalizedOfferTerm's es-US lookup falls through to its preserved-term
+  // default and the text staying in play is still English — but `fitLocalizedItem`'s es-US
+  // branch trimmed it with Spanish-only rules (leading determiners, trailing function words)
+  // that don't recognize English stop words like "of"/"the", so it fell through to a naive
+  // prefix cut and reproduced the exact R9 truncation shape on the es-US poster:
+  // "12 OUNCE BAG OF WHOLE" — losing the head noun "coffee" entirely, even though en-US and
+  // ko-KR (which never took the Spanish branch) both name the product correctly. An
+  // UNTRANSLATED item must get the same head-final English fitter regardless of which locale
+  // was requested.
+  it("keeps the product noun on the es-US offer line when the item has no Spanish translation", () => {
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 40,
+      itemDescription: "12 ounce bag of whole bean coffee",
+    });
+
+    const es = buildPosterOfferLinesFromOfferDefinition(definition, "es-US");
+    expect(es.offer_line_1).toBe("40% DE DESCUENTO");
+    expect(es.offer_line_2).toBe("BAG OF WHOLE BEAN COFFEE");
+    expect(es.offer_line_2.endsWith("COFFEE")).toBe(true);
+    expect(es.offer_line_2.length).toBeLessThanOrEqual(24);
+
+    // ko-KR never took the buggy Spanish-trimming branch, so it was already correct; pin it
+    // alongside es-US so a future regression in the shared `translated` plumbing shows up here.
+    const ko = buildPosterOfferLinesFromOfferDefinition(definition, "ko-KR");
+    expect(ko.offer_line_2).toBe("BAG OF WHOLE BEAN COFFEE");
+
+    // A genuinely translated item must keep taking the Spanish trimming path, not this
+    // English fallback — "cookie of your choice" -> "galleta de tu elección" already has a
+    // dedicated regression test above ("keeps the free/discount word when a localized item
+    // overruns the offer line"); this just re-confirms the two paths stay independent.
+    const translatedDefinition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+    const translatedEs = buildPosterOfferLinesFromOfferDefinition(translatedDefinition, "es-US");
+    expect(translatedEs.offer_line_1).toBe("GALLETA GRATIS");
+    expect(translatedEs.offer_line_2).toBe("AL COMPRAR 1 BEBIDA DE CAFÉ");
+  });
+
   it("builds sanitized poster copy from authoritative offer facts", () => {
     const definition = definitionFor({
       dealType: "BUY_ONE_GET_ONE_FREE",
@@ -578,6 +625,80 @@ describe("poster policy", () => {
     for (const locale of ["es-US", "ko-KR"] as const) {
       expect(assertPosterCopyPolicy(spec.copy_by_language[locale]).passed).toBe(true);
     }
+  });
+
+  // `localizedHeroByLocale` is additive and optional: absent, it is byte-identical to the
+  // blank-hero behavior above. When present, a candidate for a non-source locale must clear
+  // every guard the source-locale hero already clears (fit + policy, mechanical phrasing, and
+  // the S2 dedup against that locale's own offer lines) before it fills the hero; any failure
+  // falls back to the same blank hero.
+  describe("localizedHeroByLocale (additive)", () => {
+    function bagelCoffeeDefinition() {
+      return definitionFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "bagel",
+        freeItemQuantity: 1,
+        freeItemDescription: "coffee",
+        freeItemDiscountPercent: 100,
+      });
+    }
+
+    function specWith(localizedHeroByLocale?: Partial<Record<"en" | "es" | "ko", string>>) {
+      return buildPosterSpecFromOfferDefinition({
+        definition: bagelCoffeeDefinition(),
+        enabled: true,
+        templateId: "premium",
+        headline: "Coffee + bagel break",
+        businessCategory: "Coffee shop",
+        localizedHeroByLocale,
+      });
+    }
+
+    it("fills the hero for a locale whose candidate clears every guard", () => {
+      const spec = specWith({ es: "Tu caf\u00e9 te espera" });
+      expect(spec.copy_by_language["es-US"].headline).toBe("TU CAF\u00c9 TE ESPERA");
+      // A locale with no candidate keeps the current blank-hero behavior.
+      expect(spec.copy_by_language["ko-KR"].headline).toBe("");
+      expect(assertPosterCopyPolicy(spec.copy_by_language["es-US"]).passed).toBe(true);
+    });
+
+    it("falls back to blank when the candidate exceeds the 28-char headline limit", () => {
+      const tooLong = "\uac00".repeat(30);
+      const spec = specWith({ ko: tooLong });
+      expect(spec.copy_by_language["ko-KR"].headline).toBe("");
+    });
+
+    it("falls back to blank when the candidate duplicates that locale's offer line (S2 dedup)", () => {
+      const spec = specWith({ es: "Caf\u00e9 gratis" });
+      expect(spec.copy_by_language["es-US"].offer_line_1).toBe("CAF\u00c9 GRATIS");
+      expect(spec.copy_by_language["es-US"].headline).toBe("");
+    });
+
+    it("falls back to blank when the candidate is mechanically phrased (existing isMechanicalOfferHeadline rule)", () => {
+      const spec = specWith({ es: "Buy one get one free" });
+      expect(spec.copy_by_language["es-US"].headline).toBe("");
+    });
+
+    it("never lets a localized candidate override the source locale's own headline", () => {
+      const spec = specWith({ en: "Ignored candidate for the source locale" });
+      expect(spec.copy_by_language["en-US"].headline).toBe("COFFEE + BAGEL BREAK");
+    });
+
+    it("is byte-identical to the blank-hero behavior when the param is absent", () => {
+      const withEmptyMap = specWith({});
+      const withoutParam = buildPosterSpecFromOfferDefinition({
+        definition: bagelCoffeeDefinition(),
+        enabled: true,
+        templateId: "premium",
+        headline: "Coffee + bagel break",
+        businessCategory: "Coffee shop",
+      });
+      expect(withEmptyMap.copy_by_language).toEqual(withoutParam.copy_by_language);
+      expect(withoutParam.copy_by_language["es-US"].headline).toBe("");
+      expect(withoutParam.copy_by_language["ko-KR"].headline).toBe("");
+    });
   });
 
   it("renders merchant poster text only in the deal source language", () => {

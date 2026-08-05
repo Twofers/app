@@ -11,6 +11,7 @@ import {
   deterministicFallbackCopy,
   generateValidatedDealCopy,
   parseAiDealCopyVariants,
+  selectBestValidAiCopy,
   validateAiCopyAgainstOffer,
   type AiDealCopyVariant,
   type DealOfferContract,
@@ -633,6 +634,42 @@ describe("validateAiCopyAgainstOffer", () => {
       poster_kicker: "Morning deal",
       image_brief: "Coffee and bagel on a cafe table.",
     });
+  });
+});
+
+describe("selectBestValidAiCopy urgency bonus suppression", () => {
+  // Candidate B is the plain valid copy; candidate A is textually identical
+  // except its push_notification adds an urgency phrase ("Limited time
+  // only.") that trips scoreCopy's +1 regex bonus
+  // (/\blimited\b|\bonly\s+\d+\b|\bavailable\b/) but is otherwise scored
+  // identically to B. B is listed first so a tie goes to B (best is only
+  // replaced on strict `>`), making the urgency bonus the sole reason A can
+  // overtake it.
+  const candidateB = copy({});
+  const candidateA = copy({
+    push_notification: "Claim the coffee deal and get a free bagel. Limited time only.",
+  });
+
+  it("absent options keeps the current ordering (urgency bonus wins)", () => {
+    const result = selectBestValidAiCopy([candidateB, candidateA], coffeeBagelContract);
+    expect(result.copy).toEqual(candidateA);
+    expect(result.selectedVariantIndex).toBe(1);
+  });
+
+  it("suppressUrgencyBonus: false is byte-identical to absent", () => {
+    const result = selectBestValidAiCopy([candidateB, candidateA], coffeeBagelContract, {
+      suppressUrgencyBonus: false,
+    });
+    expect(result.copy).toEqual(candidateA);
+    expect(result.selectedVariantIndex).toBe(1);
+  });
+
+  it("suppressUrgencyBonus: true drops the bonus and flips the ordering", () => {
+    const result = selectBestValidAiCopy([candidateB, candidateA], coffeeBagelContract, {
+      suppressUrgencyBonus: true,
+    });
+    expect(result.copy).toEqual(candidateB);
+    expect(result.selectedVariantIndex).toBe(0);
   });
 });
 

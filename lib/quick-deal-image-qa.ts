@@ -107,8 +107,22 @@ function cleanItem(value: unknown): string {
 export function buildQuickDealImageQaPrompt(
   requiredVisualItems: readonly string[],
   renderFormat: AdImageRenderFormat = "square_1_1",
+  /**
+   * Additive (2026-08-05): optional visual descriptors keyed by item name (as
+   * it appears, raw or cleaned, in requiredVisualItems). When provided, each
+   * required item renders to the inspector as "BRAND NAME (visual descriptor)"
+   * instead of the bare name. Absent by default, so existing callers see a
+   * byte-identical prompt.
+   */
+  itemDescriptions?: Record<string, string>,
 ): string {
-  const items = requiredVisualItems.map(cleanItem).filter(Boolean);
+  const cleanedPairs = requiredVisualItems
+    .map((raw) => ({ raw, clean: cleanItem(raw) }))
+    .filter((pair) => pair.clean.length > 0);
+  const items = cleanedPairs.map(({ raw, clean }) => {
+    const descriptor = cleanItem(itemDescriptions?.[clean] ?? itemDescriptions?.[raw]);
+    return descriptor ? `${clean} (${descriptor})` : clean;
+  });
   const poster = renderFormat === "poster_4_5";
   return [
     "Inspect this deal image.",
@@ -158,15 +172,25 @@ export function buildQuickDealImageRegenerationPrompt(params: {
   basePrompt: string;
   requiredVisualItems: readonly string[];
   missingItems: readonly string[];
+  /**
+   * Additive (2026-08-05): optional regeneration guidance. qaNotes is threaded
+   * through as explicit negative feedback from the prior QA pass; requireDifferentComposition
+   * asks for a visibly different shot than the last attempt. Both absent by
+   * default, so existing callers see a byte-identical prompt.
+   */
+  opts?: { qaNotes?: string; requireDifferentComposition?: boolean };
 }): string {
   const required = params.requiredVisualItems.map(cleanItem).filter(Boolean);
   const missing = params.missingItems.map(cleanItem).filter(Boolean);
+  const qaNotes = cleanItem(params.opts?.qaNotes);
   return [
     "Regenerate the ad image.",
     missing.length > 0 ? `The previous image missed: ${missing.join(", ")}.` : "The previous image did not clearly show the full offer.",
     `The new image must clearly show all required offer items as main subjects: ${required.join(", ")}.`,
     "Make every required item clearly visible and equally important.",
     "Remove all readable text, letters, numbers, app names, business names, logos, prices, coupons, menu boards, QR codes, watermark-like marks, mascots, cartoon characters, animals, app mascots, and unrelated character props.",
+    qaNotes ? `The previous attempt was rejected for this reason, do not repeat it: ${qaNotes}` : "",
+    params.opts?.requireDifferentComposition ? "Use a clearly different composition and camera angle than the previous attempt." : "",
     params.basePrompt,
   ]
     .filter(Boolean)

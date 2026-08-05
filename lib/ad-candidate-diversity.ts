@@ -229,3 +229,76 @@ export function checkAdCandidateDiversity(
     warnings,
   };
 }
+
+export type DiversityPruneResult = {
+  survivors: AdCandidateForDiversity[];
+  removedIds: string[];
+  residualIssues: AdCandidateDiversityIssue[];
+};
+
+/**
+ * Issue codes that name a genuine multi-candidate conflict (two or more
+ * candidates competing over the same headline/opening/strategy lane), as
+ * opposed to a single-candidate problem (UNKNOWN_STRATEGY) or a whole-batch
+ * gap (MISSING_REQUIRED_STRATEGY) that removing a candidate cannot fix.
+ */
+const PRUNEABLE_DIVERSITY_CODES = new Set<AdCandidateDiversityIssue["code"]>([
+  "DUPLICATE_STRATEGY",
+  "IDENTICAL_HEADLINE",
+  "DUPLICATE_HEADLINE_OPENING",
+  "OBVIOUS_PARAPHRASE",
+]);
+
+/**
+ * Pure pruning helper (additive, 2026-08-05): given a candidate batch, the
+ * diversity issues already computed for it, and a preliminary score per
+ * candidate id, repeatedly drops the lower-scored member of each offending
+ * pair/group and re-runs checkAdCandidateDiversity until the survivors are
+ * clean, no more pruneable hard issues remain, or fewer than 2 candidates are
+ * left (nothing left to compare, so pruning stops rather than emptying the
+ * batch further). Candidate ids are resolved once up front so removal is
+ * stable even when candidates rely on the positional candidate_N fallback id.
+ */
+export function pruneDiversityOffenders(
+  candidates: readonly AdCandidateForDiversity[],
+  issues: readonly AdCandidateDiversityIssue[],
+  preliminaryScores: Record<string, number>,
+): DiversityPruneResult {
+  const scoreOf = (id: string): number => preliminaryScores[id] ?? 0;
+
+  let survivors: AdCandidateForDiversity[] = candidates.map((candidate, index) => ({
+    ...candidate,
+    candidate_id: candidateId(candidate, index),
+  }));
+  let currentIssues: readonly AdCandidateDiversityIssue[] = issues;
+  const removedIds: string[] = [];
+
+  while (survivors.length >= 2) {
+    const pruneable = currentIssues.filter(
+      (issue) => issue.severity === "hard" && issue.candidateIds.length >= 2 && PRUNEABLE_DIVERSITY_CODES.has(issue.code),
+    );
+    if (pruneable.length === 0) break;
+
+    let worstId: string | null = null;
+    let worstScore = Infinity;
+    for (const issue of pruneable) {
+      for (const id of issue.candidateIds) {
+        const score = scoreOf(id);
+        if (score < worstScore) {
+          worstScore = score;
+          worstId = id;
+        }
+      }
+    }
+    if (worstId === null) break;
+
+    survivors = survivors.filter((candidate) => candidate.candidate_id !== worstId);
+    removedIds.push(worstId);
+
+    if (survivors.length < 2) break;
+    currentIssues = checkAdCandidateDiversity(survivors).issues;
+  }
+
+  const residualIssues = checkAdCandidateDiversity(survivors).issues;
+  return { survivors, removedIds, residualIssues };
+}

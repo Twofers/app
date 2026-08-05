@@ -240,6 +240,52 @@ describe("buildAdLocalizationRepairPrompt", () => {
   });
 });
 
+describe("shared bilingual glossary (AI_SHARED_GLOSSARY_ENABLED)", () => {
+  it("buildAdLocalizationPrompt leaves localizedTerms empty when the flag is off (byte-identical default)", () => {
+    const prompt = buildAdLocalizationPrompt(request(), env({}));
+    expect(prompt.userPrompt).toContain("LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:\n[]");
+  });
+
+  it("buildAdLocalizationPrompt defaults to flag-off when no env argument is given at all (no Deno global under vitest)", () => {
+    const prompt = buildAdLocalizationPrompt(request());
+    expect(prompt.userPrompt).toContain("LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:\n[]");
+  });
+
+  it("buildAdLocalizationPrompt fills localizedTerms with the shared glossary when the flag is on and the caller passed none", () => {
+    const prompt = buildAdLocalizationPrompt(
+      request({ localizedTerms: [] }),
+      env({ AI_SHARED_GLOSSARY_ENABLED: "true" }),
+    );
+    expect(prompt.userPrompt).toContain('"term": "wallet"');
+    expect(prompt.userPrompt).toContain('"es": "billetera"');
+    expect(prompt.userPrompt).toContain('"ko": "지갑"');
+  });
+
+  it("buildAdLocalizationPrompt never overrides caller-supplied localizedTerms, even with the flag on", () => {
+    const prompt = buildAdLocalizationPrompt(
+      request({ localizedTerms: [{ term: "custom", note: "caller-supplied" }] }),
+      env({ AI_SHARED_GLOSSARY_ENABLED: "true" }),
+    );
+    expect(prompt.userPrompt).toContain("caller-supplied");
+    expect(prompt.userPrompt).not.toContain("billetera");
+  });
+
+  it("buildAdLocalizationRepairPrompt leaves localizedTerms empty when the flag is off (byte-identical default)", () => {
+    const prompt = buildAdLocalizationRepairPrompt(repairRequest(), env({}));
+    expect(prompt.userPrompt).toContain("LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:\n[]");
+  });
+
+  it("buildAdLocalizationRepairPrompt fills localizedTerms with the shared glossary when the flag is on", () => {
+    const prompt = buildAdLocalizationRepairPrompt(
+      repairRequest({ localizedTerms: [] }),
+      env({ AI_SHARED_GLOSSARY_ENABLED: "true" }),
+    );
+    expect(prompt.repairable).toBe(true);
+    expect(prompt.userPrompt).toContain('"term": "deal"');
+    expect(prompt.userPrompt).toContain('"ko": "딜"');
+  });
+});
+
 describe("generateAdLocalizationTranscreations", () => {
   it("uses the shared structured provider router and normalizes target locales", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess({

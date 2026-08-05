@@ -43,6 +43,19 @@ export type GenerateAdImageInput = {
   stylePreset: AiImageStylePreset;
   aspectRatio: AiImageAspectRatio;
   imageSize: AiImageSize;
+  /**
+   * Optional free-text visual direction (e.g. "warm morning light, wooden counter").
+   * Additive: absent by default, so existing callers are unaffected. When present,
+   * rendered as its own "Visual direction: ..." line in the Gemini prompt.
+   */
+  visualDirection?: string;
+  /**
+   * Optional per-item visual descriptors, keyed by the exact paid/free item name as
+   * passed in `paidItem` / `freeItem`. Additive: absent by default. When a description
+   * is present for a required visible item, that item renders as "NAME — descriptor"
+   * instead of a bare name.
+   */
+  itemDescriptions?: Record<string, string>;
 };
 
 export type GeminiImageAttempt = {
@@ -59,6 +72,17 @@ export type GeminiImageAttempt = {
   aspectRatio: AiImageAspectRatio;
   imageSize: AiImageSize;
   retry: boolean;
+  /**
+   * Always-on telemetry (additive, no behavior change): the actual decoded pixel
+   * dimensions and aspect ratio of the returned image, and whether that deviates
+   * from the requested `aspectRatio` beyond tolerance. Null/undefined when the
+   * attempt produced no bytes or the dimensions could not be read. This never
+   * causes a rejection or retry here — it is measurement only.
+   */
+  actualWidth?: number | null;
+  actualHeight?: number | null;
+  actualAspect?: string | null;
+  aspectMismatch?: boolean;
 };
 
 export type GeminiImageResult = {
@@ -74,7 +98,7 @@ export type GeminiImageResult = {
    * when that conversion ran. Null when Gemini already returned PNG (no decode
    * happened); callers fall back to decoding the in-memory bytes.
    */
-  luma?: { top: number; bottom: number } | null;
+  luma?: BandLuminance | null;
 };
 
 type EnvReader = {
@@ -109,6 +133,59 @@ function edgeEnv(): EnvReader {
 
 function cleanText(value: string | null | undefined, max = 240): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** Reduced "W:H" string, e.g. formatAspectRatio(1024, 1536) -> "2:3". */
+function formatAspectRatio(width: number, height: number): string {
+  if (!width || !height) return "";
+  const divisor = gcd(Math.round(width), Math.round(height)) || 1;
+  return `${Math.round(width) / divisor}:${Math.round(height) / divisor}`;
+}
+
+/**
+ * Reads only the PNG signature + IHDR width/height (offsets 16-23) — no full pixel
+ * decode. `normalizeGeminiImageToPng` guarantees its output is always "image/png"
+ * (either passed through as-is or freshly re-encoded from a JPEG conversion), so
+ * this is enough for the always-on aspect telemetry below without paying for, or
+ * depending on the success of, a second full pngjs decode of the whole image.
+ * Returns null for any non-PNG or too-short input rather than throwing.
+ */
+function readPngDimensions(bytes: Uint8Array | null): { width: number; height: number } | null {
+  if (!bytes || bytes.length < 24) return null;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+  if (!isPng) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16, false);
+  const height = view.getUint32(20, false);
+  if (!width || !height) return null;
+  return { width, height };
+}
+
+/** Parses an `AiImageAspectRatio` string ("4:5") into a width/height ratio number. */
+function parseAspectRatioValue(ratio: AiImageAspectRatio): number | null {
+  const match = /^(\d+):(\d+)$/.exec(ratio);
+  if (!match) return null;
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  return h > 0 ? w / h : null;
+}
+
+/**
+ * Always-on telemetry (no behavior change): flags when the decoded image's actual
+ * aspect ratio deviates from the requested one beyond simple rounding noise. Never
+ * used to reject or retry — measurement only, so downstream QA can see how often
+ * a provider silently returns the wrong shape.
+ */
+function detectAspectMismatch(actualWidth: number, actualHeight: number, requested: AiImageAspectRatio): boolean {
+  const expectedRatio = parseAspectRatioValue(requested);
+  if (!expectedRatio || !actualHeight) return false;
+  const actualRatio = actualWidth / actualHeight;
+  return Math.abs(actualRatio - expectedRatio) > 0.02;
 }
 
 function parseProvider(value: string | null | undefined, fallback: AiImageProvider): AiImageProvider {
@@ -209,7 +286,15 @@ export function buildGeminiAdImagePrompt(
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
   const creativeDirection = options.genericizeItems ? "" : cleanText(input.creativeDirection, 280);
+  const visualDirection = options.genericizeItems ? "" : cleanText(input.visualDirection, 200);
   const visualItems = options.genericizeItems ? [genericSubject] : [...new Set([paid, free].filter(Boolean))];
+  const itemDescriptions = options.genericizeItems ? undefined : input.itemDescriptions;
+  const visualItemsText = visualItems
+    .map((item) => {
+      const descriptor = itemDescriptions ? cleanText(itemDescriptions[item], 160) : "";
+      return descriptor ? `${item} — ${descriptor}` : item;
+    })
+    .join(", ");
   const mechanics = options.genericizeItems
     ? `Feature ${genericSubject} as the clear main subject. The exact offer terms are rendered by the app, never in the image.`
     : offerMechanics(input);
@@ -228,9 +313,10 @@ export function buildGeminiAdImagePrompt(
     "",
     `Business context for styling only, never render as text: ${businessName}`,
     `Business type for styling only: ${businessCategory}`,
+    visualDirection ? `Visual direction: ${visualDirection}` : "",
     `Offer mechanics: ${mechanics}`,
     "Ad context: The image will be used inside a mobile local-deal card.",
-    visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
+    visualItems.length > 0 ? `Required visible items: ${visualItemsText}.` : "",
     creativeDirection ? `Selected AI ad concept for composition only, never render as text: ${creativeDirection}` : "",
     referenceInstruction,
     customInstruction,
@@ -276,14 +362,23 @@ export function buildGeminiAdImagePrompt(
 }
 
 export function buildSimplifiedGeminiImagePrompt(basePrompt: string): string {
+  // This retry only runs after the primary attempt hard-failed, so improving it can
+  // only help — there is no path where a stronger simplified prompt regresses the
+  // primary flow. The old version leaned on `basePrompt.slice(0, 1600)` to carry the
+  // zone geometry, but that slice cuts the zone bullets mid-sentence (see the full
+  // bullet list in buildGeminiAdImagePrompt above). Restate the calm-band contract
+  // explicitly here instead of hoping the truncated slice still reads coherently.
   return [
     "Create a simple realistic food-and-drink product photo for a local cafe mobile deal card.",
     "Show only the required offer items from the original prompt as clear main subjects.",
     "Natural light, clean table, professional but realistic.",
     "No readable text, no logos, no people, no hands, no QR codes, no prices, no signs.",
+    "Fill the full vertical 4:5 frame edge to edge — no borders, letterboxing, or flat color bands.",
+    "Place the hero subject in the middle lane, roughly 25% to 65% of the frame height.",
+    "Keep the top quarter and the bottom third one continuous, calm, softly defocused backdrop with no busy detail — those are where the app prints its text.",
     "",
     "Original offer prompt:",
-    basePrompt.slice(0, 1600),
+    basePrompt.slice(0, 1200),
   ].join("\n");
 }
 
@@ -299,7 +394,7 @@ function base64ToBytes(value: string): Uint8Array {
 async function normalizeGeminiImageToPng(
   bytes: Uint8Array,
   mimeType: string | null,
-): Promise<{ bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: { top: number; bottom: number } | null }> {
+): Promise<{ bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: BandLuminance | null }> {
   const normalizedMime = (mimeType ?? "image/png").toLowerCase();
   if (normalizedMime === "image/png") {
     return { bytes, mimeType: "image/png", converted: false, luma: null };
@@ -340,6 +435,27 @@ async function normalizeGeminiImageToPng(
   return { bytes: new Uint8Array(sync.write(png)), mimeType: "image/png", converted: true, luma };
 }
 
+export type BandLuminance = {
+  top: number;
+  bottom: number;
+  /**
+   * Mean absolute luminance delta between horizontally adjacent sampled pixels,
+   * per band. Additive measurement (2026-08-05): the corpus study behind the zone-
+   * geometry bullets above found the top band came back busiest by CONTRAST (mean
+   * 0.26 vs 0.23 mid-band), not by brightness — a bright-but-flat wall is fine, a
+   * mid-brightness wall with hard edges is not. Brightness alone can't see that.
+   */
+  topContrast: number;
+  bottomContrast: number;
+  /**
+   * Per-band 3-column x 4-row tile grid, max minus min mean tile luminance. High
+   * spread means one part of the band (e.g. a window or lamp) stands out sharply
+   * from the rest, even when the band's overall mean brightness looks fine.
+   */
+  topTileSpread: number;
+  bottomTileSpread: number;
+};
+
 /**
  * Best-effort top/bottom band luminance (0..1) of a generated poster image, so the
  * native renderer can size its legibility scrim to the image instead of a fixed
@@ -347,34 +463,71 @@ async function normalizeGeminiImageToPng(
  * conversion. Fail-safe: any decode problem returns null and the renderer keeps
  * its safe fallback scrim. Bands approximate the 4:5 poster crop (top ~0-24.5%,
  * bottom ~65.8-100% of image height).
+ *
+ * `top` / `bottom` are unchanged from before; `topContrast` / `bottomContrast` /
+ * `topTileSpread` / `bottomTileSpread` are additive measurement fields with no
+ * existing consumer — see `BandLuminance` above for why contrast/spread matter
+ * beyond plain brightness.
  */
 export function computeBandLuminanceFromRgba(
   data: Uint8Array,
   width: number,
   height: number,
-): { top: number; bottom: number } | null {
+): BandLuminance | null {
   if (!width || !height || !data) return null;
   if (data.length < width * height * 4) return null;
   const lin = (c: number): number => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
   };
-  const band = (y0f: number, y1f: number): number => {
-    let sum = 0;
-    let n = 0;
+  const TILE_COLS = 3;
+  const TILE_ROWS = 4;
+  const bandStats = (y0f: number, y1f: number): { mean: number; contrast: number; tileSpread: number } => {
     const y0 = Math.max(0, Math.floor(y0f * height));
     const y1 = Math.min(height, Math.ceil(y1f * height));
+    const bandHeight = Math.max(1, y1 - y0);
+    let sum = 0;
+    let n = 0;
+    let contrastSum = 0;
+    let contrastN = 0;
+    const tileSum = new Array<number>(TILE_COLS * TILE_ROWS).fill(0);
+    const tileN = new Array<number>(TILE_COLS * TILE_ROWS).fill(0);
     for (let y = y0; y < y1; y += 4) {
+      let prevLum: number | null = null;
+      const rowIdx = Math.min(TILE_ROWS - 1, Math.floor(((y - y0) / bandHeight) * TILE_ROWS));
       for (let x = 0; x < width; x += 4) {
         const i = (width * y + x) * 4;
-        sum += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+        const lum = 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+        sum += lum;
         n++;
+        if (prevLum !== null) {
+          contrastSum += Math.abs(lum - prevLum);
+          contrastN++;
+        }
+        prevLum = lum;
+        const colIdx = Math.min(TILE_COLS - 1, Math.floor((x / width) * TILE_COLS));
+        const tileIdx = rowIdx * TILE_COLS + colIdx;
+        tileSum[tileIdx] += lum;
+        tileN[tileIdx] += 1;
       }
     }
-    return n ? sum / n : 0.5;
+    const mean = n ? sum / n : 0.5;
+    const contrast = contrastN ? contrastSum / contrastN : 0;
+    const tileMeans = tileSum.map((s, idx) => (tileN[idx] ? s / tileN[idx] : mean));
+    const tileSpread = tileMeans.length ? Math.max(...tileMeans) - Math.min(...tileMeans) : 0;
+    return { mean, contrast, tileSpread };
   };
   const round = (v: number): number => Math.round(v * 1000) / 1000;
-  return { top: round(band(0, 0.245)), bottom: round(band(0.658, 1)) };
+  const top = bandStats(0, 0.245);
+  const bottom = bandStats(0.658, 1);
+  return {
+    top: round(top.mean),
+    bottom: round(bottom.mean),
+    topContrast: round(top.contrast),
+    bottomContrast: round(bottom.contrast),
+    topTileSpread: round(top.tileSpread),
+    bottomTileSpread: round(bottom.tileSpread),
+  };
 }
 
 /**
@@ -383,9 +536,15 @@ export function computeBandLuminanceFromRgba(
  * came back null instead of guessing — edge logs are not readable via the CLI.
  */
 export type BandLuminanceOutcome = {
-  luma: { top: number; bottom: number } | null;
+  luma: BandLuminance | null;
   decoder: "png" | "jpeg" | null;
   reason: string | null;
+  /**
+   * Additive (2026-08-05): the decoded pixel dimensions, exposed instead of being
+   * discarded after the luma computation. Null when decode never reached pixels.
+   */
+  width: number | null;
+  height: number | null;
 };
 
 export async function computeImageBandLuminanceDetailed(
@@ -394,7 +553,7 @@ export async function computeImageBandLuminanceDetailed(
 ): Promise<BandLuminanceOutcome> {
   let decoder: "png" | "jpeg" | null = null;
   try {
-    if (!bytes || bytes.length < 16) return { luma: null, decoder: null, reason: "empty_bytes" };
+    if (!bytes || bytes.length < 16) return { luma: null, decoder: null, reason: "empty_bytes", width: null, height: null };
     const looksPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
     const normalizedMime = (mimeType ?? "").toLowerCase();
     const treatAsPng = looksPng || normalizedMime === "image/png";
@@ -408,7 +567,7 @@ export async function computeImageBandLuminanceDetailed(
       const PngCtor = (pngModule as { PNG?: unknown; default?: { PNG?: unknown } }).PNG ??
         (pngModule as { default?: { PNG?: unknown } }).default?.PNG;
       const sync = (PngCtor as unknown as { sync?: { read?: (b: Uint8Array) => { width: number; height: number; data: Uint8Array } } })?.sync;
-      if (typeof sync?.read !== "function") return { luma: null, decoder, reason: "png_sync_read_unavailable" };
+      if (typeof sync?.read !== "function") return { luma: null, decoder, reason: "png_sync_read_unavailable", width: null, height: null };
       const png = sync.read(bytes);
       width = png.width;
       height = png.height;
@@ -418,7 +577,7 @@ export async function computeImageBandLuminanceDetailed(
       const jpegModule = await import(jpegSpecifier);
       const decode = (jpegModule as { default?: { decode?: unknown }; decode?: unknown }).default?.decode ??
         (jpegModule as { decode?: unknown }).decode;
-      if (typeof decode !== "function") return { luma: null, decoder, reason: "jpeg_decode_unavailable" };
+      if (typeof decode !== "function") return { luma: null, decoder, reason: "jpeg_decode_unavailable", width: null, height: null };
       const decoded = (decode as (b: Uint8Array, o: { useTArray: boolean }) => { width?: number; height?: number; data?: Uint8Array })(
         bytes,
         { useTArray: true },
@@ -427,18 +586,18 @@ export async function computeImageBandLuminanceDetailed(
       height = decoded.height ?? 0;
       data = decoded.data ?? null;
     }
-    if (!width || !height || !data) return { luma: null, decoder, reason: "decode_no_pixels" };
+    if (!width || !height || !data) return { luma: null, decoder, reason: "decode_no_pixels", width: null, height: null };
     const luma = computeBandLuminanceFromRgba(data, width, height);
-    return { luma, decoder, reason: luma ? null : "band_math_no_pixels" };
+    return { luma, decoder, reason: luma ? null : "band_math_no_pixels", width, height };
   } catch (err) {
-    return { luma: null, decoder, reason: `decode_threw:${String((err as Error)?.name ?? "Error").slice(0, 40)}` };
+    return { luma: null, decoder, reason: `decode_threw:${String((err as Error)?.name ?? "Error").slice(0, 40)}`, width: null, height: null };
   }
 }
 
 export async function computeImageBandLuminance(
   bytes: Uint8Array,
   mimeType?: string | null,
-): Promise<{ top: number; bottom: number } | null> {
+): Promise<BandLuminance | null> {
   return (await computeImageBandLuminanceDetailed(bytes, mimeType)).luma;
 }
 
@@ -533,9 +692,9 @@ async function decodeGeminiImagePart(params: {
   imagePart: { data: string; mimeType: string | null };
   attemptBase: GeminiImageAttempt;
   startedAt: number;
-}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: { top: number; bottom: number } | null }> {
+}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: BandLuminance | null }> {
   const imageMimeType = params.imagePart.mimeType ?? "image/png";
-  let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: { top: number; bottom: number } | null };
+  let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean; luma: BandLuminance | null };
   try {
     normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(params.imagePart.data), imageMimeType);
   } catch {
@@ -551,6 +710,15 @@ async function decodeGeminiImagePart(params: {
       },
     };
   }
+  // Always-on aspect telemetry (no behavior change): a cheap header-only read of the
+  // final PNG's own IHDR width/height, rather than a second full pixel decode just to
+  // measure dimensions. Never rejects or retries on the result (see detectAspectMismatch).
+  const dims = readPngDimensions(normalizedImage.bytes);
+  const actualWidth = dims?.width ?? null;
+  const actualHeight = dims?.height ?? null;
+  const actualAspect = dims ? formatAspectRatio(dims.width, dims.height) : null;
+  const aspectMismatch = dims ? detectAspectMismatch(dims.width, dims.height, params.attemptBase.aspectRatio) : false;
+
   return {
     bytes: normalizedImage.bytes,
     mimeType: normalizedImage.mimeType,
@@ -560,6 +728,10 @@ async function decodeGeminiImagePart(params: {
       success: true,
       latencyMs: Date.now() - params.startedAt,
       mimeType: normalizedImage.mimeType,
+      actualWidth,
+      actualHeight,
+      actualAspect,
+      aspectMismatch,
     },
   };
 }
@@ -576,7 +748,7 @@ async function attemptGeminiImageGeneration(params: {
   retry: boolean;
   deadline?: AiImageDeadline;
   timeoutLeg?: string;
-}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: { top: number; bottom: number } | null }> {
+}): Promise<{ bytes: Uint8Array | null; mimeType: string | null; attempt: GeminiImageAttempt; luma: BandLuminance | null }> {
   const startedAt = Date.now();
   const useInteractionsApi = shouldUseInteractionsApi(params.model);
   const attemptBase: GeminiImageAttempt = {

@@ -19,6 +19,21 @@
  * Usage:
  *   node scripts/evaluate-ad-copy-naturalness.mjs [corpusPath]
  *   OPENAI_API_KEY=... node scripts/evaluate-ad-copy-naturalness.mjs [corpusPath]
+ *
+ * Optional trending flags (naturalness plan Phase 4.2 follow-up; additive — a bare
+ * invocation with none of these behaves byte-identically to the base script):
+ *   --snapshot-dir <dir>   Also write dated report copies naturalness-YYYY-MM-DD.json/md
+ *                          into <dir> (one pair per calendar day; reruns the same day
+ *                          overwrite that day's pair).
+ *   --compare-previous     Requires --snapshot-dir. Diffs this run's flag-class rates and
+ *                          judge averages against the latest STRICTLY EARLIER dated
+ *                          snapshot in that dir, prints the deltas, and exits nonzero if a
+ *                          flag class both grew and is now over its calibration-watchlist
+ *                          band (bands mirrored from scripts/measure-ai-ad-baseline.mjs;
+ *                          see NATURALNESS_WATCHLIST_BANDS below for the mapping).
+ *
+ *   node scripts/evaluate-ad-copy-naturalness.mjs --snapshot-dir qa-artifacts/naturalness-trend
+ *   node scripts/evaluate-ad-copy-naturalness.mjs --snapshot-dir qa-artifacts/naturalness-trend --compare-previous
  */
 
 import fs from "node:fs";
@@ -51,12 +66,46 @@ const {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
+
+// Minimal flag parser for the optional trending flags. The first non-flag token is still
+// the corpus path positional, exactly as before — a bare invocation (or one with just a
+// corpus path) is parsed identically to the original `process.argv[2]` lookup.
+const NATURALNESS_VALUE_FLAGS = new Set(["snapshot-dir"]);
+const naturalnessCliArgs = process.argv.slice(2);
+const naturalnessFlags = {};
+let corpusPathArg;
+for (let i = 0; i < naturalnessCliArgs.length; i += 1) {
+  const a = naturalnessCliArgs[i];
+  if (a.startsWith("--")) {
+    const name = a.slice(2);
+    if (NATURALNESS_VALUE_FLAGS.has(name) && naturalnessCliArgs[i + 1] !== undefined) {
+      naturalnessFlags[name] = naturalnessCliArgs[i + 1];
+      i += 1;
+    } else {
+      naturalnessFlags[name] = true;
+    }
+  } else if (corpusPathArg === undefined) {
+    corpusPathArg = a;
+  }
+}
+const snapshotDir = naturalnessFlags["snapshot-dir"]
+  ? path.resolve(root, String(naturalnessFlags["snapshot-dir"]))
+  : null;
+const comparePrevious = Boolean(naturalnessFlags["compare-previous"]);
+
 const corpusPath = path.resolve(
   root,
-  process.argv[2] || "qa-artifacts/ai-copy-baseline-2026-07-26/copy-corpus.json",
+  corpusPathArg || "qa-artifacts/ai-copy-baseline-2026-07-26/copy-corpus.json",
 );
 const corpus = JSON.parse(fs.readFileSync(corpusPath, "utf8"));
 const rows = Array.isArray(corpus.rows) ? corpus.rows : [];
+
+/** Same rounding poster/naturalness reports already use; returns a number, not a string. */
+function avgOfScores(scoreRows, key) {
+  if (!Array.isArray(scoreRows)) return null;
+  const values = scoreRows.map((row) => Number(row[key])).filter(Number.isFinite);
+  return values.length ? Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)) : null;
+}
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
@@ -240,3 +289,122 @@ fs.writeFileSync(
 );
 console.log(`naturalness: ${flaggedRows.length}/${evaluated.length} rows flagged; report written next to corpus`);
 console.log(`top flags: ${Object.entries(flagCounts).sort(([, a], [, b]) => b - a).slice(0, 6).map(([flag, count]) => `${flag}=${count}`).join(", ") || "(none)"}`);
+
+// ---- Optional snapshotting + trend comparison (naturalness trending follow-up) --------
+// Everything below only runs when --snapshot-dir is passed, so a bare invocation's output
+// and exit code are unchanged.
+if (snapshotDir) {
+  const dateTag = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  fs.mkdirSync(snapshotDir, { recursive: true });
+  const snapshotJsonPath = path.join(snapshotDir, `naturalness-${dateTag}.json`);
+  const snapshotMdPath = path.join(snapshotDir, `naturalness-${dateTag}.md`);
+  const snapshotPayload = {
+    generated_at: new Date().toISOString(),
+    corpus: path.relative(root, corpusPath),
+    row_count: evaluated.length,
+    flagged_row_count: flaggedRows.length,
+    flag_counts: flagCounts,
+    llm_scores_present: Boolean(llmScores),
+    llm_averages: llmScores
+      ? {
+          soundsHuman: avgOfScores(llmScores, "soundsHuman"),
+          fitsBusiness: avgOfScores(llmScores, "fitsBusiness"),
+          exchangeClear: avgOfScores(llmScores, "exchangeClear"),
+        }
+      : null,
+  };
+  fs.writeFileSync(snapshotJsonPath, JSON.stringify(snapshotPayload, null, 2));
+  fs.writeFileSync(snapshotMdPath, md.join("\n"));
+  console.log(`\nsnapshot written: ${snapshotJsonPath}`);
+
+  if (comparePrevious) {
+    // Calibration-watchlist bands mirrored from scripts/measure-ai-ad-baseline.mjs's
+    // calibration_watchlist checks (that script needs a live Supabase service-role key and
+    // cannot run in this tool, so the threshold VALUES are copied here, not imported). Of
+    // that file's rate-shaped bands, two map onto "how often a quality problem shows up in
+    // a text corpus":
+    //   - deterministic_copy_fallback_rate, threshold 0.15 (measure-ai-ad-baseline.mjs,
+    //     calibrationCheck around the "High fallback can mean prompt, validation, or
+    //     provider reliability needs tuning" note) — mirrored as the ceiling for ordinary
+    //     QA-heuristic flag classes (this script's own predicates: FORMULAIC_VALUE,
+    //     DANGLING_CONNECTOR, TRUNCATED_FRAGMENT, QUANTITY_ARTICLE_COLLISION, OFFER_ECHO —
+    //     all namespaced "headline:*" / "row:*" below, never a production field name).
+    //   - judge_hard_failure_rate, threshold 0.2 ("Review failed candidate themes before
+    //     changing prompts or judge criteria") — mirrored as the stricter ceiling for
+    //     flags that ARE production hard-fail signals: NO_COPY_IN_PAYLOAD, and any flag
+    //     whose field prefix is a real evaluateAdCopyStyleGate field (the REAL production
+    //     style gate this script runs — see file header), i.e. displayHook/offerLine/
+    //     supportingLine/cta/pushTitle/pushBody/socialCaption.
+    // The two warning-only bands in that file (candidate_diversity_warning_thresholds,
+    // image_aesthetic_thresholds) score images/candidate sets, not corpus rows, and are
+    // intentionally not mirrored here.
+    const NATURALNESS_WATCHLIST_BANDS = {
+      hard_fail_flag_rate_ceiling: 0.2, // mirrors judge_hard_failure_rate
+      general_flag_rate_ceiling: 0.15, // mirrors deterministic_copy_fallback_rate
+    };
+    const PRODUCTION_GATE_FIELDS = new Set([
+      "displayHook",
+      "offerLine",
+      "supportingLine",
+      "cta",
+      "pushTitle",
+      "pushBody",
+      "socialCaption",
+    ]);
+
+    function findPreviousSnapshot(dir, currentJsonPath) {
+      if (!fs.existsSync(dir)) return null;
+      const files = fs
+        .readdirSync(dir)
+        .filter((f) => /^naturalness-\d{4}-\d{2}-\d{2}\.json$/.test(f))
+        .sort(); // lexicographic sort == chronological for YYYY-MM-DD filenames
+      const currentName = path.basename(currentJsonPath);
+      const priorOnly = files.filter((f) => f < currentName);
+      return priorOnly.length ? path.join(dir, priorOnly[priorOnly.length - 1]) : null;
+    }
+
+    const previousPath = findPreviousSnapshot(snapshotDir, snapshotJsonPath);
+    if (!previousPath) {
+      console.log("compare-previous: no earlier snapshot found in snapshot dir; skipping comparison.");
+    } else {
+      const previous = JSON.parse(fs.readFileSync(previousPath, "utf8"));
+      const prevTotal = Number(previous.row_count) || 0;
+      const curTotal = evaluated.length || 0;
+      const allFlagKeys = new Set([...Object.keys(flagCounts), ...Object.keys(previous.flag_counts || {})]);
+
+      console.log(`\ncompare-previous: ${path.basename(previousPath)} -> ${path.basename(snapshotJsonPath)}`);
+      let breached = false;
+      for (const key of [...allFlagKeys].sort()) {
+        const curCount = flagCounts[key] || 0;
+        const prevCount = (previous.flag_counts || {})[key] || 0;
+        const curRate = curTotal ? curCount / curTotal : 0;
+        const prevRate = prevTotal ? prevCount / prevTotal : 0;
+        const fieldPrefix = key.split(":")[0];
+        const isHardFail = key === "NO_COPY_IN_PAYLOAD" || PRODUCTION_GATE_FIELDS.has(fieldPrefix);
+        const ceiling = isHardFail
+          ? NATURALNESS_WATCHLIST_BANDS.hard_fail_flag_rate_ceiling
+          : NATURALNESS_WATCHLIST_BANDS.general_flag_rate_ceiling;
+        const grew = curRate > prevRate;
+        const overBand = curRate > ceiling;
+        if (grew && overBand) breached = true;
+        console.log(
+          `  ${key.padEnd(46)} count ${prevCount}->${curCount}  rate ${prevRate.toFixed(3)}->${curRate.toFixed(3)}` +
+            `  ceiling ${ceiling}${grew && overBand ? "  ** GREW BEYOND BAND **" : ""}`,
+        );
+      }
+      if (previous.llm_averages || snapshotPayload.llm_averages) {
+        console.log("  judge averages:");
+        for (const key of ["soundsHuman", "fitsBusiness", "exchangeClear"]) {
+          const prevVal = previous.llm_averages?.[key] ?? null;
+          const curVal = snapshotPayload.llm_averages?.[key] ?? null;
+          console.log(`    ${key}: ${prevVal ?? "n/a"} -> ${curVal ?? "n/a"}`);
+        }
+      }
+      if (breached) {
+        console.log("\ncompare-previous: FAIL - a flag class grew beyond its calibration-watchlist band.");
+        process.exit(1);
+      }
+      console.log("\ncompare-previous: OK - no flag class grew beyond its calibration-watchlist band.");
+    }
+  }
+}

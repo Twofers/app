@@ -75,6 +75,15 @@ export type DealCopyPromptParams = {
   validationFeedback?: string;
   merchantCreativeProfile?: MerchantCreativeProfile;
   creativeFormat?: "standard_card" | "poster_v1";
+  /**
+   * Additive (2026-08-05), AI_ADS_PIPELINE_V8_ENABLED only: when true AND
+   * creativeFormat is "poster_v1", swaps the general headlineAlternative
+   * character-count rule for a poster-specific word/character budget with
+   * counted examples, and drops the now-redundant standalone 28-char poster
+   * line. Absent/false, or any non-poster format, reproduces the exact
+   * legacy FIELD RULES text byte-for-byte.
+   */
+  posterBudgetV8?: boolean;
 };
 
 export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V7";
@@ -273,6 +282,39 @@ export const AI_COPY_PROMPT_V7 = [
 
 export const COPY_VOICE_RULES = AI_COPY_PROMPT_V7;
 
+// AI_ADS_PIPELINE_V8_ENABLED poster headline budget (2026-08-05): replaces the
+// general character-count clause with an explicit word+character budget and two
+// counted examples when the request is a poster ad. The two exact strings below
+// must match their counterparts in AI_COPY_PROMPT_V7 verbatim — `buildVoiceRulesForPrompt`
+// does a literal swap, not a regex rewrite, so a byte-identical rule text keeps
+// the flag-off path untouched even if AI_COPY_PROMPT_V7 is edited later without
+// updating this pair.
+const POSTER_BUDGET_V8_HEADLINE_RULE_LEGACY =
+  "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.";
+const POSTER_BUDGET_V8_LAYOUT_LINE_LEGACY =
+  "- For poster ads the layout is fixed: the headline must be at most 28 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.";
+// "Cold brew for less" = 18 characters (fits); "Buy one latte and get one free" =
+// 30 characters (too long) — both counted with spaces, no trailing period.
+const POSTER_BUDGET_V8_HEADLINE_RULE =
+  '- headlineAlternative: short campaign headline, no trailing period. Do not merely echo the owner\'s typed item name. For poster ads the layout is fixed: at most 4 short words and 28 characters. Good, within budget: "Cold brew for less" (18 characters). Bad, too long: "Buy one latte and get one free" (30 characters, too long). Longer poster text does not fit and the candidate is rejected; never rely on truncation.';
+
+/**
+ * Byte-identical to COPY_VOICE_RULES unless `posterBudgetV8` is true AND the
+ * request is a poster ad, in which case the general headline character-count
+ * rule is replaced with the poster word/character budget above and the
+ * now-redundant standalone 28-char poster line is dropped (deduped into the
+ * replacement).
+ */
+function buildVoiceRulesForPrompt(params: {
+  creativeFormat: "standard_card" | "poster_v1";
+  posterBudgetV8?: boolean;
+}): readonly string[] {
+  if (!params.posterBudgetV8 || params.creativeFormat !== "poster_v1") return COPY_VOICE_RULES;
+  return COPY_VOICE_RULES.filter((line) => line !== POSTER_BUDGET_V8_LAYOUT_LINE_LEGACY).map((line) =>
+    line === POSTER_BUDGET_V8_HEADLINE_RULE_LEGACY ? POSTER_BUDGET_V8_HEADLINE_RULE : line
+  );
+}
+
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";
   if (outputLanguage === "ko") return "Korean";
@@ -435,6 +477,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     validationFeedback,
     merchantCreativeProfile,
     creativeFormat = "standard_card",
+    posterBudgetV8,
   } = params;
 
   const facts: string[] = [];
@@ -507,7 +550,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   const system = [
     `Write one positive creative brief and exactly five mobile Twofer deal copy candidates. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
     "",
-    ...COPY_VOICE_RULES,
+    ...buildVoiceRulesForPrompt({ creativeFormat, posterBudgetV8 }),
     "",
     categoryPlaybookBlock,
     "",

@@ -94,16 +94,17 @@ import {
   startsWithDanglingConnector,
 } from "../../../lib/ad-copy-style-gate.ts";
 import { buildDeterministicRevisionFallbackCopy } from "../../../lib/ai-revision-fallback-copy.ts";
-import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
+import { checkAdCandidateDiversity, pruneDiversityOffenders } from "../../../lib/ad-candidate-diversity.ts";
 import {
   CANDIDATE_JUDGE_PROMPT_VERSION,
   applyJudgeScoresToCandidates,
   buildCandidateJudgePrompt,
   normalizeCandidateJudgeResult,
   rankCandidatesDeterministically,
+  scoreCandidateDeterministically,
   type CandidateJudgeResult,
 } from "../../../lib/candidate-judge.ts";
-import { buildCategoryAdPlaybookPromptBlock } from "../../../lib/category-ad-playbooks.ts";
+import { buildCategoryAdPlaybookPromptBlock, getCategoryAdPlaybook } from "../../../lib/category-ad-playbooks.ts";
 import {
   buildMerchantCreativeProfile,
   buildMerchantCreativeProfilePromptBlock,
@@ -117,6 +118,7 @@ import {
 import {
   QUICK_DEAL_IMAGE_QA_SCHEMA,
   buildAdImageQaPrompt,
+  buildQuickDealImageQaPrompt,
   buildQuickDealImageRegenerationPrompt,
   normalizeQuickDealImageQaResult,
   normalizeSourceAwareImageQaResult,
@@ -146,11 +148,14 @@ import {
 } from "../../../lib/offer-definition.ts";
 import {
   SUPPORTED_LOCALES,
+  supportedLocaleToAppLanguage,
   type SupportedLocale,
 } from "../../../lib/supported-locales.ts";
 import {
+  buildPosterOfferLinesFromOfferDefinition,
   buildPosterSpecFromOfferDefinition,
   choosePosterTemplateForOffer,
+  type LocalizedHeroByLocale,
 } from "../../../lib/poster/posterCopy.ts";
 import { POSTER_TEXT_LIMITS } from "../../../lib/poster/posterPolicy.ts";
 import type { PosterDraftV1, PosterStyleChoice } from "../../../lib/poster/posterTypes.ts";
@@ -241,6 +246,13 @@ type SingleAd = {
   validation_reason_codes?: string[];
   /** Verb-first action (≤26 chars). */
   cta: string;
+  /**
+   * TASK 8 (unflagged, 2026-08-05): the ai_generation_logs row id for this
+   * generation, when the insert succeeded. Best-effort passthrough so a later
+   * publish call can link the published deal back to the generation that
+   * produced it (see publish-offer-version's optional passthrough).
+   */
+  generation_log_id?: string | null;
   /** Research the AI used to write the copy. Empty when it skipped/failed research. */
   item_research: ItemResearch;
   /** How the image was produced. */
@@ -331,16 +343,27 @@ async function researchMenuItem(params: {
   itemHint: string;
   businessName: string;
   businessLocation: string;
+  businessCategory?: string;
   costContext?: AiCostContext;
 }): Promise<ItemResearch> {
-  const { openAiKey, geminiApiKey, itemHint, businessName, businessLocation, costContext } = params;
+  const { openAiKey, geminiApiKey, itemHint, businessName, businessLocation, businessCategory, costContext } = params;
   const cleanHint = itemHint.trim().slice(0, 400);
   if (!cleanHint) {
     return { item_name: "", description: "", is_familiar: false };
   }
 
+  // FLAG 2 (AI_IMAGE_PROMPT_V4_ENABLED): the opener assumed every business was
+  // a cafe. Absent the flag, or absent a usable category, keeps the exact
+  // legacy "A cafe owner wrote..." text byte-for-byte. Uses the merchant's own
+  // typed category (not the normalized playbook label, which reads like
+  // "Coffee / cafe" and does not fit this sentence grammatically).
+  const researchOpenerCategory = aiImagePromptV4Enabled() ? (businessCategory ?? "").trim() : "";
+  const researchOpener = researchOpenerCategory
+    ? `A ${researchOpenerCategory} owner wrote the following note about a menu item they want to promote:`
+    : "A cafe owner wrote the following note about a menu item they want to promote:";
+
   const prompt = [
-    "A cafe owner wrote the following note about a menu item they want to promote:",
+    researchOpener,
     `"${cleanHint}"`,
     businessName ? `Business: ${businessName}.` : "",
     businessLocation ? `Location: ${businessLocation}.` : "",
@@ -645,6 +668,10 @@ async function generateCopy(params: {
   });
   let selected = await generateValidatedDealCopy({
     contract: offerContract,
+    // FLAG 1: scoreCopy's small "urgency word" bonus (limited/only N/available)
+    // rewards manufactured scarcity language the copy rules already discourage;
+    // suppress it under the flag so selection favors fact-safe, non-hypey copy.
+    suppressUrgencyBonus: aiAdsPipelineV8Enabled(),
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
       // Attempt 2 corrective feedback from the contract layer only covers offer
       // validation; append the concrete style-gate/diversity rejection reasons
@@ -667,6 +694,7 @@ async function generateCopy(params: {
         validationFeedback: combinedValidationFeedback,
         merchantCreativeProfile: merchantProfile,
         creativeFormat,
+        posterBudgetV8: aiAdsPipelineV8Enabled(),
       });
 
       let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
@@ -696,7 +724,7 @@ async function generateCopy(params: {
           // the router is ever fixed to honour per-call timeouts.
           timeoutMs: 25_000,
           generationRunId: costContext.requestGroupId,
-          promptVersion: AD_COPY_PROMPT_VERSION,
+          promptVersion: adCopyPromptVersionForLogging(),
           // gpt-5.4-mini at "medium" reasoning runs ~16s on the 5-variant copy call and
           // was aborted by the old 12s ceiling; "low" returns the same validated five
           // variants in ~10.5s. gpt-5.5 at "low" runs 13-16s, which is why the ceiling
@@ -743,6 +771,7 @@ async function generateCopy(params: {
           offerContract,
           costContext,
           creativeFormat,
+          outputLanguage,
         });
         copyQuality.push(prepared.telemetry);
         qualityRepairFeedback = qualityGateRepairFeedback(prepared.telemetry) ?? qualityRepairFeedback;
@@ -983,6 +1012,8 @@ type CopyQualityTelemetry = {
     ok: boolean;
     hard_failures: Array<{ code: string; candidate_ids: string[]; score?: number }>;
     warnings: Array<{ code: string; candidate_ids: string[]; score?: number }>;
+    /** FLAG 1 (task 4): candidate ids pruneDiversityOffenders removed, when it ran. */
+    pruned_candidate_ids?: string[];
   };
   preliminary_scores: Array<{
     candidate_id: string;
@@ -1070,8 +1101,91 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
 }
 
+// ─── FLAG 1/2/3 (2026-08-05): additive pipeline flags, default off = byte-identical ──
+// Each wires an already-landed, already-tested, additive interface into the ad
+// pipeline. Read once per call site via these helpers (matching the existing
+// envFlag(...) call-site pattern used throughout this file) rather than caching
+// a module-level value, since a Deno isolate can serve concurrent requests.
+function aiAdsPipelineV8Enabled(): boolean {
+  return envFlag("AI_ADS_PIPELINE_V8_ENABLED", false);
+}
+function aiImagePromptV4Enabled(): boolean {
+  return envFlag("AI_IMAGE_PROMPT_V4_ENABLED", false);
+}
+function aiPosterLocalizedHeroEnabled(): boolean {
+  return envFlag("AI_POSTER_LOCALIZED_HERO_ENABLED", false);
+}
+
+/**
+ * FLAG 1: the copy prompt's FIELD RULES change shape under this flag (poster
+ * budget line swap in prompt.ts), so telemetry should be able to tell the two
+ * apart. Used everywhere AD_COPY_PROMPT_VERSION was logged for the ad-copy
+ * call specifically (not the unrelated research/judge prompt versions).
+ */
+function adCopyPromptVersionForLogging(): string {
+  return aiAdsPipelineV8Enabled() ? `${AD_COPY_PROMPT_VERSION}+v8` : AD_COPY_PROMPT_VERSION;
+}
+
+/**
+ * FLAG 1, task 7: conservative top-band contrast/tile-spread thresholds that
+ * flag a generated poster image's top quarter as too busy for legible header
+ * text, feeding the existing capped regeneration path as a soft signal (see
+ * `produceImage`'s Gemini QA block). The corpus study behind
+ * `buildGeminiAdImagePrompt`'s zone-geometry bullets measured a mean top-band
+ * contrast of 0.26 (vs 0.23 mid-band); these thresholds sit well above that
+ * mean so only clear outliers trigger a paid regeneration, not ordinary
+ * busy-but-acceptable photography.
+ */
+const TOP_BAND_CONTRAST_REGEN_THRESHOLD = 0.42;
+const TOP_BAND_TILE_SPREAD_REGEN_THRESHOLD = 0.35;
+
+/**
+ * FLAG 1, task 1: builds a Record<string,string> of visual item descriptors
+ * from Stage-1 research, keyed by the exact required-item name strings
+ * `buildRequiredVisualItems` produces. Research describes ONE item (the
+ * merchant's typed hint), so it is only attached to a required item whose name
+ * plausibly refers to it (substring match either direction); for a single
+ * required item there is no ambiguity, so it always attaches. Returns
+ * undefined when research is unfamiliar/empty or nothing matches, so callers
+ * can spread it in as `itemDescriptions: buildItemDescriptionsFromResearch(...)`
+ * without a conditional.
+ */
+function buildItemDescriptionsFromResearch(
+  research: ItemResearch,
+  requiredVisualItems: readonly string[],
+): Record<string, string> | undefined {
+  if (!research.is_familiar) return undefined;
+  const description = research.description?.trim();
+  if (!description) return undefined;
+  const researchName = research.item_name?.trim().toLowerCase() ?? "";
+  const out: Record<string, string> = {};
+  if (researchName) {
+    for (const item of requiredVisualItems) {
+      const itemLower = item.toLowerCase();
+      if (itemLower.includes(researchName) || researchName.includes(itemLower)) {
+        out[item] = description;
+      }
+    }
+  }
+  if (Object.keys(out).length === 0 && requiredVisualItems.length === 1) {
+    out[requiredVisualItems[0]!] = description;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function candidateId(candidate: AiDealCopyVariant, index: number): string {
   return candidate.candidate_id || `candidate_${index + 1}`;
+}
+
+/**
+ * FLAG 2 (AI_IMAGE_PROMPT_V4_ENABLED): the same category playbook lookup the
+ * copy prompt already uses for `buildCategoryAdPlaybookPromptBlock`, reused
+ * here for its `visualDirection` array so the image prompt gets the same
+ * category-conditioned direction as the copy prompt, instead of a second,
+ * possibly-drifting definition.
+ */
+function playbookVisualDirection(category: string | null | undefined): string {
+  return getCategoryAdPlaybook(category).visualDirection.join("; ");
 }
 
 function styleGateCopy(candidate: AiDealCopyVariant) {
@@ -1148,7 +1262,10 @@ function makeJudgeConfig() {
     openAiModel: resolveJudgeOpenAiModel(base.openAiModel),
     primaryTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
     fallbackTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
-    transientRetryMax: 0,
+    // FLAG 1 (task 6): one transient retry instead of zero. A judge call that
+    // fails transiently used to fall straight to the deterministic ranking;
+    // now under the flag it gets one more shot before giving up.
+    transientRetryMax: aiAdsPipelineV8Enabled() ? 1 : 0,
     retryAfterFullTimeout: false,
   };
 }
@@ -1516,6 +1633,26 @@ const QUALITY_GATE_REPAIR_GUIDANCE: Record<string, string> = {
   TRUNCATED_FRAGMENT: "Every field must be a complete phrase. Never end on a bare connector word such as to, and, or the.",
   QUANTITY_ARTICLE_COLLISION:
     'Never place a count directly before an article ("one the ..."). Rephrase so the item name reads naturally after the count.',
+  // FLAG 1 (2026-08-05): completes the map with the remaining style-gate and
+  // poster-gate rejection codes that previously fell through to the generic
+  // "Avoid this rejection reason." fallback. Map completion is unconditional —
+  // it only sharpens the existing repair prompt with a concrete instruction
+  // per code, so it improves attempt-2 quality regardless of any pipeline flag.
+  POSTER_HEADLINE_OVER_LIMIT:
+    "The poster headline budget is at most 4 short words and 28 characters. Rewrite it shorter instead of relying on truncation.",
+  POSTER_KICKER_OVER_LIMIT: "Posters have no kicker slot; never return a posterKicker field.",
+  POSTER_HEADLINE_FORMULAIC_VALUE:
+    'Never end a poster headline with a bare value word such as "Savings", "Deal", "Special", or "Offer". Give the reason to come in instead.',
+  POSTER_HEADLINE_DANGLING_CONNECTOR:
+    'Poster headlines must be a complete phrase. Never start one with "and", "or", "but", or "plus", and never drop the leading word of a multi-word item name.',
+  ARTICLE_SOUND_DISAGREEMENT:
+    'Match "a" vs "an" to how the next word actually sounds when spoken aloud, not just its first letter.',
+  GENERIC_MARKETING_PHRASE: "Remove generic marketing filler; state the specific item and offer instead.",
+  AI_TONE_PHRASE: "Remove AI-sounding phrasing; write like a real local ad, not a template.",
+  HYPE_WITHOUT_SPECIFICITY: "Replace hype language with a concrete, specific detail about the actual item or offer.",
+  VAGUE_LOCAL_CLICHE: "Replace vague local-flavor cliches with a real, verified detail about this business.",
+  EMOJI_IN_AI_COPY: "Never use emojis in any field.",
+  TOO_MANY_EXCLAMATIONS: "Use at most one exclamation mark per field, and prefer none.",
 };
 
 function qualityGateRepairFeedback(telemetry: CopyQualityTelemetry): string | undefined {
@@ -1525,10 +1662,34 @@ function qualityGateRepairFeedback(telemetry: CopyQualityTelemetry): string | un
       ...telemetry.diversity.hard_failures.map((failure) => failure.code),
     ]),
   ];
-  if (codes.length === 0) return undefined;
+  // FLAG 1 (task 6): merge the independent judge's hard failures and concise
+  // feedback into the same repair prompt so attempt 2 sees them too. Additive —
+  // when the flag is off, or the judge produced nothing, this contributes
+  // nothing and the function's output is byte-identical to before.
+  const judgeLines: string[] = [];
+  if (aiAdsPipelineV8Enabled()) {
+    if (telemetry.judge.hard_failures.length > 0) {
+      judgeLines.push(
+        "The independent judge hard-failed these candidates; avoid repeating the same issue:",
+        ...telemetry.judge.hard_failures.map((failure) => `- ${failure.candidate_id}: ${failure.code}`),
+      );
+    }
+    if (telemetry.judge.feedback.length > 0) {
+      judgeLines.push(
+        "Judge feedback from the previous attempt:",
+        ...telemetry.judge.feedback.map((line) => `- ${line}`),
+      );
+    }
+  }
+  if (codes.length === 0 && judgeLines.length === 0) return undefined;
   return [
-    "Some previous candidates were rejected by automated quality checks. Every new candidate must avoid these issues:",
-    ...codes.map((code) => `- ${code}: ${QUALITY_GATE_REPAIR_GUIDANCE[code] ?? "Avoid this rejection reason."}`),
+    ...(codes.length > 0
+      ? [
+          "Some previous candidates were rejected by automated quality checks. Every new candidate must avoid these issues:",
+          ...codes.map((code) => `- ${code}: ${QUALITY_GATE_REPAIR_GUIDANCE[code] ?? "Avoid this rejection reason."}`),
+        ]
+      : []),
+    ...judgeLines,
   ].join("\n");
 }
 
@@ -1575,6 +1736,7 @@ async function prepareCopyCandidates(params: {
   offerContract: DealOfferContract;
   costContext: AiCostContext;
   creativeFormat: "standard_card" | "poster_v1";
+  outputLanguage: OutputLanguage;
 }): Promise<{
   variants: AiDealCopyVariant[];
   telemetry: CopyQualityTelemetry;
@@ -1652,7 +1814,40 @@ async function prepareCopyCandidates(params: {
       })),
     };
     if (!diversity.ok) {
-      return { variants: [], telemetry, judgeAttempts: [] };
+      // FLAG 1 (task 4): instead of discarding the whole batch on a hard
+      // diversity failure, prune the specific offenders (keeping the
+      // higher-scored member of each conflicting pair/group) and continue with
+      // the survivors. `telemetry.diversity.hard_failures` above already
+      // recorded every ORIGINAL hard-failure code before this branch runs, so
+      // qualityGateRepairFeedback still sees the full original list even
+      // though pruning may resolve some of them. Only returns empty when
+      // fewer than 2 candidates survive pruning — same floor pruneDiversityOffenders
+      // itself enforces.
+      if (!aiAdsPipelineV8Enabled()) {
+        return { variants: [], telemetry, judgeAttempts: [] };
+      }
+      const preliminaryScoresForPruning: Record<string, number> = Object.fromEntries(
+        styleSafe.map((variant, index) => [
+          candidateId(variant, index),
+          scoreCandidateDeterministically(variant, params.offerContract, params.merchantProfile, index).total,
+        ]),
+      );
+      const pruneResult = pruneDiversityOffenders(styleSafe, diversity.issues, preliminaryScoresForPruning);
+      if (pruneResult.survivors.length < 2) {
+        return { variants: [], telemetry, judgeAttempts: [] };
+      }
+      const survivorIds = new Set(
+        pruneResult.survivors.map((candidate, index) => candidate.candidate_id || `candidate_${index + 1}`),
+      );
+      const prunedVariants = styleSafe.filter((variant, index) => survivorIds.has(candidateId(variant, index)));
+      const rankedAfterPrune = rankCandidatesDeterministically(prunedVariants, params.offerContract, params.merchantProfile);
+      telemetry.preliminary_scores = rankedAfterPrune.map((variant, index) => ({
+        candidate_id: candidateId(variant, index),
+        strategy_id: variant.strategy_id ?? null,
+        score: variant.preliminary_score ?? 0,
+      }));
+      telemetry.diversity.pruned_candidate_ids = pruneResult.removedIds;
+      return prepareJudgedCopyCandidates({ ...params, ranked: rankedAfterPrune, telemetry });
     }
   }
 
@@ -1662,6 +1857,40 @@ async function prepareCopyCandidates(params: {
     strategy_id: variant.strategy_id ?? null,
     score: variant.preliminary_score ?? 0,
   }));
+
+  return prepareJudgedCopyCandidates({ ...params, ranked, telemetry });
+}
+
+/**
+ * Judge stage, split out of `prepareCopyCandidates` (2026-08-05, FLAG 1 task 4)
+ * so the diversity-pruning path can reach it too instead of returning an empty
+ * batch on every hard diversity failure. Behavior for the original single
+ * caller is unchanged — same `ranked` input, same telemetry object, same
+ * control flow.
+ */
+async function prepareJudgedCopyCandidates(params: {
+  variants: AiDealCopyVariant[];
+  creativeBrief: unknown;
+  attemptNumber: 1 | 2;
+  generationProvider?: string;
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  businessContext: BusinessContext;
+  merchantProfile: MerchantCreativeProfile;
+  offerContract: DealOfferContract;
+  costContext: AiCostContext;
+  creativeFormat: "standard_card" | "poster_v1";
+  outputLanguage: OutputLanguage;
+  ranked: AiDealCopyVariant[];
+  telemetry: CopyQualityTelemetry;
+}): Promise<{
+  variants: AiDealCopyVariant[];
+  telemetry: CopyQualityTelemetry;
+  judgeAttempts: ProviderAttempt[];
+  judgeProvider?: string;
+  judgeModel?: string;
+}> {
+  const { ranked, telemetry } = params;
 
   if (!telemetry.judge.enabled) {
     telemetry.judge.skipped_reason = "feature_flag_disabled";
@@ -1685,12 +1914,32 @@ async function prepareCopyCandidates(params: {
   }
 
   const shuffled = seededShuffle(judgeCandidates, `${params.costContext.requestGroupId}:${params.attemptNumber}`);
+  // FLAG 1 (task 6): give the judge poster render context — the locked offer
+  // lines — so it can score `posterHeroStrength` (a hero that adds an angle
+  // beyond those lines vs. one that merely restates them). Best-effort: any
+  // failure building the offer definition/lines just omits poster context,
+  // identical to the flag being off.
+  let posterOfferLines: string[] | undefined;
+  if (aiAdsPipelineV8Enabled() && params.creativeFormat === "poster_v1") {
+    try {
+      const lines = buildPosterOfferLinesFromOfferDefinition(
+        buildOfferDefinitionV1FromContract(params.offerContract),
+        outputLanguageToSupportedLocale(params.outputLanguage),
+      );
+      posterOfferLines = [lines.offer_line_1, lines.offer_line_2].filter(Boolean);
+    } catch {
+      posterOfferLines = undefined;
+    }
+  }
   const { system, userText, jsonSchema } = buildCandidateJudgePrompt({
     offerFacts: offerFactsForJudge(params.offerContract),
     categoryPlaybookBlock: buildCategoryAdPlaybookPromptBlock(params.businessContext.category),
     merchantProfileBlock: buildMerchantCreativeProfilePromptBlock(params.merchantProfile),
     creativeBrief: params.creativeBrief,
     candidates: shuffled,
+    ...(posterOfferLines && posterOfferLines.length > 0
+      ? { creativeFormat: "poster_v1" as const, posterOfferLines }
+      : {}),
   });
 
   try {
@@ -1732,6 +1981,27 @@ async function prepareCopyCandidates(params: {
         judgeProvider: result.provider,
         judgeModel: result.model,
       };
+    }
+    // FLAG 1 (task 6): when the judge hard-failed EVERY candidate it judged,
+    // returning the merely re-sorted batch (today's behavior) hands attempt 1's
+    // output straight back as a false success. Returning an empty batch instead
+    // makes generateValidatedDealCopy's own selectBestValidAiCopy find nothing
+    // valid, which triggers its existing attempt-2 retry with corrective
+    // feedback (qualityGateRepairFeedback above already folds in the judge's
+    // hard failures and concise feedback for that retry).
+    if (aiAdsPipelineV8Enabled()) {
+      const failedIds = new Set(telemetry.judge.hard_failures.map((failure) => failure.candidate_id));
+      const judgedIds = judgeCandidates.map((candidate, index) => candidate.candidate_id || candidateId(candidate, index));
+      const allJudgedFailed = judgedIds.length > 0 && judgedIds.every((id) => failedIds.has(id));
+      if (allJudgedFailed) {
+        return {
+          variants: [],
+          telemetry,
+          judgeAttempts: result.attempts,
+          judgeProvider: result.provider,
+          judgeModel: result.model,
+        };
+      }
     }
     return {
       variants: applyJudgeScoresToCandidates(ranked, judge),
@@ -2074,6 +2344,46 @@ async function findStockImageFallbacks(params: {
   }
 }
 
+/**
+ * FLAG 1 (task 1): mirrors buildAdImageQaPrompt's sourceGuidance prefix
+ * exactly (lib/quick-deal-image-qa.ts is not editable under this change's
+ * lock) so an item-description-aware prompt stays consistent with the
+ * unmodified default. Only the required-items line changes, via
+ * buildQuickDealImageQaPrompt's own additive itemDescriptions param. Absent
+ * itemDescriptions, delegates straight to buildAdImageQaPrompt for a
+ * byte-identical prompt.
+ */
+function adImageQaPromptWithItemDescriptions(params: {
+  sourceType: AdImageQaSourceType;
+  requiredVisualItems: readonly string[];
+  renderFormat?: AdImageRenderFormat;
+  itemDescriptions?: Record<string, string>;
+}): string {
+  if (!params.itemDescriptions || Object.keys(params.itemDescriptions).length === 0) {
+    return buildAdImageQaPrompt({
+      sourceType: params.sourceType,
+      requiredVisualItems: params.requiredVisualItems,
+      renderFormat: params.renderFormat,
+    });
+  }
+  const renderFormat = params.renderFormat ?? "square_1_1";
+  const cardNoun = renderFormat === "poster_4_5" ? "a vertical 4:5 poster card" : "a square mobile card";
+  const sourceGuidance =
+    params.sourceType === "merchant_original"
+      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, crop/overlay limits, and non-prominent required items as warnings unless a forbidden hard blocker appears."
+      : params.sourceType === "merchant_ai_edit"
+      ? `This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable in ${cardNoun} with native text overlays, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props.`
+      : params.sourceType === "approved_stock"
+      ? `This is approved stock media. It must still match the offer items, work in ${cardNoun} with native text overlays, and must not contain forbidden ad graphics.`
+      : params.sourceType === "deterministic_fallback"
+      ? "This is a deterministic native-rendered fallback. No vision inspection is required."
+      : `This is a fully AI-generated image. It must show the required offer items, work in ${cardNoun} with native text overlays, and must not contain forbidden ad graphics.`;
+  return [
+    sourceGuidance,
+    buildQuickDealImageQaPrompt(params.requiredVisualItems, renderFormat, params.itemDescriptions),
+  ].join(" ");
+}
+
 async function inspectGeneratedImageForOffer(params: {
   openAiKey: string;
   geminiApiKey?: string | null;
@@ -2082,6 +2392,10 @@ async function inspectGeneratedImageForOffer(params: {
   costContext: AiCostContext;
   sourceType?: AdImageQaSourceType;
   renderFormat?: AdImageRenderFormat;
+  /** FLAG 1 (task 1): optional per-item visual descriptors from Stage-1 research. */
+  itemDescriptions?: Record<string, string>;
+  /** FLAG 1 (task 3): real fetched content-type; defaults to "image/png" (generated PNGs). */
+  mimeType?: string;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   try {
@@ -2089,13 +2403,14 @@ async function inspectGeneratedImageForOffer(params: {
       {
         operation: "image_qa",
         systemPrompt: "You are Twofer's image quality inspector. Return JSON only.",
-        userPrompt: buildAdImageQaPrompt({
+        userPrompt: adImageQaPromptWithItemDescriptions({
           sourceType: params.sourceType ?? "ai_generated",
           requiredVisualItems,
           renderFormat: params.renderFormat,
+          itemDescriptions: params.itemDescriptions,
         }),
         jsonSchema: QUICK_DEAL_IMAGE_QA_SCHEMA,
-        imageInputs: [{ bytes: params.imageBytes, mimeType: "image/png" }],
+        imageInputs: [{ bytes: params.imageBytes, mimeType: safeImageMime(params.mimeType) }],
         maxOutputTokens: 900,
         timeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
         generationRunId: params.costContext.requestGroupId,
@@ -2128,6 +2443,8 @@ async function sourceAwareQaForImageBytes(params: {
   sourceType: AdImageQaSourceType;
   merchantOverrideAcknowledged?: boolean;
   renderFormat?: AdImageRenderFormat;
+  itemDescriptions?: Record<string, string>;
+  mimeType?: string;
 }): Promise<SourceAwareImageQaResult> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   const raw = await inspectGeneratedImageForOffer({
@@ -2138,6 +2455,8 @@ async function sourceAwareQaForImageBytes(params: {
     costContext: params.costContext,
     sourceType: params.sourceType,
     renderFormat: params.renderFormat,
+    itemDescriptions: params.itemDescriptions,
+    mimeType: params.mimeType,
   });
   return normalizeSourceAwareImageQaResult({
     raw,
@@ -2193,6 +2512,8 @@ async function qaMerchantOriginalPhoto(params: {
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
   merchantOverrideAcknowledged: boolean;
+  itemDescriptions?: Record<string, string>;
+  mimeType?: string;
 }): Promise<ImageQaTelemetry> {
   const sourceAware = await sourceAwareQaForImageBytes({
     openAiKey: params.openAiKey,
@@ -2202,6 +2523,8 @@ async function qaMerchantOriginalPhoto(params: {
     costContext: params.costContext,
     sourceType: "merchant_original",
     merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+    itemDescriptions: params.itemDescriptions,
+    mimeType: params.mimeType,
   });
   return imageQaTelemetryFromSourceAware(sourceAware, 1);
 }
@@ -2365,6 +2688,7 @@ async function produceImageOpenAiOnly(params: {
   research: ItemResearch;
   itemHint: string;
   businessName: string;
+  businessCategory?: string;
   offerContract: DealOfferContract;
   creativeImageBrief?: string | null;
   imageEditMode: MerchantImageEditMode;
@@ -2396,6 +2720,11 @@ async function produceImageOpenAiOnly(params: {
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
   const requiredVisualItems = buildRequiredVisualItems(offerContract);
+  // FLAG 1 (task 1): visual descriptors from Stage-1 research, keyed by the
+  // exact required-item names. Undefined (byte-identical) when the flag is off.
+  const itemDescriptions = aiAdsPipelineV8Enabled()
+    ? buildItemDescriptionsFromResearch(research, requiredVisualItems)
+    : undefined;
   let originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
   const originalPhotoResult = (): OpenAiProducedImage => ({
     posterStoragePath: photoPath,
@@ -2420,6 +2749,10 @@ async function produceImageOpenAiOnly(params: {
         requiredVisualItems,
         costContext,
         merchantOverrideAcknowledged,
+        itemDescriptions,
+        // FLAG 1 (task 3): the merchant's real uploaded photo mime, instead of
+        // the hardcoded "image/png" default (which only ever matched by luck).
+        mimeType: aiAdsPipelineV8Enabled() ? uploadedPhoto.mimeType : undefined,
       });
     }
 
@@ -2473,6 +2806,7 @@ async function produceImageOpenAiOnly(params: {
           costContext,
           sourceType: "merchant_ai_edit",
           renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+          itemDescriptions,
         });
         if (shouldFailClosedForImageQa(editQa)) {
           if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
@@ -2504,18 +2838,27 @@ async function produceImageOpenAiOnly(params: {
   const itemName = requiredVisualItems.length > 0
     ? requiredVisualItems.join(" and ")
     : research.item_name || itemHint || "menu item";
-  const prompt = buildPhotoAdImagePrompt({
-    itemName,
-    itemDescription: research.is_familiar ? research.description : "",
-    businessName,
-    requiredVisualItems,
-    creativeDirection: creativeImageBrief,
-    visualRevisionInstruction: imageRevisionInstruction({
-      revisionPreset: params.revisionPreset,
-      revisionFeedback: params.revisionFeedback,
-    }),
-    aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
-  });
+  const prompt = buildPhotoAdImagePrompt(
+    {
+      itemName,
+      itemDescription: research.is_familiar ? research.description : "",
+      businessName,
+      requiredVisualItems,
+      creativeDirection: creativeImageBrief,
+      visualRevisionInstruction: imageRevisionInstruction({
+        revisionPreset: params.revisionPreset,
+        revisionFeedback: params.revisionFeedback,
+      }),
+      aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
+    },
+    aiImagePromptV4Enabled()
+      ? {
+          promptVariant: "v4",
+          businessCategory: params.businessCategory,
+          visualDirection: playbookVisualDirection(params.businessCategory),
+        }
+      : undefined,
+  );
   let imageGeneration = await generatePhotoAdImageWithTelemetry(
     openAiKey,
     prompt,
@@ -2558,6 +2901,7 @@ async function produceImageOpenAiOnly(params: {
       costContext,
       sourceType: "ai_generated",
       renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+      itemDescriptions,
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -2594,6 +2938,11 @@ async function produceImageOpenAiOnly(params: {
         basePrompt: prompt,
         requiredVisualItems,
         missingItems: firstQa.missing_items,
+        // FLAG 1 (task 7): explicit negative QA feedback plus a request for a
+        // visibly different composition, instead of a generic regen prompt.
+        ...(aiAdsPipelineV8Enabled()
+          ? { opts: { qaNotes: firstQa.notes, requireDifferentComposition: true } }
+          : {}),
       });
       // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
       // miss keeps the first image / existing fallback instead of a second image.
@@ -2622,6 +2971,7 @@ async function produceImageOpenAiOnly(params: {
           costContext,
           sourceType: "ai_generated",
           renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+          itemDescriptions,
         });
         qa.attempts = 2;
         if (!retryQa) {
@@ -2659,6 +3009,32 @@ async function produceImageOpenAiOnly(params: {
         ),
       );
     }
+  } else if (aiAdsPipelineV8Enabled()) {
+    // FLAG 1 (task 2): no required visual items to check for presence, but
+    // forbidden-elements checks (text/logo/QR/mascot/crop) should still run
+    // instead of the image shipping fully uninspected. Fail-open on QA outage
+    // exactly as the items branch above (VISION_QA_UNAVAILABLE warning, image
+    // still ships).
+    const forbiddenCheck = await inspectGeneratedImageForOffer({
+      openAiKey,
+      geminiApiKey,
+      imageBytes: png,
+      requiredVisualItems: [],
+      costContext,
+      sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+    });
+    qa.attempts = 1;
+    Object.assign(
+      qa,
+      forbiddenCheck
+        ? imageQaTelemetryFromSourceAware(
+            normalizeSourceAwareImageQaResult({ raw: forbiddenCheck, requiredVisualItems: [], sourceType: "ai_generated" }),
+            1,
+            qa.regenerated,
+          )
+        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), 1, qa.regenerated),
+    );
   }
   // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
   // discard a generated image; an unavailable inspector ships it with the
@@ -2805,6 +3181,11 @@ async function produceImage(params: {
   budgetSink?: { report?: AiImageDeadlineReport };
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
+  // FLAG 1 (task 1): visual descriptors from Stage-1 research, keyed by the
+  // exact required-item names. Undefined (byte-identical) when the flag is off.
+  const itemDescriptions = aiAdsPipelineV8Enabled()
+    ? buildItemDescriptionsFromResearch(params.research, requiredVisualItems)
+    : undefined;
   // R4: the edge worker is killed with WORKER_RESOURCE_LIMIT at roughly 150s wall
   // clock. This chain can queue up to four Gemini calls (primary + its retry, then
   // the category-safe attempt + its retry) plus a gpt-image-1 fallback and a vision
@@ -2855,6 +3236,10 @@ async function produceImage(params: {
           requiredVisualItems,
           costContext: params.costContext,
           merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+          itemDescriptions,
+          // FLAG 1 (task 3): the merchant's real uploaded photo mime, instead
+          // of the hardcoded "image/png" default.
+          mimeType: aiAdsPipelineV8Enabled() ? uploadedPhoto.mimeType : undefined,
         });
       }
     }
@@ -3022,6 +3407,10 @@ async function produceImage(params: {
     stylePreset,
     aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
+    // FLAG 1 (task 1) / FLAG 2: additive fields, undefined when their flags
+    // are off so the prompt is byte-identical to before.
+    itemDescriptions,
+    ...(aiImagePromptV4Enabled() ? { visualDirection: playbookVisualDirection(params.businessCategory) } : {}),
   });
 
   if (params.photoPath) {
@@ -3079,6 +3468,8 @@ async function produceImage(params: {
       stylePreset,
       aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
+      itemDescriptions,
+      ...(aiImagePromptV4Enabled() ? { visualDirection: playbookVisualDirection(params.businessCategory) } : {}),
     });
     const gemini = await generateGeminiAdImageWithTelemetry({
       apiKey: params.geminiApiKey,
@@ -3107,6 +3498,7 @@ async function produceImage(params: {
       costContext: params.costContext,
       sourceType: "merchant_ai_edit",
       renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+      itemDescriptions,
     });
     if (shouldFailClosedForImageQa(editQa)) {
       return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
@@ -3245,43 +3637,73 @@ async function produceImage(params: {
         rand,
       });
       if (categoryPath) {
+        // FLAG 1 (task 2): the category-safe fallback used to be an unconditional
+        // all-clear — no vision inspection at all. Under the flag, run a real QA
+        // pass with requiredVisualItems=[] (item-name checks never applied here
+        // anyway) so forbidden-elements checks (text/logo/QR/mascot/crop) still
+        // apply. Fail-open on QA outage exactly as elsewhere; only an actual
+        // hard-block skips using this image (falls through to the remaining
+        // fallback chain below instead of returning here).
+        const categoryQa = aiAdsPipelineV8Enabled()
+          ? await sourceAwareQaForImageBytes({
+              openAiKey: params.openAiKey,
+              geminiApiKey: params.geminiApiKey,
+              imageBytes: categoryGen.bytes,
+              requiredVisualItems: [],
+              costContext: params.costContext,
+              sourceType: "ai_generated",
+              renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+            })
+          : null;
+        if (!categoryQa || !shouldFailClosedForImageQa(categoryQa)) {
+          console.log(
+            JSON.stringify({ tag: "ai_ads_v2", event: "category_safe_image_used", businessId: params.businessId }),
+          );
+          return withImageSelection(
+            {
+              posterStoragePath: categoryPath,
+              source: "generated",
+              treatment: null,
+              prompt: categoryGen.prompt,
+              qa: categoryQa
+                ? imageQaTelemetryFromSourceAware(categoryQa, 1, true)
+                : imageQaTelemetryFromSourceAware(
+                    normalizeSourceAwareImageQaResult({
+                      raw: {
+                        all_required_items_present: true,
+                        items: [],
+                        missing_items: [],
+                        has_readable_text: false,
+                        has_forbidden_logo_or_brand: false,
+                        has_qr_code: false,
+                        has_unrelated_mascot_or_animal: false,
+                        has_crop_or_overlay_risk: false,
+                        forbidden_elements: [],
+                        crop_or_overlay_issues: [],
+                        notes:
+                          "Category-safe fallback image (brand tokens dropped after a provider refusal); item-name QA not applicable.",
+                      },
+                      requiredVisualItems: [],
+                      sourceType: "ai_generated",
+                    }),
+                    0,
+                    true,
+                  ),
+              provider: "gemini",
+              model: gemini.model,
+              estimatedCostUsd: estimatedCostUsd + categoryGen.estimatedCostUsd,
+              attempts: providerAttempts,
+            },
+            { sourcePhotoPath: null, editMode: "none" },
+          );
+        }
         console.log(
-          JSON.stringify({ tag: "ai_ads_v2", event: "category_safe_image_used", businessId: params.businessId }),
-        );
-        return withImageSelection(
-          {
-            posterStoragePath: categoryPath,
-            source: "generated",
-            treatment: null,
-            prompt: categoryGen.prompt,
-            qa: imageQaTelemetryFromSourceAware(
-              normalizeSourceAwareImageQaResult({
-                raw: {
-                  all_required_items_present: true,
-                  items: [],
-                  missing_items: [],
-                  has_readable_text: false,
-                  has_forbidden_logo_or_brand: false,
-                  has_qr_code: false,
-                  has_unrelated_mascot_or_animal: false,
-                  has_crop_or_overlay_risk: false,
-                  forbidden_elements: [],
-                  crop_or_overlay_issues: [],
-                  notes:
-                    "Category-safe fallback image (brand tokens dropped after a provider refusal); item-name QA not applicable.",
-                },
-                requiredVisualItems: [],
-                sourceType: "ai_generated",
-              }),
-              0,
-              true,
-            ),
-            provider: "gemini",
-            model: gemini.model,
-            estimatedCostUsd: estimatedCostUsd + categoryGen.estimatedCostUsd,
-            attempts: providerAttempts,
-          },
-          { sourcePhotoPath: null, editMode: "none" },
+          JSON.stringify({
+            tag: "ai_ads_v2",
+            event: "category_safe_image_qa_blocked",
+            businessId: params.businessId,
+            hardFailReasons: categoryQa.hardFailReasons.slice(0, 8),
+          }),
         );
       }
     }
@@ -3296,6 +3718,7 @@ async function produceImage(params: {
       costContext: params.costContext,
       sourceType: "ai_generated",
       renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+      itemDescriptions,
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -3307,103 +3730,161 @@ async function produceImage(params: {
           qa.regenerated,
         ),
       );
-    } else if (!firstQa.all_required_items_present) {
-      Object.assign(
-        qa,
-        imageQaTelemetryFromSourceAware(
-          normalizeSourceAwareImageQaResult({
-            raw: firstQa,
-            requiredVisualItems,
-            sourceType: "ai_generated",
-          }),
-          1,
-          qa.regenerated,
-        ),
-      );
-      console.log(
-        JSON.stringify({
-          tag: "ai_ads_v2",
-          event: "gemini_image_missing_required_item",
-          businessId: params.businessId,
-          missingItems: qa.missingItems,
-        }),
-      );
-      const retryPrompt = buildQuickDealImageRegenerationPrompt({
-        basePrompt: gemini.prompt,
-        requiredVisualItems,
-        missingItems: firstQa.missing_items,
-      });
-      // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
-      // miss keeps the first image / existing fallback instead of a second image.
-      const retryGeneration =
-        MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
-          ? await generateGeminiAdImageWithTelemetry({
-              apiKey: params.geminiApiKey,
-              model: params.imageProviderConfig.geminiModel,
-              prompt: retryPrompt,
-              aspectRatio: params.imageAspectRatio,
-              imageSize: "1K",
-              estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
-              deadline: params.imageDeadline,
-              firstAttemptLeg: "gemini_required_item_retry",
-              retryOnFailure: false,
-            })
-          : null;
-      if (retryGeneration) {
-        await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
-        providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(retryGeneration.attempts));
-      }
-      if (retryGeneration?.bytes) {
-        qa.regenerated = true;
-        const retryQa = await inspectGeneratedImageForOffer({
-          openAiKey: params.openAiKey,
-          geminiApiKey: params.geminiApiKey,
-          imageBytes: retryGeneration.bytes,
-          requiredVisualItems,
-          costContext: params.costContext,
-          sourceType: "ai_generated",
-          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
-        });
-        qa.attempts = 2;
-        if (!retryQa) {
-          // Retry inspection unavailable: keep the first image's known failing
-          // verdict rather than erasing it, so a QA-failed image cannot ship
-          // uninspected under the fail-open rule.
-          console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
-        } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
-          Object.assign(
-            qa,
-            imageQaTelemetryFromSourceAware(
-              normalizeSourceAwareImageQaResult({
-                raw: retryQa,
-                requiredVisualItems,
-                sourceType: "ai_generated",
-              }),
-              2,
-              true,
-            ),
-          );
-          imageBytes = retryGeneration.bytes;
-          imageMimeType = retryGeneration.mimeType;
-          imagePrompt = retryGeneration.prompt;
-          imageLuma = retryGeneration.luma ?? null;
-          estimatedCostUsd += retryGeneration.estimatedCostUsd;
-        }
-      }
     } else {
-      Object.assign(
-        qa,
-        imageQaTelemetryFromSourceAware(
-          normalizeSourceAwareImageQaResult({
-            raw: firstQa,
-            requiredVisualItems,
-            sourceType: "ai_generated",
+      // FLAG 1 (task 7): treat extreme top-band contrast/tile-spread as a soft
+      // has_crop_or_overlay_risk signal, feeding the SAME capped regeneration
+      // path a missing-item verdict already uses — only when the flag is on.
+      // `imageLuma` here is the FIRST attempt's measured luminance (matches
+      // `imageBytes`/`firstQa`, not a stale prior value).
+      const contrastThresholdExceeded =
+        aiAdsPipelineV8Enabled() &&
+        imageLuma != null &&
+        (imageLuma.topContrast > TOP_BAND_CONTRAST_REGEN_THRESHOLD ||
+          imageLuma.topTileSpread > TOP_BAND_TILE_SPREAD_REGEN_THRESHOLD);
+      const needsRegeneration = !firstQa.all_required_items_present || contrastThresholdExceeded;
+      if (needsRegeneration) {
+        Object.assign(
+          qa,
+          imageQaTelemetryFromSourceAware(
+            normalizeSourceAwareImageQaResult({
+              raw: firstQa,
+              requiredVisualItems,
+              sourceType: "ai_generated",
+            }),
+            1,
+            qa.regenerated,
+          ),
+        );
+        if (contrastThresholdExceeded && firstQa.all_required_items_present) {
+          qa.warningCodes = [...new Set([...qa.warningCodes, "TOP_BAND_HIGH_CONTRAST"])];
+        }
+        console.log(
+          JSON.stringify({
+            tag: "ai_ads_v2",
+            event: "gemini_image_missing_required_item",
+            businessId: params.businessId,
+            missingItems: qa.missingItems,
+            contrastThresholdExceeded,
           }),
-          1,
-          qa.regenerated,
-        ),
-      );
+        );
+        const contrastQaNotes =
+          "The top of the previous image was too busy or high-contrast for legible headline text; make the top quarter calmer, flatter, and lower-contrast.";
+        const retryPrompt = buildQuickDealImageRegenerationPrompt({
+          basePrompt: gemini.prompt,
+          requiredVisualItems,
+          missingItems: firstQa.missing_items,
+          // FLAG 1 (task 7): explicit negative QA feedback plus a request for a
+          // visibly different composition, instead of a generic regen prompt.
+          ...(aiAdsPipelineV8Enabled()
+            ? {
+                opts: {
+                  qaNotes:
+                    contrastThresholdExceeded && firstQa.all_required_items_present
+                      ? contrastQaNotes
+                      : firstQa.notes,
+                  requireDifferentComposition: true,
+                },
+              }
+            : {}),
+        });
+        // Part B: only pay for a regeneration when the cap allows it; at 1 a QA
+        // miss keeps the first image / existing fallback instead of a second image.
+        const retryGeneration =
+          MAX_IMAGE_GENERATIONS_PER_REQUEST >= 2
+            ? await generateGeminiAdImageWithTelemetry({
+                apiKey: params.geminiApiKey,
+                model: params.imageProviderConfig.geminiModel,
+                prompt: retryPrompt,
+                aspectRatio: params.imageAspectRatio,
+                imageSize: "1K",
+                estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
+                deadline: params.imageDeadline,
+                firstAttemptLeg: "gemini_required_item_retry",
+                retryOnFailure: false,
+              })
+            : null;
+        if (retryGeneration) {
+          await logGeminiImageAttempts(params.costContext, "image_generation_retry", retryGeneration.attempts);
+          providerAttempts = mergeImageAttempts(providerAttempts, summarizeGeminiImageAttempts(retryGeneration.attempts));
+        }
+        if (retryGeneration?.bytes) {
+          qa.regenerated = true;
+          const retryQa = await inspectGeneratedImageForOffer({
+            openAiKey: params.openAiKey,
+            geminiApiKey: params.geminiApiKey,
+            imageBytes: retryGeneration.bytes,
+            requiredVisualItems,
+            costContext: params.costContext,
+            sourceType: "ai_generated",
+            renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+            itemDescriptions,
+          });
+          qa.attempts = 2;
+          if (!retryQa) {
+            // Retry inspection unavailable: keep the first image's known failing
+            // verdict rather than erasing it, so a QA-failed image cannot ship
+            // uninspected under the fail-open rule.
+            console.log(JSON.stringify({ tag: "ai_ads_v2", event: "retry_image_qa_unavailable" }));
+          } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
+            Object.assign(
+              qa,
+              imageQaTelemetryFromSourceAware(
+                normalizeSourceAwareImageQaResult({
+                  raw: retryQa,
+                  requiredVisualItems,
+                  sourceType: "ai_generated",
+                }),
+                2,
+                true,
+              ),
+            );
+            imageBytes = retryGeneration.bytes;
+            imageMimeType = retryGeneration.mimeType;
+            imagePrompt = retryGeneration.prompt;
+            imageLuma = retryGeneration.luma ?? null;
+            estimatedCostUsd += retryGeneration.estimatedCostUsd;
+          }
+        }
+      } else {
+        Object.assign(
+          qa,
+          imageQaTelemetryFromSourceAware(
+            normalizeSourceAwareImageQaResult({
+              raw: firstQa,
+              requiredVisualItems,
+              sourceType: "ai_generated",
+            }),
+            1,
+            qa.regenerated,
+          ),
+        );
+      }
     }
+  } else if (imageBytes && aiAdsPipelineV8Enabled()) {
+    // FLAG 1 (task 2): no required visual items to check for presence, but
+    // forbidden-elements checks (text/logo/QR/mascot/crop) should still run
+    // instead of the image shipping fully uninspected. Fail-open on QA outage
+    // exactly as the items branch above.
+    const forbiddenCheck = await inspectGeneratedImageForOffer({
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
+      imageBytes,
+      requiredVisualItems: [],
+      costContext: params.costContext,
+      sourceType: "ai_generated",
+      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+    });
+    qa.attempts = 1;
+    Object.assign(
+      qa,
+      forbiddenCheck
+        ? imageQaTelemetryFromSourceAware(
+            normalizeSourceAwareImageQaResult({ raw: forbiddenCheck, requiredVisualItems: [], sourceType: "ai_generated" }),
+            1,
+            qa.regenerated,
+          )
+        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), 1, qa.regenerated),
+    );
   }
   // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
   // discard a generated image; an unavailable inspector ships it with the
@@ -4201,6 +4682,7 @@ Deno.serve(async (req) => {
           itemHint: sourceHint,
           businessName,
           businessLocation: businessContext.location ?? "",
+          businessCategory: businessContext.category,
           costContext,
         })
       );
@@ -4293,7 +4775,7 @@ Deno.serve(async (req) => {
           request_type: "ad_variants",
           input_mode: photoPath ? "photo" : "text",
           request_hash: "copy_error_v3",
-          prompt_version: AD_COPY_PROMPT_VERSION,
+          prompt_version: adCopyPromptVersionForLogging(),
           model: CHAT_MODEL,
           success: false,
           failure_reason: "COPY_FAILED",
@@ -4549,6 +5031,55 @@ Deno.serve(async (req) => {
       stageTimingsMs.localization = 0;
     }
 
+    // FLAG 3 (AI_POSTER_LOCALIZED_HERO_ENABLED, 2026-08-05): once localization
+    // resolves with QA-passed transcreated headlines, rebuild the poster
+    // spec's copy_by_language with those headlines as candidate heroes for
+    // their locale — the builder vets each candidate internally (fit/policy/
+    // mechanical/S2 dedup) and falls back to a blank hero on any failure, same
+    // as today. Only copy_by_language is swapped; posterDraft's identity,
+    // .luma (already assigned above), and every other field are untouched —
+    // this must run AFTER the luma assignment, matching the ordering already
+    // established above.
+    if (aiPosterLocalizedHeroEnabled() && posterDraft && localizationResult) {
+      try {
+        const localizedHeroByLocale: LocalizedHeroByLocale = {};
+        for (const locale of SUPPORTED_LOCALES) {
+          const row = localizationResult.bundle.localizations[locale];
+          if (!row || row.translationStatus !== "persuasive_transcreation" || row.qaDecision !== "pass") continue;
+          const heroHeadline = typeof row.headline === "string" ? row.headline.trim() : "";
+          if (!heroHeadline) continue;
+          localizedHeroByLocale[supportedLocaleToAppLanguage(locale)] = heroHeadline;
+        }
+        if (Object.keys(localizedHeroByLocale).length > 0) {
+          const rebuiltPosterSpec = buildPosterSpecFromOfferDefinition({
+            definition: offerDefinition,
+            enabled: true,
+            templateId: choosePosterTemplateForOffer(
+              creativeRequest.posterStyle,
+              offerDefinition,
+              businessContext.category,
+            ),
+            sourceAssetPath: imageResult.posterStoragePath,
+            renderedAssetPath: null,
+            headline: copy.headline,
+            subline: null,
+            businessCategory: businessContext.category,
+            compositionPlan: imageResult.prompt,
+            localizedHeroByLocale,
+          });
+          (posterDraft as { copy_by_language?: unknown }).copy_by_language = rebuiltPosterSpec.copy_by_language;
+        }
+      } catch (localizedHeroErr) {
+        console.log(
+          JSON.stringify({
+            tag: "ai_ads_v2",
+            event: "poster_localized_hero_skipped",
+            message: String(localizedHeroErr).slice(0, 200),
+          }),
+        );
+      }
+    }
+
     const ad: SingleAd = {
       headline: copy.headline,
       subheadline: copy.subheadline,
@@ -4597,38 +5128,71 @@ Deno.serve(async (req) => {
     const productionSuccess = !imageProductionFailed;
     imagePipelineBudget.report = aiImageDeadlineReport(imageDeadline, Date.now(), stageTimingsMs);
 
-    await admin.from("ai_generation_logs").insert({
-      business_id: businessId,
-      user_id: user.id,
-      request_type: isRevision ? "ad_refine" : "ad_variants",
-      input_mode: photoPath ? "photo" : "text",
-      request_hash: `v3:${derivedRevisionCount}:${imageResult.source}:${imageResult.provider}`,
-      prompt_version: AD_COPY_PROMPT_VERSION,
-      model: copy.model ?? CHAT_MODEL,
-      success: productionSuccess,
-      failure_reason: productionSuccess ? null : "IMAGE_NULL",
-      openai_called:
-        (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
-        (localizationResult?.transcreation.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
-        (localizationResult?.semanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
-        (localizationResult?.repairedSemanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
-        Object.values(localizationResult?.repairs ?? {}).some((repair) =>
-          (repair?.attempts ?? []).some((attempt) => attempt.provider === "openai")
-        ) ||
-        imageResult.provider === "openai" ||
-        !isRevision,
-      response_payload: buildGenerationTelemetry({
-        offerContract,
-        copy,
-        imageResult,
-        productionSuccess,
-        totalLatencyMs: Date.now() - requestStartedAtMs,
-        localizationResult,
-        posterDraft,
-        requestedCreativeFormat: creativeRequest.requestedFormat,
-        stageTimingsMs,
-      }),
-    });
+    // TASK 8 (unflagged, best-effort telemetry linkage, 2026-08-05): capture the
+    // inserted row's id so it can ride along in the ad payload and, if a future
+    // publish call passes it back, publish-offer-version can link this
+    // generation to the deal it produced. `.select("id").single()` changes what
+    // the insert returns, not what it writes — same fields as before. Wrapped so
+    // a capture failure (RLS, transient DB error) can never fail the request;
+    // the row still inserts exactly as it did before this change either way.
+    let insertedGenerationLogId: string | null = null;
+    try {
+      const { data: insertedLog, error: insertLogError } = await admin
+        .from("ai_generation_logs")
+        .insert({
+          business_id: businessId,
+          user_id: user.id,
+          request_type: isRevision ? "ad_refine" : "ad_variants",
+          input_mode: photoPath ? "photo" : "text",
+          request_hash: `v3:${derivedRevisionCount}:${imageResult.source}:${imageResult.provider}`,
+          prompt_version: adCopyPromptVersionForLogging(),
+          model: copy.model ?? CHAT_MODEL,
+          success: productionSuccess,
+          failure_reason: productionSuccess ? null : "IMAGE_NULL",
+          openai_called:
+            (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+            (localizationResult?.transcreation.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+            (localizationResult?.semanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+            (localizationResult?.repairedSemanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+            Object.values(localizationResult?.repairs ?? {}).some((repair) =>
+              (repair?.attempts ?? []).some((attempt) => attempt.provider === "openai")
+            ) ||
+            imageResult.provider === "openai" ||
+            !isRevision,
+          response_payload: buildGenerationTelemetry({
+            offerContract,
+            copy,
+            imageResult,
+            productionSuccess,
+            totalLatencyMs: Date.now() - requestStartedAtMs,
+            localizationResult,
+            posterDraft,
+            requestedCreativeFormat: creativeRequest.requestedFormat,
+            stageTimingsMs,
+          }),
+        })
+        .select("id")
+        .single();
+      if (insertLogError) {
+        console.log(
+          JSON.stringify({
+            tag: "ai_ads_v2",
+            event: "generation_log_insert_error",
+            message: String(insertLogError.message ?? "").slice(0, 200),
+          }),
+        );
+      } else if (typeof insertedLog?.id === "string") {
+        insertedGenerationLogId = insertedLog.id;
+      }
+    } catch (insertErr) {
+      console.log(
+        JSON.stringify({ tag: "ai_ads_v2", event: "generation_log_insert_threw", message: String(insertErr).slice(0, 200) }),
+      );
+    }
+    // Returned in the ad payload so a later publish call can pass it back (see
+    // publish-offer-version's optional generation_log_id passthrough) and link
+    // this generation to the deal it produces.
+    ad.generation_log_id = insertedGenerationLogId;
 
     /** Quota only ticks on a real successful production (matches the log row above). */
     const updatedUsed = startingQuota.used + (productionSuccess ? 1 : 0);

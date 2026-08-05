@@ -12,6 +12,7 @@ import {
   ADMIN_AI_PROMPT_VERSIONS,
   generateAdminAiJson,
 } from "../_shared/admin-ai.ts";
+import { adminAiV2Enabled, SCORE_COMPONENT_RANGES, SCORE_TOTAL_RANGE } from "../_shared/admin-ai-v2.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SCORE_SCHEMA = {
@@ -83,6 +84,39 @@ const SCORE_SCHEMA = {
       "requires_human_review",
       "safe_for_public_display",
     ],
+  },
+};
+
+/**
+ * V2-only (ADMIN_AI_V2_ENABLED) variant of SCORE_SCHEMA: identical shape,
+ * but every score_components integer and total_score gains minimum/maximum
+ * bounds derived from SCORE_COMPONENT_RANGES / SCORE_TOTAL_RANGE in
+ * admin-ai-v2.ts (which are verified against the deterministic scorer below
+ * by admin-ai-v2.test.ts). Both providers accept minimum/maximum on integer
+ * schema properties. Flag-off keeps using SCORE_SCHEMA unchanged.
+ */
+const SCORE_SCHEMA_V2 = {
+  name: SCORE_SCHEMA.name,
+  strict: true,
+  schema: {
+    ...SCORE_SCHEMA.schema,
+    properties: {
+      ...SCORE_SCHEMA.schema.properties,
+      total_score: { type: "integer", minimum: SCORE_TOTAL_RANGE.min, maximum: SCORE_TOTAL_RANGE.max },
+      score_components: {
+        ...SCORE_SCHEMA.schema.properties.score_components,
+        properties: Object.fromEntries(
+          Object.entries(SCORE_SCHEMA.schema.properties.score_components.properties).map(([key]) => [
+            key,
+            {
+              type: "integer",
+              minimum: SCORE_COMPONENT_RANGES[key].min,
+              maximum: SCORE_COMPONENT_RANGES[key].max,
+            },
+          ]),
+        ),
+      },
+    },
   },
 };
 
@@ -244,6 +278,11 @@ Deno.serve(async (req) => {
     const latestEnrichment = ((enrichmentResult.data ?? []) as Array<Record<string, unknown>>)[0];
     const fallback = buildDeterministicScore({ prospect, demand, latestSource, latestEnrichment });
 
+    // V2 (ADMIN_AI_V2_ENABLED only): the deterministic baseline is included in
+    // the prompt as an anchor the model adjusts (with justification) rather
+    // than scoring from scratch, and the schema gains min/max bounds matching
+    // the deterministic scorer's own component ranges.
+    const v2Enabled = adminAiV2Enabled();
     const ai = await generateAdminAiJson({
       ctx,
       feature: "prospect_scoring",
@@ -257,8 +296,9 @@ Deno.serve(async (req) => {
         sales_account: salesResult.data ?? null,
         launch_area: payload.launch_area ?? null,
         customer_demand_signals_are_aggregate_only: true,
+        ...(v2Enabled ? { baseline_score: fallback } : {}),
       }),
-      jsonSchema: SCORE_SCHEMA,
+      jsonSchema: v2Enabled ? SCORE_SCHEMA_V2 : SCORE_SCHEMA,
       fallbackValue: fallback,
       relatedProspectId: prospectId,
       inputSummary: {
@@ -291,6 +331,10 @@ Deno.serve(async (req) => {
       enrichment_review_status: latestEnrichment?.review_status ?? null,
       sales_account: salesResult.data ?? null,
       ai: ai.output,
+      // V2 only: keeps the deterministic anchor next to what the AI actually
+      // returned, so a reviewer (or a later audit) can see what the AI
+      // adjusted and by how much.
+      ...(v2Enabled ? { baseline: fallback } : {}),
     };
 
     const { data: score, error: scoreError } = await ctx.supabaseAdmin

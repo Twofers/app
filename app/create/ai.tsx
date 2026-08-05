@@ -62,7 +62,11 @@ import {
   buildFallbackTemplateAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
+  appendRevisionFeedback,
+  revisionPresetForSuggestion,
+  copyFingerprintHash,
   type GeneratedAd,
+  type GeneratedAdCopyAlternative,
   type PhotoTreatment,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
@@ -891,7 +895,12 @@ function imageVersionId(ad: GeneratedAd): string | null {
   const source = ad.photo_source ?? "generated";
   const treatment = ad.photo_treatment ?? "none";
   const editMode = ad.image_selection?.editMode ?? "none";
-  return [storagePath, source, treatment, editMode].join("|");
+  // Copy fingerprint included so a copy-only revision (same image, new copy)
+  // gets its own restorable version entry instead of overwriting the prior
+  // one in the dedup at rememberImageVersion — the id used to key only on the
+  // image fields, so the earlier copy was unrecoverable.
+  const copyHash = copyFingerprintHash(ad);
+  return [storagePath, source, treatment, editMode, copyHash].join("|");
 }
 
 function buildImageVersionEntry(ad: GeneratedAd, kind: ImageVersionKind): ImageVersionEntry | null {
@@ -1040,6 +1049,9 @@ export default function AiDealScreen() {
   );
   const [isRecording, setIsRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  // The recorder is a single shared resource; this just tracks which field
+  // the in-flight recording should be transcribed into once it stops.
+  const dictationTargetRef = useRef<"hint" | "revision">("hint");
 
   // AI quota
   const [quota, setQuota] = useState<AiComposeQuota | null>(null);
@@ -1167,6 +1179,9 @@ export default function AiDealScreen() {
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
   const [revisionFeedback, setRevisionFeedback] = useState("");
+  // Set by applyRevisionSuggestion; consumed (and cleared) by the next reviseAd()
+  // call so a stale preset never silently rides along on a later, unrelated revise.
+  const [pendingRevisionPreset, setPendingRevisionPreset] = useState<string | null>(null);
   const [composedStyleIndex, setComposedStyleIndex] = useState(0);
   // Single-variant flow: the edit-intent no longer gates the (now always-visible)
   // refine panel; the setter still runs as a harmless reset across the flow.
@@ -2622,9 +2637,13 @@ export default function AiDealScreen() {
         audio_base64: b64,
       });
       if (transcript) {
-        const nextHintText = hintText.trim() ? `${hintText.trim()} ${transcript}` : transcript;
-        setHintText(nextHintText);
-        applyInferredEligibilityFromHint(nextHintText);
+        if (dictationTargetRef.current === "revision") {
+          setRevisionFeedback((current) => appendRevisionFeedback(current, transcript));
+        } else {
+          const nextHintText = hintText.trim() ? `${hintText.trim()} ${transcript}` : transcript;
+          setHintText(nextHintText);
+          applyInferredEligibilityFromHint(nextHintText);
+        }
         setBanner({ message: t("createAi.transcribeDone"), tone: "success" });
       } else {
         setBanner({ message: t("createAi.transcribeEmpty"), tone: "info" });
@@ -3200,12 +3219,18 @@ export default function AiDealScreen() {
     const requestId = ++generationRequestIdRef.current;
     const maxClaimsNum = Number(maxClaims);
     const revisionNumber = revisionsUsed + 1;
+    // Captured then cleared immediately — a preset applies to exactly the next
+    // revise call, never a later unrelated one.
+    const presetForThisRevision = pendingRevisionPreset;
+    setPendingRevisionPreset(null);
     trackEvent(AiAdsEvents.REVISION_TAPPED, {
       screen: "create_ai",
       revision_target: effectiveRevisionTarget,
       selected_revision_target: revisionTarget,
       revision_count: revisionNumber,
       feedback_length: revisionFeedbackText.length,
+      revision_feedback: revisionFeedbackText.slice(0, 800),
+      revision_preset: presetForThisRevision,
       image_source_mode: sourceModeForRevision,
     });
     try {
@@ -3217,6 +3242,7 @@ export default function AiDealScreen() {
         request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
         previous_ad: generatedAd,
+        ...(presetForThisRevision ? { revision_preset: presetForThisRevision } : {}),
         revision_target: effectiveRevisionTarget,
         revision_count: revisionNumber,
         revision_feedback: revisionFeedbackText,
@@ -4309,13 +4335,24 @@ export default function AiDealScreen() {
 
       const baseline = aiDraftBaselineRef.current;
       if (baseline) {
-        const edited =
-          title.trim() !== baseline.title.trim() ||
-          promoLine.trim() !== baseline.promo_line.trim() ||
-          ctaText.trim() !== baseline.cta_text.trim() ||
-          description.trim() !== baseline.description.trim();
+        const titleEdited = title.trim() !== baseline.title.trim();
+        const promoLineEdited = promoLine.trim() !== baseline.promo_line.trim();
+        const ctaTextEdited = ctaText.trim() !== baseline.cta_text.trim();
+        const descriptionEdited = description.trim() !== baseline.description.trim();
+        const edited = titleEdited || promoLineEdited || ctaTextEdited || descriptionEdited;
         if (edited) {
-          trackEvent(AiAdsEvents.FIELDS_EDITED_BEFORE_PUBLISH, { screen: "create_ai" });
+          // Booleans + length deltas only — never the edited text itself.
+          trackEvent(AiAdsEvents.FIELDS_EDITED_BEFORE_PUBLISH, {
+            screen: "create_ai",
+            title_edited: titleEdited,
+            promo_line_edited: promoLineEdited,
+            cta_text_edited: ctaTextEdited,
+            description_edited: descriptionEdited,
+            title_length_delta: title.trim().length - baseline.title.trim().length,
+            promo_line_length_delta: promoLine.trim().length - baseline.promo_line.trim().length,
+            cta_text_length_delta: ctaText.trim().length - baseline.cta_text.trim().length,
+            description_length_delta: description.trim().length - baseline.description.trim().length,
+          });
         }
         trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
           screen: "create_ai",
@@ -4757,6 +4794,33 @@ export default function AiDealScreen() {
     }
     return t("createAi.imageVersionGenerated", { defaultValue: "Generated image" });
   };
+  // Top few validated copy_alternatives as tappable chips under the preview.
+  // The current ad's own headline is excluded from the alternates list and
+  // rendered as its own always-first, always-selected chip so applying an
+  // alternative never loses the original winner — tapping back to it is just
+  // tapping the first chip again.
+  const currentCopyChipHeadline = generatedAd?.headline?.trim() ?? "";
+  const copyAlternativeChips: GeneratedAdCopyAlternative[] = (generatedAd?.copy_alternatives ?? [])
+    .filter((alt) => alt.headline.trim().toLowerCase() !== currentCopyChipHeadline.toLowerCase())
+    .slice(0, 3);
+  function applyCopyAlternative(alt: GeneratedAdCopyAlternative) {
+    if (!generatedAd) return;
+    const merged = normalizeGeneratedAdDisplayCopy({
+      ...generatedAd,
+      headline: alt.headline,
+      short_description: alt.short_description,
+      push_notification: alt.push_notification ?? generatedAd.push_notification,
+      social_caption: alt.social_caption ?? generatedAd.social_caption,
+      cta: alt.cta ?? generatedAd.cta,
+      selected_variant_index: alt.variant_index ?? generatedAd.selected_variant_index ?? null,
+    });
+    setGeneratedAd(merged);
+    applyAdToDraft(merged);
+    trackEvent(AiAdsEvents.COPY_OPTION_SELECTED, {
+      screen: "create_ai",
+      strategy_id: alt.strategy_id ?? null,
+    });
+  }
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -4847,7 +4911,10 @@ export default function AiDealScreen() {
   ];
   function applyRevisionSuggestion(suggestion: RevisionSuggestion) {
     setRevisionTarget(suggestion.target);
-    setRevisionFeedback(suggestion.feedback);
+    // Append (deduped) instead of overwrite — tapping a chip used to discard
+    // whatever the merchant had already typed into the feedback box.
+    setRevisionFeedback((current) => appendRevisionFeedback(current, suggestion.feedback));
+    setPendingRevisionPreset(revisionPresetForSuggestion(suggestion.key) ?? null);
     trackEvent(AiAdsEvents.REVISION_SUGGESTION_SELECTED, {
       screen: "create_ai",
       suggestion_key: suggestion.key,
@@ -5282,7 +5349,7 @@ export default function AiDealScreen() {
               />
               {Platform.OS !== "web" ? (
                 <Pressable
-                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => { dictationTargetRef.current = "hint"; void startRecording(); }}
                   disabled={transcribing}
                   style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
                 >
@@ -5858,6 +5925,50 @@ export default function AiDealScreen() {
                         )}
                       </View>
                     ) : null}
+
+                    {copyAlternativeChips.length > 0 ? (
+                      <View style={{ gap: 8 }}>
+                        <Text style={{ fontWeight: "700", fontSize: 12, color: theme.mutedText }}>
+                          {t("createAi.copyAlternativesLabel", { defaultValue: "More headlines" })}
+                        </Text>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          <View
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 10,
+                              borderRadius: 999,
+                              backgroundColor: PrimaryTint.surface,
+                              borderWidth: 1,
+                              borderColor: theme.primary,
+                              maxWidth: 180,
+                            }}
+                          >
+                            <Text numberOfLines={1} style={{ color: theme.accentText, fontWeight: "800", fontSize: 12 }}>
+                              {currentCopyChipHeadline}
+                            </Text>
+                          </View>
+                          {copyAlternativeChips.map((alt, index) => (
+                            <Pressable
+                              key={alt.candidate_id ?? alt.strategy_id ?? `copy-alt-${index}`}
+                              onPress={() => applyCopyAlternative(alt)}
+                              style={{
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderRadius: 999,
+                                backgroundColor: theme.surface,
+                                borderWidth: 1,
+                                borderColor: theme.border,
+                                maxWidth: 180,
+                              }}
+                            >
+                              <Text numberOfLines={1} style={{ color: theme.text, fontWeight: "800", fontSize: 12 }}>
+                                {alt.headline}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -5908,7 +6019,7 @@ export default function AiDealScreen() {
                 {restorableImageVersions.length > 0 ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <Text style={{ fontWeight: "800", color: theme.text }}>
-                      {t("createAi.imageVersionsTitle", { defaultValue: "Earlier image versions" })}
+                      {t("createAi.imageVersionsTitle", { defaultValue: "Earlier versions" })}
                     </Text>
                     {restorableImageVersions.map((entry, index) => {
                       const storagePath = imageVersionStoragePath(entry.ad);
@@ -6063,25 +6174,45 @@ export default function AiDealScreen() {
                           })}
                         </View>
 
-                        <TextInput
-                          value={revisionFeedback}
-                          onChangeText={setRevisionFeedback}
-                          placeholder={t("createAi.reviseFeedbackPlaceholder")}
-                          placeholderTextColor={theme.mutedText}
-                          multiline
-                          editable={canReviseAd}
-                          style={{
-                            borderWidth: 1,
-                            borderColor: theme.border,
-                            borderRadius: 10,
-                            padding: 12,
-                            minHeight: 48,
-                            backgroundColor: theme.surface,
-                            color: theme.text,
-                            fontSize: 14,
-                            opacity: canReviseAd ? 1 : 0.6,
-                          }}
-                        />
+                        <View>
+                          <TextInput
+                            value={revisionFeedback}
+                            onChangeText={setRevisionFeedback}
+                            placeholder={t("createAi.reviseFeedbackPlaceholder")}
+                            placeholderTextColor={theme.mutedText}
+                            multiline
+                            editable={canReviseAd}
+                            maxLength={800}
+                            style={{
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                              borderRadius: 10,
+                              padding: 12,
+                              paddingRight: Platform.OS !== "web" ? 54 : 12,
+                              minHeight: 48,
+                              backgroundColor: theme.surface,
+                              color: theme.text,
+                              fontSize: 14,
+                              opacity: canReviseAd ? 1 : 0.6,
+                            }}
+                          />
+                          {Platform.OS !== "web" ? (
+                            <Pressable
+                              onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => { dictationTargetRef.current = "revision"; void startRecording(); }}
+                              disabled={transcribing || !canReviseAd}
+                              style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
+                            >
+                              {transcribing ? (
+                                <ActivityIndicator color={theme.primaryText} size="small" />
+                              ) : (
+                                <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color={theme.primaryText} />
+                              )}
+                            </Pressable>
+                          ) : null}
+                        </View>
+                        <Text style={{ fontSize: 11, color: theme.mutedText, textAlign: "right" }}>
+                          {revisionFeedback.length}/800
+                        </Text>
 
                         <SecondaryButton
                           title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}

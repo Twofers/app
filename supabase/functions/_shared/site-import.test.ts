@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildMenuProbeUrl,
   buildSiteMenuPrompt,
   clampMenuPromptText,
   extractLogoCandidates,
   extractMenuLinks,
+  HOSTED_MENU_DOMAIN_ALLOWLIST,
   htmlToMenuText,
   isPrivateOrReservedIp,
   MAX_MENU_PROMPT_CHARS,
@@ -304,6 +306,114 @@ describe("extractMenuLinks", () => {
     expect(extractMenuLinks(html, BASE)).toEqual([
       { url: "https://example.com/menu.pdf", kind: "pdf" },
     ]);
+  });
+
+  describe("AI_MENU_LINKS_V2_ENABLED flag", () => {
+    it("defaults to v1 (exact match, same-host only) when no override is passed (no Deno global under vitest)", () => {
+      const html = `<a href="/order-online">Order Online</a>`;
+      expect(extractMenuLinks(html, BASE)).toEqual(extractMenuLinks(html, BASE, { v2Enabled: false }));
+      expect(extractMenuLinks(html, BASE)).toEqual([]);
+    });
+
+    it("v2Enabled: false ignores secondary keywords (byte-identical current behavior)", () => {
+      const html = `<a href="/order-online">Order Online</a><a href="/breakfast">Breakfast</a>`;
+      expect(extractMenuLinks(html, BASE, { v2Enabled: false })).toEqual([]);
+    });
+
+    it("v2Enabled: true adds secondary-keyword links ranked below an exact match", () => {
+      const html = `
+        <a href="/order-online">Order Online</a>
+        <a href="/menu">Menu</a>
+      `;
+      const out = extractMenuLinks(html, BASE, { v2Enabled: true });
+      expect(out.map((l) => l.url)).toEqual([
+        "https://example.com/menu",
+        "https://example.com/order-online",
+      ]);
+    });
+
+    it("v2Enabled: true matches each secondary keyword (food/eat/drinks/order/breakfast/lunch/dinner/bakery/pastries)", () => {
+      const keywords = ["food", "eat", "drinks", "order", "breakfast", "lunch", "dinner", "bakery", "pastries"];
+      for (const word of keywords) {
+        const html = `<a href="/${word}-page">${word}</a>`;
+        const out = extractMenuLinks(html, BASE, { v2Enabled: true });
+        expect(out.map((l) => l.url)).toContain(`https://example.com/${word}-page`);
+      }
+    });
+
+    it("v2Enabled: true still excludes a same-host link that matches neither exact nor secondary keywords", () => {
+      const html = `<a href="/about-us">About Us</a>`;
+      expect(extractMenuLinks(html, BASE, { v2Enabled: true })).toEqual([]);
+    });
+
+    it("v2Enabled: false drops an allowlisted hosted-menu offsite link (same-host only)", () => {
+      const html = `<a href="https://order.toasttab.com/menu">Order online (menu)</a>`;
+      expect(extractMenuLinks(html, BASE, { v2Enabled: false })).toEqual([]);
+    });
+
+    it("v2Enabled: true allows an offsite link on an allowlisted hosted-menu domain", () => {
+      const html = `<a href="https://order.toasttab.com/menu">Order online (menu)</a>`;
+      const out = extractMenuLinks(html, BASE, { v2Enabled: true });
+      expect(out).toEqual([{ url: "https://order.toasttab.com/menu", kind: "page" }]);
+    });
+
+    it("v2Enabled: true still drops an offsite link on a non-allowlisted domain", () => {
+      const html = `<a href="https://random-ordering-app.example.net/menu">Order online (menu)</a>`;
+      expect(extractMenuLinks(html, BASE, { v2Enabled: true })).toEqual([]);
+    });
+
+    it("v2Enabled: true ranks same-host links above allowlisted offsite links even both exact matches", () => {
+      const html = `
+        <a href="https://order.toasttab.com/menu">Menu</a>
+        <a href="/menu">Menu</a>
+      `;
+      const out = extractMenuLinks(html, BASE, { v2Enabled: true });
+      expect(out[0]).toEqual({ url: "https://example.com/menu", kind: "page" });
+      expect(out[1]).toEqual({ url: "https://order.toasttab.com/menu", kind: "page" });
+    });
+
+    it("v2Enabled: true still caps at 3 across every tier", () => {
+      const html = `
+        <a href="/menu">Menu</a>
+        <a href="/our-carta">Carta</a>
+        <a href="/order-online">Order</a>
+        <a href="/breakfast">Breakfast</a>
+        <a href="/lunch">Lunch</a>
+      `;
+      const out = extractMenuLinks(html, BASE, { v2Enabled: true });
+      expect(out.length).toBeLessThanOrEqual(3);
+    });
+
+    it("does not weaken SSRF defenses: every v2 candidate still passes validateImportUrl (rejects non-https)", () => {
+      const html = `<a href="http://order.toasttab.com/menu">Order (menu)</a>`;
+      expect(extractMenuLinks(html, BASE, { v2Enabled: true })).toEqual([]);
+    });
+
+    it("HOSTED_MENU_DOMAIN_ALLOWLIST contains only the four intended ordering platforms", () => {
+      expect([...HOSTED_MENU_DOMAIN_ALLOWLIST].sort()).toEqual(
+        ["clover.com", "order.online", "squareup.com", "toasttab.com"].sort(),
+      );
+    });
+  });
+});
+
+describe("buildMenuProbeUrl", () => {
+  it("builds a /menu probe URL for the site's own host", () => {
+    expect(buildMenuProbeUrl(BASE)).toBe("https://example.com/menu");
+  });
+
+  it("ignores any existing path/query on the base URL", () => {
+    expect(buildMenuProbeUrl("https://example.com/about?x=1")).toBe("https://example.com/menu");
+  });
+
+  it("returns a candidate that itself passes validateImportUrl", () => {
+    const probe = buildMenuProbeUrl(BASE);
+    expect(probe).not.toBeNull();
+    expect(validateImportUrl(probe!).ok).toBe(true);
+  });
+
+  it("returns null for a malformed base URL", () => {
+    expect(buildMenuProbeUrl("not a url")).toBeNull();
   });
 });
 

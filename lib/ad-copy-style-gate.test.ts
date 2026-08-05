@@ -237,6 +237,60 @@ describe("ad copy style gate", () => {
   });
 });
 
+describe("hasSpecificTerm content-word overlap (2026-08-05)", () => {
+  it("passes hype copy that names the item via a partial phrase, not the full item string", () => {
+    // Previously a false reject: the copy never contains the FULL normalized
+    // term "12 ounce bag of whole bean coffee" verbatim, so the old exact-substring
+    // check called this non-specific and any hype word triggered HYPE_WITHOUT_SPECIFICITY.
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Whole bean coffee, roasted this week — an amazing morning ritual",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["12 ounce bag of whole bean coffee"],
+    });
+
+    expect(result.failures.find((failure) => failure.field === "displayHook")?.reasons ?? []).not.toContain(
+      "HYPE_WITHOUT_SPECIFICITY",
+    );
+  });
+
+  it("still rejects genuinely vague hype with no overlap with the required term", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Amazing deal on great food",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["12 ounce bag of whole bean coffee"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.find((failure) => failure.field === "displayHook")?.reasons).toContain(
+      "HYPE_WITHOUT_SPECIFICITY",
+    );
+  });
+
+  it("requires the word itself for a single-content-word required term", () => {
+    const missing = evaluateAdCopyStyleGate({
+      copy: { displayHook: "An amazing morning treat" },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["coffee"],
+    });
+    expect(missing.failures.find((failure) => failure.field === "displayHook")?.reasons).toContain(
+      "HYPE_WITHOUT_SPECIFICITY",
+    );
+
+    const present = evaluateAdCopyStyleGate({
+      copy: { displayHook: "An amazing cup of coffee" },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["coffee"],
+    });
+    expect(present.failures.find((failure) => failure.field === "displayHook")?.reasons ?? []).not.toContain(
+      "HYPE_WITHOUT_SPECIFICITY",
+    );
+  });
+});
+
 describe("startsWithDanglingConnector (R6)", () => {
   it("catches a headline whose head noun was dropped", () => {
     // Observed live: item "Haircut and fade" -> headline "AND FADE SAVINGS".

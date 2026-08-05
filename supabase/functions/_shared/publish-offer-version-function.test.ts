@@ -98,4 +98,24 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/localized_term_snapshot_hash/);
     expect(source).not.toMatch(/context:[\s\S]*idempotency_key/);
   });
+
+  it("best-effort links a published deal back to its ai_generation_logs row when the request carries a reference", () => {
+    // TASK 8 (unflagged, 2026-08-05): no client sends this field yet — this is
+    // a forward-compatible passthrough, activated the day a client forwards
+    // ai-generate-ad-variants' `ad.generation_log_id` back into a publish
+    // call. Guards that it can never fail or block the publish response.
+    expect(source).toMatch(/function generationLogIdFromBody/);
+    expect(source).toMatch(/generation_log_id\?:\s*unknown/);
+    const linkageIndex = source.indexOf("const generationLogId = generationLogIdFromBody(body);");
+    const analyticsIndex = source.indexOf("app_analytics_events");
+    expect(linkageIndex).toBeGreaterThan(-1);
+    expect(analyticsIndex).toBeGreaterThan(linkageIndex);
+    const linkageBlock = source.slice(linkageIndex, analyticsIndex);
+    expect(linkageBlock).toMatch(/from\("ai_generation_logs"\)/);
+    expect(linkageBlock).toMatch(/\.update\(\{\s*published_deal_id:\s*firstDealId,\s*accepted_by_user:\s*true\s*\}\)/);
+    expect(linkageBlock).toMatch(/\.eq\("id", generationLogId\)/);
+    expect(linkageBlock).toMatch(/\.eq\("business_id", businessId\)/);
+    // Wrapped so a linkage failure never throws out of the handler.
+    expect(linkageBlock).toMatch(/try\s*\{[\s\S]*catch \(linkErr\)/);
+  });
 });

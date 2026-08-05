@@ -6,6 +6,11 @@ import {
   buildOfferDefinitionFallbackAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
+  appendRevisionFeedback,
+  revisionPresetForSuggestion,
+  copyFingerprint,
+  copyFingerprintHash,
+  shortHash,
   type GeneratedAd,
 } from "./ad-variants";
 import { validateDealEligibility } from "./deal-eligibility";
@@ -281,5 +286,108 @@ describe("composeListingDescription whitespace", () => {
 
   it("still drops parts that are empty or whitespace only", () => {
     expect(composeListingDescription("Promo", "   ", "Details")).toBe("Promo\n\nDetails");
+  });
+});
+
+describe("appendRevisionFeedback", () => {
+  it("appends new text onto existing feedback with a separator", () => {
+    expect(appendRevisionFeedback("Make it shorter.", "Warmer tone please")).toBe(
+      "Make it shorter. Warmer tone please",
+    );
+  });
+
+  it("does not add a second period when the current text already ends one", () => {
+    expect(appendRevisionFeedback("Make it shorter.", "Warmer")).toBe("Make it shorter. Warmer");
+    expect(appendRevisionFeedback("Make it shorter", "Warmer")).toBe("Make it shorter. Warmer");
+  });
+
+  it("skips the append when the addition is already present, case-insensitively", () => {
+    expect(appendRevisionFeedback("Please make it WARMER and shorter", "warmer")).toBe(
+      "Please make it WARMER and shorter",
+    );
+  });
+
+  it("returns the addition alone when there is no existing feedback", () => {
+    expect(appendRevisionFeedback("", "  Make it shorter.  ")).toBe("Make it shorter.");
+    expect(appendRevisionFeedback("   ", "New image angle")).toBe("New image angle");
+  });
+
+  it("returns the trimmed current text when the addition is empty", () => {
+    expect(appendRevisionFeedback("Existing feedback", "   ")).toBe("Existing feedback");
+  });
+
+  it("caps the combined result at the max length (server truncates at 800)", () => {
+    const current = "a".repeat(750);
+    const addition = "b".repeat(100);
+    const result = appendRevisionFeedback(current, addition);
+    expect(result.length).toBe(800);
+  });
+});
+
+describe("revisionPresetForSuggestion", () => {
+  it("maps each known revision suggestion chip to a stable preset key", () => {
+    expect(revisionPresetForSuggestion("new_image")).toBe("revisePresetTryAnotherImage");
+    expect(revisionPresetForSuggestion("top_headline")).toBe("revisePresetCopyTopHeadline");
+    expect(revisionPresetForSuggestion("shorter")).toBe("revisePresetCopyShorter");
+    expect(revisionPresetForSuggestion("warmer")).toBe("revisePresetCopyWarmer");
+  });
+
+  it("returns undefined for an unknown key instead of guessing", () => {
+    expect(revisionPresetForSuggestion("not_a_real_chip")).toBeUndefined();
+  });
+
+  it("the image preset key lowercases into the exact substring the server regex matches", () => {
+    // supabase/functions/ai-generate-ad-variants/index.ts's imageRevisionInstruction
+    // does `text.includes("revisepresettryanotherimage")` against the lowercased
+    // concatenation of revision_preset + revision_feedback.
+    expect(revisionPresetForSuggestion("new_image")!.toLowerCase()).toBe("revisepresettryanotherimage");
+  });
+});
+
+describe("copyFingerprint / copyFingerprintHash", () => {
+  const baseAd: GeneratedAd = {
+    headline: "Buy one latte, get one free",
+    subheadline: "Legacy subheadline",
+    short_description: "Buy one iced latte and get a second free.",
+    cta: "Claim deal",
+  };
+
+  it("changes when any visible copy field changes", () => {
+    const changed: GeneratedAd = { ...baseAd, headline: "Different headline entirely" };
+    expect(copyFingerprint(changed)).not.toBe(copyFingerprint(baseAd));
+    expect(copyFingerprintHash(changed)).not.toBe(copyFingerprintHash(baseAd));
+  });
+
+  it("stays the same when only whitespace or casing differs", () => {
+    const reformatted: GeneratedAd = { ...baseAd, headline: "  BUY ONE LATTE, GET ONE   FREE  " };
+    expect(copyFingerprint(reformatted)).toBe(copyFingerprint(baseAd));
+    expect(copyFingerprintHash(reformatted)).toBe(copyFingerprintHash(baseAd));
+  });
+
+  it("stays the same when only image fields differ (copy-only revision keeps the same copy fingerprint)", () => {
+    const sameCopyNewImage: GeneratedAd = {
+      ...baseAd,
+      poster_storage_path: "deal-photos/new-path.jpg",
+      photo_source: "generated",
+    };
+    expect(copyFingerprint(sameCopyNewImage)).toBe(copyFingerprint(baseAd));
+  });
+
+  it("is deterministic for the same input", () => {
+    expect(copyFingerprintHash(baseAd)).toBe(copyFingerprintHash({ ...baseAd }));
+  });
+});
+
+describe("shortHash", () => {
+  it("is deterministic", () => {
+    expect(shortHash("abc")).toBe(shortHash("abc"));
+  });
+
+  it("differs for different inputs", () => {
+    expect(shortHash("abc")).not.toBe(shortHash("abd"));
+  });
+
+  it("returns a non-empty string for empty input", () => {
+    expect(shortHash("")).toBe("0");
   });
 });

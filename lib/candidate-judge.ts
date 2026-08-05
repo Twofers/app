@@ -333,13 +333,91 @@ export function applyJudgeScoresToCandidates<T extends CandidateForJudging>(
     .sort((left, right) => (right.judge_score ?? 0) - (left.judge_score ?? 0));
 }
 
+/**
+ * Poster-variant of CANDIDATE_JUDGE_JSON_SCHEMA (additive, 2026-08-05): adds an
+ * optional posterHeroStrength (1-10) rubric field used only when the judge is
+ * given POSTER RENDER CONTEXT (see buildCandidateJudgePrompt's creativeFormat
+ * param). The base CANDIDATE_JUDGE_JSON_SCHEMA is intentionally left untouched
+ * so every existing call site keeps byte-identical behavior.
+ */
+export const CANDIDATE_JUDGE_POSTER_JSON_SCHEMA = {
+  name: "candidate_judge",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      pass: { type: "boolean" },
+      winnerCandidateId: { type: "string" },
+      rankedCandidateIds: {
+        type: "array",
+        items: { type: "string" },
+      },
+      scores: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            candidateId: { type: "string" },
+            offerClarity: { type: "number" },
+            naturalLocalLanguage: { type: "number" },
+            customerAppeal: { type: "number" },
+            merchantSpecificity: { type: "number" },
+            categoryFit: { type: "number" },
+            headlineStrength: { type: "number" },
+            originality: { type: "number" },
+            mobileReadability: { type: "number" },
+            posterHeroStrength: { type: "number" },
+          },
+          required: [
+            "candidateId",
+            "offerClarity",
+            "naturalLocalLanguage",
+            "customerAppeal",
+            "merchantSpecificity",
+            "categoryFit",
+            "headlineStrength",
+            "originality",
+            "mobileReadability",
+            "posterHeroStrength",
+          ],
+          additionalProperties: false,
+        },
+      },
+      hardFailReasons: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            candidateId: { type: "string" },
+            code: { type: "string" },
+          },
+          required: ["candidateId", "code"],
+          additionalProperties: false,
+        },
+      },
+      conciseFeedback: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+    required: ["pass", "winnerCandidateId", "rankedCandidateIds", "scores", "hardFailReasons", "conciseFeedback"],
+    additionalProperties: false,
+  },
+} as const;
+
 export function buildCandidateJudgePrompt(params: {
   offerFacts: string;
   categoryPlaybookBlock: string;
   merchantProfileBlock: string;
   creativeBrief: unknown;
   candidates: readonly CandidateForJudging[];
-}): { system: string; userText: string; jsonSchema: typeof CANDIDATE_JUDGE_JSON_SCHEMA } {
+  /** Additive (2026-08-05): when set to "poster_v1" together with a non-empty
+   * posterOfferLines, appends POSTER RENDER CONTEXT to the prompt and swaps in
+   * the poster-variant JSON schema. Absent by default so existing callers see
+   * byte-identical output. */
+  creativeFormat?: "poster_v1";
+  posterOfferLines?: string[];
+}): { system: string; userText: string; jsonSchema: typeof CANDIDATE_JUDGE_JSON_SCHEMA | typeof CANDIDATE_JUDGE_POSTER_JSON_SCHEMA } {
   const candidates = params.candidates.map((candidate, index) => ({
     candidateId: candidateId(candidate, index),
     strategyId: candidate.strategy_id ?? "",
@@ -350,6 +428,36 @@ export function buildCandidateJudgePrompt(params: {
     pushBody: candidate.push_body ?? candidate.push_notification,
     socialCaption: candidate.social_caption ?? "",
   }));
+
+  const posterOfferLines = (params.posterOfferLines ?? []).map(cleanText).filter(Boolean);
+  const isPosterFormat = params.creativeFormat === "poster_v1" && posterOfferLines.length > 0;
+
+  const userLines = [
+    "IMMUTABLE OFFER FACTS:",
+    params.offerFacts,
+    "",
+    params.categoryPlaybookBlock,
+    "",
+    params.merchantProfileBlock,
+    "",
+    "CREATIVE BRIEF FROM GENERATOR:",
+    JSON.stringify(params.creativeBrief ?? {}),
+    "",
+    "CANDIDATES TO JUDGE:",
+    JSON.stringify(candidates),
+    "",
+    "Score every candidate from 0 to 10 for each rubric field. Return rankedCandidateIds from strongest to weakest.",
+  ];
+
+  if (isPosterFormat) {
+    userLines.push(
+      "",
+      "POSTER RENDER CONTEXT:",
+      "The headline renders alone as a two-line hero over a photo. These exact deterministic offer lines print below it:",
+      ...posterOfferLines.map((line) => `- ${line}`),
+      "Score posterHeroStrength higher for a hero that adds an angle beyond those offer lines, and lower for a hero that merely restates the offer lines in different words.",
+    );
+  }
 
   return {
     system: [
@@ -362,22 +470,7 @@ export function buildCandidateJudgePrompt(params: {
       'Hard-fail copy that changes the offer, uses BOGO/2-for-1 shorthand, invents claims, echoes planning vocabulary such as "clearly and simply" or "exact exchange", or sounds like generic AI marketing.',
       "Output JSON only.",
     ].join("\n"),
-    userText: [
-      "IMMUTABLE OFFER FACTS:",
-      params.offerFacts,
-      "",
-      params.categoryPlaybookBlock,
-      "",
-      params.merchantProfileBlock,
-      "",
-      "CREATIVE BRIEF FROM GENERATOR:",
-      JSON.stringify(params.creativeBrief ?? {}),
-      "",
-      "CANDIDATES TO JUDGE:",
-      JSON.stringify(candidates),
-      "",
-      "Score every candidate from 0 to 10 for each rubric field. Return rankedCandidateIds from strongest to weakest.",
-    ].join("\n"),
-    jsonSchema: CANDIDATE_JUDGE_JSON_SCHEMA,
+    userText: userLines.join("\n"),
+    jsonSchema: isPosterFormat ? CANDIDATE_JUDGE_POSTER_JSON_SCHEMA : CANDIDATE_JUDGE_JSON_SCHEMA,
   };
 }

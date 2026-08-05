@@ -156,8 +156,12 @@ export function normalizeAiUsage(input: {
   // OpenAI chat-completions usage breaks reasoning tokens out of
   // completion_tokens via completion_tokens_details.reasoning_tokens (they are
   // already included in completion_tokens/output_tokens for billing purposes;
-  // this is diagnostic detail only, not an additive cost component).
-  const reasoningTokens = getDetailsNumber(usage.completion_tokens_details, "reasoning_tokens");
+  // this is diagnostic detail only, not an additive cost component). The
+  // Responses API (/v1/responses) reports the same detail under
+  // output_tokens_details.reasoning_tokens instead — read alongside the
+  // chat-completions field name so both shapes normalize identically.
+  const reasoningTokens = getDetailsNumber(usage.completion_tokens_details, "reasoning_tokens") ||
+    getDetailsNumber(outputDetails, "reasoning_tokens");
 
   return {
     input_tokens: num(usage.input_tokens ?? usage.prompt_tokens),

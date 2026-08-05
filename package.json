@@ -38,6 +38,10 @@
     "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
     "screenshots:pages": "node scripts/screenshot-pages.mjs",
     "smoke:admin-ai-staging": "node scripts/smoke-admin-ai-staging.mjs",
+    "qa:contrast-sweep": "node scripts/qa/poster-contrast-sweep.mjs",
+    "qa:band-busyness": "node scripts/qa/poster-band-busyness.mjs",
+    "qa:naturalness-snapshot": "node scripts/evaluate-ad-copy-naturalness.mjs --compare-previous --snapshot-dir qa-artifacts/naturalness-trend",
+    "qa:vision-judge": "node scripts/qa/poster-vision-judge.mjs",
     "release:state": "node scripts/generate-release-state.mjs",
     "gate:release-state": "node scripts/generate-release-state.mjs --check",
     "test:db": "node scripts/db-tests/run.mjs"

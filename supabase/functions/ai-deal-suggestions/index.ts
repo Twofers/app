@@ -24,6 +24,14 @@ type SuggestionResult = {
 
 const PROMPT_VERSION = "deal_suggestions_provider_router_v1";
 
+/**
+ * Master gate for server-side stats + repetition memory. Default OFF: with this
+ * unset (or not "true"), the function keeps trusting the client-supplied
+ * weekly_claims_by_day/top_deal_titles/totals fields and the success log stays
+ * byte-identical to the pre-hardening shape (no response_payload).
+ */
+const SUGGESTIONS_V2_ENABLED = Deno.env.get("AI_SUGGESTIONS_V2_ENABLED") === "true";
+
 const DEAL_SUGGESTIONS_SCHEMA = {
   name: "deal_suggestions",
   strict: true,
@@ -101,6 +109,122 @@ function providerAttemptsCalledOpenAi(attempts: readonly ProviderAttempt[]): boo
 
 function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
   return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
+}
+
+type ServerSideSuggestionContext = {
+  weeklyClaimsByDay: number[];
+  topDealTitles: string[];
+  totalClaims: number;
+  totalRedeems: number;
+  monthDealsLaunched: number;
+};
+
+type DealClaimStatsRow = {
+  deal_id: string;
+  created_at: string;
+  redeemed_at: string | null;
+};
+
+/**
+ * SUGGESTIONS_V2_ENABLED only: compute the same stats the merchant dashboard
+ * shows (mirrors app/(tabs)/dashboard.tsx's loadMetrics — deal_claims joined to
+ * deals, last-7-days claims-by-day, current-month totals) directly from the
+ * database instead of trusting client-supplied numbers. `supabase` is the
+ * caller's RLS-scoped client (Authorization header forwarded), same client the
+ * business-ownership check above already used, so this only ever reads rows
+ * the authenticated owner can already see.
+ */
+async function fetchServerSideSuggestionContext(
+  supabase: any,
+  businessId: string,
+): Promise<ServerSideSuggestionContext> {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const weekStart = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const fetchLower = weekStart.getTime() < monthStart.getTime() ? weekStart : monthStart;
+
+  const { data: claimsRaw } = await supabase
+    .from("deal_claims")
+    .select("deal_id,created_at,redeemed_at,deals!inner(business_id)")
+    .eq("deals.business_id", businessId)
+    .gte("created_at", fetchLower.toISOString());
+
+  const claims = (claimsRaw ?? []) as DealClaimStatsRow[];
+
+  const dayKeys: string[] = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    dayKeys.push(new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  }
+  const weekKeyToCount: Record<string, number> = Object.fromEntries(dayKeys.map((k) => [k, 0]));
+
+  let totalClaims = 0;
+  let totalRedeems = 0;
+  const monthStartMs = monthStart.getTime();
+  for (const claim of claims) {
+    const dayKey = typeof claim.created_at === "string" ? claim.created_at.slice(0, 10) : "";
+    if (dayKey in weekKeyToCount) weekKeyToCount[dayKey] += 1;
+    const createdMs = new Date(claim.created_at).getTime();
+    if (Number.isFinite(createdMs) && createdMs >= monthStartMs) {
+      totalClaims += 1;
+      if (claim.redeemed_at) totalRedeems += 1;
+    }
+  }
+
+  const { count: launchedCount } = await supabase
+    .from("deals")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId)
+    .gte("created_at", monthStart.toISOString());
+
+  const { data: liveDeals } = await supabase
+    .from("deals")
+    .select("id,title")
+    .eq("business_id", businessId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  const topDealTitles = ((liveDeals ?? []) as { id: string; title: string | null }[])
+    .map((deal) => (typeof deal.title === "string" ? deal.title.trim() : ""))
+    .filter((title): title is string => title.length > 0);
+
+  return {
+    weeklyClaimsByDay: dayKeys.map((key) => weekKeyToCount[key] ?? 0),
+    topDealTitles,
+    totalClaims,
+    totalRedeems,
+    monthDealsLaunched: launchedCount ?? 0,
+  };
+}
+
+/**
+ * SUGGESTIONS_V2_ENABLED only: the most recent successful suggestion response
+ * this business received, so the prompt can avoid repeating it. Best-effort —
+ * a lookup failure must never block generation.
+ */
+async function fetchPreviousSuggestionTitles(supabase: any, businessId: string): Promise<string[]> {
+  try {
+    const { data: priorLog } = await supabase
+      .from("ai_generation_logs")
+      .select("response_payload")
+      .eq("business_id", businessId)
+      .eq("request_type", "deal_suggestions")
+      .eq("success", true)
+      .not("response_payload", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const priorSuggestions = (priorLog?.response_payload as { suggestions?: unknown } | null)?.suggestions;
+    if (!Array.isArray(priorSuggestions)) return [];
+    return priorSuggestions
+      .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>).title : null))
+      .filter((title): title is string => typeof title === "string" && title.trim().length > 0)
+      .map((title) => title.trim())
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
 }
 
 serve(async (req) => {
@@ -269,24 +393,46 @@ serve(async (req) => {
 
     const requestGroupId = crypto.randomUUID();
 
+    // SUGGESTIONS_V2_ENABLED: replace the client-supplied stats with numbers
+    // computed server-side from tables the caller's ownership was already
+    // verified against above, and look up the business's most recent prior
+    // suggestions so the prompt can avoid repeating them.
+    const serverContext = SUGGESTIONS_V2_ENABLED
+      ? await fetchServerSideSuggestionContext(supabase, business_id)
+      : null;
+    const previousSuggestionTitles = SUGGESTIONS_V2_ENABLED
+      ? await fetchPreviousSuggestionTitles(supabase, business_id)
+      : [];
+
+    const effectiveWeeklyClaimsByDay = serverContext ? serverContext.weeklyClaimsByDay : weekly_claims_by_day;
+    const effectiveTopDealTitles = serverContext ? serverContext.topDealTitles : top_deal_titles;
+    const effectiveTotalClaims = serverContext ? serverContext.totalClaims : total_claims;
+    const effectiveTotalRedeems = serverContext ? serverContext.totalRedeems : total_redeems;
+    const effectiveMonthDealsLaunched = serverContext ? serverContext.monthDealsLaunched : month_deals_launched;
+
     // Build context summary for the prompt
     const contextLines: string[] = [];
     if (business_name) contextLines.push(`Business: ${business_name}`);
     if (business_category) contextLines.push(`Category: ${business_category}`);
-    if (total_claims != null) contextLines.push(`Total claims this month: ${total_claims}`);
-    if (total_redeems != null) contextLines.push(`Total redemptions this month: ${total_redeems}`);
-    if (month_deals_launched != null) contextLines.push(`Deals launched this month: ${month_deals_launched}`);
-    if (Array.isArray(weekly_claims_by_day) && weekly_claims_by_day.length === 7) {
+    if (effectiveTotalClaims != null) contextLines.push(`Total claims this month: ${effectiveTotalClaims}`);
+    if (effectiveTotalRedeems != null) contextLines.push(`Total redemptions this month: ${effectiveTotalRedeems}`);
+    if (effectiveMonthDealsLaunched != null) {
+      contextLines.push(`Deals launched this month: ${effectiveMonthDealsLaunched}`);
+    }
+    if (Array.isArray(effectiveWeeklyClaimsByDay) && effectiveWeeklyClaimsByDay.length === 7) {
       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const summary = weekly_claims_by_day
+      const summary = effectiveWeeklyClaimsByDay
         .map((c: number, i: number) => `${days[i]}: ${c}`)
         .join(", ");
       contextLines.push(`Claims by day (last 7 days): ${summary}`);
     }
-    if (Array.isArray(top_deal_titles) && top_deal_titles.length > 0) {
+    if (Array.isArray(effectiveTopDealTitles) && effectiveTopDealTitles.length > 0) {
       contextLines.push(
-        `Recent deal titles: ${(top_deal_titles as string[]).slice(0, 5).join("; ")}`,
+        `Recent deal titles: ${(effectiveTopDealTitles as string[]).slice(0, 5).join("; ")}`,
       );
+    }
+    if (SUGGESTIONS_V2_ENABLED && previousSuggestionTitles.length > 0) {
+      contextLines.push(`Previously suggested: ${previousSuggestionTitles.join("; ")}`);
     }
 
     const systemPrompt = [
@@ -302,6 +448,9 @@ serve(async (req) => {
       "- If claims are low on certain days, suggest targeted deals for those days.",
       "- If a deal is performing well, suggest expanding that product line or pairing it with something complementary.",
       "- One suggestion may encourage owner storytelling only when the supplied data supports a real detail to share.",
+      ...(SUGGESTIONS_V2_ENABLED
+        ? ["- Do not repeat a suggestion equivalent to a deal already running. Do not repeat a suggestion equivalent to one already suggested previously."]
+        : []),
       "",
       "FORMAT:",
       "- Keep each title under 40 chars and each body under 120 chars.",
@@ -398,7 +547,10 @@ serve(async (req) => {
       );
     }
 
-    // Log success
+    // Log success. SUGGESTIONS_V2_ENABLED: also persist the suggestions into
+    // response_payload so a later request can read it back as repetition memory
+    // (fetchPreviousSuggestionTitles above). Omitted when the flag is off so the
+    // logged row shape stays byte-identical to the pre-hardening behavior.
     void supabase.from("ai_generation_logs").insert({
       business_id,
       user_id: user.id,
@@ -410,6 +562,7 @@ serve(async (req) => {
       openai_called: providerAttemptsCalledOpenAi(generation.attempts),
       input_token_count: usageAttempt?.inputTokens ?? null,
       output_token_count: usageAttempt?.outputTokens ?? null,
+      ...(SUGGESTIONS_V2_ENABLED ? { response_payload: result } : {}),
     });
 
     return new Response(JSON.stringify(result), {

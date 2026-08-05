@@ -56,6 +56,9 @@ type DraftCreative = {
   composition_plan: CompositionPlan;
 };
 
+/** Draft-level fields (outside the poster) a fallback value was substituted for. */
+type CopyDegradedField = "headline" | "supporting_copy" | "layout_recommendation";
+
 type ImageGenerationResult = {
   path: string | null;
   signedUrl: string | null;
@@ -270,44 +273,90 @@ const POSTER_ITEM_WORDS = [
   "smoothie",
 ];
 
-function posterItemLabel(value: string | null | undefined): string {
+/**
+ * Non-food businesses (salons, auto shops, retail, etc.) never match
+ * POSTER_ITEM_WORDS, so posterItemLabel fell back to blindly grabbing the last
+ * 1-2 words of the raw offer text — which mangles multi-word or branded item
+ * names (see MEMORY: "military brand item names break image gen"). When the
+ * caller supplies the business's own verified menu/catalog item names, ground
+ * the label against those instead of guessing from word position.
+ */
+export type PosterGroundingContext = {
+  category: string;
+  menuItemNames: string[];
+};
+
+export const EMPTY_POSTER_GROUNDING_CONTEXT: PosterGroundingContext = { category: "", menuItemNames: [] };
+
+/**
+ * Best word-overlap match between the normalized offer text and the
+ * business's own item names. Requires at least one shared word so an
+ * unrelated menu item never wins over the plain word heuristic.
+ */
+function matchPosterGroundingMenuItem(normalizedValue: string, menuItemNames: readonly string[]): string {
+  if (!normalizedValue || menuItemNames.length === 0) return "";
+  const valueWords = new Set(normalizedValue.split(/\s+/).filter(Boolean));
+  let best = "";
+  let bestScore = 0;
+  for (const rawName of menuItemNames) {
+    const normalizedName = normalizePosterWords(rawName);
+    if (!normalizedName) continue;
+    const nameWords = normalizedName.split(/\s+/).filter(Boolean);
+    const overlap = nameWords.filter((word) => valueWords.has(word)).length;
+    if (overlap === 0) continue;
+    if (overlap > bestScore || (overlap === bestScore && (!best || normalizedName.length < best.length))) {
+      bestScore = overlap;
+      best = normalizedName;
+    }
+  }
+  if (!best) return "";
+  const meaningful = best.split(/\s+/).filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  return (meaningful.length > 0 ? meaningful : best.split(/\s+/)).slice(-2).join(" ");
+}
+
+function posterItemLabel(value: string | null | undefined, context?: PosterGroundingContext): string {
   const normalized = normalizePosterWords(value);
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length === 0) return "";
   const known = POSTER_ITEM_WORDS.find((word) => words.includes(word));
   if (known) return known === "drink" && words.includes("coffee") ? "coffee" : known;
+  const groundedMatch = context ? matchPosterGroundingMenuItem(normalized, context.menuItemNames) : "";
+  if (groundedMatch) return groundedMatch;
   const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
-  return meaningful.length > 0 ? meaningful.slice(-2).join(" ") : words.slice(0, 2).join(" ");
+  if (meaningful.length > 0) return meaningful.slice(-2).join(" ");
+  const categoryLabel = context?.category ? normalizePosterWords(context.category) : "";
+  if (categoryLabel) return categoryLabel.split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
+  return words.slice(0, 2).join(" ");
 }
 
-function productKeyword(productName: string): string {
-  return (posterItemLabel(productName) || "offer").toUpperCase().slice(0, 12);
+function productKeyword(productName: string, context?: PosterGroundingContext): string {
+  return (posterItemLabel(productName, context) || "offer").toUpperCase().slice(0, 12);
 }
 
-function posterRewardLabel(offerTerms: string, productName: string): string {
+function posterRewardLabel(offerTerms: string, productName: string, context?: PosterGroundingContext): string {
   const freeMatch = offerTerms.match(/\bfree\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80})/i);
   const getFreeMatch = offerTerms.match(/\bget\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80}?)(?:\s+of your choice)?\s+free\b/i);
   const freePhrase = (freeMatch?.[1] ?? getFreeMatch?.[1])
     ?.replace(/\b(?:of your choice|when|with|today|while|for|redeem|only)\b[\s\S]*$/i, "")
     .replace(/[.,;:!?]+$/g, "")
     .trim();
-  const reward = posterItemLabel(freePhrase || offerTerms);
-  const product = posterItemLabel(productName);
+  const reward = posterItemLabel(freePhrase || offerTerms, context);
+  const product = posterItemLabel(productName, context);
   if (reward && reward !== product) return reward.toUpperCase().slice(0, 12);
   if (/\bfree\b/i.test(offerTerms)) return "FREE";
   return "";
 }
 
-function posterRewardLine(offerTerms: string, productName: string): string {
-  const reward = posterRewardLabel(offerTerms, productName);
+function posterRewardLine(offerTerms: string, productName: string, context?: PosterGroundingContext): string {
+  const reward = posterRewardLabel(offerTerms, productName, context);
   if (reward && reward !== "FREE") return `GET 1 ${reward}`;
   if (reward === "FREE") return "GET 1 FREE";
   return "GET 1 MORE";
 }
 
-function posterHeadlineFromOffer(productName: string, offerTerms: string): string {
-  const product = productKeyword(productName);
-  const reward = posterRewardLabel(offerTerms, productName);
+function posterHeadlineFromOffer(productName: string, offerTerms: string, context?: PosterGroundingContext): string {
+  const product = productKeyword(productName, context);
+  const reward = posterRewardLabel(offerTerms, productName, context);
   if (reward && reward !== "FREE" && reward !== product) {
     const pair = `${product} + ${reward}`;
     return pair.length <= 22 ? `${pair} BREAK` : pair;
@@ -323,11 +372,31 @@ function isBareItemHeadline(value: string, label: string): boolean {
   return meaningful.length > 0 && meaningful.every((word) => labelWords.has(word));
 }
 
+// Generic ad-speak that carries no offer information — as weak as an empty
+// headline, but wasn't previously caught because it isn't empty and isn't a
+// bare item echo.
+const POSTER_BANNED_GENERIC_HEADLINES: RegExp[] = [
+  /^great\s+deal!?$/i,
+  /^amazing\s+offer!?$/i,
+  /^best\s+in\s+town!?$/i,
+  /^limited\s+time!?$/i,
+  /^special\s+offer!?$/i,
+  /^unbeatable\s+deal!?$/i,
+  /^don'?t\s+miss\s+out!?$/i,
+  /^incredible\s+deal!?$/i,
+  /^huge\s+savings!?$/i,
+];
+
+function isBannedGenericPosterHeadline(cleaned: string): boolean {
+  return POSTER_BANNED_GENERIC_HEADLINES.some((pattern) => pattern.test(cleaned));
+}
+
 function isWeakPosterHeadline(value: unknown, fallback: PosterCreative): boolean {
   const raw = typeof value === "string" ? value.trim() : "";
   const cleaned = stripPosterFiller(raw);
   if (!cleaned) return true;
   if (/^try\s+our\b/i.test(raw)) return true;
+  if (isBannedGenericPosterHeadline(cleaned)) return true;
   const productLabel = normalizePosterWords(fallback.offerLine1).replace(/^buy\s+\d+\s+/, "");
   const rewardLabel = normalizePosterWords(fallback.offerLine2).replace(/^get\s+\d+\s+/, "").replace(/^get\s+/, "");
   return isBareItemHeadline(cleaned, productLabel) || isBareItemHeadline(cleaned, rewardLabel);
@@ -411,30 +480,58 @@ function fallbackPoster(params: {
   startTime: string | null;
   endTime: string | null;
   quantityLimit: number | null;
+  groundingContext?: PosterGroundingContext;
 }): PosterCreative {
-  const product = productKeyword(params.productName);
+  const product = productKeyword(params.productName, params.groundingContext);
   return {
     kicker: "LOCAL DEAL",
-    headline: posterText(posterHeadlineFromOffer(params.productName, params.offerTerms), "LOCAL DEAL", 28),
+    headline: posterText(
+      posterHeadlineFromOffer(params.productName, params.offerTerms, params.groundingContext),
+      "LOCAL DEAL",
+      28,
+    ),
     supportingLine: "LIMITED-TIME LOCAL DEAL",
     offerLine1: posterText(`BUY 1 ${product}`, "BUY 1", 18),
-    offerLine2: posterText(posterRewardLine(params.offerTerms, params.productName), "GET 1 FREE", 20),
+    offerLine2: posterText(
+      posterRewardLine(params.offerTerms, params.productName, params.groundingContext),
+      "GET 1 FREE",
+      20,
+    ),
     scarcityLabel: "",
     timeLabel: formatPosterTimeLabel(params.startTime, params.endTime),
     cta: DEFAULT_CTA,
   };
 }
 
-function sanitizePosterCreative(value: Record<string, unknown>, fallback: PosterCreative): PosterCreative {
+/** Poster fields the model returned nothing usable for, so a fallback field was substituted. */
+export type PosterDegradedField = "kicker" | "headline" | "supportingLine" | "offerLine1" | "offerLine2";
+
+function sanitizePosterCreative(
+  value: Record<string, unknown>,
+  fallback: PosterCreative,
+): { poster: PosterCreative; degradedFields: PosterDegradedField[] } {
+  const degradedFields: PosterDegradedField[] = [];
+  if (!(typeof value.kicker === "string" && value.kicker.trim())) degradedFields.push("kicker");
+  const headlineWeak = isWeakPosterHeadline(value.headline, fallback);
+  if (headlineWeak) degradedFields.push("headline");
+  if (!(typeof value.supporting_line === "string" && value.supporting_line.trim())) {
+    degradedFields.push("supportingLine");
+  }
+  if (!(typeof value.offer_line_1 === "string" && value.offer_line_1.trim())) degradedFields.push("offerLine1");
+  if (!(typeof value.offer_line_2 === "string" && value.offer_line_2.trim())) degradedFields.push("offerLine2");
+
   return {
-    kicker: posterText(value.kicker, fallback.kicker, 24),
-    headline: posterText(isWeakPosterHeadline(value.headline, fallback) ? "" : value.headline, fallback.headline, 28),
-    supportingLine: posterText(value.supporting_line, fallback.supportingLine, 42),
-    offerLine1: posterText(value.offer_line_1, fallback.offerLine1, 18),
-    offerLine2: posterText(value.offer_line_2, fallback.offerLine2, 20),
-    scarcityLabel: "",
-    timeLabel: fallback.timeLabel,
-    cta: DEFAULT_CTA,
+    poster: {
+      kicker: posterText(value.kicker, fallback.kicker, 24),
+      headline: posterText(headlineWeak ? "" : value.headline, fallback.headline, 28),
+      supportingLine: posterText(value.supporting_line, fallback.supportingLine, 42),
+      offerLine1: posterText(value.offer_line_1, fallback.offerLine1, 18),
+      offerLine2: posterText(value.offer_line_2, fallback.offerLine2, 20),
+      scarcityLabel: "",
+      timeLabel: fallback.timeLabel,
+      cta: DEFAULT_CTA,
+    },
+    degradedFields,
   };
 }
 
@@ -447,6 +544,7 @@ function fallbackDraft(params: {
   endTime?: string | null;
   quantityLimit?: number | null;
   stylePreset: string;
+  groundingContext?: PosterGroundingContext;
 }): DraftCreative {
   const product = params.productName;
   const descriptor = params.productDescription ? `${params.productDescription} ` : "";
@@ -480,6 +578,7 @@ function fallbackDraft(params: {
       startTime: params.startTime ?? null,
       endTime: params.endTime ?? null,
       quantityLimit: params.quantityLimit ?? null,
+      groundingContext: params.groundingContext,
     }),
     composition_plan: fallbackCompositionPlan(params.stylePreset),
   };
@@ -555,6 +654,33 @@ function attemptUsage(attempt: ProviderAttempt | null): AiUsageInput | null {
   };
 }
 
+/**
+ * Best-effort grounding source for poster item labels: the business's own
+ * category and saved menu/catalog item names. A lookup failure must never
+ * block draft generation, so this always resolves.
+ */
+async function fetchPosterGroundingContext(
+  admin: any,
+  businessId: string,
+  category: string | null | undefined,
+): Promise<PosterGroundingContext> {
+  const cleanCategory = typeof category === "string" ? category.trim() : "";
+  try {
+    const { data: menuRows } = await admin
+      .from("business_menu_items")
+      .select("name")
+      .eq("business_id", businessId)
+      .order("sort_order", { ascending: true })
+      .limit(30);
+    const menuItemNames = ((menuRows ?? []) as Record<string, unknown>[])
+      .map((row) => (typeof row?.name === "string" ? row.name.trim() : ""))
+      .filter((name): name is string => name.length > 0);
+    return { category: cleanCategory, menuItemNames };
+  } catch {
+    return { category: cleanCategory, menuItemNames: [] };
+  }
+}
+
 function parseDraftInput(body: DraftInput) {
   const businessId = text(body.business_id, 80);
   const productName = text(body.product_name, 90);
@@ -607,7 +733,8 @@ async function generateCopyWithTextProvider(params: {
   geminiApiKey?: string | null;
   requestGroupId: string;
   input: ReturnType<typeof parseDraftInput>["value"];
-}): Promise<{ draft: DraftCreative; attempts: ProviderAttempt[] }> {
+  groundingContext?: PosterGroundingContext;
+}): Promise<{ draft: DraftCreative; attempts: ProviderAttempt[]; degradedFields: string[] }> {
   const systemPrompt = [
     "You write concise, factual advertising draft copy for local deals.",
     "Return only JSON matching the schema.",
@@ -667,8 +794,22 @@ async function generateCopyWithTextProvider(params: {
     endTime: params.input.endTime,
     quantityLimit: params.input.quantityLimit,
     stylePreset: params.input.stylePreset,
+    groundingContext: params.groundingContext,
   });
-  const poster = sanitizePosterCreative(parsed, fallback.poster);
+  const { poster, degradedFields: posterDegradedFields } = sanitizePosterCreative(parsed, fallback.poster);
+
+  // Fields the model left empty/unusable and a fallback value was substituted
+  // for — surfaced to the caller instead of silently swallowed (de-food-bias
+  // hardening, see MEMORY: "military brand item names break image gen").
+  const copyDegradedFields: CopyDegradedField[] = [];
+  if (!(typeof parsed.headline === "string" && parsed.headline.trim())) copyDegradedFields.push("headline");
+  if (!(typeof parsed.supporting_copy === "string" && parsed.supporting_copy.trim())) {
+    copyDegradedFields.push("supporting_copy");
+  }
+  if (!(typeof parsed.layout_recommendation === "string" && parsed.layout_recommendation.trim())) {
+    copyDegradedFields.push("layout_recommendation");
+  }
+
   return {
     draft: {
       headline: sanitizeGeneratedCopy(parsed.headline, fallback.headline, 72),
@@ -687,6 +828,10 @@ async function generateCopyWithTextProvider(params: {
       composition_plan: sanitizeCompositionPlan(parsed.composition_plan, params.input.stylePreset),
     },
     attempts: generation.attempts,
+    degradedFields: [
+      ...copyDegradedFields,
+      ...posterDegradedFields.map((field) => `poster.${field}`),
+    ],
   };
 }
 
@@ -851,7 +996,7 @@ serve(async (req) => {
 
   const { data: business, error: businessError } = await admin
     .from("businesses")
-    .select("id,name,owner_id")
+    .select("id,name,category,owner_id")
     .eq("id", input.businessId)
     .maybeSingle();
   if (businessError) {
@@ -873,6 +1018,8 @@ serve(async (req) => {
       403,
     );
   }
+
+  const posterGroundingContext = await fetchPosterGroundingContext(admin, input.businessId, business.category);
 
   // Web-attack review 2026-07-31, finding H-3: this image-generation endpoint had
   // no cost controls, unlike every sibling AI function. Enforce a per-business
@@ -947,6 +1094,7 @@ serve(async (req) => {
     endTime: input.endTime,
     quantityLimit: input.quantityLimit,
     stylePreset: input.stylePreset,
+    groundingContext: posterGroundingContext,
   });
   let provider = "fallback";
   let model = "dry-run-fallback";
@@ -954,6 +1102,11 @@ serve(async (req) => {
   let requestId: string | null = null;
   let estimatedCost = 0;
   let fallbackReason: string | null = dryRun ? "DRY_RUN_OR_MISSING_OPENAI_KEY" : null;
+  // De-food-bias hardening: which draft fields (if any) had to fall back to a
+  // substituted value instead of the model's own output. A pure dry run/no-key
+  // fallback substitutes the entire draft, so it starts pre-flagged; a live
+  // generation below overwrites this with the model's own per-field results.
+  let degradedFields: string[] = dryRun ? ["ai_generation_skipped"] : [];
 
   if (!dryRun && openAiKey) {
     try {
@@ -964,9 +1117,11 @@ serve(async (req) => {
           geminiApiKey,
           requestGroupId,
           input,
+          groundingContext: posterGroundingContext,
         })
       );
       draft = generated.draft;
+      degradedFields = generated.degradedFields;
       const attempt = representativeAttempt(generated.attempts);
       provider = attempt?.provider ?? "openai";
       model = attempt?.model ?? resolveAiTextProviderConfig().openAiModel;
@@ -999,6 +1154,7 @@ serve(async (req) => {
     endTime: input.endTime,
     quantityLimit: input.quantityLimit,
     stylePreset: input.stylePreset,
+    groundingContext: posterGroundingContext,
   }).image_prompt);
   let imageResult: ImageGenerationResult = {
     path: null,
@@ -1183,6 +1339,8 @@ serve(async (req) => {
       image_prompt_hash: imageResult.promptHash,
       image_deadline: imageResult.deadlineReport,
       publishing_disabled: true,
+      degraded: degradedFields.length > 0,
+      degraded_fields: degradedFields,
     },
     openai_called: provider === "openai",
     user_agent: req.headers.get("user-agent"),
@@ -1242,6 +1400,8 @@ serve(async (req) => {
       publishing_disabled: true,
       dry_run: dryRun,
       copy_only: copyOnly,
+      degraded: degradedFields.length > 0,
+      degraded_fields: degradedFields,
     },
   });
 });

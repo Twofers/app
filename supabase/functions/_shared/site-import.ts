@@ -480,6 +480,53 @@ export type MenuLink = { url: string; kind: "page" | "pdf" };
 
 const MENU_TEXT_RE = /(menu|menú|carta|메뉴)/i;
 
+/**
+ * AI_MENU_LINKS_V2_ENABLED only: broader nav-label vocabulary, ranked strictly
+ * below an exact MENU_TEXT_RE match (a "Menu" link is still always preferred
+ * over an "Order" link when both exist).
+ */
+const SECONDARY_MENU_TEXT_RE = /(food|eat|drinks?|order|breakfast|lunch|dinner|bakery|pastries)/i;
+
+/**
+ * AI_MENU_LINKS_V2_ENABLED only: known third-party hosted-menu/ordering
+ * platforms. An offsite link is only ever considered when its host is exactly
+ * one of these or a subdomain of one — this list does NOT weaken SSRF
+ * defenses. Every candidate URL, on-site or offsite, still passes through
+ * validateImportUrl here, and the caller's safeFetch (import-business-website/index.ts)
+ * re-resolves DNS and blocks private/reserved IPs before ever fetching it —
+ * this allowlist only widens which *hostnames* are eligible to be considered,
+ * not which *IP ranges* a request may ultimately reach.
+ */
+export const HOSTED_MENU_DOMAIN_ALLOWLIST = [
+  "toasttab.com",
+  "squareup.com",
+  "clover.com",
+  "order.online",
+];
+
+function isAllowedHostedMenuDomain(host: string): boolean {
+  const h = host.toLowerCase();
+  return HOSTED_MENU_DOMAIN_ALLOWLIST.some((domain) => h === domain || h.endsWith(`.${domain}`));
+}
+
+/**
+ * Env flag gate for the broadened menu-link ranking (mirrors menuTextV2FlagEnabled
+ * above). False under vitest/node (no `Deno` global) and whenever unset, so the
+ * default stays byte-identical to pre-flag output.
+ */
+export function menuLinksV2FlagEnabled(): boolean {
+  try {
+    return typeof Deno !== "undefined" && Deno.env.get("AI_MENU_LINKS_V2_ENABLED") === "true";
+  } catch {
+    return false;
+  }
+}
+
+export type ExtractMenuLinksOptions = {
+  /** Overrides the env-read flag; used by tests to exercise both branches deterministically. */
+  v2Enabled?: boolean;
+};
+
 function stripTagsInline(html: string): string {
   return html
     .replace(/<[^>]+>/g, " ")
@@ -487,11 +534,26 @@ function stripTagsInline(html: string): string {
     .trim();
 }
 
+type RankedMenuLink = MenuLink & { tier: number };
+
 /**
- * Find on-site menu links (page or PDF), same-host only, resolved to absolute
- * https URLs, de-duplicated. `page` links rank before `pdf`; capped at 3.
+ * Find on-site menu links (page or PDF), resolved to absolute https URLs,
+ * de-duplicated, capped at 3.
+ *
+ * Flag off (default): identical to the original v1 behavior — same-host only,
+ * exact MENU_TEXT_RE match only, `page` links rank before `pdf`.
+ *
+ * Flag on (AI_MENU_LINKS_V2_ENABLED): adds two lower-priority tiers instead of
+ * replacing the v1 ranking — same-host exact matches always win first:
+ *   0. same-host + exact "menu" match (v1 behavior)
+ *   1. same-host + secondary keyword match (food/eat/order/breakfast/...)
+ *   2. allowlisted offsite host (HOSTED_MENU_DOMAIN_ALLOWLIST) + exact match
+ *   3. allowlisted offsite host + secondary keyword match
+ * Within a tier, `page` still ranks before `pdf`. Pass `options.v2Enabled` to
+ * override the env read directly (used by tests).
  */
-export function extractMenuLinks(html: string, baseUrl: string): MenuLink[] {
+export function extractMenuLinks(html: string, baseUrl: string, options?: ExtractMenuLinksOptions): MenuLink[] {
+  const v2Enabled = options?.v2Enabled ?? menuLinksV2FlagEnabled();
   const source = typeof html === "string" ? html : "";
   let baseHost = "";
   try {
@@ -500,8 +562,7 @@ export function extractMenuLinks(html: string, baseUrl: string): MenuLink[] {
     return [];
   }
 
-  const pages: MenuLink[] = [];
-  const pdfs: MenuLink[] = [];
+  const found: RankedMenuLink[] = [];
   const seen = new Set<string>();
 
   const anchorRe = /<a\b[^>]*href\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))[^>]*>([\s\S]*?)<\/a>/gi;
@@ -514,19 +575,50 @@ export function extractMenuLinks(html: string, baseUrl: string): MenuLink[] {
     if (!resolved) continue;
     const parsed = validateImportUrl(resolved);
     if (!parsed.ok) continue;
-    if (parsed.url.host.toLowerCase() !== baseHost) continue; // same-host only (v1)
 
-    const isPdf = urlExtension(resolved) === "pdf";
-    const matchesMenu = MENU_TEXT_RE.test(href) || MENU_TEXT_RE.test(text);
-    if (!matchesMenu) continue;
+    const linkHost = parsed.url.host.toLowerCase();
+    const sameHost = linkHost === baseHost;
+    const allowedOffsite = v2Enabled && !sameHost && isAllowedHostedMenuDomain(linkHost);
+    if (!sameHost && !allowedOffsite) continue; // same-host only, unless v2 + allowlisted hosted-menu domain
+
+    const exactMatch = MENU_TEXT_RE.test(href) || MENU_TEXT_RE.test(text);
+    const secondaryMatch = v2Enabled && (SECONDARY_MENU_TEXT_RE.test(href) || SECONDARY_MENU_TEXT_RE.test(text));
+    if (!exactMatch && !secondaryMatch) continue;
 
     if (seen.has(resolved)) continue;
     seen.add(resolved);
-    if (isPdf) pdfs.push({ url: resolved, kind: "pdf" });
-    else pages.push({ url: resolved, kind: "page" });
+
+    const isPdf = urlExtension(resolved) === "pdf";
+    const tier = (sameHost ? 0 : 2) + (exactMatch ? 0 : 1);
+    found.push({ url: resolved, kind: isPdf ? "pdf" : "page", tier });
   }
 
-  return [...pages, ...pdfs].slice(0, 3);
+  found.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    if (a.kind !== b.kind) return a.kind === "page" ? -1 : 1;
+    return 0;
+  });
+
+  return found.slice(0, 3).map(({ url, kind }) => ({ url, kind }));
+}
+
+/**
+ * AI_MENU_LINKS_V2_ENABLED only: the direct `/menu` probe URL for a site whose
+ * homepage carried no discoverable menu link. Pure URL construction only — it
+ * does not fetch. The candidate still passes validateImportUrl, so a caller
+ * adopting this (import-business-website/index.ts, out of scope here) gets
+ * the same syntax-level guard as every other extracted link before its
+ * fetch-time DNS/IP re-check.
+ */
+export function buildMenuProbeUrl(baseUrl: string): string | null {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+  const probe = `${base.protocol}//${base.host}/menu`;
+  return validateImportUrl(probe).ok ? probe : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -100,6 +100,15 @@ export async function aiComposeOfferGenerate(body: {
   image_base64?: string;
   /** Deprecated: legacy poster generation is disabled so critical text stays rendered natively. */
   generate_poster_image?: boolean;
+  /**
+   * Ask for a fresh, differently-framed regeneration of the same offer instead
+   * of the cached result for identical inputs. Requires AI_COMPOSE_REGENERATE_ENABLED
+   * on the function; ignored (byte-identical request) when that flag is off.
+   * Client UI adoption ships separately — this is the plumbing only.
+   */
+  regenerate?: boolean;
+  /** Headlines currently on screen, so the regenerate prompt can avoid repeating them. */
+  previous_headlines?: string[];
 }): Promise<AiComposeSuccess> {
   const { data, error } = await supabase.functions.invoke("ai-compose-offer", {
     body: {
@@ -107,6 +116,10 @@ export async function aiComposeOfferGenerate(body: {
       prompt_text: body.prompt_text?.trim() || undefined,
       image_base64: body.image_base64,
       generate_poster_image: body.generate_poster_image === true,
+      ...(body.regenerate === true ? { regenerate: true } : {}),
+      ...(body.previous_headlines && body.previous_headlines.length > 0
+        ? { previous_headlines: body.previous_headlines.slice(0, 6) }
+        : {}),
     },
     timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });

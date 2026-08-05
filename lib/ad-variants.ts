@@ -286,3 +286,86 @@ export function buildOfferDefinitionFallbackAd(
     lockedTermsLine: disclosureLine,
   });
 }
+
+// --- Revision feedback chips: append-with-dedup + chip->preset mapping -----
+//
+// Suggestion chips used to overwrite whatever the merchant had already typed
+// into the feedback box, silently discarding it. appendRevisionFeedback joins
+// the chip's canned text onto the existing text instead, skipping the append
+// when the addition is already present (case-insensitive) so tapping the same
+// chip twice doesn't duplicate it. Capped at the server's 800-char limit.
+export function appendRevisionFeedback(current: string, addition: string, maxLength = 800): string {
+  const trimmedCurrent = current.trim();
+  const trimmedAddition = addition.trim();
+  if (!trimmedAddition) return trimmedCurrent.slice(0, maxLength);
+  if (!trimmedCurrent) return trimmedAddition.slice(0, maxLength);
+  if (trimmedCurrent.toLowerCase().includes(trimmedAddition.toLowerCase())) {
+    return trimmedCurrent.slice(0, maxLength);
+  }
+  const separator = /[.!?]$/.test(trimmedCurrent) ? " " : ". ";
+  return `${trimmedCurrent}${separator}${trimmedAddition}`.slice(0, maxLength);
+}
+
+// Stable machine-readable preset keys the revise edge function's
+// imageRevisionInstruction/imageStylePresetFromRevision helpers pattern-match
+// on (see supabase/functions/ai-generate-ad-variants/index.ts). Sending the
+// key alongside the (possibly localized) feedback text keeps the signal
+// working regardless of UI locale. Copy-target chips don't yet have a
+// server-side consumer for their preset key; the key is still sent for
+// forward-compatibility/telemetry and is harmless (ignored) server-side.
+const REVISION_SUGGESTION_PRESET_KEYS: Record<string, string> = {
+  top_headline: "revisePresetCopyTopHeadline",
+  shorter: "revisePresetCopyShorter",
+  warmer: "revisePresetCopyWarmer",
+  new_image: "revisePresetTryAnotherImage",
+};
+
+export function revisionPresetForSuggestion(suggestionKey: string): string | undefined {
+  return REVISION_SUGGESTION_PRESET_KEYS[suggestionKey];
+}
+
+// --- Copy-version fingerprint: lets a copy-only revision keep its own
+// restorable "earlier version" entry instead of overwriting the prior one --
+//
+// The image-version id (app/create/ai.tsx: imageVersionId) previously keyed
+// only on storagePath|source|treatment|editMode, so a revision that changed
+// ONLY the copy (headline/body/etc, same image) collided with the entry it
+// replaced and the earlier copy became unrecoverable. Mirrors (does not
+// import — lib/ai-revision-change.ts is poster-locked and out of scope for
+// this change) the visible-copy fields ai-revision-change.ts's
+// summarizeAiRevisionChange already treats as "the copy" for change
+// detection, so the two stay conceptually in sync.
+function normalizeFingerprintValue(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function copyFingerprint(ad: GeneratedAd): string {
+  const posterCopy = ad.poster?.copy;
+  return [
+    ad.headline,
+    ad.short_description,
+    ad.subheadline,
+    ad.cta,
+    ad.push_notification,
+    ad.terms_summary,
+    posterCopy?.headline,
+    posterCopy?.offer_line_1,
+    posterCopy?.offer_line_2,
+    posterCopy?.subline,
+  ]
+    .map(normalizeFingerprintValue)
+    .join("|");
+}
+
+/** Deterministic short hash — only used to keep version ids compact, not for security. */
+export function shortHash(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (Math.imul(31, hash) + value.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function copyFingerprintHash(ad: GeneratedAd): string {
+  return shortHash(copyFingerprint(ad));
+}

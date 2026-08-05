@@ -221,6 +221,67 @@ describe("website prospect command center", () => {
     expect(smoke).toMatch(/admin-ai-prompts/);
     expect(read("package.json")).toMatch(/smoke:admin-ai-staging/);
   });
+
+  it("ships the ADMIN_AI_V2_ENABLED quality pass flag-gated, plus the additive prompt-registry test/schema-compat guards", () => {
+    const helper = read("supabase/functions/_shared/admin-ai.ts");
+    expect(helper).toMatch(/from "\.\/admin-ai-v2\.ts"/);
+    expect(helper).toMatch(/adminAiV2Enabled\(\)/);
+    // The generic prompt every feature has always shared must still exist,
+    // byte-identical, as its own function — adminAiSystemPrompt only appends
+    // to it when the flag is on.
+    expect(helper).toMatch(/function genericAdminAiSystemPrompt\(feature: AdminAiFeature\): string \{/);
+    // Flag-off byte-identical proof: adminAiSystemPrompt must early-return the
+    // generic prompt untouched when the flag is off, and every original
+    // guardrail line must still be present verbatim inside the generic
+    // builder (not rewritten, not merged into the V2-only sections).
+    expect(helper).toMatch(/if \(!adminAiV2Enabled\(\)\) return generic;/);
+    for (const originalLine of [
+      "You help run Twofer operations from the internal website/admin dashboard only.",
+      "Do not create, suggest creating, or imply a live deal for an unclaimed prospect.",
+      "Do not imply an unclaimed business is a Twofer partner.",
+      "Demand proof must stay aggregated and must not reveal customer names, emails, phone numbers, exact home locations, or individual behavior.",
+      "Keep Stripe, billing, claim-token, and trial actions recommendation-only unless a separate audited admin function performs the action.",
+      "Do not include raw claim tokens, API keys, secrets, provider error bodies, or private source payloads.",
+      "Use merchant-safe wording such as Twofer deals, local offers, limited-time offers, paired offers, or bonus item offers.",
+    ]) {
+      expect(helper, originalLine).toContain(originalLine);
+    }
+    expect(helper).toMatch(/skipPromptOverride/);
+
+    const v2 = read("supabase/functions/_shared/admin-ai-v2.ts");
+    expect(v2).toMatch(/export function adminAiV2Enabled\(\): boolean/);
+    expect(v2).toMatch(/ADMIN_AI_V2_ENABLED/);
+    expect(v2).toMatch(/export const ADMIN_AI_FEATURE_REQUIRED_KEYS/);
+    expect(v2).toMatch(/export const SCORE_COMPONENT_RANGES/);
+    expect(v2).not.toMatch(/OPENAI_API_KEY|GEMINI_API_KEY|STRIPE_SECRET_KEY/);
+
+    const grounding = read("supabase/functions/_shared/admin-ai-grounding.ts");
+    expect(grounding).toMatch(/from "\.\/site-import\.ts"/);
+    expect(grounding).toMatch(/export const MAX_GROUNDED_SOURCE_URLS = 3/);
+
+    const enrich = read("supabase/functions/admin-prospect-enrich/index.ts");
+    expect(enrich).toMatch(/adminAiV2Enabled/);
+    expect(enrich).toMatch(/validateImportUrl/);
+    expect(enrich).toMatch(/isPrivateOrReservedIp/);
+    expect(enrich).toMatch(/fetchGroundedSources/);
+
+    const score = read("supabase/functions/admin-prospect-score/index.ts");
+    expect(score).toMatch(/SCORE_SCHEMA_V2/);
+    expect(score).toMatch(/baseline_score/);
+
+    const promptFunction = read("supabase/functions/admin-ai-prompts/index.ts");
+    expect(promptFunction).toMatch(/action === "test"/);
+    expect(promptFunction).toMatch(/skipPromptOverride: true/);
+    expect(promptFunction).toMatch(/findMissingRequiredKeysInSchema/);
+    expect(promptFunction).toMatch(/OUTPUT_SCHEMA_MISSING_REQUIRED_KEYS/);
+    // The test action must never persist to admin_ai_prompts (no insert/upsert
+    // of a prompt row) — only the existing upsert/activate/deactivate actions do.
+    const testActionBlock = promptFunction.slice(
+      promptFunction.indexOf('if (action === "test")'),
+      promptFunction.indexOf('if (action === "upsert")'),
+    );
+    expect(testActionBlock).not.toMatch(/\.upsert\(|admin_ai_prompts"\)\s*\.insert\(/);
+  });
 });
 
 function readDirectoryText(dir: string): string {

@@ -128,6 +128,32 @@ describe("quick deal image QA", () => {
     expect(result.missing_items).toEqual(["latte sits under the bottom text area"]);
   });
 
+  it("keeps the QA prompt byte-identical when itemDescriptions is absent", () => {
+    const withoutParam = buildQuickDealImageQaPrompt(["bagel", "coffee"], "square_1_1");
+    const withUndefined = buildQuickDealImageQaPrompt(["bagel", "coffee"], "square_1_1", undefined);
+    const withEmptyMap = buildQuickDealImageQaPrompt(["bagel", "coffee"], "square_1_1", {});
+
+    expect(withUndefined).toBe(withoutParam);
+    expect(withEmptyMap).toBe(withoutParam);
+  });
+
+  it("renders required items as BRAND NAME (visual descriptor) when itemDescriptions is provided", () => {
+    const prompt = buildQuickDealImageQaPrompt(["bagel", "coffee"], "square_1_1", {
+      bagel: "toasted sesame bagel sliced in half",
+      coffee: "iced latte in a clear cup",
+    });
+
+    expect(prompt).toContain("Required items: bagel (toasted sesame bagel sliced in half), coffee (iced latte in a clear cup).");
+  });
+
+  it("falls back to the bare item name when a descriptor is missing for that item", () => {
+    const prompt = buildQuickDealImageQaPrompt(["bagel", "coffee"], "square_1_1", {
+      bagel: "toasted sesame bagel",
+    });
+
+    expect(prompt).toContain("Required items: bagel (toasted sesame bagel), coffee.");
+  });
+
   it("builds a stronger regeneration prompt around missing items", () => {
     const prompt = buildQuickDealImageRegenerationPrompt({
       basePrompt: "Natural morning light. No text.",
@@ -140,6 +166,42 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/Natural morning light/i);
     expect(prompt).toMatch(/Remove all readable text/i);
     expect(prompt).toMatch(/mascots/i);
+  });
+
+  it("keeps the regeneration prompt byte-identical when opts is absent", () => {
+    const baseArgs = {
+      basePrompt: "Natural morning light. No text.",
+      requiredVisualItems: ["bagel", "coffee"],
+      missingItems: ["coffee"],
+    };
+    const withoutOpts = buildQuickDealImageRegenerationPrompt(baseArgs);
+    const withUndefinedOpts = buildQuickDealImageRegenerationPrompt({ ...baseArgs, opts: undefined });
+    const withEmptyOpts = buildQuickDealImageRegenerationPrompt({ ...baseArgs, opts: {} });
+
+    expect(withUndefinedOpts).toBe(withoutOpts);
+    expect(withEmptyOpts).toBe(withoutOpts);
+  });
+
+  it("threads QA notes through as explicit negative feedback", () => {
+    const prompt = buildQuickDealImageRegenerationPrompt({
+      basePrompt: "Natural morning light. No text.",
+      requiredVisualItems: ["bagel", "coffee"],
+      missingItems: ["coffee"],
+      opts: { qaNotes: "coffee cup was cropped at the right edge" },
+    });
+
+    expect(prompt).toMatch(/rejected for this reason, do not repeat it: coffee cup was cropped at the right edge/i);
+  });
+
+  it("asks for a different composition when requireDifferentComposition is set", () => {
+    const prompt = buildQuickDealImageRegenerationPrompt({
+      basePrompt: "Natural morning light. No text.",
+      requiredVisualItems: ["bagel", "coffee"],
+      missingItems: ["coffee"],
+      opts: { requireDifferentComposition: true },
+    });
+
+    expect(prompt).toMatch(/clearly different composition and camera angle than the previous attempt/i);
   });
 
   it("adds source-aware prompt guidance for merchant edits", () => {

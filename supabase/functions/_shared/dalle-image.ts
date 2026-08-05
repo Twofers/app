@@ -69,6 +69,21 @@ export type OpenAiImageAttempt = {
   size: string;
   quality: string | null;
   outputFormat: string | null;
+  /**
+   * Always-on telemetry (additive, no behavior change): the actual decoded pixel
+   * dimensions and aspect ratio of the returned image, and whether that deviates
+   * from the `size` that was requested — beyond the known, expected gpt-image-1
+   * portrait request (1024x1536 / 2:3), which is itself the deliberate closest-
+   * available-size choice for a 4:5 poster crop (see the comment on `size` below),
+   * not a mismatch. This compares actual bytes against the requested `size` string,
+   * so that intentional 2:3-vs-4:5 gap never trips it; only a provider returning
+   * something OTHER than what was asked for does. Null/false when undetermined —
+   * never causes a rejection or retry here.
+   */
+  actualWidth?: number | null;
+  actualHeight?: number | null;
+  actualAspect?: string | null;
+  aspectMismatch?: boolean;
 };
 
 export type OpenAiImageResult = {
@@ -78,6 +93,76 @@ export type OpenAiImageResult = {
 
 function requestIdFromHeaders(headers: Headers): string | null {
   return headers.get("x-request-id") ?? headers.get("openai-request-id");
+}
+
+function cleanText(value: string | null | undefined, max = 240): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** Reduced "W:H" string, e.g. formatAspectRatio(1024, 1536) -> "2:3". */
+function formatAspectRatio(width: number, height: number): string {
+  if (!width || !height) return "";
+  const divisor = gcd(Math.round(width), Math.round(height)) || 1;
+  return `${Math.round(width) / divisor}:${Math.round(height) / divisor}`;
+}
+
+/**
+ * Reads only the PNG signature + IHDR width/height (offsets 16-23) — no full pixel
+ * decode. gpt-image-1 always returns PNG (`output_format: "png"` is sent on every
+ * generate/edit call above), so this is enough for the telemetry in
+ * OpenAiImageAttempt without pulling in a PNG decoder dependency into this module.
+ * Returns null for any non-PNG or too-short input rather than throwing.
+ */
+function readPngDimensions(bytes: Uint8Array | null): { width: number; height: number } | null {
+  if (!bytes || bytes.length < 24) return null;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+  if (!isPng) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16, false);
+  const height = view.getUint32(20, false);
+  if (!width || !height) return null;
+  return { width, height };
+}
+
+function parseSizeString(size: string): { width: number; height: number } | null {
+  const match = /^(\d+)x(\d+)$/.exec(size);
+  if (!match) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+/**
+ * Always-on telemetry patch (additive, no behavior change): actualWidth/Height/Aspect
+ * plus aspectMismatch computed against the `size` string that was actually sent on
+ * this request (not the app's eventual 4:5 poster crop target — see the comment on
+ * `OpenAiImageAttempt` above for why those are different things).
+ */
+function aspectTelemetryPatch(bytes: Uint8Array | null, requestedSize: string): Partial<OpenAiImageAttempt> {
+  const dims = readPngDimensions(bytes);
+  if (!dims) return { actualWidth: null, actualHeight: null, actualAspect: null, aspectMismatch: false };
+  const actualAspect = formatAspectRatio(dims.width, dims.height);
+  const expected = parseSizeString(requestedSize);
+  const aspectMismatch = expected
+    ? Math.abs(dims.width / dims.height - expected.width / expected.height) > 0.02
+    : false;
+  return { actualWidth: dims.width, actualHeight: dims.height, actualAspect, aspectMismatch };
+}
+
+/**
+ * Category families that keep the legacy food/cafe framing in the v4 prompt variant.
+ * Anything not matched here gets the non-food "Editorial commercial photography"
+ * framing instead. Deliberately broad (matches on substring) since merchant-entered
+ * category text is free-form.
+ */
+const FOOD_CATEGORY_PATTERN =
+  /caf[eé]|coffee|restaurant|bakery|\bfood\b|diner|\bbar\b|grill|pizza|deli\b|donut|doughnut|bagel|ice cream|juice|smoothie|\bbbq\b|barbecue|kitchen|eatery|brewery|winery|bistro|\bpub\b|\btea\b|dessert|creamery|bakehouse|taco|burger|sandwich|snack/i;
+
+function isFoodCategory(category: string): boolean {
+  return FOOD_CATEGORY_PATTERN.test(category);
 }
 
 function imageResponseMetadata(json: unknown): {
@@ -174,15 +259,24 @@ export function buildPosterImagePrompt(params: {
 // V2: Photographic ad image — no text baked in, the app renders copy above the image
 // ---------------------------------------------------------------------------
 
-export function buildPhotoAdImagePrompt(params: {
-  itemName: string;
-  itemDescription?: string;
-  businessName?: string;
-  requiredVisualItems?: readonly string[];
-  creativeDirection?: string | null;
-  visualRevisionInstruction?: string;
-  aspectRatio?: "1:1" | "4:5";
-}): string {
+export function buildPhotoAdImagePrompt(
+  params: {
+    itemName: string;
+    itemDescription?: string;
+    businessName?: string;
+    requiredVisualItems?: readonly string[];
+    creativeDirection?: string | null;
+    visualRevisionInstruction?: string;
+    aspectRatio?: "1:1" | "4:5";
+  },
+  /**
+   * Additive, optional. Absent (or promptVariant unset) reproduces the exact legacy
+   * prompt byte-for-byte — every existing caller keeps its current behavior. Only
+   * promptVariant: "v4" opts into category-aware subject/backdrop framing and the
+   * zone-geometry rewrite (see zoneLine below).
+   */
+  opts: { promptVariant?: "v4"; businessCategory?: string; visualDirection?: string } = {},
+): string {
   const { itemName, itemDescription, businessName, requiredVisualItems, creativeDirection, visualRevisionInstruction } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
@@ -190,20 +284,62 @@ export function buildPhotoAdImagePrompt(params: {
     params.aspectRatio === "4:5"
       ? "Vertical 4:5 poster-ready framing that fills the whole frame edge to edge (no borders, letterboxing, or flat color bands), with the product centered and calmer photographic zones top and bottom for native text."
       : "Square 1:1 framing.";
+
+  const isV4 = opts.promptVariant === "v4";
+  const category = isV4 ? cleanText(opts.businessCategory, 80) : "";
+  const visualDirection = isV4 ? cleanText(opts.visualDirection, 200) : "";
+  // Unknown/absent category keeps the legacy food framing (matches the pre-v4 default
+  // subject, which always assumed food/cafe).
+  const food = !isV4 || !category || isFoodCategory(category);
+
+  const subjectLine = food
+    ? `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`
+    : `Editorial commercial photography — photoreal ${esc(itemName)} as the single hero subject for a ${esc(category)} business.`;
+
+  const businessContextLine = businessName
+    ? food
+      ? `For an independent cafe called ${esc(businessName)}.`
+      : `For a ${category ? `${esc(category)} ` : ""}business called ${esc(businessName)}.`
+    : "";
+
+  const backdropLine = food
+    ? "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered."
+    : visualDirection
+    ? `Backdrop matching the setting: ${esc(visualDirection)} — clean, uncluttered, professionally lit.`
+    : `Backdrop appropriate to a ${category ? esc(category) : "local"} business — clean, uncluttered, professionally lit.`;
+
+  // gpt-image-1's only portrait size is 1024x1536 (2:3, see `size` in
+  // attemptImageGeneration below). The app center-crops that to 4:5 for the poster:
+  // keep the full 1024 width, take a 1024*(5/4) = 1280px-tall center window out of
+  // the 1536px-tall source, dropping (1536-1280)/2 = 128px off the top and 128px off
+  // the bottom -> 128/1536 = 8.3% shaved off each edge, keeping the central 83.3%.
+  // buildGeminiAdImagePrompt's zone bullets (top quarter / hero 25%-65% / bottom
+  // third) describe that POST-crop 4:5 frame. Restated in this GENERATED (pre-crop)
+  // frame's own terms via pre = 0.083 + post * 0.833:
+  //   post top quarter [0%, 25%]     -> pre [8.3%, 29.2%]  -> state "top ~29%"
+  //   post hero lane    [25%, 65%]    -> pre [29.2%, 62.5%] -> state "hero 29%-63%"
+  //   post bottom third [66.7%, 100%] -> pre [63.9%, 100%]  -> state "bottom ~37% (from 63%)"
+  // Each stated band is rounded outward (wider, never narrower) so the sliver that
+  // gets cropped away entirely (the first/last 8.3%) is safely included rather than
+  // left as a gap in the instruction.
+  const zoneLine = !isV4
+    ? "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast."
+    : "Composition by zone (this is the generated 2:3 frame, before the app's center-crop to 4:5): keep the top 29% of the frame one continuous, calm, softly defocused backdrop with no busy detail. Place the hero subject in the middle lane, roughly 29% to 63% of the frame height. Keep the bottom 37% of the frame (from the 63% mark down) the same calm, continuous surface or soft shadow falloff — no props, cutlery, or bright spots competing there.";
+
   return [
     visualItems.length > 1
       ? `Required offer items: ${visualItems.join(", ")}. Show all required items together as equally important main subjects. Do not show only one item.`
       : "",
-    `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`,
+    subjectLine,
     itemDescription ? `Description: ${esc(itemDescription)}.` : "",
-    businessName ? `For an independent cafe called ${esc(businessName)}.` : "",
+    businessContextLine,
     creativeDirection ? `Selected ad concept for composition only, never render as text: ${esc(creativeDirection)}.` : "",
     visualRevisionInstruction ? `Revision direction: ${esc(visualRevisionInstruction)}.` : "",
     "Natural soft daylight, realistic textures and cast shadows, true-to-life proportions, high fine detail, clean composition, shallow depth of field.",
-    "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered.",
+    backdropLine,
     "Honest, appetizing, magazine-quality — not stocky, not illustrated, not a CGI render.",
     "Keep every required item fully inside the center-safe area and away from crop edges.",
-    "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast.",
+    zoneLine,
     "Absolutely no text, letters, numbers, prices, coupons, discount copy, menu boards, signage, banners, overlays, QR codes, barcodes, logos, fake logos, brand marks, watermarks, mascots, cartoon characters, animals, or unrelated prop characters.",
     "No human faces, no hands holding the item.",
     framing,
@@ -338,6 +474,7 @@ async function attemptImageGeneration(
         success: decoded.bytes !== null,
         errorCode: decoded.bytes ? null : "NO_IMAGE_DATA",
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
+        ...aspectTelemetryPatch(decoded.bytes, size),
       }],
     };
   } catch (error) {
@@ -648,6 +785,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
         success: decoded.bytes !== null,
         errorCode: decoded.bytes ? null : "NO_IMAGE_DATA",
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
+        ...aspectTelemetryPatch(decoded.bytes, attemptBase.size),
       }],
     };
   } catch (error) {

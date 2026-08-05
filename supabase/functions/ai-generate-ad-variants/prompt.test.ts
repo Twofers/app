@@ -369,6 +369,52 @@ describe("buildAdCopyPrompt", () => {
     expect(prompt.userText).toContain("Buy one coffee and get one free");
   });
 
+  it("posterBudgetV8: keeps the legacy 28-char poster line absent the flag or format", () => {
+    // Flag absent entirely.
+    const flagAbsent = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      creativeFormat: "poster_v1",
+    });
+    expect(flagAbsent.system).toContain("the headline must be at most 28 characters");
+    expect(flagAbsent.system).not.toContain("at most 4 short words and 28 characters");
+
+    // Flag explicitly false.
+    const flagFalse = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      creativeFormat: "poster_v1",
+      posterBudgetV8: false,
+    });
+    expect(flagFalse.system).toEqual(flagAbsent.system);
+
+    // Flag true but not a poster request — standard_card is untouched.
+    const nonPoster = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      posterBudgetV8: true,
+    });
+    expect(nonPoster.system).toContain(
+      "headlineAlternative: short campaign headline, target 3-9 words, max 55 characters",
+    );
+    expect(nonPoster.system).not.toContain("at most 4 short words and 28 characters");
+  });
+
+  it("posterBudgetV8: swaps in a counted word/character budget for poster ads", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      creativeFormat: "poster_v1",
+      posterBudgetV8: true,
+    });
+    expect(prompt.system).toContain("at most 4 short words and 28 characters");
+    expect(prompt.system).toContain('"Cold brew for less" (18 characters)');
+    expect(prompt.system).toContain('"Buy one latte and get one free" (30 characters, too long)');
+    // The standalone 28-char poster line is deduped into the replacement above.
+    expect(prompt.system).not.toContain(
+      "- For poster ads the layout is fixed: the headline must be at most 28 characters. Longer poster text does not fit and the candidate is rejected; never rely on truncation.",
+    );
+    expect(prompt.system).not.toContain(
+      "headlineAlternative: short campaign headline, target 3-9 words, max 55 characters",
+    );
+  });
+
   it("bans BOGO, free, and entire-order language for percent-off deals", () => {
     const prompt = buildAdCopyPrompt({
       ...basePromptParams("40% off one latte", "latte"),

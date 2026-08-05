@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildGeminiAdImagePrompt,
+  buildSimplifiedGeminiImagePrompt,
   computeBandLuminanceFromRgba,
   computeImageBandLuminanceDetailed,
   generateGeminiAdImageWithTelemetry,
@@ -18,6 +19,28 @@ function env(values: Record<string, string | undefined>) {
       return values[name];
     },
   };
+}
+
+/**
+ * Minimal valid PNG: signature + an IHDR chunk carrying real width/height at the
+ * standard offsets (16-23). No IDAT/IEND/CRC — `normalizeGeminiImageToPng` passes
+ * "image/png" bytes through untouched, and `readPngDimensions`-equivalent header
+ * reads only inspect the first 24 bytes, so this is sufficient for aspect telemetry
+ * tests without a full pixel-valid PNG.
+ */
+function fakePngBytes(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(33);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, 13, false);
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12);
+  view.setUint32(16, width, false);
+  view.setUint32(20, height, false);
+  return bytes;
+}
+
+function fakePngBase64(width: number, height: number): string {
+  return btoa(String.fromCharCode(...fakePngBytes(width, height)));
 }
 
 const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "ai-image-provider.ts"), "utf8");
@@ -66,6 +89,173 @@ describe("resolveGeminiImageModel", () => {
 });
 
 describe("buildGeminiAdImagePrompt", () => {
+  it("is byte-identical to the pre-change prompt when visualDirection/itemDescriptions are absent", () => {
+    // Captured from the prompt builder before visualDirection / itemDescriptions were
+    // added, using this exact input. Pins that the new optional fields being absent
+    // never changes a single character of the emitted prompt.
+    const prompt = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      dealType: "SAME_ITEM_BOGO",
+      creativeDirection: "Cozy afternoon cafe table with space for poster text.",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+
+    expect(prompt).toBe(
+      [
+        "Create a realistic, professional local business advertising image for a mobile deal app.",
+        "Business context for styling only, never render as text: Mango Cafe",
+        "Business type for styling only: coffee shop",
+        "Offer mechanics: Buy latte, get croissant free.",
+        "Ad context: The image will be used inside a mobile local-deal card.",
+        "Required visible items: latte, croissant.",
+        "Selected AI ad concept for composition only, never render as text: Cozy afternoon cafe table with space for poster text.",
+        "Create the product-focused visual from the offer facts only.",
+        "Image requirements:",
+        "- Show the actual paid item and free item clearly if they are visually distinct.",
+        "- Make the food or drink look real, appetizing, and professionally photographed.",
+        "- Use natural lighting and a local business marketing style.",
+        "- Avoid the glossy, fake, over-rendered AI look.",
+        "- Keep every required item fully inside the center-safe area and away from crop edges.",
+        "- Fill the whole vertical frame edge to edge with the photograph. No borders, margins, framing bars, letterboxing, vignette frames, or flat solid-color bands on any side — even when two items sit side by side, extend the scene (surface, background) to every edge instead of padding with empty space.",
+        "- Composition by zone: the app prints large text across the top quarter of the image and across the bottom third. Build the photograph around that. Place the hero subject entirely in the middle lane, roughly 25% to 65% of the height — it must not intrude into the top quarter or run down into the bottom third.",
+        "- The top quarter must read as ONE continuous, softly defocused backdrop — a plain wall, a single wash of background tone, or a heavily out-of-focus interior with nothing picked out. Keep windows, lamps, bright highlights, shelves, doorways, hard edges, and any second point of interest out of it. A busy or high-contrast top band is the most common reason the headline becomes hard to read.",
+        "- The bottom third is the same: one continuous surface or soft shadow falloff, with no cutlery, props, garnish, or bright spots competing.",
+        "- Both zones must still be real photography (defocused background, table surface, soft shadow) — quiet, but never empty bands.",
+        "- Use vertical 4:5 poster-ready framing that fills the entire frame edge to edge, with the product centered and calmer (not empty) photographic zones toward the top and bottom for native text.",
+        "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
+        "- Do not add readable text.",
+        "- Do not add coupons.",
+        "- Do not add QR codes.",
+        "- Do not add prices.",
+        "- Do not add fake logos.",
+        "- Do not add fake business names.",
+        "- Do not add app mascots, characters, animals, penguins, or unrelated decorative props unless they are the actual product being sold or visible in the owner reference photo.",
+        "- Do not add distorted hands, extra fingers, warped cups, impossible packaging, or strange food shapes.",
+        "- Do not misrepresent the offer.",
+        "Style: playful local deal image, realistic food or drink, subtle cheerful energy. Do not add app mascots, characters, animals, or unrelated decorative props.",
+        "Avoid:",
+        "AI-looking plastic food, readable or unreadable fake text, misspelled signs, extra cups, incorrect item counts, app mascots, unrelated characters, distorted hands, fake QR codes, fake logos, fake brand marks, random menu boards, uncanny people, strange reflections, watermark-like marks, unrealistic packaging, and any text inside the generated image.",
+        "The final headline, business name, CTA, quantity, expiration, and offer terms will be rendered by the app outside this image. Do not render those words inside the image.",
+      ].join("\n"),
+    );
+  });
+
+  it("adds a Visual direction line only when visualDirection is provided", () => {
+    const withDirection = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+      visualDirection: "Warm morning light on a wooden counter.",
+    });
+    expect(withDirection).toContain("Visual direction: Warm morning light on a wooden counter.");
+
+    const without = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+    expect(without).not.toContain("Visual direction:");
+  });
+
+  it("uses the business category verbatim when provided, defaulting to 'local cafe' only when absent", () => {
+    const withCategory = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Bloom & Petal",
+      businessCategory: "flower shop",
+      offerTitle: "50% off one bouquet",
+      paidItem: "bouquet",
+      stylePreset: "premium-cafe",
+      aspectRatio: "1:1",
+      imageSize: "1K",
+    });
+    expect(withCategory).toContain("Business type for styling only: flower shop");
+    expect(withCategory).not.toContain("local cafe");
+
+    const withoutCategory = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Bloom & Petal",
+      offerTitle: "50% off one bouquet",
+      paidItem: "bouquet",
+      stylePreset: "premium-cafe",
+      aspectRatio: "1:1",
+      imageSize: "1K",
+    });
+    expect(withoutCategory).toContain("Business type for styling only: local cafe");
+  });
+
+  it("renders itemDescriptions as 'NAME — descriptor' only for items that have one", () => {
+    const withDescriptions = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+      itemDescriptions: {
+        latte: "steamed milk with a light foam cap in a ceramic mug",
+      },
+    });
+    expect(withDescriptions).toContain(
+      "Required visible items: latte — steamed milk with a light foam cap in a ceramic mug, croissant.",
+    );
+
+    const withoutDescriptions = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      stylePreset: "playful-twofer",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+    expect(withoutDescriptions).toContain("Required visible items: latte, croissant.");
+  });
+
+  it("genericizeItems drops visualDirection and itemDescriptions along with other brand-identifying fields", () => {
+    const generic = buildGeminiAdImagePrompt(
+      {
+        businessId: "business-1",
+        businessName: "The Colonel's Brew",
+        businessCategory: "coffee shop",
+        offerTitle: "Buy one THE SERGEANT'S STRIPES, get one free",
+        paidItem: "THE SERGEANT'S STRIPES",
+        freeItem: "THE SERGEANT'S STRIPES",
+        stylePreset: "playful-twofer",
+        aspectRatio: "4:5",
+        imageSize: "1K",
+        visualDirection: "Military camp coffee scene.",
+        itemDescriptions: { "THE SERGEANT'S STRIPES": "a rugged camo-patterned coffee bag" },
+      },
+      { genericizeItems: true },
+    );
+    expect(generic).not.toContain("Visual direction:");
+    expect(generic).not.toMatch(/camo/i);
+  });
+
   it("keeps Gemini responsible for the image only", () => {
     const prompt = buildGeminiAdImagePrompt({
       businessId: "business-1",
@@ -377,6 +567,57 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     expect(result.attempts[0]?.errorCode).toBe("TIMEOUT");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("records actual width/height/aspect telemetry and no mismatch when the image matches the requested aspect", async () => {
+    // 1024x1280 is exactly 4:5 — matches the requested aspectRatio below.
+    const pngBase64 = fakePngBase64(1024, 1280);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ output_image: { mime_type: "image/png", data: pngBase64 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      aspectRatio: "4:5",
+      retryOnFailure: false,
+    });
+
+    expect(result.attempts[0]?.actualWidth).toBe(1024);
+    expect(result.attempts[0]?.actualHeight).toBe(1280);
+    expect(result.attempts[0]?.actualAspect).toBe("4:5");
+    expect(result.attempts[0]?.aspectMismatch).toBe(false);
+  });
+
+  it("flags aspectMismatch when the decoded image does not match the requested aspect ratio", async () => {
+    // 1024x1024 is 1:1, but the request below asks for 4:5 — a real provider
+    // deviation, not the expected/known gap this telemetry is meant to surface.
+    const pngBase64 = fakePngBase64(1024, 1024);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ output_image: { mime_type: "image/png", data: pngBase64 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await generateGeminiAdImageWithTelemetry({
+      apiKey: "test-gemini-key",
+      model: "gemini-3.1-flash-image",
+      prompt: "Create a product photo.",
+      aspectRatio: "4:5",
+      retryOnFailure: false,
+    });
+
+    expect(result.attempts[0]?.actualWidth).toBe(1024);
+    expect(result.attempts[0]?.actualHeight).toBe(1024);
+    expect(result.attempts[0]?.actualAspect).toBe("1:1");
+    expect(result.attempts[0]?.aspectMismatch).toBe(true);
+    // Telemetry only — a mismatch never turns a successful decode into a failure.
+    expect(result.bytes).not.toBeNull();
+  });
 });
 
 describe("Gemini image provider failure telemetry source guard", () => {
@@ -402,6 +643,25 @@ describe("Gemini image provider failure telemetry source guard", () => {
   });
 });
 
+describe("buildSimplifiedGeminiImagePrompt", () => {
+  it("restates the calm-band contract explicitly instead of relying on the truncated slice", () => {
+    const base = "x".repeat(2000);
+    const prompt = buildSimplifiedGeminiImagePrompt(base);
+
+    expect(prompt).toContain("Fill the full vertical 4:5 frame edge to edge");
+    expect(prompt).toContain("no borders, letterboxing, or flat color bands");
+    expect(prompt).toMatch(/25% to 65% of the frame height/);
+    expect(prompt).toContain("top quarter and the bottom third");
+    expect(prompt).toContain("calm, softly defocused backdrop");
+    // Still carries the existing no-text/no-logo/no-people guardrails.
+    expect(prompt).toContain("No readable text, no logos, no people, no hands, no QR codes, no prices, no signs.");
+    // The base prompt is still bounded (shortened from 1600 to 1200) so the total
+    // prompt length stays in check.
+    expect(prompt).toContain("x".repeat(1200));
+    expect(prompt).not.toContain("x".repeat(1201));
+  });
+});
+
 describe("computeBandLuminanceFromRgba", () => {
   function solid(width: number, height: number, r: number, g: number, b: number): Uint8Array {
     const data = new Uint8Array(width * height * 4);
@@ -414,9 +674,51 @@ describe("computeBandLuminanceFromRgba", () => {
     return data;
   }
 
-  it("reads ~0 for solid black and ~1 for solid white", () => {
-    expect(computeBandLuminanceFromRgba(solid(64, 80, 0, 0, 0), 64, 80)).toEqual({ top: 0, bottom: 0 });
-    expect(computeBandLuminanceFromRgba(solid(64, 80, 255, 255, 255), 64, 80)).toEqual({ top: 1, bottom: 1 });
+  it("reads ~0 for solid black and ~1 for solid white, with zero contrast and zero tile spread", () => {
+    // A solid-color image has no horizontal edges and no tile-to-tile variation, so
+    // the additive contrast/tileSpread fields must read exactly 0 alongside the
+    // unchanged top/bottom means.
+    expect(computeBandLuminanceFromRgba(solid(64, 80, 0, 0, 0), 64, 80)).toEqual({
+      top: 0,
+      bottom: 0,
+      topContrast: 0,
+      bottomContrast: 0,
+      topTileSpread: 0,
+      bottomTileSpread: 0,
+    });
+    expect(computeBandLuminanceFromRgba(solid(64, 80, 255, 255, 255), 64, 80)).toEqual({
+      top: 1,
+      bottom: 1,
+      topContrast: 0,
+      bottomContrast: 0,
+      topTileSpread: 0,
+      bottomTileSpread: 0,
+    });
+  });
+
+  it("reports nonzero horizontal contrast and tile spread when one tile of a band differs sharply", () => {
+    // Otherwise-solid-white top band with a solid-black left-hand strip: the strip
+    // creates a hard horizontal edge (high contrast at the boundary columns) and one
+    // tile (top-left) reading far darker than the rest (high tile spread), even
+    // though the band's overall mean brightness sits somewhere in between.
+    const width = 60;
+    const height = 100;
+    const data = solid(width, height, 255, 255, 255);
+    for (let y = 0; y < 25; y += 1) {
+      for (let x = 0; x < 20; x += 1) {
+        const i = (width * y + x) * 4;
+        data[i] = 0;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+      }
+    }
+    const result = computeBandLuminanceFromRgba(data, width, height);
+    expect(result).not.toBeNull();
+    expect(result!.topContrast).toBeGreaterThan(0);
+    expect(result!.topTileSpread).toBeGreaterThan(0.5);
+    // The bottom band is untouched and stays perfectly flat.
+    expect(result!.bottomContrast).toBe(0);
+    expect(result!.bottomTileSpread).toBe(0);
   });
 
   it("measures the top and bottom bands independently", () => {
@@ -455,5 +757,11 @@ describe("computeImageBandLuminanceDetailed", () => {
     const outcome = await computeImageBandLuminanceDetailed(new Uint8Array(64).fill(7), "image/png");
     expect(outcome.luma).toBeNull();
     expect(outcome.reason ?? "").toMatch(/^[a-z_]+(:[A-Za-z]+)?$/);
+  });
+
+  it("exposes width/height as null (not just discarded) when decode never reaches pixels", async () => {
+    const outcome = await computeImageBandLuminanceDetailed(new Uint8Array(4), "image/png");
+    expect(outcome.width).toBeNull();
+    expect(outcome.height).toBeNull();
   });
 });

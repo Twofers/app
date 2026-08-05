@@ -136,4 +136,47 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/poster_image_generation/);
     expect(source).not.toMatch(/ai_poster_/);
   });
+
+  describe("AI_COMPOSE_REGENERATE_ENABLED: variety regenerate", () => {
+    it("defaults off, reading a dedicated env flag", () => {
+      expect(source).toMatch(
+        /const COMPOSE_REGENERATE_ENABLED = Deno\.env\.get\("AI_COMPOSE_REGENERATE_ENABLED"\) === "true";/,
+      );
+      expect(source).toMatch(
+        /const regenerateRequested = COMPOSE_REGENERATE_ENABLED && body\.regenerate === true;/,
+      );
+    });
+
+    it("only salts the dedup request_hash when a regenerate was actually requested", () => {
+      const hashIndex = source.indexOf("const request_hash = await sha256Hex(");
+      expect(hashIndex).toBeGreaterThan(-1);
+      const hashBlock = source.slice(hashIndex, hashIndex + 400);
+      expect(hashBlock).toMatch(/\.\.\.\(regenerateRequested \? \{ regen: crypto\.randomUUID\(\) \} : \{\}\),/);
+      // Salting only touches the hash — cooldown/quota checks below still read
+      // their own independent business_id + request_type windows, untouched.
+      expect(source).toMatch(/const \{ data: recentCooldown \} = await admin/);
+      expect(source).toMatch(/const \{ used \} = await countAiQuotaUsage\(admin, \{/);
+    });
+
+    it("only injects the variety-regenerate line into the prompt when regenerate was requested", () => {
+      expect(source).toMatch(/let regenerateVarietyLine = "";/);
+      expect(source).toMatch(/if \(regenerateRequested\) \{/);
+      expect(source).toMatch(
+        /Produce meaningfully different framing than these previous suggestions: \$\{previousHeadlines\.join\("; "\)\}/,
+      );
+      // The prompt array includes the (possibly empty) line unconditionally —
+      // .filter(Boolean) below drops it when regenerate wasn't requested, so
+      // the built prompt string is byte-identical to before when it's "".
+      const userPromptIndex = source.indexOf("const userPrompt = [");
+      expect(userPromptIndex).toBeGreaterThan(-1);
+      const userPromptBlock = source.slice(userPromptIndex, userPromptIndex + 700);
+      expect(userPromptBlock).toMatch(/regenerateVarietyLine,/);
+      expect(userPromptBlock).toMatch(/\.filter\(Boolean\)/);
+    });
+
+    it("prefers client-supplied previous_headlines before falling back to the stored compose log", () => {
+      expect(source).toMatch(/Array\.isArray\(body\.previous_headlines\)/);
+      expect(source).toMatch(/await fetchPreviousComposeHeadlines\(admin, business_id\)/);
+    });
+  });
 });

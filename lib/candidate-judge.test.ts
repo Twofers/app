@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CANDIDATE_JUDGE_JSON_SCHEMA,
+  CANDIDATE_JUDGE_POSTER_JSON_SCHEMA,
   CANDIDATE_JUDGE_PROMPT_VERSION,
   applyJudgeScoresToCandidates,
   buildCandidateJudgePrompt,
@@ -135,5 +137,57 @@ describe("candidate judge helpers", () => {
     expect(prompt.system).toContain("borrowed from a different kind of business");
     expect(prompt.system).toContain("planning vocabulary");
     expect(prompt.system).toContain("what the customer does, and what the customer gets");
+  });
+
+  it("leaves the prompt and schema byte-identical when poster params are absent", () => {
+    const base = {
+      offerFacts: "Buy a coffee and get a free bagel.",
+      categoryPlaybookBlock: "CATEGORY PLAYBOOK: coffee_cafe",
+      merchantProfileBlock: "MERCHANT CREATIVE PROFILE: sparse",
+      creativeBrief: { exactCustomerHook: "breakfast is included" },
+      candidates: [copy("a", {}), copy("b", {})],
+    };
+
+    const withoutParams = buildCandidateJudgePrompt(base);
+    const withEmptyParams = buildCandidateJudgePrompt({ ...base, creativeFormat: undefined, posterOfferLines: undefined });
+    const withEmptyLines = buildCandidateJudgePrompt({ ...base, creativeFormat: "poster_v1", posterOfferLines: [] });
+
+    expect(withoutParams.userText).not.toContain("POSTER RENDER CONTEXT");
+    expect(withoutParams.system).toBe([
+      "You are judging mobile ad copy for Twofer.",
+      "Choose the candidate a real local merchant would be most likely to approve.",
+      "Read each headline and description as if the owner were saying it out loud to a regular customer. Reward lines a person would actually say; punish template-sounding or machine-filled lines.",
+      "Reward copy that fits this exact item and business category; punish moments borrowed from a different kind of business.",
+      "The exchange must be instantly clear: what the customer does, and what the customer gets.",
+      "Do not reward generic excitement. Prefer exact offer clarity, natural local language, merchant specificity, and mobile readability.",
+      'Hard-fail copy that changes the offer, uses BOGO/2-for-1 shorthand, invents claims, echoes planning vocabulary such as "clearly and simply" or "exact exchange", or sounds like generic AI marketing.',
+      "Output JSON only.",
+    ].join("\n"));
+    expect(withEmptyParams.userText).toBe(withoutParams.userText);
+    expect(withEmptyLines.userText).toBe(withoutParams.userText);
+    expect(withoutParams.jsonSchema).toBe(CANDIDATE_JUDGE_JSON_SCHEMA);
+    expect(withEmptyParams.jsonSchema).toBe(CANDIDATE_JUDGE_JSON_SCHEMA);
+    expect(withEmptyLines.jsonSchema).toBe(CANDIDATE_JUDGE_JSON_SCHEMA);
+  });
+
+  it("appends POSTER RENDER CONTEXT and swaps in the poster schema when creativeFormat is poster_v1", () => {
+    const prompt = buildCandidateJudgePrompt({
+      offerFacts: "Buy a coffee and get a free bagel.",
+      categoryPlaybookBlock: "CATEGORY PLAYBOOK: coffee_cafe",
+      merchantProfileBlock: "MERCHANT CREATIVE PROFILE: sparse",
+      creativeBrief: { exactCustomerHook: "breakfast is included" },
+      candidates: [copy("a", {}), copy("b", {})],
+      creativeFormat: "poster_v1",
+      posterOfferLines: ["Buy 1 coffee", "Get 1 bagel free"],
+    });
+
+    expect(prompt.userText).toContain("POSTER RENDER CONTEXT");
+    expect(prompt.userText).toContain("two-line hero over a photo");
+    expect(prompt.userText).toContain("- Buy 1 coffee");
+    expect(prompt.userText).toContain("- Get 1 bagel free");
+    expect(prompt.userText).toContain("adds an angle beyond those offer lines");
+    expect(prompt.jsonSchema).toBe(CANDIDATE_JUDGE_POSTER_JSON_SCHEMA);
+    expect(prompt.jsonSchema.schema.properties.scores.items.properties).toHaveProperty("posterHeroStrength");
+    expect(prompt.jsonSchema.schema.properties.scores.items.required).toContain("posterHeroStrength");
   });
 });

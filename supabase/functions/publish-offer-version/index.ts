@@ -30,6 +30,17 @@ type PublishOfferVersionBody = {
    * poster projection reads ad_spec through deals.offer_version_id.
    */
   deal_id?: unknown;
+  /**
+   * TASK 8 (unflagged, best-effort telemetry linkage, 2026-08-05): optional
+   * passthrough of the ai_generation_logs row id the ad-generation response
+   * returned (`ad.generation_log_id`). No current client sends this yet —
+   * ai-generate-ad-variants now RETURNS it, but wiring the client to forward
+   * it into the publish request is a separate, not-yet-shipped change. Reading
+   * it here is forward-compatible: the day a client sends it (here, or nested
+   * under ad_spec, see `generationLogIdFromBody` below), the best-effort
+   * ai_generation_logs UPDATE below activates with no further server change.
+   */
+  generation_log_id?: unknown;
 };
 
 type OfferDefinitionPayload = {
@@ -113,6 +124,29 @@ function jsonResponse(req: Request, body: Record<string, unknown>, status = 200)
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
+ * TASK 8 (unflagged, best-effort, 2026-08-05): duck-types a generation_log_id
+ * out of whichever spot a client happens to put it — top-level on the publish
+ * body, or nested under ad_spec (either directly, or under ad_spec.offer,
+ * since that is the natural place a client that spreads the ad-generation
+ * response's fields into its offer object would carry it). Returns null when
+ * absent or not a UUID; callers treat null as "nothing to link."
+ */
+function generationLogIdFromBody(body: PublishOfferVersionBody): string | null {
+  const candidates: unknown[] = [body.generation_log_id];
+  const adSpec = recordValue(body.ad_spec);
+  if (adSpec) {
+    candidates.push(adSpec.generation_log_id);
+    const offer = recordValue(adSpec.offer);
+    if (offer) candidates.push(offer.generation_log_id);
+  }
+  for (const candidate of candidates) {
+    const text = cleanText(candidate);
+    if (text && isUuid(text)) return text;
+  }
+  return null;
 }
 
 function cleanIdempotencyKey(value: unknown): string {
@@ -628,6 +662,29 @@ serve(async (req) => {
 
     const publishedDeals = Array.isArray(data) ? data : [];
     const firstDeal = publishedDeals[0] as { deal_id?: unknown } | undefined;
+    const firstDealId = typeof firstDeal?.deal_id === "string" ? firstDeal.deal_id : null;
+
+    // TASK 8 (unflagged, best-effort telemetry linkage, 2026-08-05): when the
+    // publish request carries a reference back to the ai_generation_logs row
+    // that produced this creative, mark that row accepted and link it to the
+    // deal it published. Scoped to the FIRST published deal and this business
+    // only; never blocks or fails the publish response either way.
+    const generationLogId = generationLogIdFromBody(body);
+    if (generationLogId && firstDealId) {
+      try {
+        const { error: generationLogUpdateError } = await admin
+          .from("ai_generation_logs")
+          .update({ published_deal_id: firstDealId, accepted_by_user: true })
+          .eq("id", generationLogId)
+          .eq("business_id", businessId);
+        if (generationLogUpdateError) {
+          console.error("[publish-offer-version] generation log linkage failed", generationLogUpdateError);
+        }
+      } catch (linkErr) {
+        console.error("[publish-offer-version] generation log linkage threw", linkErr);
+      }
+    }
+
     const adSpecForContext = adSpec as {
       adSpecVersion?: unknown;
       rendererVersion?: unknown;

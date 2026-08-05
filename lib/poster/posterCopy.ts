@@ -1,4 +1,5 @@
 import {
+  hasVerifiedLocalizedName,
   resolveLocalizedOfferTerm,
   type LocalizedOfferTerm,
 } from "../localized-offer-terms.ts";
@@ -6,6 +7,8 @@ import { renderLocalizedOfferBundleFromDefinition } from "../localized-offer-ren
 import {
   SUPPORTED_LOCALES,
   supportedLocaleOrDefault,
+  supportedLocaleToAppLanguage,
+  type SupportedAppLanguage,
   type SupportedLocale,
 } from "../supported-locales.ts";
 import type { OfferDefinitionV1 } from "../offer-definition.ts";
@@ -235,9 +238,21 @@ const ES_TRAILING_FUNCTION_WORDS = new Set([
  *
  * Nothing is dropped while the name still fits — "cualquier bebida" must not quietly become
  * "bebida", because "cualquier" ("any") is part of what the merchant is offering.
+ *
+ * `translated` reports whether `resolveLocalizedOfferTerm` actually found a translation for
+ * this item (see `hasVerifiedLocalizedName`). When it did not, the text passing through is
+ * still the ORIGINAL English item name — `resolveLocalizedOfferTerm`'s preserved-term
+ * fallback — even though `locale` asked for es-US. The Spanish trim rules below only know
+ * Spanish grammar (leading determiners, trailing function words); pointed at English text
+ * they miss English stop words like "of"/"the" and fall through to a naive prefix cut that
+ * can lose the head noun entirely: "12 ounce bag of whole bean coffee" became "12 OUNCE BAG
+ * OF WHOLE" on an es-US poster, the exact truncation en-US and ko-KR both avoid via
+ * `fitItemLine`'s head-final suffix logic. So an untranslated item uses that same English
+ * logic regardless of which locale was requested — there is no Spanish (or Korean) text here
+ * to apply locale-specific trimming to.
  */
-function fitLocalizedItem(value: string, maxChars: number, locale: SupportedLocale): string {
-  if (locale !== "es-US") return fitItemLine(value, maxChars);
+function fitLocalizedItem(value: string, maxChars: number, locale: SupportedLocale, translated = true): string {
+  if (locale !== "es-US" || !translated) return fitItemLine(value, maxChars);
   const clean = cleanText(value);
   if (!clean || clean.length <= maxChars) return clean;
   let words = clean.split(/\s+/);
@@ -276,9 +291,10 @@ function composeOfferLine(
   itemName: string,
   locale: SupportedLocale,
   maxChars: number,
+  translated = true,
 ): string {
   const overhead = compose(ITEM_PROBE).length - ITEM_PROBE.length;
-  const fitted = fitLocalizedItem(itemName, Math.max(1, maxChars - overhead), locale);
+  const fitted = fitLocalizedItem(itemName, Math.max(1, maxChars - overhead), locale, translated);
   return compose(fitted);
 }
 
@@ -361,6 +377,13 @@ export function choosePosterTemplateForOffer(
 }
 
 type PosterOfferLines = Pick<PosterCopyV1, "offer_line_1" | "offer_line_2">;
+
+/**
+ * Additive, optional. Keyed by app language (not full locale code) to match how
+ * the rest of the localization stack addresses languages. Absent, or absent for
+ * a given key, leaves that locale's hero blank (current behavior).
+ */
+export type LocalizedHeroByLocale = Partial<Record<SupportedAppLanguage, string>>;
 
 function localeNumber(locale: SupportedLocale, value: number): string {
   return new Intl.NumberFormat(locale).format(Math.max(0, Math.floor(value)));
@@ -470,6 +493,12 @@ export function buildPosterOfferLinesFromOfferDefinition(
   const localizedOffer = renderLocalizedOfferBundleFromDefinition(definition)[locale];
   const paidTerm = localizedPaidTerm(definition, locale);
   const rewardTerm = localizedRewardTerm(definition, locale);
+  // Whether `resolveLocalizedOfferTerm` actually found a translation for this item, vs.
+  // falling through to its preserved-(English)-term default. `fitLocalizedItem` needs this
+  // to know when the text it is fitting is still English despite `locale` being es-US — see
+  // its docstring.
+  const paidTranslated = hasVerifiedLocalizedName(paidTerm);
+  const rewardTranslated = hasVerifiedLocalizedName(rewardTerm);
   const firstItem = posterFriendlyItemName(
     singularItem(posterTermDisplayName(paidTerm) || definition.qualifyingItems[0]?.displayName || ""),
     locale,
@@ -483,7 +512,7 @@ export function buildPosterOfferLinesFromOfferDefinition(
     return {
       offer_line_1: lineItem(discountBadge(locale, definition.reward.discountPercent), 20),
       offer_line_2: lineItem(
-        fitLocalizedItem(rewardItem || firstItem || localizedOffer.compactOfferLine, 24, locale),
+        fitLocalizedItem(rewardItem || firstItem || localizedOffer.compactOfferLine, 24, locale, rewardTranslated),
         24,
       ),
     };
@@ -496,7 +525,7 @@ export function buildPosterOfferLinesFromOfferDefinition(
     return {
       offer_line_1: lineItem(sameItemBadge(locale, paidQuantity, rewardQuantity), 18),
       offer_line_2: lineItem(
-        fitLocalizedItem(firstItem || localizedOffer.compactOfferLine, 24, locale),
+        fitLocalizedItem(firstItem || localizedOffer.compactOfferLine, 24, locale, paidTranslated),
         24,
       ),
     };
@@ -504,11 +533,11 @@ export function buildPosterOfferLinesFromOfferDefinition(
 
   return {
     offer_line_1: lineItem(
-      composeOfferLine((name) => freeRewardBadge(locale, name, rewardQuantity), rewardItem, locale, 28),
+      composeOfferLine((name) => freeRewardBadge(locale, name, rewardQuantity), rewardItem, locale, 28, rewardTranslated),
       28,
     ),
     offer_line_2: lineItem(
-      composeOfferLine((name) => purchaseContextLine(locale, name, paidQuantity), firstItem, locale, 28),
+      composeOfferLine((name) => purchaseContextLine(locale, name, paidQuantity), firstItem, locale, 28, paidTranslated),
       28,
     ),
   };
@@ -589,25 +618,65 @@ export function buildPosterCopyFromOfferDefinition(params: {
   return sanitizePosterCopy(base, businessName).copy;
 }
 
+/**
+ * Vets a caller-supplied localized headline before it is allowed to occupy the
+ * hero slot for a non-source locale. Every check below mirrors a guard the
+ * source-locale hero already passes through (see `posterHeadline` and
+ * `sanitizePosterText`), plus the S2 dedup that keeps the hero from repeating
+ * this locale's offer lines. Any failure returns "" — the existing blank-hero
+ * behavior — rather than a partially-trusted substitute.
+ */
+function resolveLocalizedHero(
+  candidate: string | null | undefined,
+  locale: SupportedLocale,
+  lines: PosterOfferLines,
+): string {
+  const requested = cleanText(candidate);
+  if (!requested) return "";
+  // checkPosterTextFit runs scanPosterTextPolicy internally and adds the
+  // 28-char headline limit on top of it.
+  if (!checkPosterTextFit(requested, POSTER_TEXT_LIMITS.headline).ok) return "";
+  if (isMechanicalOfferHeadline(requested)) return "";
+  // Same sanitize path the source-locale hero uses before it lands in
+  // PosterCopyV1: forbidden-term removal, clamp to the headline budget,
+  // uppercase. Guards above already establish the text is clean and within
+  // budget, so this is normalization, not a second gate.
+  const sanitized = sanitizePosterText(requested, { fallback: "", maxChars: POSTER_TEXT_LIMITS.headline });
+  if (!sanitized) return "";
+  // S2: never repeat this locale's offer lines as the hero (see the "never
+  // repeats an offer line as the poster hero" regression test).
+  if (sanitized === lines.offer_line_1 || sanitized === lines.offer_line_2) return "";
+  return sanitized;
+}
+
 function copyForLocale(
   definition: OfferDefinitionV1,
   locale: SupportedLocale,
   base: PosterCopyV1,
   sourceLocale: SupportedLocale,
+  localizedHeroByLocale?: LocalizedHeroByLocale,
 ): PosterCopyV1 {
   const lines = buildPosterOfferLinesFromOfferDefinition(definition, locale);
+  // The AI writes the creative headline in English only, and `validatePosterSpecV1` binds
+  // BOTH offer lines to the deterministic lines for every locale (facts are authoritative),
+  // so there is no spare slot a localized hook could occupy. Substituting an offer line
+  // here is what made every es/ko poster print the same sentence twice in two type sizes:
+  // the hero said "AL COMPRAR 1 CUALQUIER" and so did the line under it. Leave the hero
+  // EMPTY instead. The offer is still stated in full by offer_line_1 + offer_line_2, and
+  // `assertPosterCopyPolicy` treats a missing headline as a warning, not a failure.
+  //
+  // `localizedHeroByLocale` is the escape hatch for once the localization bundle CAN
+  // supply a translated headline: when a candidate is provided for this (non-source)
+  // locale and it survives `resolveLocalizedHero`'s guards, it fills the hero instead
+  // of leaving it blank. Absent input, or a candidate that fails a guard, falls back
+  // to the empty hero unchanged.
+  const localizedHero =
+    locale === sourceLocale
+      ? ""
+      : resolveLocalizedHero(localizedHeroByLocale?.[supportedLocaleToAppLanguage(locale)], locale, lines);
   return {
     ...base,
-    // The AI writes the creative headline in English only, and `validatePosterSpecV1` binds
-    // BOTH offer lines to the deterministic lines for every locale (facts are authoritative),
-    // so there is no spare slot a localized hook could occupy. Substituting an offer line
-    // here is what made every es/ko poster print the same sentence twice in two type sizes:
-    // the hero said "AL COMPRAR 1 CUALQUIER" and so did the line under it. Leave the hero
-    // EMPTY instead. The offer is still stated in full by offer_line_1 + offer_line_2, and
-    // `assertPosterCopyPolicy` treats a missing headline as a warning, not a failure.
-    // Fill this once the localization bundle can supply a translated headline at
-    // poster-build time — today it is generated after the poster spec is built.
-    headline: locale === sourceLocale ? base.headline : "",
+    headline: locale === sourceLocale ? base.headline : localizedHero,
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,
     // Merchant-authored creative text belongs only to the deal's source
@@ -620,17 +689,22 @@ export function buildPosterCopyByLanguage(params: {
   definition: OfferDefinitionV1;
   baseCopy: PosterCopyV1;
   sourceLocale?: SupportedLocale;
+  localizedHeroByLocale?: LocalizedHeroByLocale;
 }): Record<SupportedLocale, PosterCopyV1> {
   const sourceLocale = params.sourceLocale ?? "en-US";
   return Object.fromEntries(
     SUPPORTED_LOCALES.map((locale) => {
-      const copy = copyForLocale(params.definition, locale, params.baseCopy, sourceLocale);
+      const copy = copyForLocale(params.definition, locale, params.baseCopy, sourceLocale, params.localizedHeroByLocale);
       const sanitized = sanitizePosterCopy(copy, params.baseCopy.business_name).copy;
       // `sanitizePosterCopy` fills an empty headline from `offer_line_1` — a sensible safety
       // net for the English path, but for a non-English locale it would re-create exactly
       // the duplicate `copyForLocale` just removed, this time hero-vs-gold instead of
-      // hero-vs-white. Re-assert the empty hero after sanitizing.
-      return [locale, locale === sourceLocale ? sanitized : { ...sanitized, headline: "" }];
+      // hero-vs-white. Re-assert the empty hero after sanitizing, UNLESS `copyForLocale`
+      // already placed a guard-cleared localized hero there — that hero already passed
+      // every check (including the S2 dedup), so it is not the duplicate this guard
+      // exists to catch.
+      const hasLocalizedHero = locale !== sourceLocale && cleanText(copy.headline).length > 0;
+      return [locale, locale === sourceLocale || hasLocalizedHero ? sanitized : { ...sanitized, headline: "" }];
     }),
   ) as Record<SupportedLocale, PosterCopyV1>;
 }
@@ -646,6 +720,7 @@ export function buildPosterSpecFromOfferDefinition(params: {
   sourceLocale?: SupportedLocale;
   businessCategory?: string | null;
   compositionPlan?: string | null;
+  localizedHeroByLocale?: LocalizedHeroByLocale;
 }): PosterDraftV1 {
   const baseCopy = buildPosterCopyFromOfferDefinition({
     definition: params.definition,
@@ -657,6 +732,7 @@ export function buildPosterSpecFromOfferDefinition(params: {
     definition: params.definition,
     baseCopy,
     sourceLocale: params.sourceLocale,
+    localizedHeroByLocale: params.localizedHeroByLocale,
   });
   const policy = assertPosterCopyPolicy(baseCopy);
   return {

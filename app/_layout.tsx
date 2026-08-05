@@ -31,6 +31,26 @@ import { Colors } from '@/constants/theme';
 import { TabModeProvider, useTabMode } from '@/lib/tab-mode';
 import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
 import { getOwnerRedemptionSecurityStatus } from '@/lib/owner-redemption-security';
+import { AiAdsEvents, setAnalyticsSink, type AnalyticsProps } from '@/lib/analytics';
+import { trackAppAnalyticsEvent, type AppAnalyticsEventName } from '@/lib/app-analytics';
+
+// FIX: setAnalyticsSink existed but nothing ever called it, so every
+// AiAdsEvents.trackEvent() call (the AI ad-copy studio funnel) only ever
+// logged in __DEV__ and evaporated in production. Install a sink that
+// forwards the already-namespaced ai_ads_* events onto the existing
+// ingest-analytics-event pipeline. Best-effort: trackAppAnalyticsEvent is
+// fire-and-forget and swallows its own failures, so this never blocks the UI.
+const AI_ADS_ANALYTICS_EVENT_NAMES = new Set<string>(Object.values(AiAdsEvents));
+setAnalyticsSink((event: string, props: AnalyticsProps) => {
+  if (!AI_ADS_ANALYTICS_EVENT_NAMES.has(event)) return;
+  const { business_id, deal_id, ...context } = props;
+  trackAppAnalyticsEvent({
+    event_name: event as AppAnalyticsEventName,
+    business_id: typeof business_id === 'string' ? business_id : null,
+    deal_id: typeof deal_id === 'string' ? deal_id : null,
+    context,
+  });
+});
 
 // N-2 FIX: Register foreground notification handler at module level so
 // notifications received while the app is open are displayed to the user.

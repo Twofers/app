@@ -8,6 +8,15 @@ import {
   sha256Hex,
   type AdminContext,
 } from "./admin-prospects.ts";
+import {
+  ADMIN_AI_V2_MAX_OUTPUT_TOKENS,
+  ADMIN_AI_V2_REQUIRED_STRING_FIELDS,
+  adminAiV2Enabled,
+  bannedPhraseGuardrailSection,
+  featureSystemPromptSection,
+  findEmptyRequiredStringFields,
+  isPublicFacingFieldName,
+} from "./admin-ai-v2.ts";
 
 export type AdminAiReviewStatus =
   | "needs_review"
@@ -79,6 +88,13 @@ type GenerateAdminAiJsonParams<TValue extends Record<string, unknown>> = {
   reviewStatus?: AdminAiReviewStatus;
   requiresHumanReview?: boolean;
   safeForPublicDisplay?: boolean;
+  // Additive/protective, not gated by ADMIN_AI_V2_ENABLED: when true, skips
+  // loadActivePromptOverride and always uses this call's own systemPrompt/
+  // jsonSchema/promptVersion. Used by admin-ai-prompts' "test" action so
+  // testing a CANDIDATE prompt/schema is never silently overridden by an
+  // already-active DB prompt override for the same feature. Every existing
+  // caller omits this (defaults to false) and is unaffected.
+  skipPromptOverride?: boolean;
 };
 
 export type AdminAiGeneration<TValue extends Record<string, unknown>> = {
@@ -155,6 +171,128 @@ function sanitizeOutput(value: unknown): { value: unknown; warnings: string[] } 
     const next: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
       const sanitized = sanitizeOutput(nested);
+      warnings.push(...sanitized.warnings);
+      next[key] = sanitized.value;
+    }
+    return { value: next, warnings };
+  }
+  return { value, warnings: [] };
+}
+
+function bannedPhrasesPresent(text: string): boolean {
+  let matched = false;
+  for (const pattern of BANNED_PUBLIC_COPY_PATTERNS) {
+    if (pattern.test(text)) matched = true;
+    pattern.lastIndex = 0;
+  }
+  return matched;
+}
+
+const BANNED_PHRASE_REWRITE_SCHEMA = {
+  name: "admin_ai_banned_phrase_rewrite",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: { text: { type: "string" } },
+    required: ["text"],
+  },
+};
+
+// Bounds the number of banned-phrase rewrite provider calls a single
+// generateAdminAiJson run can make, so a pathological output (many
+// public-facing fields all tripping the sanitizer) can't balloon latency or
+// cost. Fields beyond this cap fall back to the existing blind string
+// replace, same as flag-off.
+const MAX_BANNED_PHRASE_REWRITES = 3;
+
+async function rewriteBannedPhraseText(params: {
+  text: string;
+  openAiApiKey?: string;
+  geminiApiKey?: string;
+  admin: unknown;
+  requestGroupId: string;
+}): Promise<string | null> {
+  try {
+    const result = await generateStructuredText({
+      operation: "copy_revision",
+      systemPrompt: [
+        "Rewrite merchant-facing Twofer copy to remove specific banned terms without changing anything else about meaning, tone, facts, or length.",
+        bannedPhraseGuardrailSection(),
+        "Return only the rewritten text in the text field. Do not add commentary.",
+      ].join("\n"),
+      userPrompt: `Rewrite this text so it contains none of the banned terms, changing nothing else about it:\n\n${params.text}`,
+      jsonSchema: BANNED_PHRASE_REWRITE_SCHEMA,
+      maxOutputTokens: 220,
+      timeoutMs: 8_000,
+      generationRunId: params.requestGroupId,
+      promptVersion: "admin-ai-banned-phrase-rewrite-v1",
+      reasoningLevel: "low",
+    }, {
+      openAiApiKey: params.openAiApiKey,
+      geminiApiKey: params.geminiApiKey,
+      admin: params.admin as { from(table: string): any },
+    });
+    const value = result.value as { text?: unknown } | null | undefined;
+    return typeof value?.text === "string" ? value.text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * V2-only sanitize path. Structurally mirrors the sync sanitizeOutput above
+ * (same recursive walk, same sanitizeText fallback for the blind replace),
+ * but for a public-facing field (see isPublicFacingFieldName) whose text
+ * trips a banned pattern, it first tries ONE cheap AI rewrite that removes
+ * the term without otherwise changing the text. The blind string replace is
+ * used only when: the field is internal-only, no provider key is
+ * configured, the per-run rewrite budget is exhausted, or the rewrite
+ * attempt failed / still contains a banned term.
+ */
+async function sanitizeOutputV2Async(
+  value: unknown,
+  fieldName: string | null,
+  ctx: { openAiApiKey?: string; geminiApiKey?: string; admin: unknown; requestGroupId: string; rewriteBudget: { count: number } },
+): Promise<{ value: unknown; warnings: string[] }> {
+  if (typeof value === "string") {
+    if (!bannedPhrasesPresent(value)) return { value, warnings: [] };
+    const canReask = isPublicFacingFieldName(fieldName) &&
+      (Boolean(ctx.openAiApiKey) || Boolean(ctx.geminiApiKey)) &&
+      ctx.rewriteBudget.count < MAX_BANNED_PHRASE_REWRITES;
+    if (canReask) {
+      ctx.rewriteBudget.count += 1;
+      const rewritten = await rewriteBannedPhraseText({
+        text: value,
+        openAiApiKey: ctx.openAiApiKey,
+        geminiApiKey: ctx.geminiApiKey,
+        admin: ctx.admin,
+        requestGroupId: ctx.requestGroupId,
+      });
+      if (rewritten && !bannedPhrasesPresent(rewritten)) {
+        return {
+          value: rewritten,
+          warnings: ["Banned public wording was rewritten by AI so the replacement reads naturally."],
+        };
+      }
+    }
+    return sanitizeText(value);
+  }
+  if (Array.isArray(value)) {
+    const warnings: string[] = [];
+    const next: unknown[] = [];
+    for (const item of value) {
+      const sanitized = await sanitizeOutputV2Async(item, fieldName, ctx);
+      warnings.push(...sanitized.warnings);
+      next.push(sanitized.value);
+    }
+    return { value: next, warnings };
+  }
+  if (value && typeof value === "object") {
+    const warnings: string[] = [];
+    const next: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      const sanitized = await sanitizeOutputV2Async(nested, key, ctx);
       warnings.push(...sanitized.warnings);
       next[key] = sanitized.value;
     }
@@ -396,7 +534,7 @@ async function loadActivePromptOverride(params: {
   };
 }
 
-export function adminAiSystemPrompt(feature: AdminAiFeature): string {
+function genericAdminAiSystemPrompt(feature: AdminAiFeature): string {
   return [
     "You help run Twofer operations from the internal website/admin dashboard only.",
     "Never write instructions for the mobile app and never ask the browser or Expo client to call an AI provider.",
@@ -408,6 +546,30 @@ export function adminAiSystemPrompt(feature: AdminAiFeature): string {
     "Use merchant-safe wording such as Twofer deals, local offers, limited-time offers, paired offers, or bonus item offers.",
     `Feature: ${feature}. Return only strict JSON matching the schema.`,
   ].join("\n");
+}
+
+/**
+ * Builds the system prompt handed to the AI provider for `feature`.
+ *
+ * Flag-off (ADMIN_AI_V2_ENABLED unset/false, the default): returns exactly
+ * genericAdminAiSystemPrompt(feature), byte-identical to the prompt every
+ * feature has always shared.
+ *
+ * Flag-on: appends a banned-public-copy-phrase guardrail (naming the exact
+ * terms sanitizeText patches around, see BANNED_PUBLIC_COPY_PATTERNS below)
+ * and, for the four features that have one, a feature-specific section
+ * (tone/word-count/example/trial-facts for sales_script; decision criteria
+ * for onboarding_review; grounding rules for prospect_enrichment; the scoring
+ * rubric for prospect_scoring). Every other feature keeps the generic prompt
+ * plus the banned-phrase guardrail only.
+ */
+export function adminAiSystemPrompt(feature: AdminAiFeature): string {
+  const generic = genericAdminAiSystemPrompt(feature);
+  if (!adminAiV2Enabled()) return generic;
+  const sections = [generic, bannedPhraseGuardrailSection()];
+  const featureSection = featureSystemPromptSection(feature);
+  if (featureSection) sections.push(featureSection);
+  return sections.join("\n\n");
 }
 
 export async function generateAdminAiJson<TValue extends Record<string, unknown>>(
@@ -431,15 +593,30 @@ export async function generateAdminAiJson<TValue extends Record<string, unknown>
     throttlePerHour: params.throttlePerHour ?? 40,
   });
 
-  const activePrompt = await loadActivePromptOverride({
-    ctx: params.ctx,
-    feature: params.feature,
-    promptName,
-    fallbackVersion: fallbackPromptVersion,
-    fallbackSystemPrompt: params.systemPrompt,
-    fallbackJsonSchema: params.jsonSchema,
-  });
+  // skipPromptOverride is additive/protective (see the field comment on
+  // GenerateAdminAiJsonParams): it is not gated by ADMIN_AI_V2_ENABLED and
+  // every existing caller omits it, so this branch never changes existing
+  // behavior for them.
+  const activePrompt = params.skipPromptOverride
+    ? { promptVersion: fallbackPromptVersion, systemPrompt: params.systemPrompt, jsonSchema: params.jsonSchema }
+    : await loadActivePromptOverride({
+      ctx: params.ctx,
+      feature: params.feature,
+      promptName,
+      fallbackVersion: fallbackPromptVersion,
+      fallbackSystemPrompt: params.systemPrompt,
+      fallbackJsonSchema: params.jsonSchema,
+    });
   const promptVersion = activePrompt.promptVersion;
+  const v2Enabled = adminAiV2Enabled();
+  // Flag-off: identical to the old `params.maxOutputTokens ?? 1100`. Flag-on:
+  // sales_script and trial_conversion_assistant default to 2400 instead of
+  // 1100 (their outputs regularly need more room — a full script bundle or a
+  // multi-part conversion plan); an explicit params.maxOutputTokens always
+  // wins over both defaults, same as before.
+  const maxOutputTokens = params.maxOutputTokens ??
+    (v2Enabled ? ADMIN_AI_V2_MAX_OUTPUT_TOKENS[params.feature] : undefined) ??
+    1100;
 
   const openAiApiKey = Deno.env.get("OPENAI_API_KEY");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
@@ -450,7 +627,7 @@ export async function generateAdminAiJson<TValue extends Record<string, unknown>
         systemPrompt: activePrompt.systemPrompt,
         userPrompt: params.userPrompt,
         jsonSchema: activePrompt.jsonSchema,
-        maxOutputTokens: params.maxOutputTokens ?? 1100,
+        maxOutputTokens,
         timeoutMs: params.timeoutMs ?? 12_000,
         generationRunId: requestGroupId,
         promptVersion,
@@ -479,7 +656,74 @@ export async function generateAdminAiJson<TValue extends Record<string, unknown>
     defaultWarnings.push("No server-side AI provider key is configured; deterministic fallback was used.");
   }
 
-  const sanitized = sanitizeOutput(rawValue);
+  // V2 completeness re-ask: for the features in ADMIN_AI_V2_REQUIRED_STRING_FIELDS
+  // (currently sales_script and trial_conversion_assistant), a successful
+  // provider call that still left a required copy field blank gets exactly
+  // one repair attempt asking the model to fill in the named fields. If the
+  // repair still leaves a field blank, or itself fails, this falls back to
+  // the deterministic fallbackValue exactly like a provider failure would.
+  if (v2Enabled && !fallbackUsed) {
+    const requiredStringFields = ADMIN_AI_V2_REQUIRED_STRING_FIELDS[params.feature];
+    const missing = requiredStringFields?.length
+      ? findEmptyRequiredStringFields(rawValue, requiredStringFields)
+      : [];
+    if (missing.length) {
+      try {
+        const repairResult = await generateStructuredText({
+          operation: params.operation ?? "merchant_context",
+          systemPrompt: activePrompt.systemPrompt,
+          userPrompt: `${params.userPrompt}\n\nYour previous response left these required fields empty or missing: ${missing.join(", ")}. Return the full corrected JSON with every field completed; do not leave any required field blank.`,
+          jsonSchema: activePrompt.jsonSchema,
+          maxOutputTokens,
+          timeoutMs: params.timeoutMs ?? 12_000,
+          generationRunId: requestGroupId,
+          promptVersion,
+          reasoningLevel: "low",
+        }, {
+          openAiApiKey,
+          geminiApiKey,
+          admin: params.ctx.supabaseAdmin,
+        });
+        attempts = [...attempts, ...repairResult.attempts];
+        const repairedValue = repairResult.value && typeof repairResult.value === "object" && !Array.isArray(repairResult.value)
+          ? repairResult.value as Record<string, unknown>
+          : null;
+        const stillMissing = repairedValue
+          ? findEmptyRequiredStringFields(repairedValue, requiredStringFields ?? [])
+          : requiredStringFields ?? [];
+        if (repairedValue && !stillMissing.length) {
+          rawValue = repairedValue;
+          provider = repairResult.provider;
+          model = repairResult.model;
+          fallbackUsed = repairResult.fallbackUsed;
+        } else {
+          rawValue = params.fallbackValue;
+          fallbackUsed = true;
+          provider = "deterministic";
+          model = "admin-ai-deterministic-fallback";
+          defaultWarnings.push("AI output was incomplete after one repair attempt; deterministic fallback was used.");
+        }
+      } catch (repairError) {
+        const maybeAttempts = (repairError as { attempts?: ProviderAttempt[] })?.attempts;
+        attempts = [...attempts, ...(Array.isArray(maybeAttempts) ? maybeAttempts : [])];
+        rawValue = params.fallbackValue;
+        fallbackUsed = true;
+        provider = "deterministic";
+        model = "admin-ai-deterministic-fallback";
+        defaultWarnings.push("AI output was incomplete and the repair attempt failed; deterministic fallback was used.");
+      }
+    }
+  }
+
+  const sanitized = v2Enabled
+    ? await sanitizeOutputV2Async(rawValue, null, {
+      openAiApiKey,
+      geminiApiKey,
+      admin: params.ctx.supabaseAdmin,
+      requestGroupId,
+      rewriteBudget: { count: 0 },
+    })
+    : sanitizeOutput(rawValue);
   const outputRecord = sanitized.value && typeof sanitized.value === "object" && !Array.isArray(sanitized.value)
     ? sanitized.value as Record<string, unknown>
     : { ...params.fallbackValue };

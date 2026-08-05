@@ -83,4 +83,65 @@ describe("import-business-website source guards", () => {
     expect(source).toMatch(/AI_PROVIDER_CIRCUIT_OPEN"\s*\?\s*"MENU_BUSY"\s*:\s*"MENU_EXTRACTION_FAILED"/);
     expect(source).toMatch(/!warnings\.includes\("MENU_BUSY"\)/);
   });
+
+  describe("AI_MENU_LINKS_V2_ENABLED: broadened menu-link discovery wired into the live flow", () => {
+    it("reads the flag once via the shared helper (byte-identical extractMenuLinks call when off)", () => {
+      expect(source).toMatch(
+        /const MENU_LINKS_V2_ENABLED = menuLinksV2FlagEnabled\(\);/,
+      );
+      expect(source).toMatch(
+        /extractMenuLinks\(homepageHtml, homepageUrl, \{ v2Enabled: MENU_LINKS_V2_ENABLED \}\)/,
+      );
+    });
+
+    it("only probes /menu when the flag is on, no link matched, and nothing was already found", () => {
+      const probeIndex = source.indexOf("buildMenuProbeUrl(homepageUrl)");
+      expect(probeIndex).toBeGreaterThan(-1);
+      const guardBlock = source.slice(probeIndex - 400, probeIndex);
+      expect(guardBlock).toMatch(
+        /if \(MENU_LINKS_V2_ENABLED && menuLinks\.length === 0 && !menuText && !menuPdfUrl\) \{/,
+      );
+    });
+
+    it("probes /menu through the same safeFetch (SSRF-safe) path as a discovered link — no shortcut fetch", () => {
+      const probeIndex = source.indexOf("const probeUrl = buildMenuProbeUrl(homepageUrl);");
+      expect(probeIndex).toBeGreaterThan(-1);
+      const probeBlock = source.slice(probeIndex, probeIndex + 500);
+      expect(probeBlock).toMatch(/const probe = await safeFetch\(\{/);
+      expect(probeBlock).toContain('allowedContentType: HTML_CONTENT_TYPE');
+      expect(probeBlock).toContain("maxBytes: MAX_HTML_BYTES");
+      // Not a second bare fetch — still routed through the one safeFetch
+      // wrapper the SSRF-safe-fetch source guard above already pins to 1.
+      expect(probeBlock).not.toMatch(/(?<![.\w])fetch\(/);
+    });
+
+    it("runs the probe strictly after the discovered-link loop and before the homepage-text fallback (ordering)", () => {
+      const loopEndIndex = source.indexOf("// MENU_LINKS_V2_ENABLED: no menu link was discoverable");
+      const probeIndex = source.indexOf("const probeUrl = buildMenuProbeUrl(homepageUrl);");
+      const homepageFallbackIndex = source.indexOf("// Single-page sites: fall back to the homepage's own text.");
+      const menuLinksLoopIndex = source.indexOf("for (const link of menuLinks) {");
+
+      expect(menuLinksLoopIndex).toBeGreaterThan(-1);
+      expect(loopEndIndex).toBeGreaterThan(menuLinksLoopIndex);
+      expect(probeIndex).toBeGreaterThan(loopEndIndex);
+      expect(homepageFallbackIndex).toBeGreaterThan(probeIndex);
+    });
+
+    it("a probe failure sets nothing and falls through to the existing MENU_NOT_FOUND path (no new warning code)", () => {
+      const probeIndex = source.indexOf("const probeUrl = buildMenuProbeUrl(homepageUrl);");
+      const homepageFallbackIndex = source.indexOf("// Single-page sites: fall back to the homepage's own text.");
+      expect(probeIndex).toBeGreaterThan(-1);
+      expect(homepageFallbackIndex).toBeGreaterThan(probeIndex);
+      const probeToFallbackBlock = source.slice(probeIndex, homepageFallbackIndex);
+      // No warnings.push inside the probe block — a failed/short probe is
+      // silent, same as a failed/short discovered-link fetch above it.
+      expect(probeToFallbackBlock).not.toMatch(/warnings\.push/);
+      expect(probeToFallbackBlock).not.toContain("MENU_NOT_FOUND");
+    });
+
+    it("imports buildMenuProbeUrl and menuLinksV2FlagEnabled from the shared site-import module", () => {
+      expect(source).toMatch(/buildMenuProbeUrl,/);
+      expect(source).toMatch(/menuLinksV2FlagEnabled,/);
+    });
+  });
 });

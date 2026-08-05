@@ -14,7 +14,159 @@ import {
   ADMIN_AI_PROMPT_VERSIONS,
   generateAdminAiJson,
 } from "../_shared/admin-ai.ts";
+import { adminAiV2Enabled } from "../_shared/admin-ai-v2.ts";
+import {
+  buildGroundedSourceBlocks,
+  extractGroundedText,
+  extractPageTitle,
+  MAX_GROUNDED_SOURCE_URLS,
+  type GroundedSourceBlock,
+} from "../_shared/admin-ai-grounding.ts";
+import { isPrivateOrReservedIp, validateImportUrl } from "../_shared/site-import.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+
+// ---------------------------------------------------------------------------
+// V2 grounding fetch (ADMIN_AI_V2_ENABLED only) — mirrors the SSRF-safe
+// safeFetch/hostResolvesToPublicIp/readCapped pattern in
+// import-business-website/index.ts (that file is not edited by this change):
+// https-only + no-credentials + no-IP-literal/local-host syntax validation
+// (validateImportUrl, imported from site-import.ts), then a DNS re-check that
+// every resolved A/AAAA record is a public IP (isPrivateOrReservedIp, also
+// imported from site-import.ts) before the actual fetch, with a byte-capped
+// streaming read and a small manual-redirect budget re-validated on every hop.
+const GROUNDING_USER_AGENT = "TwoferBot/1.0 (+https://www.twoferapp.com)";
+const GROUNDING_FETCH_TIMEOUT_MS = 8_000;
+const GROUNDING_MAX_HTML_BYTES = 1_500_000;
+const GROUNDING_MAX_REDIRECTS = 3;
+const GROUNDING_HTML_CONTENT_TYPE = /^(text\/html|application\/xhtml\+xml)/;
+
+async function hostResolvesToPublicIp(host: string): Promise<{ ok: true } | { ok: false; code: string }> {
+  let anyResolved = false;
+  for (const recordType of ["A", "AAAA"] as const) {
+    try {
+      const ips = await Deno.resolveDns(host, recordType);
+      for (const ip of ips) {
+        anyResolved = true;
+        if (isPrivateOrReservedIp(ip)) return { ok: false, code: "BLOCKED_URL" };
+      }
+    } catch {
+      // A host legitimately may lack one record type (e.g. no AAAA). Ignore.
+    }
+  }
+  if (!anyResolved) return { ok: false, code: "FETCH_FAILED" };
+  return { ok: true };
+}
+
+async function readCappedHtml(res: Response, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
+  const reader = res.body?.getReader();
+  if (!reader) return { ok: true, text: "" };
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.length;
+      if (total > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          /* ignore */
+        }
+        return { ok: false };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false };
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return { ok: true, text: new TextDecoder("utf-8").decode(bytes) };
+}
+
+/** Fetches one admin-supplied source_url and extracts a title + capped readable text, or reports why it couldn't. Never throws. */
+async function fetchGroundedSource(rawUrl: string): Promise<GroundedSourceBlock> {
+  let currentUrl = rawUrl;
+  for (let hop = 0; hop <= GROUNDING_MAX_REDIRECTS; hop += 1) {
+    const parsed = validateImportUrl(currentUrl);
+    if (!parsed.ok) {
+      const blocked = parsed.code === "IP_LITERAL" || parsed.code === "BLOCKED_HOST";
+      return { url: rawUrl, status: "failed", reason: blocked ? "BLOCKED_URL" : "INVALID_URL" };
+    }
+
+    const hostCheck = await hostResolvesToPublicIp(parsed.url.hostname);
+    if (!hostCheck.ok) return { url: rawUrl, status: "failed", reason: hostCheck.code };
+
+    let res: Response;
+    try {
+      res = await fetch(currentUrl, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(GROUNDING_FETCH_TIMEOUT_MS),
+        headers: { "User-Agent": GROUNDING_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+      });
+    } catch {
+      return { url: rawUrl, status: "failed", reason: "FETCH_FAILED" };
+    }
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* ignore */
+      }
+      if (!location) return { url: rawUrl, status: "failed", reason: "FETCH_FAILED" };
+      try {
+        currentUrl = new URL(location, currentUrl).toString();
+      } catch {
+        return { url: rawUrl, status: "failed", reason: "FETCH_FAILED" };
+      }
+      continue;
+    }
+
+    if (!res.ok) {
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* ignore */
+      }
+      return { url: rawUrl, status: "failed", reason: `FETCH_FAILED_${res.status}` };
+    }
+
+    const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+    if (!GROUNDING_HTML_CONTENT_TYPE.test(contentType)) {
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* ignore */
+      }
+      return { url: rawUrl, status: "failed", reason: "CONTENT_TYPE" };
+    }
+
+    const streamed = await readCappedHtml(res, GROUNDING_MAX_HTML_BYTES);
+    if (!streamed.ok) return { url: rawUrl, status: "failed", reason: "SITE_TOO_LARGE" };
+
+    return {
+      url: rawUrl,
+      status: "fetched",
+      title: extractPageTitle(streamed.text),
+      text: extractGroundedText(streamed.text),
+    };
+  }
+  return { url: rawUrl, status: "failed", reason: "TOO_MANY_REDIRECTS" };
+}
+
+/** Fetches up to MAX_GROUNDED_SOURCE_URLS admin-supplied URLs in parallel. Individual failures never throw — each becomes a "failed" block so the prompt still sees the URL was supplied. */
+async function fetchGroundedSources(urls: string[]): Promise<GroundedSourceBlock[]> {
+  const capped = urls.slice(0, MAX_GROUNDED_SOURCE_URLS);
+  return Promise.all(capped.map((url) => fetchGroundedSource(url)));
+}
 
 const ENRICHMENT_SCHEMA = {
   name: "admin_prospect_enrichment",
@@ -257,6 +409,18 @@ Deno.serve(async (req) => {
     const sourceUrls = Array.isArray(payload.source_urls) ? payload.source_urls.map((value) => cleanString(value, 500)).filter(Boolean) : [];
     const fallback = buildFallbackEnrichment(prospect, supplied);
     const sourceRows = (sourcesResult.data ?? []) as Array<Record<string, unknown>>;
+
+    // V2 grounding (ADMIN_AI_V2_ENABLED only): fetch up to MAX_GROUNDED_SOURCE_URLS
+    // of the admin-supplied source_urls server-side and inject the extracted
+    // title/text as "Fetched source content:" blocks so the model can ground
+    // itself in real page content instead of guessing from a bare URL string.
+    // A fetch failure for a given URL falls back to bare-URL behavior for that
+    // URL only (it is still listed in source_urls, plus a failed grounding
+    // block explaining why nothing could be read).
+    const v2Enabled = adminAiV2Enabled();
+    const groundedSources = v2Enabled && sourceUrls.length ? await fetchGroundedSources(sourceUrls) : [];
+    const groundedSourceBlocks = buildGroundedSourceBlocks(groundedSources);
+
     const ai = await generateAdminAiJson({
       ctx,
       feature: "prospect_enrichment",
@@ -277,6 +441,12 @@ Deno.serve(async (req) => {
           source_confidence: prospect.source_confidence,
         },
         source_urls: sourceUrls,
+        fetched_sources: groundedSources.map((source) => ({
+          url: source.url,
+          status: source.status,
+          title: source.title ?? null,
+          reason: source.reason ?? null,
+        })),
         stored_source_notes: sourceRows.map((row) => ({
           provider: row.provider,
           source_url: row.source_url,
@@ -286,7 +456,7 @@ Deno.serve(async (req) => {
         })),
         admin_notes: cleanString(payload.admin_notes, 1200),
         category_focus: cleanString(payload.category_focus, 120),
-      }),
+      }) + (groundedSourceBlocks ? `\n\n${groundedSourceBlocks}` : ""),
       jsonSchema: ENRICHMENT_SCHEMA,
       fallbackValue: fallback,
       relatedProspectId: prospectId,
@@ -295,6 +465,7 @@ Deno.serve(async (req) => {
         mode,
         source_url_count: sourceUrls.length,
         stored_source_count: sourceRows.length,
+        grounded_source_count: groundedSources.filter((source) => source.status === "fetched").length,
       },
       defaultSources: sourceRows.map((row) => ({
         label: String(row.provider ?? "stored source"),

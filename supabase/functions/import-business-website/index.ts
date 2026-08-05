@@ -11,6 +11,7 @@ import {
 } from "../_shared/ai-text-provider.ts";
 import {
   AI_SITE_MENU_IMPORT_PROMPT_VERSION,
+  buildMenuProbeUrl,
   buildSiteMenuPrompt,
   clampMenuPromptText,
   extractLogoCandidates,
@@ -24,6 +25,7 @@ import {
   FETCH_TIMEOUT_MS,
   MAX_REDIRECTS,
   DAILY_SCAN_LIMIT_DEFAULT,
+  menuLinksV2FlagEnabled,
   menuSchema,
   normalizeMenuItems,
   upgradeHttpToHttps,
@@ -41,6 +43,15 @@ const HTML_CONTENT_TYPE = /^(text\/html|application\/xhtml\+xml)/;
 const IMAGE_CONTENT_TYPE = /^image\/(png|jpe?g|webp|gif)/;
 const PDF_CONTENT_TYPE = /^application\/pdf/;
 const MIN_MENU_TEXT_CHARS = 100;
+
+/**
+ * Master gate for broadened menu-link discovery (secondary nav keywords,
+ * allowlisted hosted-menu offsite domains, and the /menu direct probe below).
+ * Default OFF: with this unset (or not "true"), extractMenuLinks keeps its v1
+ * behavior (same-host, exact "menu" match only) and the probe never runs, so
+ * this function's behavior stays byte-identical to today.
+ */
+const MENU_LINKS_V2_ENABLED = menuLinksV2FlagEnabled();
 
 function log(event: string, details: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ tag: "site_import", event, ...details }));
@@ -445,10 +456,14 @@ serve(async (req) => {
     let menuPageUrl: string | null = null;
     let menuPdfUrl: string | null = null;
 
-    const menuLinks = extractMenuLinks(homepageHtml, homepageUrl);
+    const menuLinks = extractMenuLinks(homepageHtml, homepageUrl, { v2Enabled: MENU_LINKS_V2_ENABLED });
     for (const link of menuLinks) {
       if (link.kind === "page") {
         if (menuText) continue;
+        // Same hardened path regardless of host: safeFetch re-validates via
+        // validateImportUrl and re-resolves DNS/IP for whatever host is in
+        // link.url — a same-host homepage page and an allowlisted offsite
+        // hosted-menu page (MENU_LINKS_V2_ENABLED) get identical treatment.
         const page = await safeFetch({
           url: link.url,
           accept: "text/html,application/xhtml+xml",
@@ -465,6 +480,32 @@ serve(async (req) => {
         }
       } else if (link.kind === "pdf" && !menuPdfUrl) {
         menuPdfUrl = link.url;
+      }
+    }
+
+    // MENU_LINKS_V2_ENABLED: no menu link was discoverable on the homepage —
+    // probe the conventional /menu path directly before giving up. The probe
+    // candidate goes through the identical safeFetch path as a discovered
+    // link (no shortcut fetch); a 404/blocked/unreachable probe just leaves
+    // menuText unset, falling through to the homepage-text fallback and,
+    // ultimately, the same MENU_NOT_FOUND warning as today.
+    if (MENU_LINKS_V2_ENABLED && menuLinks.length === 0 && !menuText && !menuPdfUrl) {
+      const probeUrl = buildMenuProbeUrl(homepageUrl);
+      if (probeUrl) {
+        const probe = await safeFetch({
+          url: probeUrl,
+          accept: "text/html,application/xhtml+xml",
+          allowedContentType: HTML_CONTENT_TYPE,
+          maxBytes: MAX_HTML_BYTES,
+          overflowCode: "SITE_TOO_LARGE",
+        });
+        if (probe.ok) {
+          const probeText = htmlToMenuText(new TextDecoder("utf-8").decode(probe.bytes));
+          if (probeText.length >= MIN_MENU_TEXT_CHARS) {
+            menuText = probeText;
+            menuPageUrl = probeUrl;
+          }
+        }
       }
     }
 
