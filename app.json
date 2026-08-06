@@ -234,6 +234,18 @@
         },
         {
           "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.twoferapp.com",
+              "pathPrefix": "/wallet"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
           "autoVerify": false,
           "data": [
             {

@@ -264,6 +264,13 @@ export const WALLET_PASS_FOREGROUND_HEX = "#FFFFFF";
 
 export const WALLET_PASS_APP_URL = "https://twoferapp.com";
 export const WALLET_PASS_SUPPORT_EMAIL = "support@twoferapp.com";
+/**
+ * Google's `webAppLinkInfo` target: the browser fallback for a customer
+ * without the app installed today, and (after the app.json intent filter +
+ * expo-router's file-based `/wallet` route land) the same URL becomes a real
+ * deep link straight to the pass sheet — no separate object to maintain.
+ */
+export const WALLET_PASS_WEB_APP_LINK = "https://www.twoferapp.com/wallet";
 
 /** Production Android package. Dev builds use `.dev` and are never issued passes. */
 export const WALLET_PASS_ANDROID_PACKAGE = "com.unvmex2.twoforone";
@@ -417,14 +424,26 @@ export function buildGoogleWalletGenericObject(
   // when there is a live claim to open — on a redeemed/empty card it would lead
   // to an empty wallet. The https "Open Twofer" link stays in linksModuleData as
   // the fallback for anyone without the app installed.
+  //
+  // `appTarget` is a union field per platform — packageName and targetUri
+  // cannot both be set on androidAppLinkInfo (Google silently drops the whole
+  // button when they are). To deep-link to a specific in-app view, Google's
+  // docs require `webAppLinkInfo` with an https target instead; androidAppLinkInfo
+  // stays package-only, which just renders a generic "open the app" action.
+  // `title`/`description` inside androidAppLinkInfo are deprecated in favor of
+  // the top-level `displayText` (<=30 chars per locale — appLinkTitle qualifies
+  // in en/es/ko).
   if (content.state === "active_deal") {
     object.appLinkData = {
+      displayText: localized(content.locale, content.appLinkTitle),
       androidAppLinkInfo: {
-        title: localized(content.locale, content.appLinkTitle),
-        description: localized(content.locale, content.appLinkBody),
         appTarget: {
           packageName: WALLET_PASS_ANDROID_PACKAGE,
-          targetUri: { uri: WALLET_PASS_APP_DEEP_LINK, description: content.appLinkTitle },
+        },
+      },
+      webAppLinkInfo: {
+        appTarget: {
+          targetUri: { uri: WALLET_PASS_WEB_APP_LINK, description: content.appLinkTitle },
         },
       },
     };

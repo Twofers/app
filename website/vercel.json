@@ -278,6 +278,14 @@
       "destination": "/api/share-preview"
     },
     {
+      "source": "/wallet",
+      "destination": "/wallet/index.html"
+    },
+    {
+      "source": "/wallet/",
+      "destination": "/wallet/index.html"
+    },
+    {
       "source": "/business",
       "destination": "/business/index.html"
     },

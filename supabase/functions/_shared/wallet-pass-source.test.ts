@@ -125,6 +125,44 @@ describe("native wallet pass — Android app link targets the real installed app
   });
 });
 
+describe("native wallet pass — /wallet universal link reaches the pass sheet (B2)", () => {
+  const appJson = JSON.parse(read("app.json"));
+  const intentFilters: Array<Record<string, any>> = appJson.expo.android.intentFilters;
+
+  it("app.json declares an autoVerify https intent filter for www.twoferapp.com/wallet", () => {
+    const walletFilter = intentFilters.find((filter) =>
+      (filter.data ?? []).some(
+        (d: Record<string, unknown>) =>
+          d.scheme === "https" && d.host === "www.twoferapp.com" && d.pathPrefix === "/wallet",
+      ),
+    );
+    expect(walletFilter, "no intent filter matches https://www.twoferapp.com/wallet*").toBeDefined();
+    expect(walletFilter?.autoVerify).toBe(true);
+  });
+
+  // Expo Router resolves any incoming https URL by stripping the origin and
+  // matching the remaining pathname straight against the file-based route
+  // tree (see node_modules/expo-router/build/fork/extractPathFromURL.js) — it
+  // does not consult app.json's associatedDomains/intentFilters for routing,
+  // only the OS does, to decide whether to hand the URL to the app at all.
+  // Concretely: no "linking config" file maps `/wallet`; the mapping is
+  // `app/(tabs)/wallet.tsx` existing at all, exactly like the existing
+  // `twofer://wallet?pass=1` custom-scheme deep link already relies on. This
+  // guard pins that the route file — and its `pass` param handling that opens
+  // the staff pass sheet — has not moved or been renamed out from under the
+  // intent filter above.
+  it("app/(tabs)/wallet.tsx is the route file at path 'wallet' and still consumes the pass=1 param", () => {
+    const source = read("app/(tabs)/wallet.tsx");
+    expect(source).toMatch(/useLocalSearchParams<\{\s*pass\?:\s*string \| string\[\]\s*\}>/);
+    expect(source).toMatch(/openPassParam !== "1"/);
+  });
+
+  it("app/(tabs)/_layout.tsx registers \"wallet\" as a Tabs.Screen name (so its route path is exactly /wallet)", () => {
+    const layout = read("app/(tabs)/_layout.tsx");
+    expect(layout).toMatch(/<Tabs\.Screen\s+name="wallet"/);
+  });
+});
+
 describe("native wallet pass — issue endpoint", () => {
   const source = read("supabase/functions/wallet-pass-issue/index.ts");
 

@@ -27,7 +27,7 @@ Convention: this plan file IS the tracker; check items off as they land.
 
 Per Google's documented schema (see parent plan §B root cause):
 
-- [ ] `buildGoogleWalletGenericObject` (`supabase/functions/_shared/wallet-pass-content.ts:414-431`):
+- [x] `buildGoogleWalletGenericObject` (`supabase/functions/_shared/wallet-pass-content.ts:414-431`):
       - `androidAppLinkInfo.appTarget = { packageName: WALLET_PASS_ANDROID_PACKAGE }`
         ALONE (renders the open-the-app action).
       - Add `webAppLinkInfo.appTarget.targetUri = https://www.twoferapp.com/wallet`
@@ -36,9 +36,9 @@ Per Google's documented schema (see parent plan §B root cause):
         localized `displayText` (≤30 chars per locale — check en/es/ko copy
         lengths).
       - Keep the attach-only-when-`active_deal` gate (:420) exactly as-is.
-- [ ] Remove `WALLET_PASS_APP_DEEP_LINK` from the Google object only — the
+- [x] Remove `WALLET_PASS_APP_DEEP_LINK` from the Google object only — the
       in-app `twofer://wallet?pass=1` handler stays (B2 reuses it).
-- [ ] Update `wallet-pass-content.test.ts` to pin the NEW shape (union field:
+- [x] Update `wallet-pass-content.test.ts` to pin the NEW shape (union field:
       assert `targetUri` is ABSENT from androidAppLinkInfo.appTarget); keep
       the app.json↔constant package-name source-sync guard from 2026-08-02.
 - [ ] FOUNDER GATE: deploy the 7 wallet-touching functions (same list as the
@@ -47,11 +47,11 @@ Per Google's documented schema (see parent plan §B root cause):
 
 ## Workstream B1b — real `/wallet` page on the website
 
-- [ ] Add a static `/wallet` page: one-screen "open the Twofer app" guidance
+- [x] Add a static `/wallet` page: one-screen "open the Twofer app" guidance
       + both store links (App Store live; Play Store 1.0.2). Match existing
       website styling; en copy only is fine for the website (site is
       en/es-aware — follow whatever the existing pages do).
-- [ ] Vercel trap: static files resolve BEFORE rewrites — ship it as a real
+- [x] Vercel trap: static files resolve BEFORE rewrites — ship it as a real
       static page and never let a stray `wallet/index.html` shadow future
       routing. Verify no existing rewrite/redirect claims `/wallet`.
 - [ ] FOUNDER GATE: website deploy MUST use build → prepare-deploy →
@@ -59,16 +59,36 @@ Per Google's documented schema (see parent plan §B root cause):
 
 ## Workstream B2 — true deep link to the pass sheet (binary)
 
-- [ ] `app.json`: add `autoVerify: true` intent filter for
+- [x] `app.json`: add `autoVerify: true` intent filter for
       `https://www.twoferapp.com` with `pathPrefix: "/wallet"` (only `/s` is
       verified today). Compiles into AndroidManifest → forces the store
       build. `.well-known/assetlinks.json` already exists for the `/s` App
       Link on the same host — verify it's fingerprint-correct, no change
       expected.
-- [ ] Map `/wallet` in expo-router linking to the Wallet tab preserving the
+- [x] Map `/wallet` in expo-router linking to the Wallet tab preserving the
       existing `pass=1` sheet-open behavior (`app/(tabs)/wallet.tsx:621`).
-- [ ] Unit/source test for the linking config; device verify rides the next
+      No code change was needed here — see deviation note below.
+- [x] Unit/source test for the linking config; device verify rides the next
       binary QA: pass → "Open Twofer" → app opens to the staff pass sheet.
+
+**Deviation note (2026-08-06 implementation pass):** there is no separate
+"linking config" file to edit. Expo Router (`node_modules/expo-router/build/fork/extractPathFromURL.js`,
+`getLinkingConfig.js`) resolves every incoming URL — custom scheme or https —
+by unconditionally stripping the origin and matching the remaining pathname
+straight against the file-based route tree; it never consults
+`app.json`'s `associatedDomains`/`intentFilters` for that (only the OS does,
+to decide whether to hand the URL to the app at all). `app/(tabs)/wallet.tsx`
+already resolves at path `wallet`, and its `pass=1` handling already reads
+via `useLocalSearchParams` regardless of which scheme produced the URL — that
+is exactly why the pre-existing `twofer://wallet?pass=1` custom-scheme link
+already worked with zero routing code. So once the app.json intent filter
+above lets Android hand `https://www.twoferapp.com/wallet?pass=1` to the app,
+it lands on the same route with no additional mapping code required. Added a
+source test (`wallet-pass-source.test.ts`, describe block "native wallet
+pass — /wallet universal link reaches the pass sheet (B2)") pinning: the new
+intent filter's shape, that `wallet.tsx` still owns the `pass` param, and that
+`wallet` is still the registered `Tabs.Screen` name — so a future rename of
+either would fail loudly instead of silently breaking the deep link.
 
 ## Workstream C — per-user "pass added" flag (binary)
 
@@ -77,9 +97,9 @@ AsyncStorage key `twoforone.consumer.native_wallet_pass_added`
 (`lib/native-wallet-pass-storage.ts:9`) — one account's tap hides it for
 every account on the device.
 
-- [ ] Namespace the key by user id; ignore the legacy key (worst case the
+- [x] Namespace the key by user id; ignore the legacy key (worst case the
       badge shows once more per user — Wallet dedupes saves).
-- [ ] Unit test: two user ids on one device get independent flags.
+- [x] Unit test: two user ids on one device get independent flags.
 
 ## Workstream A — verify released-claims inventory end to end (no code expected)
 

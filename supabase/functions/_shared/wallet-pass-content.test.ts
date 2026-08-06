@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   WALLET_PASS_REDEEMED_FRESH_HOURS,
   WALLET_PASS_SCAN_PREFIX,
+  WALLET_PASS_WEB_APP_LINK,
   buildGoogleSaveJwtClaims,
   buildGoogleWalletGenericObject,
   buildGoogleWalletObjectId,
@@ -236,19 +237,35 @@ describe("Google Wallet object builder", () => {
   it("active object carries an app link into the wallet pass", () => {
     const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
     const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
-    const android = (object.appLinkData as { androidAppLinkInfo?: Record<string, any> })?.androidAppLinkInfo;
-    expect(android).toBeDefined();
+    const appLinkData = object.appLinkData as {
+      displayText?: Record<string, any>;
+      androidAppLinkInfo?: Record<string, any>;
+      webAppLinkInfo?: Record<string, any>;
+    };
+    expect(appLinkData).toBeDefined();
+    expect(appLinkData.androidAppLinkInfo).toBeDefined();
+    expect(appLinkData.webAppLinkInfo).toBeDefined();
     // Must match `expo.android.package` in app.json exactly. A mismatch is
     // invisible in Wallet: the app-link button silently never resolves and the
     // pass falls back to the marketing https link (caught on-device 2026-08-02).
-    expect(android?.appTarget?.packageName).toBe("com.unvmex2.twoforone");
-    expect(android?.appTarget?.targetUri?.uri).toBe("twofer://wallet?pass=1");
+    expect(appLinkData.androidAppLinkInfo?.appTarget?.packageName).toBe("com.unvmex2.twoforone");
+    // `appTarget` is a union field: packageName and targetUri cannot coexist on
+    // androidAppLinkInfo, or Google silently drops the whole button (the exact
+    // bug this shape replaces). The https deep-link target lives on
+    // webAppLinkInfo instead, per Google's documented pattern.
+    expect(appLinkData.androidAppLinkInfo?.appTarget?.targetUri).toBeUndefined();
+    expect(appLinkData.webAppLinkInfo?.appTarget?.targetUri?.uri).toBe(WALLET_PASS_WEB_APP_LINK);
+    // `title`/`description` inside androidAppLinkInfo are deprecated; the
+    // current field is the top-level, <=30-char `displayText`.
+    expect(appLinkData.androidAppLinkInfo?.title).toBeUndefined();
+    expect(appLinkData.androidAppLinkInfo?.description).toBeUndefined();
+    expect(appLinkData.displayText).toEqual({ defaultValue: { language: "en-US", value: "Open in Twofer" } });
   });
 
-  it("app link carries no claim id or redemption code", () => {
+  it("app link's web target carries no claim id or redemption code", () => {
     const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, "en"), "en");
     const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
-    const uri = (object.appLinkData as any).androidAppLinkInfo.appTarget.targetUri.uri as string;
+    const uri = (object.appLinkData as any).webAppLinkInfo.appTarget.targetUri.uri as string;
     // The barcode is the only place a short code belongs; a link is copyable.
     expect(uri).not.toMatch(/ABC123/i);
     expect(uri).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i);
@@ -275,7 +292,7 @@ describe("Google Wallet object builder", () => {
     expect(uris.every((u) => /^(https?|mailto|tel):/.test(u))).toBe(true);
   });
 
-  it("localizes the app link copy", () => {
+  it("localizes the app link copy and the object's top-level displayText, both within Google's 30-char cap", () => {
     for (const [locale, title] of [
       ["en", "Open in Twofer"],
       ["es", "Abrir en Twofer"],
@@ -283,7 +300,11 @@ describe("Google Wallet object builder", () => {
     ] as const) {
       const content = buildWalletPassContent(deriveWalletPassState([claimRow()], NOW, locale), locale);
       expect(content.appLinkTitle).toBe(title);
+      expect(content.appLinkTitle.length).toBeLessThanOrEqual(30);
       expect(content.appLinkBody.length).toBeGreaterThan(0);
+      const object = buildGoogleWalletGenericObject(content, { issuerId, objectId, logoUrl: null });
+      const displayText = (object.appLinkData as any).displayText.defaultValue.value as string;
+      expect(displayText).toBe(title);
     }
   });
 

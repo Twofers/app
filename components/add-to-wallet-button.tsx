@@ -3,6 +3,7 @@ import { ActivityIndicator, Linking, Platform, Text, View, type StyleProp, type 
 import { useTranslation } from "react-i18next";
 import { SvgXml } from "react-native-svg";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { AppleWalletPassButton, presentAppleWalletPass } from "@/lib/apple-wallet-native";
 import { fetchAppleWalletPassBase64, issueWalletPass } from "@/lib/wallet-pass-functions";
 import { isNativeWalletPassEnabled } from "@/lib/runtime-env";
@@ -23,6 +24,8 @@ const BADGE_MAX_HEIGHT = 50;
  */
 export function AddToWalletButton({ style }: { style?: StyleProp<ViewStyle> }) {
   const { t, i18n } = useTranslation();
+  const { session } = useAuthSession();
+  const userId = session?.user?.id ?? null;
   const [added, setAdded] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -32,15 +35,19 @@ export function AddToWalletButton({ style }: { style?: StyleProp<ViewStyle> }) {
   const visible = isNativeWalletPassEnabled() && (isApple || isGoogle);
 
   useEffect(() => {
-    if (!visible) return;
+    // No signed-in user yet (e.g. session still resolving) — nothing to key
+    // the "added" flag off of. Leave `added` at its initial null so Android's
+    // `added !== false` guard below keeps the badge hidden until it resolves,
+    // same as before this per-user split existed.
+    if (!visible || !userId) return;
     let cancelled = false;
-    void getNativeWalletPassAdded().then((value) => {
+    void getNativeWalletPassAdded(userId).then((value) => {
       if (!cancelled) setAdded(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [visible]);
+  }, [visible, userId]);
 
   if (!visible) return null;
   // Android hides the button once the card is added. iOS keeps the system
@@ -54,7 +61,7 @@ export function AddToWalletButton({ style }: { style?: StyleProp<ViewStyle> }) {
     try {
       const { save_url } = await issueWalletPass("google", i18n.language);
       await Linking.openURL(save_url);
-      await setNativeWalletPassAdded();
+      if (userId) await setNativeWalletPassAdded(userId);
       setAdded(true);
     } catch {
       setFailed(true);
