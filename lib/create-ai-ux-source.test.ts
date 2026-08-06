@@ -615,10 +615,20 @@ describe("AI create UX source guards", () => {
     const refClears = createAiSource.match(/lastAutoEligibilityInferenceRef\.current = null;/g) ?? [];
     expect(refClears).toHaveLength(1);
 
-    // finalize runs on the settled text: blur of the hint input, and inside
-    // generateAd BEFORE the eligibility gate (bailing out with the ineligible
-    // banner when stale fragments were cleared).
+    // Batching safety: the merge baseline must be captured BEFORE the state
+    // update is queued — reading the ref inside the updater made every
+    // batched keystroke compare against the FINAL inference and kept the
+    // first seeded fragment forever (device repro s1v_happy_item).
+    expect(createAiSource).toMatch(
+      /const previousInferred = lastAutoEligibilityInferenceRef\.current;\s*\n\s*lastAutoEligibilityInferenceRef\.current = inferred;/,
+    );
+
+    // finalize runs on the settled text: blur of the hint input (iOS), a
+    // 1.4s debounce after typing stops (Android never blurs on keyboard
+    // dismiss), and inside generateAd BEFORE the eligibility gate (bailing
+    // out with the ineligible banner when stale fragments were cleared).
     expect(createAiSource).toContain("onBlur={() => finalizeInferredEligibilityFromHint(hintText)}");
+    expect(createAiSource).toContain("finalizeInferredEligibilityFromHint(hintText, { expand: false })");
     expect(createAiSource).toMatch(
       /if \(finalizeInferredEligibilityFromHint\(hintText\)\) \{[\s\S]*?\}\s*\n\s*if \(blockIneligibleOffer\("generate_ad"\)\) return;/,
     );

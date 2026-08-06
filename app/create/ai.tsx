@@ -1739,14 +1739,22 @@ export default function AiDealScreen() {
       // up by finalizeInferredEligibilityFromHint on blur/generate instead.
       return;
     }
+    // Capture the baseline BEFORE queueing the state update. Rapid keystrokes
+    // batch several updaters into one flush; reading the ref inside the
+    // updater made every queued merge compare against the FINAL inference
+    // (the ref is advanced synchronously below), so none of them matched
+    // their true predecessor and the first seeded fragment ("ho") survived
+    // every later, correct inference. Each updater must carry the baseline
+    // that was current when its keystroke happened.
+    const previousInferred = lastAutoEligibilityInferenceRef.current;
+    lastAutoEligibilityInferenceRef.current = inferred;
     setEligibilityForm((current) =>
       mergeInferredEligibilityForm(current, inferred, {
         allowDealTypeChange: true,
-        previousInferred: lastAutoEligibilityInferenceRef.current,
+        previousInferred,
         touchedFields: eligibilityTouchedRef.current,
       }),
     );
-    lastAutoEligibilityInferenceRef.current = inferred;
   }
 
   /**
@@ -1757,7 +1765,7 @@ export default function AiDealScreen() {
    * resulting "Not eligible yet" state points at a field the merchant can
    * actually see. Returns true when stale auto-values were cleared.
    */
-  function finalizeInferredEligibilityFromHint(text: string): boolean {
+  function finalizeInferredEligibilityFromHint(text: string, opts?: { expand?: boolean }): boolean {
     const inferred = inferDealEligibilityFormFromText(text);
     if (inferred) {
       applyInferredEligibilityFromHint(text);
@@ -1769,9 +1777,25 @@ export default function AiDealScreen() {
     if (reconciled === eligibilityForm) return false;
     setEligibilityForm(reconciled);
     lastAutoEligibilityInferenceRef.current = null;
-    if (text.trim() && !moreOptionsOpen) setMoreOptionsOpen(true);
+    if ((opts?.expand ?? true) && text.trim() && !moreOptionsOpen) setMoreOptionsOpen(true);
     return true;
   }
+
+  // Android never fires TextInput onBlur when the keyboard is dismissed with
+  // the back key, so blur alone cannot be the settle trigger. Reconcile the
+  // auto-inference ~1.4s after the hint text stops changing instead. The
+  // debounced pass clears stale fragments but does NOT auto-expand More
+  // options (the merchant may still be typing); the honest "Not eligible yet"
+  // box with its tappable More options link is the visible path, and the
+  // generate-tap finalize still expands.
+  useEffect(() => {
+    if (!hintText.trim()) return;
+    const id = setTimeout(() => {
+      finalizeInferredEligibilityFromHint(hintText, { expand: false });
+    }, 1400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- eligibilityForm keeps finalize's closure fresh; finalize itself is stable-by-source
+  }, [hintText, eligibilityForm]);
 
   function handleHintTextChange(text: string) {
     setHintText(text);
