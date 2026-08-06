@@ -6,6 +6,7 @@ import {
   projectStructuredTextCost,
   resolveAiCostBudgetConfig,
 } from "./ai-cost-budget.ts";
+import { GEMINI_TEXT_MODEL_ALLOWLIST } from "./gemini-text-provider.ts";
 
 function env(values: Record<string, string | undefined>) {
   return {
@@ -63,8 +64,14 @@ describe("ai cost budget helpers", () => {
     expect(projection.reason).toBe("total_generation_hard_limit");
   });
 
-  it("prices the previously-unpriced allowlisted Gemini flash models (were silently $0)", () => {
-    for (const model of ["gemini-3.1-flash", "gemini-3-flash", "gemini-2.5-flash"]) {
+  it("has a non-zero TEXT_PRICING row for every allowlisted Gemini text model", () => {
+    // Guards the invariant documented on GEMINI_TEXT_MODEL_ALLOWLIST: an
+    // operator-selectable Gemini model with no pricing row silently estimates $0 —
+    // no budget enforcement and no spend visibility, the exact gap that shipped with
+    // the since-removed bare gemini-3.1-flash/gemini-3-flash ids (which were also not
+    // real Gemini API model ids at all).
+    expect(GEMINI_TEXT_MODEL_ALLOWLIST.size).toBeGreaterThan(0);
+    for (const model of GEMINI_TEXT_MODEL_ALLOWLIST) {
       const cost = estimateTextGenerationCostUsd({
         provider: "gemini",
         model,
@@ -75,26 +82,55 @@ describe("ai cost budget helpers", () => {
     }
   });
 
-  it("matches gemini-3.5-flash's rates for the newly-priced flash variants (documented placeholder)", () => {
-    const reference = estimateTextGenerationCostUsd({
+  it("prices gemini-3.6-flash from its published rate", () => {
+    // Source: ai.google.dev/gemini-api/docs/pricing standard tier, cross-checked against
+    // ai.google.dev/gemini-api/docs/models (both raw .md.txt variants) — retrieved
+    // 2026-08-05. $1.50/1M input, $0.15/1M cached input, $7.50/1M output (thinking
+    // tokens billed at the output rate). Replaces the frozen-placeholder assertions for
+    // the bare gemini-3.1-flash/gemini-3-flash ids, removed the same day after the
+    // catalog check showed neither exists as a real Gemini API model id.
+    const cost = estimateTextGenerationCostUsd({
+      provider: "gemini",
+      model: "gemini-3.6-flash",
+      inputTokens: 1_000_000,
+      cachedInputTokens: 0,
+      outputTokens: 1_000_000,
+    });
+    // 1M billable input @ $1.50/1M + 1M output @ $7.50/1M
+    expect(cost).toBeCloseTo(1.5 + 7.5, 6);
+  });
+
+  it("prices gemini-2.5-flash from confirmed published rates, not a copied placeholder", () => {
+    // Source: ai.google.dev/gemini-api/docs/pricing standard tier, cross-checked against
+    // cloud.google.com/vertex-ai/generative-ai/pricing — retrieved 2026-08-05. $0.30/1M
+    // input, $0.03/1M cached input, $2.50/1M output (thinking tokens billed at the output
+    // rate), asserted against literal dollar amounts rather than any other row.
+    const cost = estimateTextGenerationCostUsd({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      inputTokens: 1_000_000,
+      cachedInputTokens: 0,
+      outputTokens: 1_000_000,
+    });
+    // 1M billable input @ $0.30/1M + 1M output @ $2.50/1M
+    expect(cost).toBeCloseTo(0.3 + 2.5, 6);
+  });
+
+  it("prices gemini-3.5-flash from its corrected 2026-08-05 published rate", () => {
+    // Source: ai.google.dev/gemini-api/docs/pricing standard tier, cross-checked against
+    // cloud.google.com/vertex-ai/generative-ai/pricing and re-confirmed across three
+    // separate fetches — retrieved 2026-08-05. $1.50/1M input, $0.15/1M cached input,
+    // $9.00/1M output (thinking tokens billed at the output rate). Replaces a prior
+    // entry that was stale by ~5x on input / ~3.6x on output.
+    const cost = estimateTextGenerationCostUsd({
       provider: "gemini",
       model: "gemini-3.5-flash",
-      inputTokens: 1000,
-      cachedInputTokens: 100,
-      outputTokens: 500,
-      reasoningTokens: 50,
+      inputTokens: 1_000_000,
+      cachedInputTokens: 0,
+      outputTokens: 1_000_000,
     });
-    for (const model of ["gemini-3.1-flash", "gemini-3-flash", "gemini-2.5-flash"]) {
-      const cost = estimateTextGenerationCostUsd({
-        provider: "gemini",
-        model,
-        inputTokens: 1000,
-        cachedInputTokens: 100,
-        outputTokens: 500,
-        reasoningTokens: 50,
-      });
-      expect(cost).toBe(reference);
-    }
+    // 1M billable input @ $1.50/1M + 1M output @ $9.00/1M
+    expect(cost).toBeCloseTo(1.5 + 9, 6);
   });
 
   it("includes the medium reasoning-reserve tokens in the projected output cost by default", () => {

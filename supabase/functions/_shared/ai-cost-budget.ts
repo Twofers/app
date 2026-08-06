@@ -33,17 +33,33 @@ const TEXT_PRICING: Record<string, TextPricing> = {
   "openai:gpt-5.4-mini": { inputPer1M: 0.75, cachedInputPer1M: 0.075, outputPer1M: 4.5, reasoningPer1M: 4.5 },
   "openai:gpt-5.4-nano": { inputPer1M: 0.2, cachedInputPer1M: 0.02, outputPer1M: 1.6, reasoningPer1M: 1.6 },
   "openai:gpt-4o-mini": { inputPer1M: 0.15, cachedInputPer1M: 0.075, outputPer1M: 0.6 },
-  "gemini:gemini-3.5-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
-  // gemini-3.1-flash / gemini-3-flash / gemini-2.5-flash are allowlisted text
-  // models (see GEMINI_TEXT_MODEL_ALLOWLIST in gemini-text-provider.ts) but had
-  // no entry here, so estimateTextGenerationCostUsd/projectStructuredTextCost
-  // silently returned $0 for them (no pricing -> no budget enforcement, no
-  // spend visibility). Exact published per-token rates for these specific
-  // variants were not sourced when this entry was added; mirroring the
-  // gemini-3.5-flash rates as a conservative (non-zero) placeholder closes the
-  // accounting gap. Update with exact published rates when available.
-  "gemini:gemini-3.1-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
-  "gemini:gemini-3-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
+  // gemini-3.6-flash: CONFIRMED. Source: ai.google.dev/gemini-api/docs/pricing and
+  // ai.google.dev/gemini-api/docs/models (raw .md.txt variants) — retrieved 2026-08-05.
+  // Current stable flagship flash model. Input $1.50/1M, cached input (context caching)
+  // $0.15/1M (hourly storage fee not separately modeled, consistent with the rest of
+  // this table), output (incl. thinking) $7.50/1M — thinking/reasoning tokens bill at
+  // the output rate per Google's "Output price (including thinking tokens)" framing,
+  // hence reasoningPer1M === outputPer1M.
+  "gemini:gemini-3.6-flash": { inputPer1M: 1.5, cachedInputPer1M: 0.15, outputPer1M: 7.5, reasoningPer1M: 7.5 },
+  // gemini-3.5-flash: CONFIRMED/CORRECTED 2026-08-05. Source: ai.google.dev/gemini-api/docs/pricing
+  // (standard tier), cross-checked against cloud.google.com/vertex-ai/generative-ai/pricing and
+  // re-confirmed across three separate fetches — retrieved 2026-08-05. Input $1.50/1M, cached
+  // input (context caching) $0.15/1M (plus a $1.00/1M-tokens/hour storage fee, not separately
+  // modeled here, consistent with how storage fees aren't modeled elsewhere in this table),
+  // output (incl. thinking) $9.00/1M — thinking/reasoning tokens are billed at the output rate
+  // per Google's own "Output price (including thinking tokens)" framing, hence
+  // reasoningPer1M === outputPer1M. Previous entry (inputPer1M: 0.3 / outputPer1M: 2.5) was
+  // stale relative to this rate — a ~5x/3.6x undercount on both live budget enforcement and
+  // spend telemetry for every real gemini-3.5-flash call. That stale value happened to equal
+  // today's real gemini-2.5-flash rate (see below), which is almost certainly how it ended up
+  // on this row.
+  "gemini:gemini-3.5-flash": { inputPer1M: 1.5, cachedInputPer1M: 0.15, outputPer1M: 9, reasoningPer1M: 9 },
+  // gemini-2.5-flash: CONFIRMED. Source: ai.google.dev/gemini-api/docs/pricing (standard
+  // tier), cross-checked against cloud.google.com/vertex-ai/generative-ai/pricing —
+  // retrieved 2026-08-05. Input $0.30/1M (text/image/video; audio is $1.00/1M, not
+  // separately modeled here), cached input $0.03/1M, output (incl. thinking) $2.50/1M —
+  // thinking/reasoning tokens are billed at the output rate per Google's own "Output
+  // price (including thinking tokens)" framing, hence reasoningPer1M === outputPer1M.
   "gemini:gemini-2.5-flash": { inputPer1M: 0.3, cachedInputPer1M: 0.03, outputPer1M: 2.5, reasoningPer1M: 2.5 },
 };
 

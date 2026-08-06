@@ -19,10 +19,20 @@ type EnvReader = {
 
 export const GEMINI_TEXT_MODEL_FALLBACK = "gemini-3.5-flash";
 
+// Every id here must be a real, callable Gemini API model id AND have a matching
+// "gemini:<id>" row in TEXT_PRICING (ai-cost-budget.ts) — asserted in
+// ai-cost-budget.test.ts — so an operator-selected model can neither fail model
+// resolution at the API nor price at $0 in budget enforcement. Bare
+// "gemini-3.1-flash" and "gemini-3-flash" were removed 2026-08-05: neither exists as
+// a Gemini API model id (ai.google.dev models catalog + pricing pages, raw .md.txt
+// variants, retrieved 2026-08-05 — those generations only ship suffixed variants such
+// as gemini-3-flash-preview and gemini-3.1-flash-lite), so selecting one passed this
+// allowlist and would then fail at the generateContent endpoint, where the id does
+// not resolve. gemini-3.6-flash is the current stable flagship flash (same sources,
+// same date).
 export const GEMINI_TEXT_MODEL_ALLOWLIST = new Set([
+  "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-3.1-flash",
-  "gemini-3-flash",
   "gemini-2.5-flash",
 ]);
 
