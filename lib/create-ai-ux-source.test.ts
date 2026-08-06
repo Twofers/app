@@ -606,4 +606,27 @@ describe("AI create UX source guards", () => {
       expect(createAi.scheduleSummaryTapHint, `${locale} scheduleSummaryTapHint`).toBeTruthy();
     }
   });
+
+  it("settles hint auto-inference before generation and never orphans mid-typing fragments (S10 QA 2026-08-06 F1)", () => {
+    // The null branch of applyInferredEligibilityFromHint must KEEP the last
+    // non-null inference as merge baseline — clearing it is what let a seeded
+    // fragment ("ho") survive as if merchant-entered. The only remaining ref
+    // clear lives in finalizeInferredEligibilityFromHint's reconcile path.
+    const refClears = createAiSource.match(/lastAutoEligibilityInferenceRef\.current = null;/g) ?? [];
+    expect(refClears).toHaveLength(1);
+
+    // finalize runs on the settled text: blur of the hint input, and inside
+    // generateAd BEFORE the eligibility gate (bailing out with the ineligible
+    // banner when stale fragments were cleared).
+    expect(createAiSource).toContain("onBlur={() => finalizeInferredEligibilityFromHint(hintText)}");
+    expect(createAiSource).toMatch(
+      /if \(finalizeInferredEligibilityFromHint\(hintText\)\) \{[\s\S]*?\}\s*\n\s*if \(blockIneligibleOffer\("generate_ad"\)\) return;/,
+    );
+    expect(createAiSource).toContain("clearStaleAutoInference(eligibilityForm, lastAuto, eligibilityTouchedRef.current)");
+
+    // Express dead-end guard: the collapsed "Not eligible yet" box is a
+    // Pressable that opens More options, so the message never points at a
+    // field the merchant cannot see.
+    expect(createAiSource).toContain("disabled={moreOptionsOpen}");
+  });
 });

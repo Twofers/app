@@ -283,6 +283,56 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   return null;
 }
 
+/**
+ * Reconcile the eligibility form with the FINAL settled hint text when
+ * inference on that text yields nothing usable. While the merchant types,
+ * intermediate keystrokes can produce a briefly-usable fragment ("ho" from
+ * "house latte…", "ha" from "half off…") that gets seeded into the item
+ * fields; if every later keystroke infers null, that fragment sticks and —
+ * with the offer form collapsed behind the express "More options" expander —
+ * flows invisibly into generation and live deal copy. Any field value the
+ * auto-inference itself wrote (it equals the last auto-inferred value and the
+ * merchant never touched the field) is such a fragment, not merchant input:
+ * reset it to the default so the eligibility gate honestly blocks.
+ */
+export function clearStaleAutoInference(
+  current: DealEligibilityFormState,
+  lastAuto: DealEligibilityFormState | null,
+  touchedFields?: Iterable<keyof DealEligibilityFormState> | null,
+): DealEligibilityFormState {
+  if (!lastAuto) return current;
+  const touched = touchedFields ? new Set(touchedFields) : null;
+  const defaults = createDefaultDealEligibilityFormState();
+  const stringKeys = [
+    "itemDescription",
+    "requiredItemDescription",
+    "freeItemDescription",
+    "discountPercent",
+  ] as const;
+  const next = { ...current };
+  let changed = false;
+  for (const key of stringKeys) {
+    if (touched?.has(key)) continue;
+    const auto = lastAuto[key];
+    if (auto.trim() && current[key] === auto && current[key] !== defaults[key]) {
+      next[key] = defaults[key];
+      changed = true;
+    }
+  }
+  // dealType only travels back to the default when it was auto-set alongside a
+  // cleared item field — a merchant-tapped offer-rule chip is in touchedFields
+  // and stays put either way.
+  if (
+    changed &&
+    !touched?.has("dealType") &&
+    current.dealType === lastAuto.dealType &&
+    current.dealType !== defaults.dealType
+  ) {
+    next.dealType = defaults.dealType;
+  }
+  return changed ? next : current;
+}
+
 function fillIfEmpty(current: string, inferred: string): string {
   return current.trim() ? current : inferred;
 }

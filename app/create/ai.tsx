@@ -180,6 +180,7 @@ import {
   type GenerationOutcomeKind,
 } from "@/lib/create-ai-generation-outcome";
 import {
+  clearStaleAutoInference,
   inferDealEligibilityFormFromText,
   mergeInferredEligibilityForm,
 } from "@/lib/deal-eligibility-inference";
@@ -1728,7 +1729,14 @@ export default function AiDealScreen() {
   function applyInferredEligibilityFromHint(text: string) {
     const inferred = inferDealEligibilityFormFromText(text);
     if (!inferred) {
-      lastAutoEligibilityInferenceRef.current = null;
+      // Keep the last non-null inference as the merge baseline. Clearing it
+      // here orphaned mid-typing fragments: a briefly-usable prefix ("ho"
+      // from "house latte…") seeded the item field, the next keystroke
+      // inferred null and wiped the ref, and from then on fillIfEmptyOrAuto
+      // treated the fragment as merchant input and never replaced it — the
+      // garbage then flowed into live deal copy with the offer form hidden
+      // behind the collapsed express expander. Stale fragments are cleaned
+      // up by finalizeInferredEligibilityFromHint on blur/generate instead.
       return;
     }
     setEligibilityForm((current) =>
@@ -1739,6 +1747,30 @@ export default function AiDealScreen() {
       }),
     );
     lastAutoEligibilityInferenceRef.current = inferred;
+  }
+
+  /**
+   * Run once the hint text has SETTLED (blur / generate tap). When the full
+   * text infers nothing usable, any untouched field still holding the last
+   * auto-inferred value is a mid-typing fragment — reset it (see
+   * clearStaleAutoInference) and, in express mode, open More options so the
+   * resulting "Not eligible yet" state points at a field the merchant can
+   * actually see. Returns true when stale auto-values were cleared.
+   */
+  function finalizeInferredEligibilityFromHint(text: string): boolean {
+    const inferred = inferDealEligibilityFormFromText(text);
+    if (inferred) {
+      applyInferredEligibilityFromHint(text);
+      return false;
+    }
+    const lastAuto = lastAutoEligibilityInferenceRef.current;
+    if (!lastAuto) return false;
+    const reconciled = clearStaleAutoInference(eligibilityForm, lastAuto, eligibilityTouchedRef.current);
+    if (reconciled === eligibilityForm) return false;
+    setEligibilityForm(reconciled);
+    lastAutoEligibilityInferenceRef.current = null;
+    if (text.trim() && !moreOptionsOpen) setMoreOptionsOpen(true);
+    return true;
   }
 
   function handleHintTextChange(text: string) {
@@ -3120,6 +3152,29 @@ export default function AiDealScreen() {
     const priceNumPreCheck = parseOptionalPriceInput(price);
     if (priceNumPreCheck !== null && Number.isNaN(priceNumPreCheck)) {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      return;
+    }
+    // Settle auto-inference against the final hint text BEFORE the
+    // eligibility gate: if generation is about to run on a mid-typing
+    // fragment ("ho"), clear it and block honestly instead of letting the
+    // fragment reach the AI and the live deal. State updates land next
+    // render, so bail out with the ineligible messaging directly.
+    if (finalizeInferredEligibilityFromHint(hintText)) {
+      setBanner({
+        message: t("dealEligibility.invalidBody", {
+          defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
+        }),
+        tone: "error",
+      });
+      trackEvent("deal_validation_failed", {
+        businessId,
+        attemptedDealType: eligibilityForm.dealType,
+        discountPercent: Number(eligibilityForm.discountPercent) || null,
+        customerValuePercent: null,
+        reasonCode: "STALE_AUTO_INFERENCE_CLEARED",
+        attemptedAction: "generate_ad",
+        source: "create_ai",
+      });
       return;
     }
     if (blockIneligibleOffer("generate_ad")) return;
@@ -5485,6 +5540,7 @@ export default function AiDealScreen() {
                 ref={hintInputRef}
                 value={hintText}
                 onChangeText={handleHintTextChange}
+                onBlur={() => finalizeInferredEligibilityFromHint(hintText)}
                 placeholder={selectedPhotoUri ? t("createAi.hintPlaceholder") : t("createAi.hintPlaceholderNoPhoto")}
                 placeholderTextColor={theme.mutedText}
                 multiline
@@ -6032,7 +6088,10 @@ export default function AiDealScreen() {
             ) : null}
               </>
             ) : (
-              <View
+              <Pressable
+                onPress={() => setMoreOptionsOpen(true)}
+                disabled={moreOptionsOpen}
+                accessibilityRole="button"
                 style={{
                   marginTop: 16,
                   padding: 14,
@@ -6053,7 +6112,14 @@ export default function AiDealScreen() {
                       defaultValue: "Finish the required offer rules before choosing schedule and generating an ad.",
                     })}
                 </Text>
-              </View>
+                {/* Express: the offer form this message refers to lives inside
+                    the collapsed expander — give the merchant a visible way in. */}
+                {!moreOptionsOpen ? (
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, textDecorationLine: "underline" }}>
+                    {t("createAi.moreOptionsHeader", { defaultValue: "More options" })}
+                  </Text>
+                ) : null}
+              </Pressable>
             )}
 
             {/* Single ad preview - text rendered natively below the image, not baked in. */}
@@ -6333,7 +6399,10 @@ export default function AiDealScreen() {
 
                 {/* Revise panel — Express Phase 1: gated behind More options. */}
                 {moreOptionsOpen && showComposedRevisePanel ? (
-                  <View style={{ padding: 14, borderRadius: 12, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+                  // marginBottom keeps the panel's last button (Revise ad) clear of the
+                  // Android 3-button nav bar — without it, taps landed on Home (S10 QA
+                  // 2026-08-06 finding 4).
+                  <View style={{ padding: 14, borderRadius: 12, marginBottom: 32, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                       <Text
                         style={{ flex: 1, minWidth: 160, fontWeight: "800", fontSize: 14, color: theme.text }}

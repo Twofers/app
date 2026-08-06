@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clearStaleAutoInference,
   inferDealEligibilityFormFromText,
   mergeInferredEligibilityForm,
 } from "./deal-eligibility-inference";
@@ -382,5 +383,85 @@ describe("deal eligibility inference", () => {
       dealType: "BUY_ONE_GET_ONE_FREE", // stays despite BOGSF inference
       requiredItemDescription: "sandwich", // untouched item slots still fill
     });
+  });
+});
+
+describe("clearStaleAutoInference (S10 QA 2026-08-06 F1: mid-typing fragments must not ship)", () => {
+  // Emulates ai.tsx's per-keystroke behavior with the fixed semantics: apply
+  // merges usable inferences (keeping the last non-null as baseline even when a
+  // later keystroke infers null), finalize reconciles against the settled text.
+  function simulateTyping(fullText: string, samplePoints: number[]) {
+    let form = createDefaultDealEligibilityFormState();
+    let lastAuto: ReturnType<typeof inferDealEligibilityFormFromText> = null;
+    const touched = new Set<never>();
+    for (const end of samplePoints) {
+      const inferred = inferDealEligibilityFormFromText(fullText.slice(0, end));
+      if (!inferred) continue; // fixed semantics: null keeps lastAuto
+      form = mergeInferredEligibilityForm(form, inferred, {
+        allowDealTypeChange: true,
+        previousInferred: lastAuto,
+        touchedFields: touched,
+      });
+      lastAuto = inferred;
+    }
+    return { form, lastAuto, touched };
+  }
+
+  it("clears the seeded 'ha' fragment when 'half off drinks today' settles (live-repro)", () => {
+    // "ha" was observed live as the seeded single item from "half off drinks
+    // today" (screenshot s1_deadend12); later keystrokes all infer null.
+    const text = "half off drinks today";
+    const { form, lastAuto, touched } = simulateTyping(text, [2, 4, 8, text.length]);
+    expect(form.itemDescription).not.toBe(""); // fragment did get seeded mid-typing
+
+    const finalInference = inferDealEligibilityFormFromText(text);
+    expect(finalInference).toBeNull(); // settled text is unusable → reconcile path
+    const reconciled = clearStaleAutoInference(form, lastAuto, touched);
+    expect(reconciled.itemDescription).toBe("");
+    expect(
+      validateDealEligibility(dealEligibilityFormToInput(reconciled)).eligible,
+    ).toBe(false); // gate blocks honestly instead of shipping "ha"
+  });
+
+  it("replaces the seeded 'ho' fragment once '50% off house latte today' settles (live-repro)", () => {
+    // With the ref no longer cleared on a null inference, the settled text's
+    // own inference must overwrite the fragment via the normal merge path.
+    const text = "50% off house latte today";
+    const { form, lastAuto, touched } = simulateTyping(text, [10, text.length]);
+    expect(form.itemDescription).toBe("house latte");
+    expect(lastAuto?.itemDescription).toBe("house latte");
+    expect(touched.size).toBe(0);
+  });
+
+  it("never clears fields the merchant touched or values that differ from the last auto-write", () => {
+    const auto = inferDealEligibilityFormFromText("50% off ho");
+    expect(auto?.itemDescription).toBe("ho");
+    const manual = { ...createDefaultDealEligibilityFormState(), itemDescription: "house latte", discountPercent: "50" };
+    // Item differs from lastAuto ("ho") → survives. The untouched discount
+    // equals the auto-written "50" → treated as auto and reset; only
+    // touchedFields distinguishes a merchant-typed duplicate, and form edits
+    // always land in touchedFields in the real screen.
+    const partiallyCleared = clearStaleAutoInference(manual, auto, null);
+    expect(partiallyCleared.itemDescription).toBe("house latte");
+    expect(partiallyCleared.discountPercent).toBe(createDefaultDealEligibilityFormState().discountPercent);
+    // Same value but merchant-touched → survives.
+    const touchedForm = { ...createDefaultDealEligibilityFormState(), itemDescription: "ho" };
+    const kept = clearStaleAutoInference(touchedForm, auto, ["itemDescription"]);
+    expect(kept.itemDescription).toBe("ho");
+  });
+
+  it("resets auto-seeded discount and item together, back to defaults", () => {
+    const auto = inferDealEligibilityFormFromText("50% off ho");
+    const seeded = mergeInferredEligibilityForm(createDefaultDealEligibilityFormState(), auto, {
+      allowDealTypeChange: true,
+      previousInferred: null,
+      touchedFields: null,
+    });
+    expect(seeded.itemDescription).toBe("ho");
+    expect(seeded.discountPercent).toBe("50");
+    const cleared = clearStaleAutoInference(seeded, auto, null);
+    const defaults = createDefaultDealEligibilityFormState();
+    expect(cleared.itemDescription).toBe(defaults.itemDescription);
+    expect(cleared.discountPercent).toBe(defaults.discountPercent);
   });
 });
