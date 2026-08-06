@@ -37,8 +37,8 @@ Twofer is built for the neighborhood spots that make your city worth living in. 
 ### Keywords *(100 chars max)*
 bogo,deals,local,cafe,coffee,bakery,discount,coupon,food,nearby,wallet,qr
 
-### What's New (v1.0.2)
-More dependable claiming and redemption, including improved manual redemption and wallet-to-app flows. Business owners also get a smoother publish experience, better fallback ads when photos are unavailable, menu-item promotion choices, and refined AI-assisted copy. Spanish and Korean deal messaging has been polished throughout.
+### What's New (v1.0.4)
+A big upgrade for business owners creating ads with AI: voice input is more dependable, style and revision choices are clearer, and the app now flags when the AI isn't sure about a business detail so you can fix it before publishing. Ad copy comes out more natural and more accurate. Plus small fixes and polish throughout the app.
 
 ---
 
@@ -86,8 +86,8 @@ Food & Drink
 ### Tags / Store Topics
 Deals, Coupons, Local Business, Coffee, Food, Restaurants
 
-### Release Notes (v1.0.2)
-More dependable claiming and redemption, improved wallet and manual-redemption flows, smoother business publishing, better fallback ads, menu-item promotion choices, refined AI-assisted copy, and polished Spanish and Korean deal messaging.
+### Release Notes (v1.0.4)
+Fixed claimed and redeemed deals sometimes showing an outdated status, clearer deal descriptions, and a big AI upgrade for business owners: more accurate ad copy, a smoother ad creation flow with dependable voice input, and regenerated deal ads now update correctly for customers.
 
 ---
 
