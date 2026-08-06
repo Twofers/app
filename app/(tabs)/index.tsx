@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/banner";
 import { ClaimSuccessToast } from "@/components/claim-success-toast";
 import { BrandedConfirmModal } from "@/components/ui/branded-confirm-modal";
+import { RequestBusinessSheet } from "@/components/request-business-sheet";
 import { BusinessRowCard } from "@/components/business-row-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -260,6 +261,10 @@ export default function HomeScreen() {
   const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
   // Branded deal-alert dialog (replaces native Alert.alert) for opt-in, denied permission, and registration retry.
   const [alertDialog, setAlertDialog] = useState<null | "consent" | "permissionDenied" | "registrationFailed">(null);
+  // Mirrors lib/notifications' getAlertsEnabled() so the zero-deals empty state can
+  // hide its "get alerts" CTA once the customer has already opted in.
+  const [dealAlertsEnabled, setDealAlertsEnabled] = useState(false);
+  const [requestBusinessVisible, setRequestBusinessVisible] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const deviceDealLocaleRef = useRef(getDeviceDealLocale());
   const customerPreferredDealLocaleRef = useRef<string | null>(null);
@@ -624,6 +629,7 @@ export default function HomeScreen() {
     // Notification delivery scope must not change what the customer can browse.
     // The Deals-page heart control owns this screen-local filter.
     setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
+    setDealAlertsEnabled(await getAlertsEnabled());
     const coords = await resolveConsumerCoordinates(prefs);
     if (coords) {
       setUserGeo({ lat: coords.lat, lng: coords.lng });
@@ -682,7 +688,13 @@ export default function HomeScreen() {
       }
     }
     await setAlertsEnabled(true);
-    await setConsumerNotificationPrefs({ v: 1, mode: "favorites_only" });
+    // Preserve the customer's existing notification mode (default all_nearby) —
+    // accepting this prompt must never silently downgrade a cold-start user with
+    // zero favorites to favorites_only, which would leave them subscribed to
+    // nothing at all. Settings has the only explicit mode picker.
+    const { notificationPrefs } = await getConsumerPreferences();
+    await setConsumerNotificationPrefs(notificationPrefs);
+    setDealAlertsEnabled(true);
   }, [userId]);
   const maybeOfferDealAlerts = useCallback(async () => {
     if (alertConsentAskedRef.current) return;
@@ -999,6 +1011,13 @@ export default function HomeScreen() {
 
   const emptyNearbyLive =
     !loadingDeals && liveDealsDisplay.length === 0 && searchFilteredDeals.length > 0 && !showAllLiveDeals;
+
+  // The real day-one case: no live deals anywhere, independent of the radius/"show
+  // all" toggles and of any search text. Distinct from emptyNearbyLive (deals exist
+  // but not in radius) and from a plain no-search-matches result (repeatVisibleDeals
+  // has entries; only the typed query filtered them out) — both of those keep the
+  // lighter generic empty state below.
+  const dealsTrulyZero = !loadingDeals && repeatVisibleDeals.length === 0;
 
   const showDealsSkeleton = loadingDeals && deals.length === 0;
   const wasShowingDealsSkeleton = useRef(showDealsSkeleton);
@@ -1866,14 +1885,84 @@ export default function HomeScreen() {
             feedSegment === "deals"
               ? emptyNearbyLive || showDealsSkeleton || banner
                 ? null
-                : (
-                    <EmptyState
-                      title={t("consumerHome.emptyLiveTitle")}
-                      message={t("consumerHome.emptyLiveBody")}
-                      actionLabel={businesses.length > 0 ? t("consumerHome.browseShopsCta") : t("commonUi.tryAgain")}
-                      onAction={businesses.length > 0 ? () => setFeedSegment("shops") : () => void onPullToRefresh()}
-                    />
-                  )
+                : dealsTrulyZero
+                  ? (
+                      <View
+                        style={{
+                          borderRadius: Radii.lg,
+                          backgroundColor: theme.surface,
+                          padding: Spacing.xxxl,
+                          marginTop: Spacing.md,
+                          marginBottom: Spacing.xxxl,
+                          borderWidth: 1,
+                          borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
+                          gap: Spacing.md,
+                          alignItems: "center",
+                          ...Shadows.soft,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: 28,
+                            backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginTop: 2,
+                          }}
+                        >
+                          <Image
+                            source={require("../../assets/images/twofer-mark-512.png")}
+                            style={{ width: 30, height: 30, opacity: 0.95 }}
+                            contentFit="contain"
+                          />
+                        </View>
+                        <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>
+                          {t("consumerHome.emptyZeroTitle")}
+                        </Text>
+                        <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
+                          {t("consumerHome.emptyZeroBody")}
+                        </Text>
+                        <PrimaryButton
+                          title={t("consumerHome.emptyZeroBrowseCta")}
+                          onPress={() => setFeedSegment("shops")}
+                          style={{ alignSelf: "stretch" }}
+                        />
+                        {!dealAlertsEnabled ? (
+                          <SecondaryButton
+                            title={t("consumerHome.emptyZeroAlertsCta")}
+                            onPress={() => setAlertDialog("consent")}
+                            style={{ alignSelf: "stretch" }}
+                          />
+                        ) : null}
+                        <Pressable
+                          onPress={() => setRequestBusinessVisible(true)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              opacity: 0.6,
+                              lineHeight: 20,
+                              color: theme.text,
+                              textDecorationLine: "underline",
+                            }}
+                          >
+                            {t("consumerHome.requestBusinessPrompt")}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )
+                  : (
+                      <EmptyState
+                        title={t("consumerHome.emptyLiveTitle")}
+                        message={t("consumerHome.emptyLiveBody")}
+                        actionLabel={businesses.length > 0 ? t("consumerHome.browseShopsCta") : t("commonUi.tryAgain")}
+                        onAction={businesses.length > 0 ? () => setFeedSegment("shops") : () => void onPullToRefresh()}
+                      />
+                    )
               : loadingBiz && businesses.length === 0
                 ? (
                     <LoadingSkeleton rows={4} />
@@ -1885,6 +1974,22 @@ export default function HomeScreen() {
                   : (
                       <EmptyState title={t("consumerHome.emptyBusinessesTitle")} message={t("consumerHome.emptyBusinessesBody")} />
                     )
+          }
+          ListFooterComponent={
+            feedSegment === "shops"
+              ? (
+                  <Pressable
+                    onPress={() => setRequestBusinessVisible(true)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    style={{ paddingVertical: Spacing.xl, alignItems: "center" }}
+                  >
+                    <Text style={{ fontSize: 13, opacity: 0.55, color: theme.text, textDecorationLine: "underline" }}>
+                      {t("consumerHome.requestBusinessPrompt")}
+                    </Text>
+                  </Pressable>
+                )
+              : null
           }
         />
       </Animated.View>
@@ -1921,6 +2026,11 @@ export default function HomeScreen() {
         })}
         confirmLabel={t("commonUi.ok")}
         onConfirm={() => setAlertDialog(null)}
+      />
+      <RequestBusinessSheet
+        visible={requestBusinessVisible}
+        onDismiss={() => setRequestBusinessVisible(false)}
+        sourceSurface={feedSegment === "shops" ? "app_shops_footer" : "app_zero_deals_empty"}
       />
     </View>
     </KeyboardScreen>

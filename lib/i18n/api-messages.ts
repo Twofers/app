@@ -125,6 +125,14 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "Missing hint_text.": "apiErrors.aiMissingHint",
   "Regeneration limit reached for this draft. Edit the text below or start a new offer.":
     "apiErrors.aiRegenerationLimit",
+
+  // request-business-on-twofer / public-local-businesses (consumer demand capture).
+  "Sign in to request this business.": "requestBusiness.errSignIn",
+  "Could not save this request.": "requestBusiness.errGeneric",
+  "Business requests are not configured.": "requestBusiness.errGeneric",
+  "Could not load local businesses.": "requestBusiness.errSearchFailed",
+  "Local businesses are not configured.": "requestBusiness.errSearchFailed",
+  "Choose one business to request.": "requestBusiness.errGeneric",
 };
 
 const CUTOFF_PREFIX = "Claiming has closed. Cutoff was ";

@@ -131,7 +131,24 @@
     "timeLeftM": "{{m}}분 남음",
     "onlyOneLeft": "1개 남음",
     "onlyNLeft": "{{count}}개 남음",
-    "noPhotoYet": "사진 준비 중"
+    "noPhotoYet": "사진 준비 중",
+    "emptyZeroAlertsCta": "딜 알림 받기",
+    "requestBusinessPrompt": "찾는 매장이 없나요? 요청하기"
+  },
+  "requestBusiness": {
+    "title": "매장 요청하기",
+    "subtitle": "Twofer에서 보고 싶은 매장을 검색하세요.",
+    "searchPlaceholder": "매장 이름",
+    "noResults": "일치하는 결과가 없어요 — 철자를 확인해 주세요.",
+    "submit": "요청 보내기",
+    "submitting": "보내는 중…",
+    "cancel": "취소",
+    "close": "닫기",
+    "successBody": "요청을 보냈어요 — {{name}}이(가) Twofer에 합류하면 알려드릴게요.",
+    "alreadyRequestedBody": "오늘 이미 {{name}}을(를) 요청했어요.",
+    "errSignIn": "매장을 요청하려면 로그인하세요.",
+    "errGeneric": "요청을 저장하지 못했어요. 다시 시도해 주세요.",
+    "errSearchFailed": "지금은 검색할 수 없어요. 다시 시도해 주세요."
   },
   "consumerMap": {
     "title": "지도",

@@ -42,43 +42,50 @@ on-focus local check (`lib/notifications.ts:186-230`).
 
 ## Workstream A — stop the alerts-mode downgrade (client, 1 line class)
 
-- [ ] `enableDealAlerts` must preserve the user's current mode: read prefs
+- [x] `enableDealAlerts` must preserve the user's current mode: read prefs
       first; only set `deal_alerts_enabled`/consent fields, never overwrite
       `mode` when one exists; a genuinely unset mode keeps the `all_nearby`
       default. Inspect `lib/consumer-preferences.ts` for the actual shape
       before editing — do not guess field names.
-- [ ] Unit test: enabling alerts with mode `all_nearby` keeps `all_nearby`;
+- [x] Unit test: enabling alerts with mode `all_nearby` keeps `all_nearby`;
       with no stored prefs keeps the default; with `favorites_only` keeps
       `favorites_only`.
 
 ## Workstream B — zero-deals empty state carries the growth CTAs (client)
 
-- [ ] When the deals segment has zero live deals overall, render the rich
+- [x] When the deals segment has zero live deals overall, render the rich
       empty state (or an equivalent branch), not the generic one: primary
       action switches to the Shops segment ("Save shops to hear when deals
       post"), secondary offers the deal-alerts opt-in if not yet enabled
       (reusing `maybeOfferDealAlerts` / the branded confirm — never
       Alert.alert).
-- [ ] Keep copy minimal, new i18n keys in ALL THREE locales (en/es/ko);
+- [x] Keep copy minimal, new i18n keys in ALL THREE locales (en/es/ko);
       CI `check:i18n-keys` gates missing keys and `defaultValue` masks them
       at runtime — add every key everywhere.
-- [ ] Source test pinning the branch condition (zero-deals → rich empty
+- [x] Source test pinning the branch condition (zero-deals → rich empty
       state), modeled on existing index source tests if present.
 
 ## Workstream C — wire up "request a business" (client)
 
-- [ ] Read `supabase/functions/request-business-on-twofer/index.ts` for the
+- [x] Read `supabase/functions/request-business-on-twofer/index.ts` for the
       exact contract (auth requirement, payload, rate limits) before writing
       the caller.
-- [ ] Entry points (both low-key, few words): a footer row on the Shops
+- [x] Entry points (both low-key, few words): a footer row on the Shops
       segment list and a secondary line on the zero-deals empty state —
       "Don't see your spot? Request it."
-- [ ] Minimal sheet/modal: business name (required), optional note; submit
+- [x] Minimal sheet/modal: business name (required), optional note; submit
       via `lib/functions.ts`-style wrapper; success state is a one-line
       confirmation. Branded modal, not Alert.alert.
-- [ ] Disable the submit button while in flight (double-submit trap — same
+      DEVIATION: the deployed function only accepts an existing
+      `business_id`/`prospect_id` (UUID), never free text, and has no note
+      field — see `record_business_demand_signal` in
+      `20260802120000_business_prospect_command_center.sql`. Built as a
+      search-and-select sheet instead (search via the also-dead
+      `public-local-businesses` function, tap a result, confirm); dropped
+      the "optional note" field since the server has nowhere to put it.
+- [x] Disable the submit button while in flight (double-submit trap — same
       class as the known business-apply F-08).
-- [ ] i18n keys in en/es/ko + unit test for the wrapper.
+- [x] i18n keys in en/es/ko + unit test for the wrapper.
 
 ## Workstream D — realtime area push (DESIGN ONLY this batch)
 

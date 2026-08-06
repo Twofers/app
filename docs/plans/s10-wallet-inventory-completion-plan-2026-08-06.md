@@ -103,12 +103,15 @@ every account on the device.
 
 ## Workstream A — verify released-claims inventory end to end (no code expected)
 
-- [ ] Confirm the DEPLOYED `claim-deal` excludes `released` at both counting
-      sites (:713 pre-check, :873 owner-push) — use the safe
-      `supabase functions download --workdir <scratch>` trick, never into the
-      working tree.
-- [ ] If the deployed copy predates the fix → FOUNDER GATE: redeploy
-      `claim-deal` (Bash, one function per call).
+- [x] Confirm the DEPLOYED `claim-deal` excludes `released` at both counting
+      sites — checked 2026-08-06 via `functions download --workdir <scratch>`:
+      **DEPLOYED COPY IS STALE** (still `.neq("claim_status", "canceled")` at
+      :713/:873; local has `(canceled,released)` at :714/:874). The DB trigger
+      + `deal_claim_counts` RPC are fixed (migration applied), so caps are
+      ultimately enforced correctly, but the stale fast-path pre-check counts
+      released claims and can report sold-out early.
+- [ ] FOUNDER GATE (confirmed needed): redeploy `claim-deal` (Bash, one
+      function per call).
 - [ ] Device verify (founder or next S10 session): cap-10 deal → claim (9) →
       release → detail reads 10 → re-claim (9) → dashboard history keeps both.
 

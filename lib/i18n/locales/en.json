@@ -131,7 +131,24 @@
     "timeLeftM": "{{m}}m left",
     "onlyOneLeft": "Only 1 left",
     "onlyNLeft": "Only {{count}} left",
-    "noPhotoYet": "Photo coming soon"
+    "noPhotoYet": "Photo coming soon",
+    "emptyZeroAlertsCta": "Get deal alerts",
+    "requestBusinessPrompt": "Don't see your spot? Request it."
+  },
+  "requestBusiness": {
+    "title": "Request a business",
+    "subtitle": "Search for a shop you'd like to see on Twofer.",
+    "searchPlaceholder": "Business name",
+    "noResults": "No matches yet — check the spelling.",
+    "submit": "Send request",
+    "submitting": "Sending…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "successBody": "Request sent — we'll let you know if {{name}} joins Twofer.",
+    "alreadyRequestedBody": "You already requested {{name}} today.",
+    "errSignIn": "Sign in to request a business.",
+    "errGeneric": "Couldn't save your request. Try again.",
+    "errSearchFailed": "Couldn't search right now. Try again."
   },
   "consumerMap": {
     "title": "Map",

@@ -131,7 +131,24 @@
     "timeLeftM": "{{m}}m restantes",
     "onlyOneLeft": "Solo queda 1",
     "onlyNLeft": "Solo quedan {{count}}",
-    "noPhotoYet": "Foto próximamente"
+    "noPhotoYet": "Foto próximamente",
+    "emptyZeroAlertsCta": "Recibir avisos de ofertas",
+    "requestBusinessPrompt": "¿No ves tu lugar? Solicítalo."
+  },
+  "requestBusiness": {
+    "title": "Solicitar un negocio",
+    "subtitle": "Busca un negocio que te gustaría ver en Twofer.",
+    "searchPlaceholder": "Nombre del negocio",
+    "noResults": "Sin coincidencias aún — revisa la ortografía.",
+    "submit": "Enviar solicitud",
+    "submitting": "Enviando…",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "successBody": "Solicitud enviada — te avisaremos si {{name}} se une a Twofer.",
+    "alreadyRequestedBody": "Ya solicitaste {{name}} hoy.",
+    "errSignIn": "Inicia sesión para solicitar un negocio.",
+    "errGeneric": "No pudimos guardar tu solicitud. Intenta de nuevo.",
+    "errSearchFailed": "No pudimos buscar en este momento. Intenta de nuevo."
   },
   "consumerMap": {
     "title": "Mapa",
