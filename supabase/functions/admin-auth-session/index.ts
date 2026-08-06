@@ -93,6 +93,25 @@ async function redeemMagicLink(params: {
   });
 }
 
+// Same one-time grant, addressed by the raw OTP instead of the hashed handle.
+// `generate_link` returns both; only this one is independent of whether the
+// project runs the PKCE flow (which prefixes `hashed_token` with `pkce_`).
+async function redeemEmailOtp(params: {
+  supabaseUrl: string;
+  anonKey: string;
+  email: string;
+  token: string;
+}) {
+  return fetch(`${params.supabaseUrl}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      apikey: params.anonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ type: "magiclink", email: params.email, token: params.token }),
+  });
+}
+
 async function refreshGrant(params: {
   supabaseUrl: string;
   anonKey: string;
@@ -368,14 +387,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    let authResponse: Response;
+    // deno-lint-ignore no-explicit-any
+    let session: any = {};
+    let authOk = false;
+    let mintDetail = "";
+
     if (isRefresh) {
-      authResponse = await refreshGrant({ supabaseUrl, anonKey, refreshToken });
+      const refreshResponse = await refreshGrant({ supabaseUrl, anonKey, refreshToken });
+      session = await refreshResponse.json().catch(() => ({}));
+      authOk = refreshResponse.ok && typeof session?.access_token === "string";
     } else {
       const linkResponse = await adminGenerateMagicLink({ supabaseUrl, serviceRoleKey, email });
       const link = await linkResponse.json().catch(() => ({}));
       const tokenHash = typeof link?.hashed_token === "string" ? link.hashed_token : "";
-      if (!linkResponse.ok || !tokenHash) {
+      const emailOtp = typeof link?.email_otp === "string" ? link.email_otp : "";
+      if (!linkResponse.ok || (!tokenHash && !emailOtp)) {
         // Distinguish "no such user" (expected, generic 401 below) from an
         // Auth-configuration problem, which is otherwise near-impossible to
         // diagnose from the browser.
@@ -399,23 +425,43 @@ Deno.serve(async (req) => {
           401,
         );
       }
-      authResponse = await redeemMagicLink({ supabaseUrl, anonKey, tokenHash });
+      // Redeem the one-time grant. Try the hashed handle first, then the raw
+      // OTP, so the flow works whether or not the project runs PKCE. Neither
+      // token value is ever logged — only the upstream status and error code.
+      if (tokenHash) {
+        const hashResponse = await redeemMagicLink({ supabaseUrl, anonKey, tokenHash });
+        session = await hashResponse.json().catch(() => ({}));
+        authOk = hashResponse.ok && typeof session?.access_token === "string";
+        if (!authOk) {
+          mintDetail = `token_hash=${hashResponse.status}/${session?.error_code ?? "?"}`;
+        }
+      }
+      if (!authOk && emailOtp) {
+        const otpResponse = await redeemEmailOtp({ supabaseUrl, anonKey, email, token: emailOtp });
+        session = await otpResponse.json().catch(() => ({}));
+        authOk = otpResponse.ok && typeof session?.access_token === "string";
+        if (!authOk) {
+          mintDetail = `${mintDetail} email_otp=${otpResponse.status}/${session?.error_code ?? "?"}`.trim();
+        }
+      }
+      if (!authOk) {
+        console.error("[admin-auth-session] session mint failed:", mintDetail);
+      }
     }
 
-    let session = await authResponse.json().catch(() => ({}));
-    if (!authResponse.ok || !session?.access_token) {
+    if (!authOk) {
       if (!isRefresh) {
         await supabaseAdmin.from("admin_audit_log").insert({
           admin_email: email || null,
           action: "admin_login_failed",
           target_type: "admin_login",
-          reason: "invalid_credentials",
+          reason: "session_mint_failed",
           ip_address: requestIp,
           user_agent: req.headers.get("user-agent"),
           request_id: requestId,
         });
       }
-      return json(req, { error: "Invalid admin credentials." }, 401);
+      return json(req, { error: "Invalid admin credentials.", reason: mintDetail || undefined }, 401);
     }
 
     const supabaseUser = createClient(supabaseUrl, serviceRoleKey, {
