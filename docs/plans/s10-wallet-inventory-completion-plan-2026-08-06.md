@@ -41,9 +41,15 @@ Per Google's documented schema (see parent plan §B root cause):
 - [x] Update `wallet-pass-content.test.ts` to pin the NEW shape (union field:
       assert `targetUri` is ABSENT from androidAppLinkInfo.appTarget); keep
       the app.json↔constant package-name source-sync guard from 2026-08-02.
-- [ ] FOUNDER GATE: deploy the 7 wallet-touching functions (same list as the
-      2026-08-02 package-name fix), then re-save a pass on device. If the
-      open-app action renders → close the wallet gate as pass-with-note.
+- [x] FOUNDER GATE: deploy the wallet-touching functions — **DONE 2026-08-06**
+      (Dan ran the deploys). Verified via `functions download --workdir`: all 8
+      (claim-deal, wallet-pass-issue, wallet-pass-webservice, redeem-token,
+      staff-redemption, release-claim, finalize-stale-redeems,
+      complete-visual-redeem) carry `WALLET_PASS_WEB_APP_LINK` and zero
+      occurrences of the old `targetUri: { uri: WALLET_PASS_APP_DEEP_LINK`
+      shape. Smoke: all POST 401 (auth required), no 500s.
+- [ ] Re-save a pass on device. If the open-app action renders → close the
+      wallet gate as pass-with-note. **ONLY REMAINING B1 STEP.**
 
 ## Workstream B1b — real `/wallet` page on the website
 
@@ -54,8 +60,12 @@ Per Google's documented schema (see parent plan §B root cause):
 - [x] Vercel trap: static files resolve BEFORE rewrites — ship it as a real
       static page and never let a stray `wallet/index.html` shadow future
       routing. Verify no existing rewrite/redirect claims `/wallet`.
-- [ ] FOUNDER GATE: website deploy MUST use build → prepare-deploy →
-      `--prebuilt` (established pipeline).
+- [x] FOUNDER GATE: website deploy via build → prepare-deploy → `--prebuilt`
+      — **DONE 2026-08-06**. Live verification: `/wallet` HTTP 200, correct
+      title + open-the-app copy + both store links; `/`, `/support`,
+      `/business/start-trial` all 200; `/s/TESTCODE` still returns
+      `x-share-preview-match: query` (the prune did not break share previews);
+      share-preview self-test all green; UI crawl 42 routes × 2 viewports pass.
 
 ## Workstream B2 — true deep link to the pass sheet (binary)
 
@@ -104,14 +114,13 @@ every account on the device.
 ## Workstream A — verify released-claims inventory end to end (no code expected)
 
 - [x] Confirm the DEPLOYED `claim-deal` excludes `released` at both counting
-      sites — checked 2026-08-06 via `functions download --workdir <scratch>`:
-      **DEPLOYED COPY IS STALE** (still `.neq("claim_status", "canceled")` at
-      :713/:873; local has `(canceled,released)` at :714/:874). The DB trigger
-      + `deal_claim_counts` RPC are fixed (migration applied), so caps are
-      ultimately enforced correctly, but the stale fast-path pre-check counts
-      released claims and can report sold-out early.
-- [ ] FOUNDER GATE (confirmed needed): redeploy `claim-deal` (Bash, one
-      function per call).
+      sites — first checked 2026-08-06 pre-deploy: deployed copy WAS STALE
+      (`.neq("claim_status", "canceled")` at :713/:873). **RESOLVED
+      2026-08-06** — after Dan's redeploy, the deployed source reads
+      `.not("claim_status", "in", "(canceled,released)")` at both :714 and
+      :874, matching local. Cap counting is now consistent across all four
+      sites (trigger, RPC, and both edge fast paths).
+- [x] FOUNDER GATE: redeploy `claim-deal` — **DONE + VERIFIED 2026-08-06**.
 - [ ] Device verify (founder or next S10 session): cap-10 deal → claim (9) →
       release → detail reads 10 → re-claim (9) → dashboard history keeps both.
 
