@@ -43,10 +43,10 @@ function validationMessage(data) {
   if (!String(data.get("contact_name") || "").trim()) return { field: markInvalid("contact_name"), text: msg("trial.validationContact") || "Enter the owner or manager name." };
   const email = String(data.get("email") || "").trim();
   if (!email || !email.includes("@")) return { field: markInvalid("email"), text: msg("trial.validationEmail") || "Enter a valid business email." };
-  // Address is required client-side: without launch_area on the form, the
-  // server's launch-area scoring reads only the address, and an application
-  // missing both is auto-waitlisted instead of queued for review.
-  if (!String(data.get("address") || "").trim()) return { field: markInvalid("address"), text: msg("trial.validationAddress") || "Enter your business address." };
+  // Address is optional, and stays optional: it lives in the collapsed
+  // "Add business details" block, so requiring it blocked submission on a field
+  // the form calls optional and does not even show. The server treats a missing
+  // address as an unknown launch area (human review), never an auto-waitlist.
   if (data.get("terms_accepted") !== "on") return { field: markInvalid("terms_accepted"), text: msg("trial.validationTerms") || "Please accept the Business Terms." };
   if (data.get("privacy_acknowledged") !== "on") return { field: markInvalid("privacy_acknowledged"), text: msg("trial.validationPrivacy") || "Please acknowledge the Privacy Policy." };
   return null;
@@ -59,6 +59,10 @@ form.addEventListener("submit", async (event) => {
   const invalid = validationMessage(data);
   if (invalid) {
     setStatus(invalid.text, true);
+    // A field inside a collapsed section can be neither seen nor focused, which
+    // reads as "the form refuses to submit and will not say where". Open its
+    // section first so the error always points at something visible.
+    invalid.field?.closest("details")?.setAttribute("open", "");
     invalid.field?.focus();
     return;
   }

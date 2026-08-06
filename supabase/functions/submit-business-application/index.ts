@@ -185,20 +185,32 @@ function scoreApplication(args: {
   // 70-point quick-approval bar. Locality and web presence carry that weight
   // now, so one-click approval requires email + phone + in-area address +
   // website/social (15+10+20+10+20 = 75) and any missing signal fails it.
+  //
+  // The address is optional on the public form, so "no address and no launch
+  // area" means the location is UNKNOWN, not outside the launch area. Those two
+  // must score differently: an out-of-area application is auto-waitlisted below,
+  // and a business that simply skipped an optional field must never land there.
+  const hasLocationSignal = Boolean(args.address || args.launchArea);
   const inLaunchArea = isDfwLaunchArea(args.address, args.launchArea);
   if (inLaunchArea) {
     score += 20;
     riskReasons.push("dfw_launch_area_match");
-  } else {
+  } else if (hasLocationSignal) {
     score -= 40;
     riskReasons.push("outside_or_unclear_launch_area");
+  } else {
+    score -= 10;
+    riskReasons.push("launch_area_unknown");
   }
 
   if (args.address) {
     score += 10;
     riskReasons.push("address_provided");
   } else {
-    score -= 30;
+    // Only penalize a withheld address again when the applicant did give a
+    // launch area: with no location signal at all, launch_area_unknown above
+    // already accounts for the same missing fact.
+    if (hasLocationSignal) score -= 30;
     riskReasons.push("missing_address");
   }
 
@@ -251,7 +263,10 @@ function scoreApplication(args: {
     riskReasons.push("disposable_email_domain");
   }
 
-  if (!inLaunchArea) {
+  // Waitlist only a location we can actually place outside the launch area.
+  // An unknown location falls through to the score bands below, where it lands
+  // in pending_verification for a human to follow up on.
+  if (!inLaunchArea && hasLocationSignal) {
     return {
       status: "waitlisted",
       access_tier: "waitlisted",
