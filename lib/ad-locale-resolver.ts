@@ -3,7 +3,7 @@ import {
   enabledSupportedLocales,
   normalizeSupportedLocale,
   type SupportedLocale,
-} from "./supported-locales";
+} from "./supported-locales.ts";
 
 export type AdLocaleResolutionSource =
   | "customer_preference"

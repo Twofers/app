@@ -524,12 +524,22 @@ serve(async (req) => {
 
     if (v2Enabled) {
       const gateOutcome = applyDealTranslationOutputGate({
-        title_en: result.title_en,
-        title_es: result.title_es,
-        title_ko: result.title_ko,
-        description_en: result.description_en,
-        description_es: result.description_es,
-        description_ko: result.description_ko,
+        fields: {
+          title_en: result.title_en,
+          title_es: result.title_es,
+          title_ko: result.title_ko,
+          description_en: result.description_en,
+          description_es: result.description_es,
+          description_ko: result.description_ko,
+        },
+        // title/description are the merchant's own original text (unchanged
+        // since request parsing above); sourceLocale identifies which two
+        // fields already mirror them verbatim so the gate can exempt those
+        // fields and, for the rest, tell a faithful shorthand carry-over
+        // apart from one the AI introduced.
+        sourceLocale,
+        sourceTitle: title,
+        sourceDescription: description,
       });
       if (gateOutcome.blankedFields.length > 0) {
         console.log(JSON.stringify({

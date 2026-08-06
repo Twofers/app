@@ -1,6 +1,6 @@
-import { logPostgrestError } from "./supabase-client-log";
-import { supabase } from "./supabase";
-import type { SupportedLocale } from "./supported-locales";
+import { logPostgrestError } from "./supabase-client-log.ts";
+import { supabase } from "./supabase.ts";
+import type { SupportedLocale } from "./supported-locales.ts";
 
 export type CustomerDealLocalization = {
   dealId: string;

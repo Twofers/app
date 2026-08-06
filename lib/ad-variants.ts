@@ -294,16 +294,36 @@ export function buildOfferDefinitionFallbackAd(
 // the chip's canned text onto the existing text instead, skipping the append
 // when the addition is already present (case-insensitive) so tapping the same
 // chip twice doesn't duplicate it. Capped at the server's 800-char limit.
+
+// Shared with the chip "selected" highlight in app/create/ai.tsx, so the UI's
+// notion of "this chip's text is already in the feedback box" never drifts
+// from the dedup rule appendRevisionFeedback actually applies.
+export function revisionFeedbackContainsSuggestion(feedback: string, suggestionText: string): boolean {
+  return feedback.trim().toLowerCase().includes(suggestionText.trim().toLowerCase());
+}
+
+// A hard slice(0, maxLength) can land mid-word (e.g. "...crisp" -> "...cri"),
+// which reads as data loss/a typo rather than a length limit engaging. Cut at
+// the last word boundary at or before maxLength instead, then drop any
+// whitespace/punctuation orphaned right at the new end.
+function truncateAtWordBoundary(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const clipped = value.slice(0, maxLength);
+  const lastBreak = clipped.search(/\s+\S*$/);
+  const cut = lastBreak > 0 ? clipped.slice(0, lastBreak) : clipped;
+  return cut.replace(/[\s.,;:!?-]+$/, "");
+}
+
 export function appendRevisionFeedback(current: string, addition: string, maxLength = 800): string {
   const trimmedCurrent = current.trim();
   const trimmedAddition = addition.trim();
-  if (!trimmedAddition) return trimmedCurrent.slice(0, maxLength);
-  if (!trimmedCurrent) return trimmedAddition.slice(0, maxLength);
-  if (trimmedCurrent.toLowerCase().includes(trimmedAddition.toLowerCase())) {
-    return trimmedCurrent.slice(0, maxLength);
+  if (!trimmedAddition) return truncateAtWordBoundary(trimmedCurrent, maxLength);
+  if (!trimmedCurrent) return truncateAtWordBoundary(trimmedAddition, maxLength);
+  if (revisionFeedbackContainsSuggestion(trimmedCurrent, trimmedAddition)) {
+    return truncateAtWordBoundary(trimmedCurrent, maxLength);
   }
   const separator = /[.!?]$/.test(trimmedCurrent) ? " " : ". ";
-  return `${trimmedCurrent}${separator}${trimmedAddition}`.slice(0, maxLength);
+  return truncateAtWordBoundary(`${trimmedCurrent}${separator}${trimmedAddition}`, maxLength);
 }
 
 // Stable machine-readable preset keys the revise edge function's

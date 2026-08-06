@@ -140,6 +140,46 @@ describe("pruneDiversityOffenders", () => {
     expect(result.residualIssues.some((issue) => issue.code === "IDENTICAL_HEADLINE")).toBe(false);
   });
 
+  it("surfaces unpruneable hard failures (UNKNOWN_STRATEGY) in residualIssues even after pruning resolves other conflicts", () => {
+    // ADVERSARIAL REVIEW FIX (defect 2, 2026-08-05): MISSING_REQUIRED_STRATEGY
+    // and UNKNOWN_STRATEGY are hard but intentionally NOT in
+    // PRUNEABLE_DIVERSITY_CODES — dropping a candidate cannot manufacture a
+    // missing strategy lane or fix an invalid strategy id on a survivor.
+    // UNKNOWN_STRATEGY is also single-candidate (candidateIds.length === 1),
+    // so it never qualifies for the >=2-candidate pruning loop either way. A
+    // caller that only checks `survivors.length >= 2` after pruning and
+    // ignores `residualIssues` would ship a batch that still has this hard
+    // failure in it — this pins that residualIssues surfaces it so that
+    // regression is caught here, not just at the ai-generate-ad-variants call
+    // site.
+    const candidates: AdCandidateForDiversity[] = [
+      withId("dup-low", candidate("value_clarity", "Coffee gets the bagel", "Buy a coffee and the bagel is on us.")),
+      // Deliberately different description text from "dup-low" so only the
+      // headline collides (IDENTICAL_HEADLINE) without also tripping
+      // OBVIOUS_PARAPHRASE on the body — keeps this test isolated to the one
+      // hard failure it means to exercise.
+      withId("dup-high", candidate("social_or_occasion", "Coffee gets the bagel", "A warm bagel comes free with every coffee order.")),
+      withId("bad-strategy", candidate("not_a_real_strategy", "Warm breakfast with coffee")),
+    ];
+    const check = checkAdCandidateDiversity(candidates);
+    expect(check.hardFailures.map((issue) => issue.code).sort()).toEqual(["IDENTICAL_HEADLINE", "UNKNOWN_STRATEGY"]);
+
+    const result = pruneDiversityOffenders(candidates, check.issues, {
+      "dup-low": 20,
+      "dup-high": 80,
+      "bad-strategy": 50,
+    });
+
+    // The pruneable IDENTICAL_HEADLINE conflict was resolved by dropping the
+    // lower-scored duplicate...
+    expect(result.removedIds).toEqual(["dup-low"]);
+    expect(result.survivors.map((entry) => entry.candidate_id).sort()).toEqual(["bad-strategy", "dup-high"]);
+    expect(result.residualIssues.some((issue) => issue.code === "IDENTICAL_HEADLINE")).toBe(false);
+    // ...but UNKNOWN_STRATEGY survives pruning untouched, still hard.
+    const residualHardCodes = result.residualIssues.filter((issue) => issue.severity === "hard").map((issue) => issue.code);
+    expect(residualHardCodes).toEqual(["UNKNOWN_STRATEGY"]);
+  });
+
   it("leaves candidates untouched when there are no pruneable hard issues", () => {
     const candidates: AdCandidateForDiversity[] = [
       withId("a", candidate("value_clarity", "Coffee gets the bagel")),

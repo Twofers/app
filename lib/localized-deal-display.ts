@@ -1,24 +1,24 @@
 import {
   renderLocalizedOfferFromDefinition,
   type LocalizedLockedOfferContent,
-} from "./localized-offer-renderer";
-import type { LocalizedDealFields } from "./deal-localization";
-import { localizedDealDescription, localizedDealTitle } from "./deal-localization";
-import type { DealStructuredDisplayFields } from "./deal-feed-schema";
-import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "./offer-definition";
+} from "./localized-offer-renderer.ts";
+import type { LocalizedDealFields } from "./deal-localization.ts";
+import { localizedDealDescription, localizedDealTitle } from "./deal-localization.ts";
+import type { DealStructuredDisplayFields } from "./deal-feed-schema.ts";
+import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "./offer-definition.ts";
 import {
   resolveAdLocale,
   type AdLocaleResolutionSource,
   type ResolvedAdLocale,
-} from "./ad-locale-resolver";
+} from "./ad-locale-resolver.ts";
 import {
   normalizeSupportedLocale,
   supportedLocaleToAppLanguage,
   type SupportedLocale,
-} from "./supported-locales";
-import type { CustomerDealLocalization } from "./customer-deal-localizations";
-import { dealItemTranslationLocales } from "./deal-item-translation-flag";
-import { DEAL_ITEM_TRANSLATION_EXPANSION } from "./localized-offer-terms-expansion";
+} from "./supported-locales.ts";
+import type { CustomerDealLocalization } from "./customer-deal-localizations.ts";
+import { dealItemTranslationLocales } from "./deal-item-translation-flag.ts";
+import { DEAL_ITEM_TRANSLATION_EXPANSION } from "./localized-offer-terms-expansion.ts";
 
 type LocalizedDealDisplayOfferVersionFields = {
   ad_spec?: unknown;

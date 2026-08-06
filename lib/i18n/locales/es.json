@@ -2033,6 +2033,8 @@
     "errAiGenerationFailed": "AI generation failed.",
     "errImageGenerationNoImage": "La IA no pudo crear una imagen para este anuncio. Agrega una foto o inténtalo de nuevo antes de usarlo.",
     "noticeImagelessAd": "No pudimos crear una foto para esta oferta, así que tu anuncio usa un fondo limpio. Puedes agregar tu propia foto cuando quieras.",
+    "composeLowConfidence": "La IA no estaba segura — revisa los detalles.",
+    "composeLowConfidenceDismiss": "Descartar",
     "errImageServiceDown": "Nuestro servicio de imágenes está ocupado ahora. Inténtalo de nuevo en unos minutos o añade tu propia foto.",
     "errNeedPhotoOrDescription": "Añade una foto o describe tu oferta y vuelve a generar.",
     "offerMechanicsInvalid": "No pudimos ajustar este anuncio a tu oferta. Revisa qué compra el cliente, el artículo gratis y la regla de la oferta, luego inténtalo de nuevo.",

@@ -41,6 +41,14 @@ export type AiComposeResultPayload = {
   poster_storage_path?: string | null;
   /** True when a poster was requested (text-only) but image generation or upload failed. */
   poster_image_unavailable?: boolean;
+  /**
+   * AI_COMPOSE_FALLBACK_ENABLED only: true when this result was built by the
+   * deterministic (non-AI) fallback (supabase/functions/ai-compose-offer/deterministic-fallback.ts)
+   * after a live-AI failure, rather than by the model itself. Mirrors the
+   * top-level AiComposeSuccess.fallback flag; kept here too since `result` is
+   * what callers usually read from.
+   */
+  compose_fallback?: boolean;
 };
 
 export type AiComposeSuccess = {
@@ -48,6 +56,8 @@ export type AiComposeSuccess = {
   duplicate_cached?: boolean;
   result: AiComposeResultPayload;
   quota: AiComposeQuota;
+  /** AI_COMPOSE_FALLBACK_ENABLED only: true when `result` came from the deterministic fallback, not the AI. */
+  fallback?: boolean;
 };
 
 export type AiComposeErrorBody = {

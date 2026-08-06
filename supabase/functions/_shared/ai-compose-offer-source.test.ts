@@ -179,4 +179,69 @@ describe("ai-compose-offer legacy fallback source guard", () => {
       expect(source).toMatch(/await fetchPreviousComposeHeadlines\(admin, business_id\)/);
     });
   });
+
+  describe("AI_COMPOSE_FALLBACK_ENABLED: deterministic compose fallback (F1)", () => {
+    it("defaults off, reading a dedicated env flag", () => {
+      expect(source).toMatch(
+        /const COMPOSE_FALLBACK_ENABLED = Deno\.env\.get\("AI_COMPOSE_FALLBACK_ENABLED"\) === "true";/,
+      );
+      expect(source).toMatch(/if \(!COMPOSE_FALLBACK_ENABLED\) return null;/);
+    });
+
+    it("is attempted at both AI failure surfaces, before either existing 502 path", () => {
+      const catchIndex = source.indexOf("} catch (err) {");
+      const invalidShapeIndex = source.indexOf('failure_reason: "INVALID_AI_SHAPE"');
+      expect(catchIndex).toBeGreaterThan(-1);
+      expect(invalidShapeIndex).toBeGreaterThan(-1);
+
+      const firstCallIndex = source.indexOf("await tryComposeFallback(");
+      expect(firstCallIndex).toBeGreaterThan(catchIndex);
+      expect(firstCallIndex).toBeLessThan(invalidShapeIndex);
+
+      const secondCallIndex = source.indexOf("await tryComposeFallback(", firstCallIndex + 1);
+      expect(secondCallIndex).toBeGreaterThan(firstCallIndex);
+      expect(secondCallIndex).toBeLessThan(invalidShapeIndex);
+
+      // Exactly the two documented call sites — a third would mean an undocumented
+      // new dead-end got fallback coverage without this test being updated for it.
+      expect(source.split("await tryComposeFallback(").length - 1).toBe(2);
+
+      // Each call site returns immediately on a non-null fallback response, so the
+      // existing failure-log-insert + 502 below it only runs when the fallback
+      // itself declined (flag off, unparseable hint, or it failed its own validation).
+      expect(source).toMatch(/if \(composeFallbackResponse\) return composeFallbackResponse;/);
+    });
+
+    it("never re-logs provider cost for the attempt(s) the caller already logged", () => {
+      const fnStart = source.indexOf("async function tryComposeFallback(");
+      const fnEnd = source.indexOf("\n    const systemPrompt = [", fnStart);
+      expect(fnStart).toBeGreaterThan(-1);
+      expect(fnEnd).toBeGreaterThan(fnStart);
+      const fnBody = source.slice(fnStart, fnEnd);
+      expect(fnBody).not.toMatch(/logComposeProviderAttempts/);
+      expect(fnBody).not.toMatch(/logComposeCost/);
+    });
+
+    it("salts the logged request_hash so a fallback result can never be replayed by the dedup cache", () => {
+      // The dedup-cache lookup earlier in this file selects by the TRUE request_hash;
+      // storing the fallback's row under a salted hash guarantees a later retry with
+      // identical inputs recomputes that true hash, misses this row, and reaches the
+      // real AI call again instead of silently replaying a degraded result.
+      expect(source).toMatch(
+        /const saltedHash = await sha256Hex\(`\$\{request_hash\}:compose_fallback:\$\{crypto\.randomUUID\(\)\}`\);/,
+      );
+      expect(source).toMatch(/request_hash: saltedHash,/);
+    });
+
+    it("logs the fallback as a real success for quota/cooldown purposes, tagged so it is never mistaken for AI output", () => {
+      const fnStart = source.indexOf("async function tryComposeFallback(");
+      const fnEnd = source.indexOf("\n    const systemPrompt = [", fnStart);
+      const fnBody = source.slice(fnStart, fnEnd);
+      expect(fnBody).toMatch(/success:\s*true,/);
+      expect(fnBody).toMatch(/failure_reason:\s*null,/);
+      expect(fnBody).toMatch(/compose_fallback:\s*true,/);
+      expect(fnBody).toMatch(/fallback:\s*true,/);
+      expect(fnBody).toMatch(/low_confidence:\s*true,/);
+    });
+  });
 });

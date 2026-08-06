@@ -433,7 +433,11 @@ describe("AI create UX source guards", () => {
     // 2026-08-05 change (Dan-approved): tapping a chip used to silently discard
     // whatever the merchant had already typed into the feedback box.
     expect(createAiSource).toContain("appendRevisionFeedback(current, suggestion.feedback)");
-    expect(createAiSource).toContain("setPendingRevisionPreset(revisionPresetForSuggestion(suggestion.key) ?? null)");
+    // The preset carries its own target (2026-08-05 adversarial-review fix) so a
+    // later target-pill switch or manual feedback edit can tell it's gone stale
+    // and drop it before it silently rides along on an unrelated revise call.
+    expect(createAiSource).toContain("const presetKey = revisionPresetForSuggestion(suggestion.key)");
+    expect(createAiSource).toContain("setPendingRevisionPreset(presetKey ? { key: presetKey, target: suggestion.target } : null)");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_SUGGESTION_SELECTED");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_TAPPED");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_SUCCEEDED");

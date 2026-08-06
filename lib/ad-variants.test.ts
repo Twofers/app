@@ -7,6 +7,7 @@ import {
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
   appendRevisionFeedback,
+  revisionFeedbackContainsSuggestion,
   revisionPresetForSuggestion,
   copyFingerprint,
   copyFingerprintHash,
@@ -316,11 +317,64 @@ describe("appendRevisionFeedback", () => {
     expect(appendRevisionFeedback("Existing feedback", "   ")).toBe("Existing feedback");
   });
 
-  it("caps the combined result at the max length (server truncates at 800)", () => {
+  it("caps the combined result at the max length without slicing a word in half", () => {
     const current = "a".repeat(750);
     const addition = "b".repeat(100);
     const result = appendRevisionFeedback(current, addition);
-    expect(result.length).toBe(800);
+    // Combined (before capping) is 750 a's + ". " + 100 b's = 852 chars. A
+    // hard slice(0, 800) would land 48 characters into the "b" run — a
+    // truncated word. The fix drops that whole half-cut trailing word (and
+    // the now-orphaned separator) instead of keeping the fragment.
+    expect(result.length).toBeLessThanOrEqual(800);
+    expect(result).toBe("a".repeat(750));
+  });
+
+  it("keeps whole words and never cuts one in half at the cap", () => {
+    const current = "x".repeat(795);
+    const addition = "hello world";
+    const result = appendRevisionFeedback(current, addition, 800);
+    // Combined is 795 x's + ". " + "hello world" = 808 chars. Slicing at 800
+    // would land inside "hello" ("...hel"). No whole word from the addition
+    // fits after the separator, so the cut backs all the way up to the x run
+    // and drops the orphaned trailing separator too.
+    expect(result.length).toBeLessThanOrEqual(800);
+    expect(result).toBe("x".repeat(795));
+    expect(result).not.toMatch(/\s$/);
+  });
+
+  it("keeps as many whole words as fit before the cap, dropping only the partial one", () => {
+    const current = "Please rewrite the top headline";
+    const addition = "so it sounds like a real local ad written by a person, not a template";
+    const maxLength = current.length + 2 + 20; // room for ". " + a few whole words only
+    const result = appendRevisionFeedback(current, addition, maxLength);
+    const uncapped = `${current}. ${addition}`;
+    expect(result.length).toBeLessThanOrEqual(maxLength);
+    // Whatever survived the cut must be an exact prefix of the untruncated
+    // text (modulo the trailing separator/punctuation stripped at the cut
+    // point) — i.e. no word was sliced mid-way.
+    expect(uncapped.startsWith(result)).toBe(true);
+    expect(result).not.toMatch(/\s$/);
+    const nextChar = uncapped[result.length];
+    expect(nextChar === undefined || /\s/.test(nextChar) || /[.,;:!?-]/.test(nextChar)).toBe(true);
+  });
+});
+
+describe("revisionFeedbackContainsSuggestion", () => {
+  it("matches case-insensitively, consistent with appendRevisionFeedback's dedup", () => {
+    expect(revisionFeedbackContainsSuggestion("Please make it WARMER and shorter", "warmer")).toBe(true);
+    expect(revisionFeedbackContainsSuggestion("Make it shorter.", "Warmer")).toBe(false);
+  });
+
+  it("matches on substring containment, not exact equality", () => {
+    // A chip's canned text survives inside a longer, appended feedback string
+    // (this is exactly what keeps a chip's "selected" highlight lit after
+    // appendRevisionFeedback joins it onto existing text).
+    const feedback = appendRevisionFeedback("Make it shorter.", "Warmer tone please");
+    expect(revisionFeedbackContainsSuggestion(feedback, "Warmer tone please")).toBe(true);
+  });
+
+  it("unselects once the suggestion text is edited out", () => {
+    expect(revisionFeedbackContainsSuggestion("Make it shorter and warm", "Warmer tone please")).toBe(false);
   });
 });
 

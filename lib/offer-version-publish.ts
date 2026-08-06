@@ -43,6 +43,16 @@ export type OfferVersionPublishScreenshotQaSnapshot = {
 export type OfferVersionPublishAdSpec = AdSpecV1 & {
   composedCard?: OfferVersionPublishComposedCardSpec | null;
   localization?: OfferVersionPublishLocalizationSnapshot | null;
+  /**
+   * Optional passthrough of the ai_generation_logs row id the ad-generation
+   * response returned (`ad.generation_log_id` — see
+   * supabase/functions/ai-generate-ad-variants). publish-offer-version reads
+   * this (or the top-level body / ad_spec.offer variants) to link the
+   * generation that produced this creative to the deal it publishes; see
+   * that function's `generationLogIdFromBody`. Absent when the ad wasn't AI
+   * generated (manual draft, fallback template) or carried no id.
+   */
+  generation_log_id?: string | null;
 };
 
 export type PublishOfferVersionedDealBody = {
@@ -285,6 +295,8 @@ export function buildOfferVersionPublishAdSpec(
     composedCard?: OfferVersionPublishComposedCardSpec | null;
     localization?: OfferVersionPublishLocalizationSnapshot | null;
     localizationApproval?: AdLocalizationApprovalSnapshot | null;
+    /** See OfferVersionPublishAdSpec.generation_log_id. */
+    generationLogId?: string | null;
   },
 ): OfferVersionPublishAdSpec {
   const spec = buildAdSpecV1({
@@ -304,11 +316,13 @@ export function buildOfferVersionPublishAdSpec(
         localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
         approval: options?.localizationApproval ?? null,
       });
-  if (!options?.composedCard && !localization) return spec;
+  const generationLogId = options?.generationLogId ?? null;
+  if (!options?.composedCard && !localization && !generationLogId) return spec;
   return {
     ...spec,
     ...(options?.composedCard ? { composedCard: options.composedCard } : {}),
     ...(localization ? { localization } : {}),
+    ...(generationLogId ? { generation_log_id: generationLogId } : {}),
   };
 }
 

@@ -253,6 +253,21 @@ type SingleAd = {
    * produced it (see publish-offer-version's optional passthrough).
    */
   generation_log_id?: string | null;
+  /**
+   * TASK 5 (adversarial review addendum, 2026-08-05), FLAG 1 only: true when
+   * Stage-1 research could not confidently identify the item AND the image is
+   * fully AI-generated (never seen the real product). The client already
+   * reads this defensively and shows a small notice; absent (not false) when
+   * the flag is off or the conditions aren't met — additive response field.
+   */
+  low_confidence?: boolean;
+  /**
+   * TASK 5 (adversarial review addendum, 2026-08-05), FLAG 1 only: a short,
+   * merchant-safe, jargon-free sentence explaining `low_confidence`. Renders
+   * verbatim in the app — no internal codes, no technical language. Present
+   * only when `low_confidence` is true.
+   */
+  recommendation_reason?: string;
   /** Research the AI used to write the copy. Empty when it skipped/failed research. */
   item_research: ItemResearch;
   /** How the image was produced. */
@@ -1139,6 +1154,36 @@ function adCopyPromptVersionForLogging(): string {
 const TOP_BAND_CONTRAST_REGEN_THRESHOLD = 0.42;
 const TOP_BAND_TILE_SPREAD_REGEN_THRESHOLD = 0.35;
 
+// Mirrors lib/ad-candidate-diversity.ts's STOP_WORDS / meaningfulWords approach
+// for the word-overlap fallback below (that module doesn't export its version,
+// so this is a small local copy rather than an import).
+const ITEM_DESCRIPTION_STOP_WORDS = new Set([
+  "a", "an", "and", "at", "for", "get", "grab", "one", "order", "the", "to", "with", "when", "you", "your",
+]);
+
+function itemDescriptionMeaningfulWords(value: string): Set<string> {
+  const normalized = value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return new Set(
+    normalized.split(" ").filter((word) => word.length > 1 && !ITEM_DESCRIPTION_STOP_WORDS.has(word)),
+  );
+}
+
+/** True when at least one non-stop-word token is shared between the two strings. */
+function hasItemDescriptionWordOverlap(a: string, b: string): boolean {
+  const wordsA = itemDescriptionMeaningfulWords(a);
+  if (wordsA.size === 0) return false;
+  const wordsB = itemDescriptionMeaningfulWords(b);
+  for (const word of wordsB) {
+    if (wordsA.has(word)) return true;
+  }
+  return false;
+}
+
 /**
  * FLAG 1, task 1: builds a Record<string,string> of visual item descriptors
  * from Stage-1 research, keyed by the exact required-item name strings
@@ -1149,10 +1194,25 @@ const TOP_BAND_TILE_SPREAD_REGEN_THRESHOLD = 0.35;
  * undefined when research is unfamiliar/empty or nothing matches, so callers
  * can spread it in as `itemDescriptions: buildItemDescriptionsFromResearch(...)`
  * without a conditional.
+ *
+ * ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05): a two-required-item deal
+ * (BOGO) whose research item_name doesn't literally substring-match either
+ * item's exact name — e.g. research says "iced vanilla latte" but the
+ * contract's paid item is spelled "vanilla iced latte, 16oz" — used to
+ * silently attach nothing. Add a content-word-overlap fallback (>=1 shared
+ * meaningful word after stripping stop words), checked against the PAID item
+ * first: research almost always describes what the merchant is selling, not
+ * the free reward, so a match is only ever attributed to the paid item. When
+ * even that finds nothing, still attach to the paid item — is_familiar is
+ * already guaranteed true at this point (checked at function entry above),
+ * matching this function's existing single-item behavior, which already
+ * force-attaches with no evidence check at all — but NEVER to the free item,
+ * so an unrelated description can never land on the reward's image prompt.
  */
 function buildItemDescriptionsFromResearch(
   research: ItemResearch,
   requiredVisualItems: readonly string[],
+  offerItems: { paidItem?: string; freeItem?: string },
 ): Record<string, string> | undefined {
   if (!research.is_familiar) return undefined;
   const description = research.description?.trim();
@@ -1167,10 +1227,66 @@ function buildItemDescriptionsFromResearch(
       }
     }
   }
-  if (Object.keys(out).length === 0 && requiredVisualItems.length === 1) {
+  if (Object.keys(out).length > 0) return out;
+
+  if (requiredVisualItems.length === 1) {
     out[requiredVisualItems[0]!] = description;
+    return out;
   }
+
+  if (requiredVisualItems.length === 2) {
+    const paidItem = (offerItems.paidItem ?? "").trim();
+    if (paidItem && requiredVisualItems.includes(paidItem)) {
+      // Both the word-overlap match and the is_familiar-only last resort
+      // resolve to the SAME target (paid item, never free) — is_familiar is
+      // already guaranteed true at function entry above, so there is no
+      // additional condition left to gate a separate "no match at all"
+      // outcome on. `matchedByWordOverlap` is real content-word evidence
+      // rather than a discarded computation: it is recorded so an operator
+      // can tell a confident match from a blind is_familiar-only attach
+      // apart in logs, without changing which item gets the description.
+      const matchedByWordOverlap = researchName ? hasItemDescriptionWordOverlap(researchName, paidItem) : false;
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "item_description_paid_fallback_attach",
+          matchedByWordOverlap,
+        }),
+      );
+      out[paidItem] = description;
+      return out;
+    }
+  }
+
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * TASK 5 (adversarial review addendum, 2026-08-05), FLAG 1 only: the client
+ * already reads ad.low_confidence / ad.recommendation_reason defensively and
+ * shows a small notice, but nothing server-side sets them yet. When Stage-1
+ * research could not confidently identify the item — is_familiar false,
+ * research failed (researchMenuItem already normalizes a failure to
+ * is_familiar: false), or an empty description even if is_familiar somehow
+ * came back true — AND the image is fully AI-generated (never seen the real
+ * product; a merchant photo, an AI edit of one, or an approved stock image
+ * doesn't need this notice), flag a short, merchant-safe, jargon-free
+ * recommendation to double-check the image. Additive: returns {} (both
+ * fields absent, not false/empty-string) when the flag is off or these
+ * conditions are not met.
+ */
+function lowConfidenceImageAdFields(
+  research: ItemResearch,
+  photoSource: SingleAd["photo_source"],
+): Pick<SingleAd, "low_confidence" | "recommendation_reason"> {
+  if (!aiAdsPipelineV8Enabled()) return {};
+  if (photoSource !== "generated") return {};
+  const researchUnconfident = !research.is_familiar || !research.description?.trim();
+  if (!researchUnconfident) return {};
+  return {
+    low_confidence: true,
+    recommendation_reason: "We weren't sure what this item looks like — double-check the image.",
+  };
 }
 
 function candidateId(candidate: AiDealCopyVariant, index: number): string {
@@ -1833,7 +1949,25 @@ async function prepareCopyCandidates(params: {
         ]),
       );
       const pruneResult = pruneDiversityOffenders(styleSafe, diversity.issues, preliminaryScoresForPruning);
+      telemetry.diversity.pruned_candidate_ids = pruneResult.removedIds;
       if (pruneResult.survivors.length < 2) {
+        return { variants: [], telemetry, judgeAttempts: [] };
+      }
+      // ADVERSARIAL REVIEW FIX (defect 2, 2026-08-05): pruneDiversityOffenders only
+      // removes PRUNEABLE conflicts (DUPLICATE_STRATEGY, IDENTICAL_HEADLINE,
+      // DUPLICATE_HEADLINE_OPENING, OBVIOUS_PARAPHRASE — see PRUNEABLE_DIVERSITY_CODES
+      // in lib/ad-candidate-diversity.ts). MISSING_REQUIRED_STRATEGY and
+      // UNKNOWN_STRATEGY are hard but UNPRUNEABLE by design: dropping a candidate
+      // cannot manufacture a missing strategy lane or fix an invalid strategy id on a
+      // surviving one, so pruning no-ops on them. Without this check the survivors
+      // would ship with that unpruneable hard failure still present — a tainted batch
+      // the flag-off path would never have allowed through (it returns empty on ANY
+      // hard failure). Match that floor: any residual hard issue after pruning forces
+      // the same empty-batch / attempt-2-retry outcome flag-off takes, and
+      // qualityGateRepairFeedback still sees every original hard-failure code via
+      // telemetry.diversity.hard_failures (untouched above).
+      const residualHardFailures = pruneResult.residualIssues.filter((issue) => issue.severity === "hard");
+      if (residualHardFailures.length > 0) {
         return { variants: [], telemetry, judgeAttempts: [] };
       }
       const survivorIds = new Set(
@@ -1846,7 +1980,6 @@ async function prepareCopyCandidates(params: {
         strategy_id: variant.strategy_id ?? null,
         score: variant.preliminary_score ?? 0,
       }));
-      telemetry.diversity.pruned_candidate_ids = pruneResult.removedIds;
       return prepareJudgedCopyCandidates({ ...params, ranked: rankedAfterPrune, telemetry });
     }
   }
@@ -1911,6 +2044,26 @@ async function prepareJudgedCopyCandidates(params: {
   if (judgeCandidates.length < 2) {
     telemetry.judge.skipped_reason = "fewer_than_two_valid_candidates";
     return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+
+  // ADVERSARIAL REVIEW FIX (defect 3, 2026-08-05): buildCandidateJudgePrompt
+  // (and applyJudgeScoresToCandidates) each assign a fallback id via
+  // `candidate.candidate_id || candidate_${index+1}` — the judge JSON schema
+  // allows an empty candidateId and cleanVariant drops it, so the fallback is
+  // live. Left alone, that positional fallback gets computed against TWO
+  // DIFFERENT orderings: unshuffled `judgeCandidates` (for the
+  // all-judged-failed check below) vs. the SHUFFLED array the judge prompt and
+  // model actually use — divergent whenever a candidate lacks a real id.
+  // Materialize a stable id onto each candidate object HERE, once, at this
+  // fixed pre-shuffle index, before anything reorders them. seededShuffle
+  // reorders references without cloning, so the materialized id travels with
+  // each candidate through the shuffle; and because these are the SAME object
+  // references `ranked` holds, this also keeps
+  // `applyJudgeScoresToCandidates(ranked, judge)` below matching against the
+  // same ids the judge actually scored, not a second, independently-computed
+  // fallback.
+  for (const [index, candidate] of judgeCandidates.entries()) {
+    if (!candidate.candidate_id) candidate.candidate_id = candidateId(candidate, index);
   }
 
   const shuffled = seededShuffle(judgeCandidates, `${params.costContext.requestGroupId}:${params.attemptNumber}`);
@@ -1991,8 +2144,10 @@ async function prepareJudgedCopyCandidates(params: {
     // hard failures and concise feedback for that retry).
     if (aiAdsPipelineV8Enabled()) {
       const failedIds = new Set(telemetry.judge.hard_failures.map((failure) => failure.candidate_id));
-      const judgedIds = judgeCandidates.map((candidate, index) => candidate.candidate_id || candidateId(candidate, index));
-      const allJudgedFailed = judgedIds.length > 0 && judgedIds.every((id) => failedIds.has(id));
+      // Read the SAME materialized ids assigned above (pre-shuffle) rather than
+      // recomputing a positional fallback here — see defect 3 comment above.
+      const judgedIds = judgeCandidates.map((candidate) => candidate.candidate_id).filter((id): id is string => Boolean(id));
+      const allJudgedFailed = judgedIds.length === judgeCandidates.length && judgedIds.every((id) => failedIds.has(id));
       if (allJudgedFailed) {
         return {
           variants: [],
@@ -2032,6 +2187,17 @@ type ImageQaTelemetry = {
   merchantOverrideAllowed: boolean;
   merchantOverrideAcknowledged: boolean;
   sourceAware: SourceAwareImageQaResult | null;
+  /**
+   * ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05), FLAG 1 only: how many
+   * required-item keys buildItemDescriptionsFromResearch actually attached a
+   * Stage-1 research descriptor to for this generation (0 when the flag is
+   * off, research was unfamiliar/empty, or nothing matched — a silent no-op
+   * that used to be invisible). Set once by the caller right after `qa` is
+   * constructed; imageQaTelemetryFromSourceAware itself never sets this, so it
+   * survives every later `Object.assign(qa, imageQaTelemetryFromSourceAware(...))`
+   * merge in the same function.
+   */
+  itemDescriptionsAttachedCount?: number;
 };
 
 function imageQaTelemetryFromSourceAware(
@@ -2722,9 +2888,11 @@ async function produceImageOpenAiOnly(params: {
   const requiredVisualItems = buildRequiredVisualItems(offerContract);
   // FLAG 1 (task 1): visual descriptors from Stage-1 research, keyed by the
   // exact required-item names. Undefined (byte-identical) when the flag is off.
+  const openAiOnlyOfferItems = requiredOfferItems(offerContract);
   const itemDescriptions = aiAdsPipelineV8Enabled()
-    ? buildItemDescriptionsFromResearch(research, requiredVisualItems)
+    ? buildItemDescriptionsFromResearch(research, requiredVisualItems, openAiOnlyOfferItems)
     : undefined;
+  const itemDescriptionsAttachedCount = itemDescriptions ? Object.keys(itemDescriptions).length : 0;
   let originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
   const originalPhotoResult = (): OpenAiProducedImage => ({
     posterStoragePath: photoPath,
@@ -2812,6 +2980,9 @@ async function produceImageOpenAiOnly(params: {
           if (!imageQaBlocksAutomaticSelection(originalQa)) return { ...originalPhotoResult(), attempts: enhancedAttempts };
         } else {
           const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
+          // ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05): this QA call above
+          // also received `itemDescriptions`; report the same attach count here.
+          editQaTelemetry.itemDescriptionsAttachedCount = itemDescriptionsAttachedCount;
 
           const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
           const { error: upErr } = await admin.storage
@@ -2888,6 +3059,15 @@ async function produceImageOpenAiOnly(params: {
       sourceType: "ai_generated",
     }),
   );
+  // ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05): surface whether Stage-1
+  // research actually got attached as an item descriptor, in the existing
+  // generation telemetry (buildGenerationTelemetry reads imageResult.qa), so a
+  // silent no-op (research present but nothing matched) is visible instead of
+  // indistinguishable from "flag off" or "no research at all". Set once, on
+  // this same `qa` object every return path below shares; later
+  // Object.assign(qa, ...) calls only touch ImageQaTelemetry's own fields, so
+  // this survives them.
+  qa.itemDescriptionsAttachedCount = itemDescriptionsAttachedCount;
   if (!png) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa, attempts: providerAttempts };
   }
@@ -3015,16 +3195,31 @@ async function produceImageOpenAiOnly(params: {
     // instead of the image shipping fully uninspected. Fail-open on QA outage
     // exactly as the items branch above (VISION_QA_UNAVAILABLE warning, image
     // still ships).
-    const forbiddenCheck = await inspectGeneratedImageForOffer({
-      openAiKey,
-      geminiApiKey,
-      imageBytes: png,
-      requiredVisualItems: [],
-      costContext,
-      sourceType: "ai_generated",
-      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
-    });
-    qa.attempts = 1;
+    //
+    // ADVERSARIAL REVIEW FIX (defect 1, 2026-08-05): this call never consulted
+    // the image wall-clock budget (vision QA can take ~39s worst case: 25s
+    // primary + 14s fallback, see makeImageQaConfig), so a tight-budget request
+    // could be pushed past the ~150s worker kill with no response. Skip the
+    // call — and use the same VISION_QA_UNAVAILABLE fail-open telemetry an
+    // actual outage produces — when less than ~30s remains.
+    const noItemQaAffordable = canSpendAiImageDeadline(params.imageDeadline, "openai_no_item_qa", 30_000);
+    if (!noItemQaAffordable) {
+      console.log(
+        JSON.stringify({ tag: "ai_ads_v2", event: "image_leg_skipped_for_budget", leg: "openai_no_item_qa" }),
+      );
+    }
+    const forbiddenCheck = noItemQaAffordable
+      ? await inspectGeneratedImageForOffer({
+          openAiKey,
+          geminiApiKey,
+          imageBytes: png,
+          requiredVisualItems: [],
+          costContext,
+          sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+        })
+      : null;
+    qa.attempts = noItemQaAffordable ? 1 : 0;
     Object.assign(
       qa,
       forbiddenCheck
@@ -3033,7 +3228,7 @@ async function produceImageOpenAiOnly(params: {
             1,
             qa.regenerated,
           )
-        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), 1, qa.regenerated),
+        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), noItemQaAffordable ? 1 : 0, qa.regenerated),
     );
   }
   // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
@@ -3181,11 +3376,16 @@ async function produceImage(params: {
   budgetSink?: { report?: AiImageDeadlineReport };
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
+  // Hoisted above its previous single call site (before the Gemini prompt build
+  // below) so FLAG 1 (task 1) item-description matching can use it too; pure
+  // function of params.offerContract, so computing it here changes nothing.
+  const offerItems = requiredOfferItems(params.offerContract);
   // FLAG 1 (task 1): visual descriptors from Stage-1 research, keyed by the
   // exact required-item names. Undefined (byte-identical) when the flag is off.
   const itemDescriptions = aiAdsPipelineV8Enabled()
-    ? buildItemDescriptionsFromResearch(params.research, requiredVisualItems)
+    ? buildItemDescriptionsFromResearch(params.research, requiredVisualItems, offerItems)
     : undefined;
+  const itemDescriptionsAttachedCount = itemDescriptions ? Object.keys(itemDescriptions).length : 0;
   // R4: the edge worker is killed with WORKER_RESOURCE_LIMIT at roughly 150s wall
   // clock. This chain can queue up to four Gemini calls (primary + its retry, then
   // the category-safe attempt + its retry) plus a gpt-image-1 fallback and a vision
@@ -3383,7 +3583,7 @@ async function produceImage(params: {
   const useOpenAiFallback = params.imageProviderConfig.fallbackProvider === "openai";
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
-  const offerItems = requiredOfferItems(params.offerContract);
+  // offerItems hoisted to the top of this function now (see above); reused here.
   const stylePreset = imageStylePresetFromRevision({
     revisionPreset: params.revisionPreset,
     revisionFeedback: params.revisionFeedback,
@@ -3504,6 +3704,9 @@ async function produceImage(params: {
       return useOpenAiFallback ? openAiFallback(geminiAttempts) : originalUploadedPhotoOrFallback();
     }
     const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
+    // ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05): this QA call above also
+    // received `itemDescriptions`; report the same attach count here.
+    editQaTelemetry.itemDescriptionsAttachedCount = itemDescriptionsAttachedCount;
 
     const enhancedPath = await uploadGeneratedBytes({
       admin: params.admin,
@@ -3577,6 +3780,11 @@ async function produceImage(params: {
     0,
     gemini.attempts.some((attempt) => attempt.retry && attempt.success),
   );
+  // ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05): see the matching comment in
+  // produceImageOpenAiOnly — set once, survives later Object.assign(qa, ...)
+  // merges in this function since imageQaTelemetryFromSourceAware never sets
+  // this field itself.
+  qa.itemDescriptionsAttachedCount = itemDescriptionsAttachedCount;
 
   // F4 (2026-07-20): the primary prompt embeds the merchant's exact item names as
   // "required visible items". An evocative branded name (e.g. a coffee named after
@@ -3587,8 +3795,16 @@ async function produceImage(params: {
   // exact identity is rendered by the app as native text, so this stays faithful
   // to the offer. Runs only on the no-image path, so working generations are
   // untouched.
-  // 60s estimate: this leg passes retryOnFailure, so it is up to two Gemini calls.
-  if (!imageBytes && pipelineHasBudgetFor("gemini_category_safe", 60_000)) {
+  // 99s estimate: 60s for the generation (this leg passes retryOnFailure, so it
+  // is up to two Gemini calls) + 39s for the FLAG 1 QA call this leg now also
+  // makes on success (makeImageQaConfig: primaryTimeoutMs 25s + fallbackTimeoutMs
+  // 14s = 39s worst case if the primary vision provider times out and it falls
+  // back). Was 60_000 before that QA call existed; raised to cover it so the
+  // pre-flight check actually reflects everything this leg can now spend. The
+  // QA call itself still gets its OWN fresh remaining-budget check right before
+  // it fires (see "gemini_category_safe_qa" below) since the generation above
+  // can eat an unpredictable share of this estimate first.
+  if (!imageBytes && pipelineHasBudgetFor("gemini_category_safe", 99_000)) {
     const categorySafePrompt = buildGeminiAdImagePrompt(
       {
         businessId: params.businessId,
@@ -3644,7 +3860,21 @@ async function produceImage(params: {
         // apply. Fail-open on QA outage exactly as elsewhere; only an actual
         // hard-block skips using this image (falls through to the remaining
         // fallback chain below instead of returning here).
-        const categoryQa = aiAdsPipelineV8Enabled()
+        //
+        // ADVERSARIAL REVIEW FIX (defect 1, 2026-08-05): this QA call was added
+        // to a leg the wall-clock budget did not know to reserve for, and vision
+        // QA (25s primary + 14s fallback = ~39s worst case) never itself
+        // consults the deadline — together those could push a tight-budget
+        // request past the ~150s worker kill with no response at all. Re-check
+        // the remaining budget immediately before firing it (the generation
+        // above already spent an unpredictable share of the leg's raised
+        // estimate); when it cannot afford ~30s, skip the call entirely and use
+        // the same VISION_QA_UNAVAILABLE fail-open telemetry an actual QA outage
+        // produces, so a skipped-for-budget image is never silently marked
+        // "checked, all clear" the way the flag-off default is.
+        const categorySafeQaAffordable =
+          aiAdsPipelineV8Enabled() && pipelineHasBudgetFor("gemini_category_safe_qa", 30_000);
+        const categoryQa = categorySafeQaAffordable
           ? await sourceAwareQaForImageBytes({
               openAiKey: params.openAiKey,
               geminiApiKey: params.geminiApiKey,
@@ -3654,6 +3884,8 @@ async function produceImage(params: {
               sourceType: "ai_generated",
               renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
             })
+          : aiAdsPipelineV8Enabled()
+          ? unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" })
           : null;
         if (!categoryQa || !shouldFailClosedForImageQa(categoryQa)) {
           console.log(
@@ -3666,7 +3898,7 @@ async function produceImage(params: {
               treatment: null,
               prompt: categoryGen.prompt,
               qa: categoryQa
-                ? imageQaTelemetryFromSourceAware(categoryQa, 1, true)
+                ? imageQaTelemetryFromSourceAware(categoryQa, categorySafeQaAffordable ? 1 : 0, true)
                 : imageQaTelemetryFromSourceAware(
                     normalizeSourceAwareImageQaResult({
                       raw: {
@@ -3865,16 +4097,26 @@ async function produceImage(params: {
     // forbidden-elements checks (text/logo/QR/mascot/crop) should still run
     // instead of the image shipping fully uninspected. Fail-open on QA outage
     // exactly as the items branch above.
-    const forbiddenCheck = await inspectGeneratedImageForOffer({
-      openAiKey: params.openAiKey,
-      geminiApiKey: params.geminiApiKey,
-      imageBytes,
-      requiredVisualItems: [],
-      costContext: params.costContext,
-      sourceType: "ai_generated",
-      renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
-    });
-    qa.attempts = 1;
+    //
+    // ADVERSARIAL REVIEW FIX (defect 1, 2026-08-05): this call never consulted
+    // the image wall-clock budget (vision QA can take ~39s worst case: 25s
+    // primary + 14s fallback, see makeImageQaConfig), so a tight-budget request
+    // could be pushed past the ~150s worker kill with no response. Skip the
+    // call — and use the same VISION_QA_UNAVAILABLE fail-open telemetry an
+    // actual outage produces — when less than ~30s remains.
+    const noItemQaAffordable = pipelineHasBudgetFor("gemini_no_item_qa", 30_000);
+    const forbiddenCheck = noItemQaAffordable
+      ? await inspectGeneratedImageForOffer({
+          openAiKey: params.openAiKey,
+          geminiApiKey: params.geminiApiKey,
+          imageBytes,
+          requiredVisualItems: [],
+          costContext: params.costContext,
+          sourceType: "ai_generated",
+          renderFormat: params.imageAspectRatio === "4:5" ? "poster_4_5" : "square_1_1",
+        })
+      : null;
+    qa.attempts = noItemQaAffordable ? 1 : 0;
     Object.assign(
       qa,
       forbiddenCheck
@@ -3883,7 +4125,7 @@ async function produceImage(params: {
             1,
             qa.regenerated,
           )
-        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), 1, qa.regenerated),
+        : imageQaTelemetryFromSourceAware(unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }), noItemQaAffordable ? 1 : 0, qa.regenerated),
     );
   }
   // Fail-open on QA outage (Dan, 2026-07-17): only an actual QA verdict may
@@ -4205,6 +4447,11 @@ function buildGenerationTelemetry(params: {
       produced_image: imageResult.posterStoragePath !== null,
       requested_aspect_ratio: params.posterDraft?.aspect_ratio ?? "1:1",
       provider_attempts: (imageResult.attempts ?? []).map(imageProviderAttemptTelemetry),
+      // ADVERSARIAL REVIEW FIX (defect 4, 2026-08-05), FLAG 1 only: how many
+      // required-item keys got a Stage-1 research descriptor attached (0 when
+      // the flag is off, research was unfamiliar/empty, or nothing matched —
+      // previously a silent, invisible no-op).
+      item_descriptions_attached_count: imageResult.qa.itemDescriptionsAttachedCount ?? 0,
     },
     poster: params.posterDraft
       ? {
@@ -5103,6 +5350,7 @@ Deno.serve(async (req) => {
       poster_storage_path: imageResult.posterStoragePath,
       image_selection: imageResult.selection,
       poster: posterDraft,
+      ...lowConfidenceImageAdFields(research, imageResult.source),
       localization_bundle: localizationResult?.bundle ?? null,
       localization_status: localizationResult
         ? {

@@ -63,6 +63,7 @@ import {
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
   appendRevisionFeedback,
+  revisionFeedbackContainsSuggestion,
   revisionPresetForSuggestion,
   copyFingerprintHash,
   type GeneratedAd,
@@ -785,6 +786,35 @@ function generatedAdForPublishSpec(params: {
   };
 }
 
+/**
+ * ai_generation_logs row id the ad-generation response attaches to
+ * `ad.generation_log_id` (see supabase/functions/ai-generate-ad-variants).
+ * Not on the GeneratedAd type — lib/ad-variants.ts is out of scope for this
+ * change — but the field survives on the raw network response (and through
+ * normalizeGeneratedAdDisplayCopy's `...ad` spread), so read it defensively
+ * instead of widening that type.
+ */
+function extractGenerationLogId(ad: unknown): string | null {
+  if (!ad || typeof ad !== "object") return null;
+  const raw = (ad as { generation_log_id?: unknown }).generation_log_id;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+/**
+ * low_confidence / recommendation_reason the compose-offer response shape
+ * carries (lib/ai-compose-offer.ts). Not on the GeneratedAd type either —
+ * same reasoning as extractGenerationLogId above. Reads defensively so the
+ * notice activates the moment a generation response attaches these fields,
+ * with zero effect while it doesn't.
+ */
+function extractLowConfidenceNotice(ad: unknown): { reason: string } | null {
+  if (!ad || typeof ad !== "object") return null;
+  const o = ad as { low_confidence?: unknown; recommendation_reason?: unknown };
+  if (o.low_confidence !== true) return null;
+  const reason = typeof o.recommendation_reason === "string" ? o.recommendation_reason.trim() : "";
+  return { reason };
+}
+
 function buildLiveAdPresentationReviewContext(params: {
   creativeFormat: AdCreativeFormat;
   sourceLocale: SupportedLocale;
@@ -1049,9 +1079,19 @@ export default function AiDealScreen() {
   );
   const [isRecording, setIsRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  // The recorder is a single shared resource; this just tracks which field
-  // the in-flight recording should be transcribed into once it stops.
+  // The recorder is a single shared resource. dictationTargetRef is the target
+  // requested by whichever mic button was tapped; startRecording freezes it
+  // into activeDictationTargetRef at entry (before any await), so stop always
+  // transcribes into the field whose button actually started the recording —
+  // never wherever a later tap happened to point.
   const dictationTargetRef = useRef<"hint" | "revision">("hint");
+  const activeDictationTargetRef = useRef<"hint" | "revision">("hint");
+  // Synchronous re-entrancy guard against a fast double-tap (same or other
+  // field) starting the shared recorder twice: setIsRecording(true) only
+  // lands after three awaited setup steps in startRecording, so isRecording
+  // alone doesn't block a second tap during that window. Set true in the
+  // onPress handler BEFORE calling startRecording; cleared in its finally.
+  const recordingStartInFlightRef = useRef(false);
 
   // AI quota
   const [quota, setQuota] = useState<AiComposeQuota | null>(null);
@@ -1173,6 +1213,20 @@ export default function AiDealScreen() {
    * know what treatment produced the previous_ad's image, not the current UI selection.
    */
   const lastSentPhotoTreatmentRef = useRef<PhotoTreatment | null>(null);
+  /**
+   * ai_generation_logs row id from the most recent successful generate/revise
+   * response (see extractGenerationLogId). Threaded into the publish request
+   * so the server can link this generation to the deal it produces
+   * (best-effort telemetry; publish-offer-version's generationLogIdFromBody).
+   * Kept in sync with `generatedAd`: set on every successful generate/revise,
+   * cleared wherever generatedAd resets to "no live AI generation".
+   */
+  const latestGenerationLogIdRef = useRef<string | null>(null);
+  // F3: compose-offer-shaped low_confidence signal on the current generatedAd
+  // (see extractLowConfidenceNotice). null = no notice. Kept in sync with
+  // generatedAd the same way as latestGenerationLogIdRef above, plus cleared
+  // on manual dismiss.
+  const [lowConfidenceNotice, setLowConfidenceNotice] = useState<{ reason: string } | null>(null);
 
   // Revision state
   const [revising, setRevising] = useState(false);
@@ -1181,7 +1235,18 @@ export default function AiDealScreen() {
   const [revisionFeedback, setRevisionFeedback] = useState("");
   // Set by applyRevisionSuggestion; consumed (and cleared) by the next reviseAd()
   // call so a stale preset never silently rides along on a later, unrelated revise.
-  const [pendingRevisionPreset, setPendingRevisionPreset] = useState<string | null>(null);
+  // Also invalidated early (before any reviseAd call) at the two points where
+  // the preset stops describing what's actually about to be sent: switching
+  // the revision-target pill away from the preset's own target, or the
+  // merchant manually editing the feedback text the chip wrote.
+  const [pendingRevisionPreset, setPendingRevisionPreset] = useState<{ key: string; target: RevisionTarget } | null>(
+    null,
+  );
+  // Snapshot of revisionFeedback exactly as applyRevisionSuggestion last left
+  // it. The feedback TextInput's onChangeText compares against this to tell a
+  // manual edit (invalidates pendingRevisionPreset) from the chip's own
+  // programmatic update (must not immediately invalidate its own preset).
+  const lastChipAppliedFeedbackRef = useRef<string | null>(null);
   const [composedStyleIndex, setComposedStyleIndex] = useState(0);
   // Single-variant flow: the edit-intent no longer gates the (now always-visible)
   // refine panel; the setter still runs as a harmless reset across the flow.
@@ -1715,6 +1780,12 @@ export default function AiDealScreen() {
     const restored = normalizeGeneratedAdDisplayCopy(entry.ad);
     const restoredPath = imageVersionStoragePath(restored);
     setGeneratedAd(restored);
+    // Restoring an earlier image version switches generatedAd to that
+    // version's own generation — carry forward ITS id/confidence signal
+    // (both null when this version predates that plumbing), not the latest
+    // revision's.
+    latestGenerationLogIdRef.current = extractGenerationLogId(restored);
+    setLowConfidenceNotice(extractLowConfidenceNotice(restored));
     setUsePhotoAsFinal(restored.photo_source === "uploaded_original");
     setMerchantOriginalWarningAcknowledged(false);
     if (restored.photo_treatment) setPhotoTreatment(restored.photo_treatment);
@@ -1976,6 +2047,8 @@ export default function AiDealScreen() {
     setTimezone(draft.timezone);
     setPublishLocationIds(draft.publishLocationIds);
     setGeneratedAd(draft.generatedAd);
+    latestGenerationLogIdRef.current = extractGenerationLogId(draft.generatedAd);
+    setLowConfidenceNotice(extractLowConfidenceNotice(draft.generatedAd));
     setImageVersions(() => {
       if (!draft.generatedAd) return [];
       const entry = buildImageVersionEntry(draft.generatedAd, "generated");
@@ -2225,6 +2298,8 @@ export default function AiDealScreen() {
         setApprovedComposedPresentationHash(null);
         setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
+        latestGenerationLogIdRef.current = null;
+        setLowConfidenceNotice(null);
         clearGenerationErrorState();
         setTemplateLoaded(false);
         setEditDirtyBaseline(
@@ -2325,6 +2400,8 @@ export default function AiDealScreen() {
         setApprovedComposedPresentationHash(null);
         setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
+        latestGenerationLogIdRef.current = null;
+        setLowConfidenceNotice(null);
         setManualDraftUnlocked(false);
         clearGenerationErrorState();
       }
@@ -2504,6 +2581,8 @@ export default function AiDealScreen() {
     setApprovedComposedPresentationHash(null);
     setApprovedLocalizationApprovalHash(null);
     aiDraftBaselineRef.current = null;
+    latestGenerationLogIdRef.current = null;
+    setLowConfidenceNotice(null);
     lastSentPhotoTreatmentRef.current = null;
     adGenerationStartedAtRef.current = null;
     composedPreviewShownAtRef.current = null;
@@ -2606,6 +2685,11 @@ export default function AiDealScreen() {
   }
 
   async function startRecording() {
+    // Frozen at entry, synchronously, before any await — a tap that arrives
+    // while this call is still in flight is blocked by recordingStartInFlightRef
+    // before it can touch dictationTargetRef, but this freeze is a second,
+    // independent guarantee that stop() routes to whoever actually started us.
+    activeDictationTargetRef.current = dictationTargetRef.current;
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
@@ -2619,6 +2703,8 @@ export default function AiDealScreen() {
       setBanner(null);
     } catch {
       setBanner({ message: t("createAi.errRecordingStart"), tone: "error" });
+    } finally {
+      recordingStartInFlightRef.current = false;
     }
   }
 
@@ -2637,7 +2723,7 @@ export default function AiDealScreen() {
         audio_base64: b64,
       });
       if (transcript) {
-        if (dictationTargetRef.current === "revision") {
+        if (activeDictationTargetRef.current === "revision") {
           setRevisionFeedback((current) => appendRevisionFeedback(current, transcript));
         } else {
           const nextHintText = hintText.trim() ? `${hintText.trim()} ${transcript}` : transcript;
@@ -2660,6 +2746,17 @@ export default function AiDealScreen() {
     } finally {
       setTranscribing(false);
     }
+  }
+
+  // Shared start-path for both mic buttons. No-ops (rather than double-starting
+  // the single shared recorder) when a start is already in flight or a
+  // recording is already active — both are checked synchronously so a fast
+  // second tap on either field's mic can never sneak through.
+  function beginDictation(target: "hint" | "revision") {
+    if (recordingStartInFlightRef.current || isRecording) return;
+    recordingStartInFlightRef.current = true;
+    dictationTargetRef.current = target;
+    void startRecording();
   }
 
   /** Returns null when the form can publish, otherwise the specific reason. */
@@ -2753,6 +2850,10 @@ export default function AiDealScreen() {
       cta_text: draft.cta_text,
       description: draft.offer_details,
     };
+  }
+
+  function dismissLowConfidenceNotice() {
+    setLowConfidenceNotice(null);
   }
 
   function imageFailureTelemetry(err: unknown) {
@@ -3098,6 +3199,11 @@ export default function AiDealScreen() {
       if (sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original") {
         setUsePhotoAsFinal(false);
       }
+      // Keep the latest generation's log id / compose-confidence signal in
+      // sync with generatedAd — read off the raw response (ad), since
+      // neither field is on the GeneratedAd type (see extractGenerationLogId).
+      latestGenerationLogIdRef.current = extractGenerationLogId(ad);
+      setLowConfidenceNotice(extractLowConfidenceNotice(ad));
       setGeneratedAd(normalizedAd);
       applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "generated");
@@ -3221,7 +3327,7 @@ export default function AiDealScreen() {
     const revisionNumber = revisionsUsed + 1;
     // Captured then cleared immediately — a preset applies to exactly the next
     // revise call, never a later unrelated one.
-    const presetForThisRevision = pendingRevisionPreset;
+    const presetForThisRevision = pendingRevisionPreset?.key ?? null;
     setPendingRevisionPreset(null);
     trackEvent(AiAdsEvents.REVISION_TAPPED, {
       screen: "create_ai",
@@ -3316,6 +3422,10 @@ export default function AiDealScreen() {
           ? "createAi.reviseSuccessImage"
           : "createAi.reviseSuccessCopy";
       setBanner({ message: t(revisionSuccessKey), tone: "success" });
+      // Each revision response carries its own generation_log_id / confidence
+      // signal — keep the LATEST (see the matching comment in generateAd()).
+      latestGenerationLogIdRef.current = extractGenerationLogId(ad);
+      setLowConfidenceNotice(extractLowConfidenceNotice(ad));
       setGeneratedAd(normalizedAd);
       applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "revision");
@@ -3528,6 +3638,10 @@ export default function AiDealScreen() {
     composedPreviewShownAtRef.current = null;
     lastComposedPreviewTelemetryHashRef.current = null;
     setGeneratedAd(fallbackAd);
+    // Deterministic fallback, not an AI generation — no generation log row and
+    // no compose-offer confidence signal to carry forward.
+    latestGenerationLogIdRef.current = null;
+    setLowConfidenceNotice(null);
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
@@ -4254,6 +4368,9 @@ export default function AiDealScreen() {
           composedCard: composedCardPublishSpec,
           localizationApproval: localizationApprovalForPublish,
           ...(localizationBundleForPublish ? {} : { localization: null }),
+          // Best-effort telemetry linkage (TASK 8, publish-offer-version):
+          // absent when this draft never came from a live AI generation.
+          ...(latestGenerationLogIdRef.current ? { generationLogId: latestGenerationLogIdRef.current } : {}),
         };
         const publishBodyBase = {
           business_id: businessId,
@@ -4399,6 +4516,8 @@ export default function AiDealScreen() {
         setApprovedComposedPresentationHash(null);
         setApprovedLocalizationApprovalHash(null);
         aiDraftBaselineRef.current = null;
+        latestGenerationLogIdRef.current = null;
+        setLowConfidenceNotice(null);
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
             photoUri: null,
@@ -4913,14 +5032,29 @@ export default function AiDealScreen() {
     setRevisionTarget(suggestion.target);
     // Append (deduped) instead of overwrite — tapping a chip used to discard
     // whatever the merchant had already typed into the feedback box.
-    setRevisionFeedback((current) => appendRevisionFeedback(current, suggestion.feedback));
-    setPendingRevisionPreset(revisionPresetForSuggestion(suggestion.key) ?? null);
+    setRevisionFeedback((current) => {
+      const next = appendRevisionFeedback(current, suggestion.feedback);
+      lastChipAppliedFeedbackRef.current = next;
+      return next;
+    });
+    const presetKey = revisionPresetForSuggestion(suggestion.key);
+    setPendingRevisionPreset(presetKey ? { key: presetKey, target: suggestion.target } : null);
     trackEvent(AiAdsEvents.REVISION_SUGGESTION_SELECTED, {
       screen: "create_ai",
       suggestion_key: suggestion.key,
       revision_target: suggestion.target,
       revision_count: revisionsUsed,
     });
+  }
+  // The feedback box's only other writer is applyRevisionSuggestion, which
+  // updates lastChipAppliedFeedbackRef in the same call. Any change that
+  // doesn't match that snapshot is the merchant typing/deleting by hand, which
+  // invalidates a pending preset the same way switching the target pill does.
+  function handleRevisionFeedbackChange(value: string) {
+    setRevisionFeedback(value);
+    if (value !== lastChipAppliedFeedbackRef.current) {
+      setPendingRevisionPreset(null);
+    }
   }
   const iosSchedulePickerTitle =
     iosSchedulePicker === "start"
@@ -5349,7 +5483,7 @@ export default function AiDealScreen() {
               />
               {Platform.OS !== "web" ? (
                 <Pressable
-                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => { dictationTargetRef.current = "hint"; void startRecording(); }}
+                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => beginDictation("hint")}
                   disabled={transcribing}
                   style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
                 >
@@ -5850,6 +5984,24 @@ export default function AiDealScreen() {
               >
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.dealPreview")}</Text>
 
+                {lowConfidenceNotice ? (
+                  <View>
+                    <Banner
+                      message={t("createAi.composeLowConfidence")}
+                      tone="info"
+                      actionLabel={t("createAi.composeLowConfidenceDismiss")}
+                      onRetry={dismissLowConfidenceNotice}
+                    />
+                    {lowConfidenceNotice.reason ? (
+                      // Server-provided free text — render as plain text only,
+                      // never markdown/HTML.
+                      <Text style={{ marginTop: 4, marginLeft: 2, fontSize: 12, lineHeight: 16, color: theme.mutedText }}>
+                        {lowConfidenceNotice.reason}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 {composedAdPreviewEnabled ? (
                   <>
                     <ComposedPreviewTelemetryBeacon
@@ -6120,7 +6272,15 @@ export default function AiDealScreen() {
                               <Pressable
                                 key={target}
                                 disabled={!canReviseAd}
-                                onPress={() => setRevisionTarget(target)}
+                                onPress={() => {
+                                  setRevisionTarget(target);
+                                  // A pending preset only makes sense for the target it was
+                                  // set for (e.g. an image preset once "copy" is selected
+                                  // instead) — drop it rather than silently carry it over.
+                                  setPendingRevisionPreset((current) =>
+                                    current && current.target !== target ? null : current,
+                                  );
+                                }}
                                 style={{
                                   flex: 1,
                                   paddingVertical: 8,
@@ -6141,7 +6301,14 @@ export default function AiDealScreen() {
 
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                           {revisionSuggestionOptions.map((suggestion) => {
-                            const selected = revisionTarget === suggestion.target && revisionFeedback === suggestion.feedback;
+                            // Containment, not equality — appendRevisionFeedback joins the
+                            // chip's text onto whatever was already there, so an exact-match
+                            // check goes stale (and dark) the instant a second chip is tapped.
+                            // Same rule appendRevisionFeedback itself uses for its own dedup,
+                            // so a manual edit that removes the chip's sentence also unselects it.
+                            const selected =
+                              revisionTarget === suggestion.target &&
+                              revisionFeedbackContainsSuggestion(revisionFeedback, suggestion.feedback);
                             return (
                               <Pressable
                                 key={suggestion.key}
@@ -6177,7 +6344,7 @@ export default function AiDealScreen() {
                         <View>
                           <TextInput
                             value={revisionFeedback}
-                            onChangeText={setRevisionFeedback}
+                            onChangeText={handleRevisionFeedbackChange}
                             placeholder={t("createAi.reviseFeedbackPlaceholder")}
                             placeholderTextColor={theme.mutedText}
                             multiline
@@ -6198,7 +6365,7 @@ export default function AiDealScreen() {
                           />
                           {Platform.OS !== "web" ? (
                             <Pressable
-                              onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => { dictationTargetRef.current = "revision"; void startRecording(); }}
+                              onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => beginDictation("revision")}
                               disabled={transcribing || !canReviseAd}
                               style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
                             >

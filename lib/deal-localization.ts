@@ -1,4 +1,4 @@
-import { getDealDisplayDescription, getDealDisplayTitle, type DealDisplayTitleFields } from "./deal-display-copy";
+import { getDealDisplayDescription, getDealDisplayTitle, type DealDisplayTitleFields } from "./deal-display-copy.ts";
 
 export type LocalizedDealFields = DealDisplayTitleFields & {
   source_locale?: string | null;

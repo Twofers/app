@@ -556,6 +556,45 @@ describe("offer version publish client helpers", () => {
     expect(spec.localization).toBeUndefined();
   });
 
+  it("threads an optional generation_log_id passthrough onto the publish ad spec", () => {
+    const definition = buildDefinition();
+    const spec = buildOfferVersionPublishAdSpec(
+      "create_ai",
+      definition,
+      {
+        headline: "Latte run, cookie reward",
+        subheadline: "Your afternoon coffee comes with a little extra.",
+        short_description: "Your afternoon coffee comes with a little extra.",
+        cta: "Claim deal",
+      },
+      { generationLogId: "33333333-3333-4333-8333-333333333333" },
+    );
+
+    // The single injection point publish-offer-version's generationLogIdFromBody
+    // duck-types first: ad_spec.generation_log_id (see supabase/functions/
+    // publish-offer-version/index.ts).
+    expect(spec.generation_log_id).toBe("33333333-3333-4333-8333-333333333333");
+  });
+
+  it("omits generation_log_id (today's ad spec unchanged) when the caller sends none", () => {
+    const definition = buildDefinition();
+    const generatedAd = {
+      headline: "Latte run, cookie reward",
+      subheadline: "Your afternoon coffee comes with a little extra.",
+      short_description: "Your afternoon coffee comes with a little extra.",
+      cta: "Claim deal",
+    };
+    const specWithNoOptions = buildOfferVersionPublishAdSpec("create_ai", definition, generatedAd);
+    const specWithNullId = buildOfferVersionPublishAdSpec("create_ai", definition, generatedAd, {
+      generationLogId: null,
+    });
+
+    expect("generation_log_id" in specWithNoOptions).toBe(false);
+    expect(specWithNoOptions.generation_log_id).toBeUndefined();
+    expect(specWithNullId.generation_log_id).toBeUndefined();
+    expect(specWithNullId).toEqual(specWithNoOptions);
+  });
+
   it("builds screenshot QA publish snapshots from deterministic composite triggers", () => {
     const definition = buildDefinition();
     const presentation = buildDefaultAdPresentationSpec({

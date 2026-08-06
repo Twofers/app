@@ -14,6 +14,7 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 import { getBusinessCapabilities } from "../_shared/business-capabilities.ts";
 import { getServiceRoleKey } from "../_shared/service-role-key.ts";
 import { formatRepairInstruction, validateComposeOutput } from "./validate-output.ts";
+import { buildDeterministicComposeFallback } from "./deterministic-fallback.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -34,6 +35,16 @@ const COMPOSE_V2_GATES_ENABLED = Deno.env.get("AI_COMPOSE_V2_GATES_ENABLED") ===
  * as before (byte-identical).
  */
 const COMPOSE_REGENERATE_ENABLED = Deno.env.get("AI_COMPOSE_REGENERATE_ENABLED") === "true";
+
+/**
+ * Master gate for the deterministic (non-AI) compose fallback (F1,
+ * first-deal-ai-quality-harness, 2026-07-20: a live-AI failure otherwise
+ * dead-ends the merchant on a 502 with nothing to work from). Default OFF:
+ * with this unset (or not "true"), a live generation failure — or a
+ * shape-validation failure that survives the AI_COMPOSE_V2_GATES_ENABLED
+ * repair re-ask — returns the existing 502 exactly as before (byte-identical).
+ */
+const COMPOSE_FALLBACK_ENABLED = Deno.env.get("AI_COMPOSE_FALLBACK_ENABLED") === "true";
 
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
@@ -773,6 +784,84 @@ serve(async (req) => {
       requestGroupId: crypto.randomUUID(),
     };
 
+    // AI_COMPOSE_FALLBACK_ENABLED only: last-resort deterministic (non-AI) compose
+    // result, tried when the live generation call throws or its output still fails
+    // shape validation after one repair re-ask (see the two call sites below). Closes
+    // over this request's already-established admin/business/user/text/menu/quota
+    // context so each call site only has to pass what is specific to the failed
+    // attempt. Returns null (never throws) whenever the flag is off, the hint doesn't
+    // parse into an allowed deal, or the built copy fails validateComposeOutput —
+    // callers fall through to their existing 502 in every one of those cases.
+    async function tryComposeFallback(usage: {
+      model: string | null;
+      openaiCalled: boolean;
+      inputTokens: number | null;
+      outputTokens: number | null;
+      estimatedCostUsd: number | null;
+    }): Promise<Response | null> {
+      if (!COMPOSE_FALLBACK_ENABLED) return null;
+
+      const built = buildDeterministicComposeFallback({
+        hintText: combinedText,
+        menuItems: composeMenuItems,
+        offerTypes: OFFER_TYPES,
+      });
+      if (!built) return null;
+
+      const fallbackPayload: Record<string, unknown> = {
+        ...built,
+        input_type: input_mode,
+        compose_fallback: true,
+      };
+      if (generate_poster_image) {
+        fallbackPayload.poster_image_unavailable = true;
+        fallbackPayload.poster_disabled_reason = "native_text_rendering_required";
+      }
+
+      // Salted so this row can never be found by the dedup-cache lookup above (keyed on
+      // the TRUE request_hash) — a retry with the same inputs must hit the real AI
+      // again, not silently replay this degraded result.
+      const saltedHash = await sha256Hex(`${request_hash}:compose_fallback:${crypto.randomUUID()}`);
+
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        // Not `user.id` — `user` is narrowed non-null back at the request's auth
+        // check, but that narrowing does not carry into this nested closure
+        // (TS18047). costContext.ownerUserId is the same value, already typed
+        // as a non-nullable string.
+        user_id: costContext.ownerUserId,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        voice_transcript: voiceTranscriptIn || null,
+        request_hash: saltedHash,
+        prompt_version: PROMPT_VERSION,
+        model: usage.model,
+        success: true,
+        failure_reason: null,
+        openai_called: usage.openaiCalled,
+        low_confidence: true,
+        recommended_offer_type: built.recommended_offer.offer_type,
+        input_token_count: usage.inputTokens,
+        output_token_count: usage.outputTokens,
+        estimated_cost_usd: usage.estimatedCostUsd,
+        response_payload: fallbackPayload,
+      });
+
+      const newUsed = used + 1;
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          duplicate_cached: false,
+          result: fallbackPayload,
+          fallback: true,
+          poster_storage_path: null,
+          quota: { used: newUsed, limit, remaining: Math.max(0, limit - newUsed) },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const systemPrompt = [
       "You help local businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
       `Allowed offer_type values only: ${OFFER_TYPES.join(", ")}.`,
@@ -877,6 +966,14 @@ serve(async (req) => {
       const attempts = (err as { attempts?: ProviderAttempt[] })?.attempts ?? [];
       await logComposeProviderAttempts({ ctx: costContext, attempts });
       const usageAttempt = representativeAttempt(attempts);
+      const composeFallbackResponse = await tryComposeFallback({
+        model: usageAttempt?.model ?? configuredComposeModel,
+        openaiCalled: providerAttemptsCalledAi(attempts),
+        inputTokens: usageAttempt?.inputTokens ?? null,
+        outputTokens: usageAttempt?.outputTokens ?? null,
+        estimatedCostUsd: usageAttempt?.estimatedCostUsd ?? null,
+      });
+      if (composeFallbackResponse) return composeFallbackResponse;
       await admin.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
@@ -1008,6 +1105,14 @@ serve(async (req) => {
           compose_v2_final_violation_codes: composeV2FinalViolationCodes,
         }
         : parsed;
+      const composeFallbackResponse = await tryComposeFallback({
+        model: generation.model,
+        openaiCalled: providerAttemptsCalledAi(generation.attempts),
+        inputTokens: inTok,
+        outputTokens: outTok,
+        estimatedCostUsd: estCost,
+      });
+      if (composeFallbackResponse) return composeFallbackResponse;
       await admin.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,

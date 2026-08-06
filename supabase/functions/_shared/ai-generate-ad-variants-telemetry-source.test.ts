@@ -130,4 +130,36 @@ describe("ai-generate-ad-variants telemetry source guard", () => {
     expect(source).toContain('reason: "IMAGE_UNAVAILABLE"');
     expect(source).toContain('releaseReservedChargeableRevision("image_failed")');
   });
+
+  it("flags low_confidence + recommendation_reason only for unfamiliar research on generated images, only under FLAG 1 (task 5)", () => {
+    const helperIndex = source.indexOf("function lowConfidenceImageAdFields(");
+    const candidateIdIndex = source.indexOf(
+      "function candidateId(candidate: AiDealCopyVariant, index: number): string {",
+    );
+    expect(helperIndex).toBeGreaterThan(-1);
+    expect(candidateIdIndex).toBeGreaterThan(helperIndex);
+    const helperBlock = source.slice(helperIndex, candidateIdIndex);
+
+    // Flag-off, a non-generated image, or confident research all resolve to
+    // {} — the fields must be ABSENT, not present-and-false/empty-string, so
+    // the client's defensive read sees nothing at all.
+    expect(helperBlock).toMatch(/if \(!aiAdsPipelineV8Enabled\(\)\) return \{\};/);
+    expect(helperBlock).toMatch(/if \(photoSource !== "generated"\) return \{\};/);
+    // Unfamiliar/failed research OR an empty description even when
+    // is_familiar somehow came back true.
+    expect(helperBlock).toMatch(/!research\.is_familiar \|\| !research\.description\?\.trim\(\)/);
+    expect(helperBlock).toMatch(/low_confidence:\s*true/);
+    const reasonMatch = helperBlock.match(/recommendation_reason:\s*"([^"]*)"/);
+    expect(reasonMatch).not.toBeNull();
+    const reasonText = reasonMatch?.[1] ?? "";
+    // Merchant-safe copy: short (renders verbatim in the app), no internal
+    // codes/flag names/jargon leaking into customer-facing text.
+    expect(reasonText.length).toBeGreaterThan(0);
+    expect(reasonText.length).toBeLessThan(80);
+    expect(reasonText).not.toMatch(/AI_ADS_PIPELINE_V8|is_familiar|errorCode|VISION_QA|flag/i);
+
+    // Wired into the ad response as an additive spread (never unconditional
+    // fields on the SingleAd literal).
+    expect(source).toMatch(/\.\.\.lowConfidenceImageAdFields\(research, imageResult\.source\)/);
+  });
 });
