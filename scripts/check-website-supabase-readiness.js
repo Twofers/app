@@ -509,7 +509,7 @@ if (failures.length === 0) {
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, 'from("admin_users")', "admin auth must check admin_users allowlist");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_success", "admin auth must audit successful logins");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_denied", "admin auth must audit denied logins");
-  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=password", "admin auth must perform password grant server-side");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "auth/v1/admin/generate_link", "admin auth must mint the pre-MFA session server-side (passwordless)");
   assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support server-managed session refresh");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminAuthFn)) {
     failures.push("supabase/functions/admin-auth-session/index.ts: admin auth must not depend on payment or AI secrets");

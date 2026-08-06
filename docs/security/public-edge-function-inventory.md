@@ -43,7 +43,7 @@ Current count: **78** functions with `verify_jwt = false`.
 | `submit-launch-signup` | deliberately public intake | application/DB rate limit; honeypot; idempotency/dedupe |
 | `admin-dashboard-summary` | user JWT checked in-function + active admin/role/MFA guard | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `admin-qr-campaigns` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
-| `admin-auth-session` | founder email + mandatory TOTP (server-held password grant)/refresh token + active owner UUID | application/DB rate limit; 8 failed sign-in attempts/email/15 minutes |
+| `admin-auth-session` | founder email + mandatory TOTP (passwordless; service-role magiclink mint)/refresh token + active owner UUID | application/DB rate limit; single-use/expiry; 8 failed sign-in attempts/email/15 minutes |
 | `admin-ai-usage` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
 | `admin-business-applications` | user JWT checked in-function + active admin/role/MFA guard | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `public-local-businesses` | deliberately public read-only directory | read-only operation with bounded query/result |

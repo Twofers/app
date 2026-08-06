@@ -48,24 +48,30 @@ RPCs.
 ## Passwordless founder sign-in (2026-08-06)
 
 `/admin/login` collects the admin email and a 6-digit authenticator code only.
-The Supabase password grant still runs, but the password is the edge-function
-secret `FOUNDER_ADMIN_PASSWORD`; it is never prompted for, never sent from the
-browser, and never stored in Vercel. `admin-auth-session` performs the grant,
-the TOTP challenge, and the verify in one request, and returns a session only
-after it reaches AAL2 — a rejected code revokes the interim AAL1 session,
-writes `admin_login_failed` / `invalid_totp_code`, and counts toward the same
-8-per-email-per-15-minutes limiter as a bad sign-in.
+There is no password anywhere in the flow — not in the form, not in a secret.
+`admin-auth-session` mints the pre-MFA (AAL1) session itself with the
+service-role key: `POST /auth/v1/admin/generate_link` (type `magiclink`, which
+returns a single-use token and sends no email), redeemed at
+`POST /auth/v1/verify`. It then runs the TOTP challenge and verify in the same
+request and returns a session only after it reaches AAL2 — a rejected code
+revokes the interim AAL1 session, writes `admin_login_failed` /
+`invalid_totp_code`, and counts toward the same 8-per-email-per-15-minutes
+limiter as a bad sign-in. The limiter is checked *before* `generate_link`, so
+the address alone cannot be used to spin the Auth admin API.
 
 Operational consequences:
 
-- Set `FOUNDER_ADMIN_PASSWORD` in the Supabase function secrets before deploying
-  `admin-auth-session`, and reset it there whenever the founder's Supabase
-  password is rotated. If it is unset, sign-in returns HTTP 500 "Founder admin
-  login is not configured."
+- Nothing to configure and nothing to rotate. Changing the founder's Supabase
+  password no longer affects admin login. An earlier revision of this flow used
+  a `FOUNDER_ADMIN_PASSWORD` secret; it is obsolete and should be removed with
+  `supabase secrets unset FOUNDER_ADMIN_PASSWORD`.
 - Console access is now single-factor: possession of the TOTP seed plus
   knowledge of the founder email is sufficient. Treat authenticator-device loss
   or seed exposure as a full admin compromise — unenroll the factor in Supabase
-  Auth and rotate `FOUNDER_ADMIN_PASSWORD` in the same window.
+  Auth immediately, since that is the whole of the credential.
+- Magiclink/email sign-in must stay enabled in the project's Auth settings. If
+  `generate_link` fails, sign-in returns 401 with `reason:
+  "magiclink_unavailable"` and logs the upstream status to the function log.
 - The enrollment path is unchanged: if the founder has no verified TOTP factor,
   the endpoint still returns `mfa_enrollment_required` with an AAL1 session so
   the QR flow can complete. That branch is reachable with the email alone, so

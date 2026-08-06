@@ -4,7 +4,7 @@ Generated from secret/config-name references in Edge Functions, website API
 handlers, backup scripts, and workflows. **This file contains names and recovery
 instructions only; never put secret values here.**
 
-Current count: **126** referenced secret/config names.
+Current count: **125** referenced secret/config names.
 
 | Name | Account owner | Consumers | Minted/stored at | Revoke | Disaster-recovery re-issue |
 |---|---|---|---|---|---|
@@ -76,7 +76,6 @@ Current count: **126** referenced secret/config names.
 | `ENABLE_STRIPE_BACKFILL` | Twofer / provider owner | supabase/functions/stripe-backfill-customers | provider dashboard or approved password manager | follow provider-specific revocation | re-issue with least privilege and document the owner |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Expo/EAS | scripts/security/probe-rate-limit-rls.mjs | Expo account/project | revoke in Expo | mint a least-privilege replacement token |
 | `EXPO_PUBLIC_SUPABASE_URL` | Expo/EAS | scripts/security/probe-rate-limit-rls.mjs, scripts/security/query-admin-posture.mjs, scripts/security/query-storage-posture.mjs | Expo account/project | revoke in Expo | mint a least-privilege replacement token |
-| `FOUNDER_ADMIN_PASSWORD` | Twofer founder | supabase/functions/admin-auth-session | approved founder configuration | replace the configured value and audit old use | issue/configure from the founder-controlled account |
 | `FOUNDER_ADMIN_USER_ID` | Twofer founder | supabase/functions/_shared/admin-founder.ts | approved founder configuration | replace the configured value and audit old use | issue/configure from the founder-controlled account |
 | `GEMINI_API_KEY` | AI provider | supabase/functions/ai-compose-offer, supabase/functions/ai-deal-suggestions, supabase/functions/ai-extract-menu, supabase/functions/ai-generate-ad-variants, supabase/functions/ai-generate-deal-copy (+4) | provider API-key dashboard | revoke in provider dashboard | mint a project-scoped replacement with hard spend caps |
 | `GOOGLE_PLACES_API_KEY` | Google Cloud | supabase/functions/ai-business-lookup | Google Cloud Console | disable/delete the key or service-account key | mint a restricted key or scoped service-account key |

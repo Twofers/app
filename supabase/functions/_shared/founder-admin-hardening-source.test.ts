@@ -45,9 +45,11 @@ describe("founder-only admin hardening", () => {
     const script = read("website/admin/admin-login.js");
     const api = read("website/api/admin/session.js");
 
-    // The password is a server-side secret, not a form field.
-    expect(authSession).toMatch(/FOUNDER_ADMIN_PASSWORD/);
+    // No password anywhere: not a form field, not a stored secret, not a grant.
     expect(authSession).not.toMatch(/payload\.password/);
+    expect(authSession).not.toMatch(/FOUNDER_ADMIN_PASSWORD/);
+    expect(authSession).not.toMatch(/grant_type=password/);
+    expect(authSession).toMatch(/auth\/v1\/admin\/generate_link/);
     expect(page).not.toMatch(/type="password"/);
     expect(script).not.toMatch(/password/);
     expect(api).not.toMatch(/req\.body\?\.password/);

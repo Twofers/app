@@ -55,19 +55,41 @@ async function readJson(req: Request): Promise<AuthPayload> {
   }
 }
 
-async function passwordGrant(params: {
+// Founder sign-in is passwordless. Instead of a password grant we mint the
+// pre-MFA (aal1) session with the service-role key: generate a one-time
+// magiclink token for the address, then redeem it. `generate_link` only
+// returns the token — it sends no email — and the token is single-use. The
+// resulting session is aal1 and is worthless to the caller until the TOTP
+// step-up below succeeds, so possession of the authenticator remains the only
+// thing that actually grants admin access.
+async function adminGenerateMagicLink(params: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  email: string;
+}) {
+  return fetch(`${params.supabaseUrl}/auth/v1/admin/generate_link`, {
+    method: "POST",
+    headers: {
+      apikey: params.serviceRoleKey,
+      Authorization: `Bearer ${params.serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ type: "magiclink", email: params.email }),
+  });
+}
+
+async function redeemMagicLink(params: {
   supabaseUrl: string;
   anonKey: string;
-  email: string;
-  password: string;
+  tokenHash: string;
 }) {
-  return fetch(`${params.supabaseUrl}/auth/v1/token?grant_type=password`, {
+  return fetch(`${params.supabaseUrl}/auth/v1/verify`, {
     method: "POST",
     headers: {
       apikey: params.anonKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email: params.email, password: params.password }),
+    body: JSON.stringify({ type: "magiclink", token_hash: params.tokenHash }),
   });
 }
 
@@ -148,13 +170,6 @@ async function revokeSession(params: { supabaseUrl: string; anonKey: string; acc
   } catch {
     // A stranded aal1 session is never handed to the caller; ignore.
   }
-}
-
-// The founder signs in with admin email + authenticator code only. The
-// Supabase password grant still runs, but the password is a server-side secret
-// the browser never sees, prompts for, or transmits.
-function founderAdminPassword(): string {
-  return (Deno.env.get("FOUNDER_ADMIN_PASSWORD") ?? "").replace(/[\r\n]+$/, "");
 }
 
 const LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15;
@@ -339,25 +354,53 @@ Deno.serve(async (req) => {
     const code = cleanString(payload.code);
     const refreshToken = typeof payload.refresh_token === "string" ? payload.refresh_token : "";
     const isRefresh = refreshToken.length > 0;
-    const founderPassword = founderAdminPassword();
 
     if (!isRefresh && (!email || !code)) {
       return json(req, { error: "Admin email and authenticator code are required." }, 400);
     }
 
+    // Rate-limit before touching the Auth admin API, so a stranger with the
+    // founder address cannot make us mint magiclink tokens in a loop.
     if (!isRefresh) {
-      if (!founderPassword) {
-        return json(req, { error: "Founder admin login is not configured." }, 500);
-      }
       const failedCount = await recentFailedLoginCount(supabaseAdmin, email);
       if (failedCount >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
         return json(req, { error: "Too many sign-in attempts. Please try again later." }, 429);
       }
     }
 
-    const authResponse = isRefresh
-      ? await refreshGrant({ supabaseUrl, anonKey, refreshToken })
-      : await passwordGrant({ supabaseUrl, anonKey, email, password: founderPassword });
+    let authResponse: Response;
+    if (isRefresh) {
+      authResponse = await refreshGrant({ supabaseUrl, anonKey, refreshToken });
+    } else {
+      const linkResponse = await adminGenerateMagicLink({ supabaseUrl, serviceRoleKey, email });
+      const link = await linkResponse.json().catch(() => ({}));
+      const tokenHash = typeof link?.hashed_token === "string" ? link.hashed_token : "";
+      if (!linkResponse.ok || !tokenHash) {
+        // Distinguish "no such user" (expected, generic 401 below) from an
+        // Auth-configuration problem, which is otherwise near-impossible to
+        // diagnose from the browser.
+        console.error(
+          "[admin-auth-session] generate_link failed:",
+          linkResponse.status,
+          JSON.stringify(link),
+        );
+        await supabaseAdmin.from("admin_audit_log").insert({
+          admin_email: email || null,
+          action: "admin_login_failed",
+          target_type: "admin_login",
+          reason: "magiclink_unavailable",
+          ip_address: requestIp,
+          user_agent: req.headers.get("user-agent"),
+          request_id: requestId,
+        });
+        return json(
+          req,
+          { error: "Invalid admin credentials.", reason: "magiclink_unavailable" },
+          401,
+        );
+      }
+      authResponse = await redeemMagicLink({ supabaseUrl, anonKey, tokenHash });
+    }
 
     let session = await authResponse.json().catch(() => ({}));
     if (!authResponse.ok || !session?.access_token) {

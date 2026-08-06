@@ -38,7 +38,7 @@ function functionSource(name) {
 }
 
 const explicitAuth = new Map([
-  ["admin-auth-session", "founder email + mandatory TOTP (server-held password grant)/refresh token + active owner UUID"],
+  ["admin-auth-session", "founder email + mandatory TOTP (passwordless; service-role magiclink mint)/refresh token + active owner UUID"],
   ["stripe-webhook", "Stripe-Signature verified with the webhook signing secret"],
   ["wallet-pass-webservice", "Apple Wallet signed device/pass token"],
   ["exit-redemption-mode", "device exit token + owner PIN, checked in-function"],
