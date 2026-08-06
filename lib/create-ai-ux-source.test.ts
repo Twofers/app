@@ -536,4 +536,74 @@ describe("AI create UX source guards", () => {
     // soon as it comes back (no picker selection step in between).
     expect(createAiSource).toMatch(/setGeneratedAd\(normalizedAd\);\s+applyAdToDraft\(normalizedAd\);/);
   });
+
+  it("defaults express (collapsed) only for a fresh create-hub entry, expanded for template/edit/reuse", () => {
+    // Express-create-flow plan Phase 1 (2026-08-06): a view state over the
+    // existing form, not a second flow. The fresh-entry test is the SAME one
+    // draft recovery already uses (no templateId, no dealId, no prefill/reuse
+    // params) — reused rather than reinvented, so a templateId, an
+    // edit-existing (dealId) entry, or any reuse/AI-compose/menu-offer/hub
+    // prefill entry (all captured by hasCreatePrefillParams) auto-expands
+    // "More options" instead of hiding fields the merchant arrived with.
+    expect(createAiSource).toContain(
+      "const shouldUseDraftRecovery = !dealIdFromRoute && !templateId && !hasCreatePrefillParams;",
+    );
+    expect(createAiSource).toContain(
+      "const [moreOptionsOpen, setMoreOptionsOpen] = useState(() => !shouldUseDraftRecovery);",
+    );
+  });
+
+  it("renders the express essentials unconditionally and gates the rest behind one More options expander", () => {
+    // Photo step, description/voice hint, and the publish gate stay
+    // unconditional — express mode never hides these.
+    expect(createAiSource).toContain("<StepBadge n={1} total={3} t={t} />");
+    expect(createAiSource).toContain("<StepBadge n={2} total={3} t={t} />");
+    expect(createAiSource).toContain("const publishReadiness = useMemo");
+
+    // Ad format switch (standard_card vs poster_v1) hides behind the
+    // expander; the photo picker right after it stays express-visible.
+    // Matched by regex, not a literal: git normalizes app/create/ai.tsx to
+    // CRLF on Windows checkouts, so a hardcoded "\n" cannot match (same
+    // convention as the "restores generated drafts…" test above).
+    expect(createAiSource).toMatch(
+      /\{moreOptionsOpen \? \(\s+<>\s+<Text style=\{\{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme\.text \}\}>\{t\("createAi\.adFormatTitle"\)\}<\/Text>/,
+    );
+
+    // Eligibility override form hides behind the expander. Auto-inference
+    // from the typed hint (applyInferredEligibilityFromHint) still runs
+    // either way, so express mode does not depend on the merchant ever
+    // opening it for the common case.
+    expect(createAiSource).toMatch(/\{moreOptionsOpen \? \(\s+<DealEligibilityForm/);
+    expect(createAiSource).toContain("applyInferredEligibilityFromHint(text);");
+
+    // Recurring schedule detail (day pickers, time windows) collapses to a
+    // single summary row reusing the existing displayScheduleSummary — no
+    // new schedule model invented. Tapping the row opens More options.
+    expect(createAiSource).toContain(
+      "{displayScheduleSummary} · {t(\"createAi.scheduleSummaryTapHint\", { defaultValue: \"Tap to change\" })}",
+    );
+    expect(createAiSource).toContain("onPress={() => setMoreOptionsOpen(true)}");
+
+    // Claim settings hides behind the expander; its own claimSettingsOpen
+    // inner collapse is untouched.
+    expect(createAiSource).toContain("setClaimSettingsOpen((v) => !v)");
+
+    // AI revision loop / version history UI (compare images, earlier
+    // versions, the revise/tweak panel) hides behind the expander; "Use this
+    // ad" stays visible either way so accepting a first draft is never
+    // blocked by More options being closed.
+    expect(createAiSource).toContain("{moreOptionsOpen && canCompareImages && originalImageVersion ? (");
+    expect(createAiSource).toContain("{moreOptionsOpen && restorableImageVersions.length > 0 ? (");
+    expect(createAiSource).toContain("{moreOptionsOpen && showComposedRevisePanel ? (");
+    expect(createAiSource).toContain('title={t("createAi.useThisAd")}');
+  });
+
+  it("keeps the More options / schedule-summary copy translated in every active locale", () => {
+    for (const locale of ["en", "es", "ko"] as const) {
+      const createAi = readLocale(locale).createAi;
+      expect(createAi.moreOptionsHeader, `${locale} moreOptionsHeader`).toBeTruthy();
+      expect(createAi.moreOptionsSummary, `${locale} moreOptionsSummary`).toBeTruthy();
+      expect(createAi.scheduleSummaryTapHint, `${locale} scheduleSummaryTapHint`).toBeTruthy();
+    }
+  });
 });

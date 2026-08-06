@@ -1383,6 +1383,17 @@ export default function AiDealScreen() {
 
   const shouldUseDraftRecovery = !dealIdFromRoute && !templateId && !hasCreatePrefillParams;
 
+  // Express view state (Phase 1, express-create-flow plan). A fresh create-hub
+  // entry — no templateId, no dealId, no prefill/reuse params, same test as
+  // shouldUseDraftRecovery above — starts collapsed to the essentials (photo,
+  // description, AI generate + card preview, one schedule summary row,
+  // publish). Any templateId/edit/reuse/prefill entry starts expanded so
+  // those flows never hide fields they arrived with. Purely a view state over
+  // the existing form state: it does not delete/rename any state, change AI
+  // generation calls, publish payloads, or reorder sections. Local only, not
+  // persisted.
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(() => !shouldUseDraftRecovery);
+
   /** Stable English — shipped to the AI. Do not localize. */
   const offerScheduleSummary = useMemo(
     () =>
@@ -5176,64 +5187,71 @@ export default function AiDealScreen() {
         ) : (
           <>
             <StepBadge n={1} total={3} t={t} />
-            <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.adFormatTitle")}</Text>
-            <View
-              style={{
-                flexDirection: "row",
-                marginTop: 8,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 8,
-                overflow: "hidden",
-                backgroundColor: theme.surface,
-              }}
-            >
-              {(["standard_card", "poster_v1"] as CreativeFormat[]).map((format, index) => {
-                const selected = creativeFormat === format;
-                const iconName = format === "poster_v1" ? "crop-portrait" : "view-agenda";
-                return (
-                  <Pressable
-                    key={format}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => selectCreativeFormat(format)}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      minHeight: 48,
-                      borderRightWidth: index === 0 ? 1 : 0,
-                      borderRightColor: theme.border,
-                      backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-                      paddingVertical: 9,
-                      paddingHorizontal: 8,
-                      justifyContent: "center",
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                      <MaterialIcons
-                        name={iconName}
-                        size={18}
-                        color={selected ? theme.primary : theme.icon}
-                      />
-                      <Text
+            {/* Express Phase 1: ad format switch moves behind "More options" — the
+                default format still applies when collapsed, this only hides the
+                manual override. */}
+            {moreOptionsOpen ? (
+              <>
+                <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.adFormatTitle")}</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    marginTop: 8,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    backgroundColor: theme.surface,
+                  }}
+                >
+                  {(["standard_card", "poster_v1"] as CreativeFormat[]).map((format, index) => {
+                    const selected = creativeFormat === format;
+                    const iconName = format === "poster_v1" ? "crop-portrait" : "view-agenda";
+                    return (
+                      <Pressable
+                        key={format}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => selectCreativeFormat(format)}
                         style={{
+                          flex: 1,
                           minWidth: 0,
-                          color: selected ? theme.accentText : theme.text,
-                          fontWeight: "800",
-                          fontSize: 14,
-                          textAlign: "center",
+                          minHeight: 48,
+                          borderRightWidth: index === 0 ? 1 : 0,
+                          borderRightColor: theme.border,
+                          backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                          paddingVertical: 9,
+                          paddingHorizontal: 8,
+                          justifyContent: "center",
                         }}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.82}
                       >
-                        {format === "poster_v1" ? t("createAi.adFormatPoster") : t("createAi.adFormatStandard")}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                          <MaterialIcons
+                            name={iconName}
+                            size={18}
+                            color={selected ? theme.primary : theme.icon}
+                          />
+                          <Text
+                            style={{
+                              minWidth: 0,
+                              color: selected ? theme.accentText : theme.text,
+                              fontWeight: "800",
+                              fontSize: 14,
+                              textAlign: "center",
+                            }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.82}
+                          >
+                            {format === "poster_v1" ? t("createAi.adFormatPoster") : t("createAi.adFormatStandard")}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
             <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.photo")}</Text>
             {/* Both buttons default to width:100%; flex wrappers keep the row inside the viewport. */}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
@@ -5508,18 +5526,58 @@ export default function AiDealScreen() {
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, marginTop: 5, color: theme.text, backgroundColor: theme.surface }}
             />
 
-            <DealEligibilityForm
-              value={eligibilityForm}
-              onChange={handleEligibilityFormChange}
-              t={t}
-              theme={theme}
-              colorScheme={colorScheme}
-              inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
-              result={eligibilityResult}
-              compact
-            />
+            {/* Express Phase 1: single "More options" expander. Gates the ad format
+                switch above, the eligibility override below, the recurring
+                schedule detail and claim settings further down, and the AI
+                revision/version-history UI in the ad review section. Eligibility
+                itself still auto-infers from the typed description whether this
+                is open or not (applyInferredEligibilityFromHint) — this only
+                hides the manual override form. */}
+            <Pressable
+              onPress={() => setMoreOptionsOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: moreOptionsOpen }}
+              accessibilityLabel={t("createAi.moreOptionsHeader", { defaultValue: "More options" })}
+              style={{ marginTop: 14, gap: 4 }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Text style={{ flex: 1, fontWeight: "700", color: theme.text }}>
+                  {t("createAi.moreOptionsHeader", { defaultValue: "More options" })}
+                </Text>
+                <Text style={{ fontSize: 12, opacity: 0.55, color: theme.text }}>
+                  {moreOptionsOpen
+                    ? t("createAi.collapseSettings", { defaultValue: "Hide" })
+                    : t("createAi.expandSettings", { defaultValue: "Show" })}
+                </Text>
+              </View>
+              {!moreOptionsOpen ? (
+                <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                  {t("createAi.moreOptionsSummary", {
+                    defaultValue: "Ad format, eligibility, recurring schedule, claim limits",
+                  })}
+                </Text>
+              ) : null}
+            </Pressable>
+
+            {moreOptionsOpen ? (
+              <DealEligibilityForm
+                value={eligibilityForm}
+                onChange={handleEligibilityFormChange}
+                t={t}
+                theme={theme}
+                colorScheme={colorScheme}
+                inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                result={eligibilityResult}
+                compact
+              />
+            ) : null}
 
             {eligibilityResult.eligible ? (
+              <>
+            {/* Express Phase 1: full schedule detail (badge, mode toggle, day/time
+                pickers) only when More options is open; collapsed shows one
+                summary row built from the existing displayScheduleSummary. */}
+            {moreOptionsOpen ? (
               <>
             <View
               onLayout={(e) => {
@@ -5870,6 +5928,30 @@ export default function AiDealScreen() {
                 />
               </>
             ) : null}
+              </>
+            ) : (
+              <Pressable
+                onPress={() => setMoreOptionsOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t("createAi.scheduleTitle", { defaultValue: "Schedule" })}
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceMuted,
+                  gap: 2,
+                }}
+              >
+                <Text style={{ fontWeight: "700", fontSize: 13, color: theme.text }}>
+                  {t("createAi.scheduleTitle", { defaultValue: "Schedule" })}
+                </Text>
+                <Text style={{ fontSize: 13, color: theme.mutedText }} numberOfLines={1}>
+                  {displayScheduleSummary} · {t("createAi.scheduleSummaryTapHint", { defaultValue: "Tap to change" })}
+                </Text>
+              </Pressable>
+            )}
 
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
@@ -6142,7 +6224,10 @@ export default function AiDealScreen() {
                   </>
                 )}
 
-                {canCompareImages && originalImageVersion ? (
+                {/* Express Phase 1: compare/earlier-versions/revise-panel are the
+                    "AI revision loop / version history" UI — gated behind More
+                    options. "Use this ad" (below) stays visible either way. */}
+                {moreOptionsOpen && canCompareImages && originalImageVersion ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <Text style={{ fontWeight: "800", color: theme.text }}>
                       {t("createAi.imageCompareTitle", { defaultValue: "Compare images" })}
@@ -6168,7 +6253,7 @@ export default function AiDealScreen() {
                   </View>
                 ) : null}
 
-                {restorableImageVersions.length > 0 ? (
+                {moreOptionsOpen && restorableImageVersions.length > 0 ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <Text style={{ fontWeight: "800", color: theme.text }}>
                       {t("createAi.imageVersionsTitle", { defaultValue: "Earlier versions" })}
@@ -6229,8 +6314,25 @@ export default function AiDealScreen() {
                   onPress={acceptAd}
                 />
 
-                {/* Revise panel */}
-                {showComposedRevisePanel ? (
+                {/* Express Phase 1: the revise panel lives behind More options, but a
+                    merchant reviewing a fresh ad still needs the loop reachable right
+                    here — this link opens the expander in place instead of leaving a
+                    dead end. */}
+                {!moreOptionsOpen && showComposedRevisePanel ? (
+                  <Pressable
+                    onPress={() => setMoreOptionsOpen(true)}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ alignItems: "center", paddingVertical: 4 }}
+                  >
+                    <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text, textDecorationLine: "underline" }}>
+                      {t("createAi.tweakTitle")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {/* Revise panel — Express Phase 1: gated behind More options. */}
+                {moreOptionsOpen && showComposedRevisePanel ? (
                   <View style={{ padding: 14, borderRadius: 12, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                       <Text

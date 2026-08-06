@@ -64,22 +64,35 @@ UI restructuring only. Ships in the next store build (no OTA path).
 
 ## Checklist — Phase 1
 
-- [ ] Add `expressMode` view state + "More options" expander to
+- [x] Add `expressMode` view state + "More options" expander to
       `app/create/ai.tsx`; wrap the advanced sections listed above. No state
       deletion, no section reordering beyond visibility.
-- [ ] Express schedule summary row backed by the existing presets; tapping it
+      (Implemented as `moreOptionsOpen`, `app/create/ai.tsx:1395`. Gates: ad
+      format switch, eligibility override form, recurring schedule detail,
+      claim settings, and the AI revision/version-history UI in the ad
+      review section — see 2026-08-06 implementation notes below.)
+- [x] Express schedule summary row backed by the existing presets; tapping it
       expands More options scrolled to the schedule section.
-- [ ] Auto-expand rules for template/edit/reuse entries (see §Design 3).
-- [ ] New i18n keys in en + es + ko (e.g. `createAi.moreOptions`,
-      `createAi.scheduleSummary` — follow existing key naming).
-- [ ] Update `lib/create-ai-ux-source.test.ts` (LOCKED file — see §6) with
+      (Reuses the existing `displayScheduleSummary` memo — no new schedule
+      model. Tap opens More options; per §Design's own escape hatch, no
+      scroll-to-section plumbing was added since it would be fragile.)
+- [x] Auto-expand rules for template/edit/reuse entries (see §Design 3).
+      (`moreOptionsOpen` seeds from the existing `shouldUseDraftRecovery`
+      flag — same "fresh entry" test already used for draft recovery.)
+- [x] New i18n keys in en + es + ko (`createAi.moreOptionsHeader`,
+      `createAi.moreOptionsSummary`, `createAi.scheduleSummaryTapHint`).
+- [x] Update `lib/create-ai-ux-source.test.ts` (LOCKED file — see §6) with
       source-sync assertions for the express default + auto-expand rules.
-- [ ] Gates: `npm run typecheck`, focused vitest on create-ai tests,
-      `npm run gate:ai-poster-lock` (after §6), copy evaluator if headline
-      copy paths are touched (they should not be).
-- [ ] Analytics sanity: confirm no `deal_viewed`/publish analytics events are
-      emitted differently; time-to-publish comparison is a post-ship
-      dashboard exercise, not a code change.
+- [x] Gates: `npm run typecheck` (clean), focused vitest on create-ai tests
+      (37/37 `lib/create-ai-ux-source.test.ts` + 42/42 across the other
+      create-ai-adjacent source-sync test files, all passing), and
+      `node scripts/check-i18n-keys.mjs` (PASS, locale parity holds).
+      `npm run gate:ai-poster-lock` intentionally NOT run — it fails until
+      the supervisor updates `docs/ai-poster-core-lock.json` hashes per §6.
+      Copy evaluator not run — no headline/copy-generation paths touched.
+- [x] Analytics sanity: no `deal_viewed`/publish analytics event call sites
+      were touched — this pass only wraps existing JSX in view-state
+      conditionals and adds one new state variable.
 
 ## Phase 2 — decompose the monolith (FOLLOW-UP, not this batch)
 
