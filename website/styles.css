@@ -6304,6 +6304,50 @@ body:not(.admin-shell) main.content-page .admin-panel {
   margin-top: 16px;
 }
 
+/* The confirmation page is the one place these badges live inside a one-third
+   grid column. At their natural sizes the pair needs 140 + 155 + 12 = 307px --
+   wider than the column at every width where the grid is still three across --
+   so they wrapped into a ragged stack that made step 2 far taller than steps 1
+   and 3. Size them off the column instead of wrapping.
+
+   Sizing is driven by HEIGHT, not width: the localized artwork does not share
+   one aspect ratio (Korea's App Store badge is 130x40 where en/es are 120x40),
+   so anything that fixes the widths renders the two badges at visibly different
+   heights in ko. Height is the shared dimension -- give both the same one and
+   let each width follow its own ratio.
+
+   The divisor is that worst-case total width per 1px of height: Apple at 5:1
+   clear space is 2.5h in ko, Google's 646x250 canvas is 2.584h, plus a little
+   slack. Artwork is only ever scaled proportionally -- never cropped or
+   stretched, per the brand rules above -- and Apple's 10px clear space is
+   expressed as h/6 so it scales with the badge instead of swallowing it.
+
+   Container queries, not viewport ones: the column width is what constrains the
+   badges, and it is not a fixed function of the viewport. Where they are
+   unsupported nothing below applies and the row keeps today's wrapping. */
+@supports (width: 1cqw) {
+  .business-confirmation-page .confirmation-journey li {
+    container-type: inline-size;
+  }
+
+  .business-confirmation-page .store-badge-row {
+    --badge-height: min(60px, calc((100cqw - 10px) / 5.2));
+
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .business-confirmation-page .store-badge-row .store-badge--apple {
+    box-sizing: border-box;
+    height: var(--badge-height);
+    padding: calc(var(--badge-height) / 6);
+  }
+
+  .business-confirmation-page .store-badge-row .store-badge--google {
+    height: var(--badge-height);
+  }
+}
+
 .footer-stores {
   display: flex;
   flex-wrap: wrap;
