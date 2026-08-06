@@ -39,6 +39,26 @@ describe("founder-only admin hardening", () => {
     expect(script).not.toContain("permanent_delete");
   });
 
+  it("signs the founder in with email + TOTP only, never a submitted password", () => {
+    const authSession = read("supabase/functions/admin-auth-session/index.ts");
+    const page = read("website/admin/login/index.html");
+    const script = read("website/admin/admin-login.js");
+    const api = read("website/api/admin/session.js");
+
+    // The password is a server-side secret, not a form field.
+    expect(authSession).toMatch(/FOUNDER_ADMIN_PASSWORD/);
+    expect(authSession).not.toMatch(/payload\.password/);
+    expect(page).not.toMatch(/type="password"/);
+    expect(script).not.toMatch(/password/);
+    expect(api).not.toMatch(/req\.body\?\.password/);
+
+    // A code is required up front, and only an aal2 session is handed back.
+    expect(authSession).toMatch(/!isRefresh && \(!email \|\| !code\)/);
+    expect(authSession).toMatch(/decodeJwtAal\(verified\.access_token\) !== "aal2"/);
+    expect(authSession).toMatch(/reason: "invalid_totp_code"/);
+    expect(authSession).toMatch(/revokeSession\(/);
+  });
+
   it("makes MFA mandatory for current and future admin rows", () => {
     const migration = read("supabase/migrations/20260824123000_mandatory_admin_mfa.sql");
     const authSession = read("supabase/functions/admin-auth-session/index.ts");

@@ -38,7 +38,7 @@ function functionSource(name) {
 }
 
 const explicitAuth = new Map([
-  ["admin-auth-session", "founder credentials/refresh token + active owner UUID + mandatory TOTP"],
+  ["admin-auth-session", "founder email + mandatory TOTP (server-held password grant)/refresh token + active owner UUID"],
   ["stripe-webhook", "Stripe-Signature verified with the webhook signing secret"],
   ["wallet-pass-webservice", "Apple Wallet signed device/pass token"],
   ["exit-redemption-mode", "device exit token + owner PIN, checked in-function"],
@@ -100,7 +100,7 @@ function abuseProtection(name, source, auth) {
   if (auth === "x-cron-secret") protections.push("cron secret");
   if (auth.startsWith("Stripe-Signature")) protections.push("signed provider request + event dedupe");
   if (name === "admin-auth-session") {
-    protections.push("8 failed password attempts/email/15 minutes");
+    protections.push("8 failed sign-in attempts/email/15 minutes");
   }
   if (name === "ingest-analytics-event") {
     protections.push("daily-HMAC IP actor key; atomic 60/actor + 5,000 global per 15 minutes");

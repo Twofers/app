@@ -32,11 +32,15 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed." });
   if (!sameOrigin(req)) return send(res, 403, { error: "Invalid request origin." });
 
-  const action = String(req.body?.action || "password");
-  if (action === "password") {
+  const action = String(req.body?.action || "signin");
+  if (action === "signin") {
+    // Admin email + authenticator code. No password is collected here or sent
+    // upstream; the founder's Supabase password lives only in the edge
+    // function's environment.
     const { response, payload } = await edgeFunction("admin-auth-session", {
+      action: "signin",
       email: req.body?.email,
-      password: req.body?.password,
+      code: req.body?.code,
     });
     if (!response.ok || !payload?.ok) {
       return send(res, response.status, { error: payload?.error || "Sign in failed." });
@@ -53,7 +57,7 @@ module.exports = async function handler(req, res) {
         factor_id: payload.factor_id || null,
       });
     }
-    // A fresh password login that already satisfies MFA issues a NEW session on
+    // A fresh sign-in that already satisfies MFA issues a NEW session on
     // a fresh clock. (Previously this read `pending.*` before its declaration
     // below — a temporal-dead-zone ReferenceError, and semantically wrong since
     // no pending state exists on a fresh login. Web-attack review 2026-07-31, F4.)

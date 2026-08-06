@@ -45,6 +45,32 @@ Rollback is code/config rollback to the last reviewed SHA. Do not roll back the
 rate-limit ledgers by dropping them; they are inert if callers stop using the
 RPCs.
 
+## Passwordless founder sign-in (2026-08-06)
+
+`/admin/login` collects the admin email and a 6-digit authenticator code only.
+The Supabase password grant still runs, but the password is the edge-function
+secret `FOUNDER_ADMIN_PASSWORD`; it is never prompted for, never sent from the
+browser, and never stored in Vercel. `admin-auth-session` performs the grant,
+the TOTP challenge, and the verify in one request, and returns a session only
+after it reaches AAL2 — a rejected code revokes the interim AAL1 session,
+writes `admin_login_failed` / `invalid_totp_code`, and counts toward the same
+8-per-email-per-15-minutes limiter as a bad sign-in.
+
+Operational consequences:
+
+- Set `FOUNDER_ADMIN_PASSWORD` in the Supabase function secrets before deploying
+  `admin-auth-session`, and reset it there whenever the founder's Supabase
+  password is rotated. If it is unset, sign-in returns HTTP 500 "Founder admin
+  login is not configured."
+- Console access is now single-factor: possession of the TOTP seed plus
+  knowledge of the founder email is sufficient. Treat authenticator-device loss
+  or seed exposure as a full admin compromise — unenroll the factor in Supabase
+  Auth and rotate `FOUNDER_ADMIN_PASSWORD` in the same window.
+- The enrollment path is unchanged: if the founder has no verified TOTP factor,
+  the endpoint still returns `mfa_enrollment_required` with an AAL1 session so
+  the QR flow can complete. That branch is reachable with the email alone, so
+  never leave the founder account without a verified factor.
+
 ## Supabase control plane
 
 - The timestamped read-only CLI result is

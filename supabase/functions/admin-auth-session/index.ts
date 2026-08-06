@@ -21,7 +21,6 @@ type AdminRole =
 type AuthPayload = {
   action?: unknown;
   email?: unknown;
-  password?: unknown;
   refresh_token?: unknown;
   access_token?: unknown;
   factor_id?: unknown;
@@ -135,6 +134,29 @@ async function verifyFactor(params: {
   });
 }
 
+// Best-effort teardown of the aal1 session minted during a sign-in that never
+// reached aal2, so a rejected code leaves no live session behind.
+async function revokeSession(params: { supabaseUrl: string; anonKey: string; accessToken: string }) {
+  try {
+    await fetch(`${params.supabaseUrl}/auth/v1/logout?scope=local`, {
+      method: "POST",
+      headers: {
+        apikey: params.anonKey,
+        Authorization: `Bearer ${params.accessToken}`,
+      },
+    });
+  } catch {
+    // A stranded aal1 session is never handed to the caller; ignore.
+  }
+}
+
+// The founder signs in with admin email + authenticator code only. The
+// Supabase password grant still runs, but the password is a server-side secret
+// the browser never sees, prompts for, or transmits.
+function founderAdminPassword(): string {
+  return (Deno.env.get("FOUNDER_ADMIN_PASSWORD") ?? "").replace(/[\r\n]+$/, "");
+}
+
 const LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15;
 const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 8;
 
@@ -212,7 +234,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = await readJson(req);
-    const action = cleanString(payload.action) || "password";
+    const action = cleanString(payload.action) || "signin";
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     const requestIp = clientIpFromRequest(req);
 
@@ -311,17 +333,22 @@ Deno.serve(async (req) => {
       return json(req, successBody(admin, verified));
     }
 
-    // action === "password" (default: email+password or refresh_token grant)
+    // action === "signin" (default: admin email + authenticator code, or a
+    // refresh_token grant for an already-established session)
     const email = cleanString(payload.email).toLowerCase();
-    const password = typeof payload.password === "string" ? payload.password : "";
+    const code = cleanString(payload.code);
     const refreshToken = typeof payload.refresh_token === "string" ? payload.refresh_token : "";
     const isRefresh = refreshToken.length > 0;
+    const founderPassword = founderAdminPassword();
 
-    if (!isRefresh && (!email || !password)) {
-      return json(req, { error: "Email and password are required." }, 400);
+    if (!isRefresh && (!email || !code)) {
+      return json(req, { error: "Admin email and authenticator code are required." }, 400);
     }
 
     if (!isRefresh) {
+      if (!founderPassword) {
+        return json(req, { error: "Founder admin login is not configured." }, 500);
+      }
       const failedCount = await recentFailedLoginCount(supabaseAdmin, email);
       if (failedCount >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
         return json(req, { error: "Too many sign-in attempts. Please try again later." }, 429);
@@ -330,9 +357,9 @@ Deno.serve(async (req) => {
 
     const authResponse = isRefresh
       ? await refreshGrant({ supabaseUrl, anonKey, refreshToken })
-      : await passwordGrant({ supabaseUrl, anonKey, email, password });
+      : await passwordGrant({ supabaseUrl, anonKey, email, password: founderPassword });
 
-    const session = await authResponse.json().catch(() => ({}));
+    let session = await authResponse.json().catch(() => ({}));
     if (!authResponse.ok || !session?.access_token) {
       if (!isRefresh) {
         await supabaseAdmin.from("admin_audit_log").insert({
@@ -379,24 +406,74 @@ Deno.serve(async (req) => {
 
     if (decodeJwtAal(session.access_token) !== "aal2") {
       const factor = verifiedTotpFactor((user as { factors?: unknown }).factors);
-      await supabaseAdmin.from("admin_audit_log").insert({
-        admin_user_id: adminUser.id,
-        admin_email: adminUser.email,
-        action: isRefresh ? "admin_session_refreshed" : "admin_login_success",
-        target_type: "admin_login",
-        reason: factor ? "mfa_step_up_required" : "mfa_enrollment_required",
-        request_id: requestId,
-      });
-      const sessionForMfa = {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_in: session.expires_in,
-        token_type: session.token_type,
-      };
-      if (factor) {
-        return json(req, { ok: true, mfa_required: true, factor_id: factor.id, session: sessionForMfa });
+
+      // A refresh grant carries no code to check, and a founder with no
+      // verified factor yet has to enroll one before any code can exist. Both
+      // hand the aal1 session back so the browser can finish the MFA step.
+      if (isRefresh || !factor) {
+        await supabaseAdmin.from("admin_audit_log").insert({
+          admin_user_id: adminUser.id,
+          admin_email: adminUser.email,
+          action: isRefresh ? "admin_session_refreshed" : "admin_login_success",
+          target_type: "admin_login",
+          reason: factor ? "mfa_step_up_required" : "mfa_enrollment_required",
+          request_id: requestId,
+        });
+        const sessionForMfa = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          expires_in: session.expires_in,
+          token_type: session.token_type,
+        };
+        if (factor) {
+          return json(req, { ok: true, mfa_required: true, factor_id: factor.id, session: sessionForMfa });
+        }
+        return json(req, { ok: true, mfa_enrollment_required: true, session: sessionForMfa });
       }
-      return json(req, { ok: true, mfa_enrollment_required: true, session: sessionForMfa });
+
+      // Single-step sign-in: the authenticator code arrived with the request,
+      // so step up here and only ever hand back an aal2 session. A wrong code
+      // logs `admin_login_failed`, which feeds the same rate limiter as a bad
+      // sign-in, and leaks no aal1 session to the caller.
+      const challengeResponse = await challengeFactor({
+        supabaseUrl,
+        anonKey,
+        accessToken: session.access_token,
+        factorId: factor.id,
+      });
+      const challenge = await challengeResponse.json().catch(() => ({}));
+      if (!challengeResponse.ok || !challenge?.id) {
+        await revokeSession({ supabaseUrl, anonKey, accessToken: session.access_token });
+        return json(req, { error: "Could not start MFA verification." }, 400);
+      }
+
+      const verified = await verifyFactor({
+        supabaseUrl,
+        anonKey,
+        accessToken: session.access_token,
+        factorId: factor.id,
+        challengeId: challenge.id,
+        code,
+      }).then((response) => response.json().catch(() => ({})), () => ({}));
+
+      if (!verified?.access_token || decodeJwtAal(verified.access_token) !== "aal2") {
+        await revokeSession({ supabaseUrl, anonKey, accessToken: session.access_token });
+        await supabaseAdmin.from("admin_audit_log").insert({
+          admin_user_id: adminUser.id,
+          // Logged under the submitted address so `recentFailedLoginCount`
+          // (which keys on it) counts wrong codes toward the same limit.
+          admin_email: email,
+          action: "admin_login_failed",
+          target_type: "admin_login",
+          reason: "invalid_totp_code",
+          ip_address: requestIp,
+          user_agent: req.headers.get("user-agent"),
+          request_id: requestId,
+        });
+        return json(req, { error: "Incorrect verification code." }, 401);
+      }
+
+      session = verified;
     }
 
     await supabaseAdmin.from("admin_audit_log").insert({

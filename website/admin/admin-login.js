@@ -140,16 +140,16 @@
     event.preventDefault();
     const data = new FormData(form);
     const email = String(data.get("email") || "").trim();
-    const password = String(data.get("password") || "");
-    if (!email || !password) {
-      setStatus("Enter your admin email and password.", true);
+    const code = String(data.get("code") || "").trim();
+    if (!email || !code) {
+      setStatus("Enter your admin email and the 6-digit authenticator code.", true);
       return;
     }
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
     setStatus("Signing in...");
     try {
-      const result = await request("POST", { action: "password", email, password });
+      const result = await request("POST", { action: "signin", email, code });
       if (result.mfa_enrollment_required) {
         await beginEnrollment();
       } else if (result.mfa_required) {
@@ -159,6 +159,10 @@
       }
     } catch (error) {
       await clearSession();
+      // A rejected code is spent either way — never leave it sitting in the
+      // field for a second submit.
+      const codeInput = form.querySelector('input[name="code"]');
+      if (codeInput) codeInput.value = "";
       setStatus(error.message || "Could not sign in.", true);
     } finally {
       if (submitButton) submitButton.disabled = false;

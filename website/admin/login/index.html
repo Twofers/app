@@ -37,8 +37,16 @@
               <input name="email" type="email" autocomplete="email" inputmode="email" required />
             </label>
             <label>
-              Password
-              <input name="password" type="password" autocomplete="current-password" required />
+              Authenticator code
+              <input
+                name="code"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="one-time-code"
+                maxlength="6"
+                required
+              />
             </label>
             <div class="admin-login-actions">
               <button type="submit">Sign in to admin</button>
@@ -71,8 +79,8 @@
         </article>
         <article class="admin-panel">
           <h2>Authentication Boundary</h2>
-          <p>Sign in with the same Supabase Auth user that is active in the <code>admin_users</code> allowlist. When "keep me signed in" is checked, this browser stores a refresh token so the dashboard can renew the short-lived access token automatically.</p>
-          <p class="admin-note">Never paste service-role keys, Stripe keys, API keys, or production secrets into this page. This form only accepts your admin email and password.</p>
+          <p>Sign in with the same Supabase Auth user that is active in the <code>admin_users</code> allowlist. Enter your admin email and the current 6-digit code from your authenticator app &mdash; no password is asked for or sent. The session cookie is server-side and renews the short-lived access token automatically.</p>
+          <p class="admin-note">Never paste service-role keys, Stripe keys, API keys, or production secrets into this page. This form only accepts your admin email and an authenticator code.</p>
         </article>
         <article class="admin-panel">
           <h2>Security Checks</h2>
@@ -83,6 +91,6 @@
     </main>
     <script src="/admin/qrcode-browser.js?v=20260728-local-qr"></script>
     <script src="/admin/admin-shell.js?v=20260731-admin-session"></script>
-    <script src="/admin/admin-login.js?v=20260731-admin-session"></script>
+    <script src="/admin/admin-login.js?v=20260806-admin-totp-login"></script>
   </body>
 </html>

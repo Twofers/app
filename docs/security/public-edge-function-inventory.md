@@ -27,7 +27,7 @@ Current count: **78** functions with `verify_jwt = false`.
 | `ai-compose-offer` | user JWT checked in-function | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `ai-extract-menu` | user JWT checked in-function | authenticated caller |
 | `delete-user-account` | user JWT checked in-function | application/DB rate limit; authenticated caller |
-| `ingest-analytics-event` | optional user JWT; four pre-auth event names deliberately public | single-use/expiry; idempotency/dedupe; authenticated caller; daily-HMAC IP actor key; atomic 60/actor + 5,000 global per 15 minutes |
+| `ingest-analytics-event` | optional user JWT; four pre-auth event names deliberately public | application/DB rate limit; single-use/expiry; idempotency/dedupe; authenticated caller; daily-HMAC IP actor key; atomic 60/actor + 5,000 global per 15 minutes |
 | `publish-offer-version` | user JWT checked in-function | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `weekly-deal-digest` | x-cron-secret | cron secret |
 | `send-trial-ending-reminders` | x-cron-secret | idempotency/dedupe; cron secret |
@@ -37,13 +37,13 @@ Current count: **78** functions with `verify_jwt = false`.
 | `cancel-visual-redeem` | retired operation; always returns CANCEL_NOT_SUPPORTED | no state-changing path |
 | `finalize-stale-redeems` | x-cron-secret | single-use/expiry; cron secret |
 | `deal-link` | deliberately public; signed/share identifier is validated in-function | signed/scoped capability checked in-function |
-| `qr-campaign-redirect` | deliberately public redirect; campaign slug is the capability | atomic 30/IP + 2,000/campaign per minute DB ceiling |
+| `qr-campaign-redirect` | deliberately public redirect; campaign slug is the capability | application/DB rate limit; atomic 30/IP + 2,000/campaign per minute DB ceiling |
 | `deal-share-lookup` | deliberately public; share code is validated in-function | application/DB rate limit; single-use/expiry |
 | `submit-business-application` | deliberately public intake | application/DB rate limit; honeypot |
 | `submit-launch-signup` | deliberately public intake | application/DB rate limit; honeypot; idempotency/dedupe |
 | `admin-dashboard-summary` | user JWT checked in-function + active admin/role/MFA guard | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `admin-qr-campaigns` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
-| `admin-auth-session` | founder credentials/refresh token + active owner UUID + mandatory TOTP | application/DB rate limit; 8 failed password attempts/email/15 minutes |
+| `admin-auth-session` | founder email + mandatory TOTP (server-held password grant)/refresh token + active owner UUID | application/DB rate limit; 8 failed sign-in attempts/email/15 minutes |
 | `admin-ai-usage` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
 | `admin-business-applications` | user JWT checked in-function + active admin/role/MFA guard | single-use/expiry; idempotency/dedupe; authenticated caller |
 | `public-local-businesses` | deliberately public read-only directory | read-only operation with bounded query/result |
@@ -63,7 +63,7 @@ Current count: **78** functions with `verify_jwt = false`.
 | `admin-trial-conversion-assistant` | user JWT checked in-function + active admin/role/MFA guard | application/DB rate limit; single-use/expiry; authenticated caller |
 | `admin-ai-operating-report` | user JWT checked in-function + active admin/role/MFA guard | application/DB rate limit; single-use/expiry; authenticated caller |
 | `admin-ai-cost-ledger-reset` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
-| `admin-ai-prompts` | user JWT checked in-function + active admin/role/MFA guard | authenticated caller |
+| `admin-ai-prompts` | user JWT checked in-function + active admin/role/MFA guard | application/DB rate limit; authenticated caller |
 | `get-business-onboarding-context` | signed onboarding token or user JWT, checked in-function | single-use/expiry; idempotency/dedupe; authenticated caller; signed/scoped capability checked in-function |
 | `update-business-profile-section` | user JWT checked in-function | authenticated caller |
 | `accept-business-terms` | user JWT checked in-function | authenticated caller |
@@ -75,7 +75,7 @@ Current count: **78** functions with `verify_jwt = false`.
 | `billing-checkout-redirect` | signed checkout token | signed/scoped capability checked in-function |
 | `simulate-subscribe` | retired operation; always returns HTTP 410 | no state-changing path |
 | `stripe-create-checkout-session` | user JWT checked in-function | single-use/expiry; authenticated caller |
-| `business-activation-status` | signed activation token | single-use/expiry; signed/scoped capability checked in-function |
+| `business-activation-status` | signed activation token | application/DB rate limit; single-use/expiry; signed/scoped capability checked in-function |
 | `stripe-customer-portal-session` | user JWT checked in-function | single-use/expiry; authenticated caller |
 | `stripe-ensure-customer` | user JWT checked in-function | authenticated caller |
 | `stripe-backfill-customers` | x-cron-secret or privileged user JWT, checked in-function | authenticated caller |
