@@ -5451,6 +5451,134 @@ main.content-page {
   line-height: 1.55;
 }
 
+/* Business Access Requests page ------------------------------------------- */
+
+/* The decision note is its own full-width row under the queue filter, not a
+   search box wedged beside it. */
+.admin-shell .admin-trial-note {
+  margin-top: 4px;
+}
+
+.admin-shell .admin-trial-note small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* The three explainer cards are reference, not the point of the page. */
+.admin-shell .admin-legend {
+  margin: 18px 0 0;
+}
+
+.admin-shell .admin-legend > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.admin-shell .admin-legend[open] > summary {
+  margin-bottom: 14px;
+}
+
+/* Long emails and names must wrap between characters, not force the column to
+   ~7 chars wide, and badges must never split mid-word. */
+.admin-shell .admin-access-table td,
+.admin-shell .admin-access-table th {
+  white-space: normal;
+}
+
+.admin-shell .admin-access-table .admin-access-email {
+  overflow-wrap: anywhere;
+}
+
+/* Only the email column truly collapses (it has no spaces to wrap on); giving it
+   a floor stops auto-layout starving it to a few characters. Business/Owner wrap
+   fine on their own, so leave them free and keep the whole table inside its wrap. */
+.admin-shell .admin-access-table th:nth-child(3),
+.admin-shell .admin-access-table td:nth-child(3) {
+  min-width: 156px;
+}
+
+.admin-shell .admin-access-table .admin-badge {
+  white-space: nowrap;
+}
+
+/* The two everyday buttons + the More actions summary fit comfortably below this,
+   and a lower floor keeps the 8-column table inside its wrap on a 1366 laptop. */
+.admin-shell .admin-access-table .admin-inline-actions {
+  min-width: 210px;
+}
+
+/* Free full-access grant: the day count and its button read as one unit so the
+   number always belongs to the button beside it. */
+.admin-shell .admin-trial-grant {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.admin-shell .admin-trial-grant .admin-inline-field {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-shell .admin-trial-grant .admin-inline-field input {
+  width: 84px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+/* Destructive actions get a tinted-outline treatment inside the drawer:
+   clearly a red action without the full-bleed alarm of a solid button. */
+.admin-shell .admin-access-table .button.button-danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: var(--danger);
+}
+
+.admin-shell .admin-access-table .button.button-danger:hover,
+.admin-shell .admin-access-table .button.button-danger:focus-visible {
+  border-color: var(--danger);
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* AI review is appended beside the request facts, never over them. */
+.admin-shell .admin-ai-review {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-shell .admin-ai-review-heading {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-shell .admin-ai-review-body {
+  margin: 0;
+  white-space: pre-line;
+}
+
 .admin-ai-usage-table {
   margin-top: 18px;
   box-shadow: none;
@@ -5934,6 +6062,24 @@ body:not(.admin-shell) main.content-page .admin-panel {
 
   .admin-table[data-mobile-cards] .admin-row-detail::before {
     display: none;
+  }
+
+  /* The action cluster needs the whole card width, not the cramped value column,
+     or the 250px inline-actions floor pushes the card into horizontal overflow. */
+  .admin-shell .admin-access-table[data-mobile-cards] td[data-label="Action"] {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-access-table[data-mobile-cards] td[data-label="Action"]::before {
+    margin-bottom: 4px;
+  }
+
+  .admin-shell .admin-access-table[data-mobile-cards] .admin-inline-actions {
+    min-width: 0;
+  }
+
+  .admin-shell .admin-access-table[data-mobile-cards] .admin-trial-grant {
+    flex-wrap: wrap;
   }
 }
 

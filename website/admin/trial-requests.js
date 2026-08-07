@@ -17,6 +17,10 @@
   const MIN_TRIAL_DAYS = 1;
   const MAX_TRIAL_DAYS = 120;
   const DEFAULT_TRIAL_DAYS = 30;
+  // Keep in step with the <thead> in this page's index.html.
+  const COLUMN_COUNT = 8;
+  // Business name per application id, so a confirm can name what it is about to change.
+  const businessNames = new Map();
 
   function applyRequestedQueue() {
     if (!form) return;
@@ -84,6 +88,41 @@
   function statusLabel(status) {
     if (status === "approved_not_activated") return "approved setup";
     return String(status || "unknown").replaceAll("_", " ");
+  }
+
+  // Mirrors riskLevel() in supabase/functions/admin-business-applications/index.ts.
+  // The scale is inverted on purpose: it is a trust score, so a LOWER number means
+  // HIGHER risk. Showing the bare number reads backwards, hence the label.
+  function riskLevelFor(score) {
+    if (score === null || score === undefined || score === "") return null;
+    const value = Number(score);
+    if (!Number.isFinite(value)) return null;
+    if (value < 0) return { label: "Blocked", tone: "danger" };
+    if (value >= 70) return { label: "Low", tone: "success" };
+    if (value >= HIGH_RISK_MAX_SCORE + 1) return { label: "Medium", tone: "warning" };
+    return { label: "High", tone: "danger" };
+  }
+
+  // Same wording as the dashboard action queue (relativeWaiting in admin.js) so the
+  // two triage surfaces read the same way.
+  function relativeAge(value) {
+    if (!value) return "";
+    const time = new Date(value).getTime();
+    if (!Number.isFinite(time)) return "";
+    const days = Math.max(0, Math.floor((Date.now() - time) / 86400000));
+    if (days === 0) return "Today";
+    if (days === 1) return "1 day";
+    return `${days} days`;
+  }
+
+  function fullTimestamp(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : "";
+  }
+
+  function businessNameFor(applicationId) {
+    return businessNames.get(applicationId) || "this business";
   }
 
   function escapeText(value) {
@@ -203,11 +242,45 @@
     tbody.innerHTML = "";
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 7;
+    td.colSpan = COLUMN_COUNT;
     td.className = "admin-row-detail";
     td.textContent = message;
     tr.appendChild(td);
     tbody.appendChild(tr);
+  }
+
+  // Placeholder rows while the queue loads, so a stale decision is never left on
+  // screen looking current. Mirrors setTablesState("loading") in admin-directory.js.
+  function renderLoadingRows() {
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const headers = [...document.querySelectorAll(".admin-access-table thead th")];
+    for (let row = 0; row < 4; row += 1) {
+      const tr = document.createElement("tr");
+      tr.setAttribute("aria-hidden", "true");
+      for (let column = 0; column < COLUMN_COUNT; column += 1) {
+        const td = document.createElement("td");
+        if (headers[column]) td.dataset.label = headers[column].textContent || "";
+        const bar = document.createElement("span");
+        bar.className = "admin-skeleton";
+        td.appendChild(bar);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+
+  function actionButton(app, { decision, adminAction, label, ariaLabel, variant }) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `button button-small${variant ? ` ${variant}` : ""}`;
+    if (decision) button.dataset.decision = decision;
+    if (adminAction) button.dataset.adminAction = adminAction;
+    button.dataset.applicationId = app.id;
+    button.textContent = label;
+    // Every row repeats the same button labels, so name the business for screen readers.
+    button.setAttribute("aria-label", `${ariaLabel} ${app.business_name || "this business"}`);
+    return button;
   }
 
   function renderApplications(applications) {
@@ -219,23 +292,47 @@
     }
 
     for (const app of applications) {
+      businessNames.set(app.id, app.business_name || "");
       const tr = document.createElement("tr");
       const status = app.status || "unknown";
       const tone = badgeTone(status);
       const cells = [
-        ["Business", app.business_name || "Unknown business"],
-        ["Owner", app.contact_name || ""],
-        ["Email", app.email || ""],
-        ["Launch area", app.launch_area || "Unspecified"],
-        ["Risk score", app.risk_score ?? ""],
+        ["Business", app.business_name || "Unknown business", ""],
+        ["Owner", app.contact_name || "", ""],
+        ["Email", app.email || "", "admin-access-email"],
+        ["Launch area", app.launch_area || "Unspecified", ""],
       ];
 
-      for (const [label, value] of cells) {
+      for (const [label, value, className] of cells) {
         const td = document.createElement("td");
         td.dataset.label = label;
+        if (className) td.className = className;
         td.textContent = escapeText(value);
         tr.appendChild(td);
       }
+
+      // How long this request has been waiting. The queue is unusable for triage
+      // without it, and created_at is already in the list payload.
+      const requestedTd = document.createElement("td");
+      requestedTd.dataset.label = "Requested";
+      requestedTd.textContent = relativeAge(app.created_at) || "—";
+      const requestedTitle = fullTimestamp(app.created_at);
+      if (requestedTitle) requestedTd.title = `Requested ${requestedTitle}`;
+      tr.appendChild(requestedTd);
+
+      // The raw score reads backwards on its own -- 5 looks safe but means high
+      // risk -- so lead with the level and keep the number as supporting detail.
+      const riskTd = document.createElement("td");
+      riskTd.dataset.label = "Risk";
+      const risk = riskLevelFor(app.risk_score);
+      const riskBadge = document.createElement("span");
+      riskBadge.className = `admin-badge${risk ? ` ${risk.tone}` : ""}`;
+      riskBadge.textContent = risk ? `${risk.label} · ${app.risk_score}` : "Unscored";
+      riskBadge.title = risk
+        ? `Risk score ${app.risk_score} of 100 — a lower score means higher risk.`
+        : "No risk score recorded for this request.";
+      riskTd.appendChild(riskBadge);
+      tr.appendChild(riskTd);
 
       const statusTd = document.createElement("td");
       statusTd.dataset.label = "Status";
@@ -249,25 +346,26 @@
       actionsTd.dataset.label = "Action";
       const actions = document.createElement("div");
       actions.className = "admin-inline-actions";
-      for (const [decision, label] of [
-        ["ai_review", "AI Review"],
-        ["approve_setup", "Approve for setup"],
-        ["review_required", "Review"],
-        ["waitlist", "Waitlist"],
-        ["reject", "Reject"],
-        ["suspend", "Suspend"],
-      ]) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `button button-small${decision === "reject" || decision === "suspend" ? " button-secondary" : ""}`;
-        button.dataset.decision = decision;
-        button.dataset.applicationId = app.id;
-        button.textContent = label;
-        actions.appendChild(button);
-      }
+      // Only the two everyday actions stay in the open. The rest -- including
+      // everything destructive or free-of-charge -- sits behind a disclosure so a
+      // wrapped row cannot put Reject under the cursor you aimed at Approve.
+      actions.append(
+        actionButton(app, { decision: "approve_setup", label: "Approve for setup", ariaLabel: "Approve for setup:" }),
+        actionButton(app, { decision: "ai_review", label: "AI review", ariaLabel: "Draft an AI review for", variant: "button-secondary" }),
+      );
 
-      // Full access without payment: a day count plus its own button, kept next
-      // to each other so the number always belongs to the row being approved.
+      const moreActions = document.createElement("details");
+      moreActions.className = "admin-more-actions";
+      const moreSummary = document.createElement("summary");
+      moreSummary.textContent = "More actions";
+      moreSummary.setAttribute("aria-label", `More actions for ${app.business_name || "this business"}`);
+      const moreList = document.createElement("div");
+      moreList.className = "admin-inline-actions";
+
+      // Full access without payment: a day count plus its own button, boxed
+      // together so the number always belongs to the row being approved.
+      const grant = document.createElement("div");
+      grant.className = "admin-trial-grant";
       const daysLabel = document.createElement("label");
       daysLabel.className = "admin-inline-field";
       daysLabel.textContent = "Trial days";
@@ -278,37 +376,46 @@
       daysInput.step = "1";
       daysInput.value = String(DEFAULT_TRIAL_DAYS);
       daysInput.dataset.trialDaysFor = app.id;
+      daysInput.setAttribute("aria-label", `Trial days for ${app.business_name || "this business"}`);
       daysLabel.appendChild(daysInput);
-      actions.appendChild(daysLabel);
+      grant.append(
+        daysLabel,
+        actionButton(app, { decision: "approve_full_access", label: "Approve - full access", ariaLabel: "Approve full access for" }),
+      );
+      moreList.appendChild(grant);
 
-      const fullAccessButton = document.createElement("button");
-      fullAccessButton.type = "button";
-      fullAccessButton.className = "button button-small";
-      fullAccessButton.dataset.decision = "approve_full_access";
-      fullAccessButton.dataset.applicationId = app.id;
-      fullAccessButton.textContent = "Approve - full access";
-      actions.appendChild(fullAccessButton);
+      moreList.append(
+        actionButton(app, { decision: "review_required", label: "Review", ariaLabel: "Mark review required for", variant: "button-secondary" }),
+        actionButton(app, { decision: "waitlist", label: "Waitlist", ariaLabel: "Waitlist", variant: "button-secondary" }),
+        actionButton(app, { decision: "reject", label: "Reject", ariaLabel: "Reject the request from", variant: "button-secondary button-danger" }),
+        actionButton(app, { decision: "suspend", label: "Suspend", ariaLabel: "Suspend", variant: "button-secondary button-danger" }),
+      );
 
       if (app.billing_link_resend_eligible === true) {
-        const resendButton = document.createElement("button");
-        resendButton.type = "button";
-        resendButton.className = "button button-small button-secondary";
-        resendButton.dataset.adminAction = "resend_billing_link";
-        resendButton.dataset.applicationId = app.id;
-        resendButton.textContent = app.billing_link_email_sent
-          ? "Send new billing link"
-          : "Send billing link";
-        actions.appendChild(resendButton);
+        moreList.appendChild(actionButton(app, {
+          adminAction: "resend_billing_link",
+          label: app.billing_link_email_sent ? "Send new billing link" : "Send billing link",
+          ariaLabel: "Send a billing link to",
+          variant: "button-secondary",
+        }));
       }
+
+      moreActions.append(moreSummary, moreList);
+      actions.appendChild(moreActions);
       actionsTd.appendChild(actions);
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
 
       const detailTr = document.createElement("tr");
       const detailTd = document.createElement("td");
-      detailTd.colSpan = 7;
+      detailTd.colSpan = COLUMN_COUNT;
       detailTd.className = "admin-row-detail";
-      detailTd.textContent = [
+      // The facts live in their own node so an AI review can be appended beside
+      // them instead of overwriting the evidence the decision rests on.
+      const facts = document.createElement("p");
+      facts.className = "admin-note";
+      facts.dataset.applicationFacts = app.id;
+      facts.textContent = [
         app.business_type ? `Type: ${app.business_type}` : "",
         app.phone ? `Phone: ${app.phone}` : "",
         app.website_or_instagram ? `Web/IG: ${app.website_or_instagram}` : "",
@@ -317,14 +424,16 @@
         app.offer_interests ? `Offers: ${app.offer_interests}` : "",
         Array.isArray(app.risk_reasons) && app.risk_reasons.length ? `Signals: ${app.risk_reasons.join(", ")}` : "",
       ].filter(Boolean).join(" | ") || "No extra request details.";
+      detailTd.appendChild(facts);
       detailTd.dataset.applicationDetail = app.id;
       detailTr.appendChild(detailTd);
       tbody.appendChild(detailTr);
     }
   }
 
-  async function loadApplications() {
+  async function loadApplications({ showSkeleton = false } = {}) {
     setTrialStatus("Loading business access requests...");
+    if (showSkeleton) renderLoadingRows();
     const payload = await postAdmin({ action: "list", status: selectedStatus() });
     let applications = payload.applications || [];
     if (highRiskOnly) {
@@ -349,16 +458,34 @@
       try {
         const payload = await postOnboardingAi({ application_id: applicationId });
         const detail = document.querySelector(`[data-application-detail="${applicationId}"]`);
-        if (detail) detail.textContent = stringifyRecommendation(payload.recommendation);
+        if (detail) {
+          // Replace only a previous draft; the request facts above it stay put.
+          detail.querySelector(`[data-application-ai="${applicationId}"]`)?.remove();
+          const block = document.createElement("div");
+          block.className = "admin-ai-review";
+          block.dataset.applicationAi = applicationId;
+          const heading = document.createElement("p");
+          heading.className = "admin-ai-review-heading";
+          heading.textContent = "AI review — draft only, not a decision";
+          const body = document.createElement("p");
+          body.className = "admin-ai-review-body";
+          body.textContent = stringifyRecommendation(payload.recommendation) || "The AI review came back empty.";
+          block.append(heading, body);
+          detail.appendChild(block);
+        }
         setTrialStatus("AI review drafted. Admin decision still requires an explicit click.");
       } finally {
         button.disabled = false;
       }
       return;
     }
-    if (decision === "reject" && !window.confirm("Reject this business request?")) return;
-    if (decision === "approve_setup" && !window.confirm("Approve this business for setup access? No trial or credits start yet.")) return;
-    if (decision === "suspend" && !window.confirm("Suspend this business and block merchant actions?")) return;
+    // Every confirm names the business: the rows repeat the same button labels, so
+    // "are you sure?" on its own does not tell you which row you hit.
+    const name = businessNameFor(applicationId);
+    if (decision === "reject" && !window.confirm(`Reject the request from ${name}? They will be told the request was declined.`)) return;
+    if (decision === "approve_setup" && !window.confirm(`Approve ${name} for setup access? No trial, credits, or publishing start yet.`)) return;
+    if (decision === "waitlist" && !window.confirm(`Move ${name} to the waitlist?`)) return;
+    if (decision === "suspend" && !window.confirm(`Suspend ${name} and block all merchant actions?`)) return;
 
     let trialDays;
     if (decision === "approve_full_access") {
@@ -368,7 +495,7 @@
         return;
       }
       const confirmed = window.confirm(
-        `Grant ${trialDays} days of full access now, no payment required yet?`,
+        `Grant ${name} ${trialDays} days of full access now? No payment required yet.`,
       );
       if (!confirmed) return;
     }
@@ -441,14 +568,21 @@
     });
   }
 
+  function reloadQueue() {
+    loadApplications({ showSkeleton: true }).catch((error) => {
+      if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
+      renderEmpty("Could not load business access requests.");
+      setTrialStatus(error instanceof Error ? error.message : "Could not load business access requests.", "danger");
+    });
+  }
+
   if (form) {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      loadApplications().catch((error) => {
-        if (String(error?.message || "").includes("session")) setAdminStatus("Admin session not connected", "warning");
-        setTrialStatus(error instanceof Error ? error.message : "Could not load business access requests.", "danger");
-      });
+      reloadQueue();
     });
+    // Changing the queue reloads immediately; Load requests stays as an explicit refresh.
+    form.querySelector('select[name="status"]')?.addEventListener("change", reloadQueue);
   }
 
   if (tbody) {
