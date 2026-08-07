@@ -13,7 +13,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors, Gray } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { localizedDealTitle } from "@/lib/deal-localization";
@@ -196,13 +196,13 @@ export default function ReuseDealScreen() {
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       {/* The stack header already shows the screen title; only the subtitle renders in-page. */}
-      <Text style={{ opacity: 0.65, fontSize: 15, lineHeight: 22 }}>{t("reuseHub.subtitle")}</Text>
+      <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>{t("reuseHub.subtitle")}</Text>
       {err ? <Banner message={err} tone="error" /> : null}
 
       {!isLoggedIn || loading ? (
-        <Text style={{ marginTop: Spacing.lg }}>{t("reuseHub.loading")}</Text>
+        <Text style={{ color: theme.text, marginTop: Spacing.lg }}>{t("reuseHub.loading")}</Text>
       ) : !businessId ? (
-        <Text style={{ marginTop: Spacing.lg }}>{t("reuseHub.needBusiness")}</Text>
+        <Text style={{ color: theme.text, marginTop: Spacing.lg }}>{t("reuseHub.needBusiness")}</Text>
       ) : (
         <ScrollView
           style={{ marginTop: Spacing.md, flex: 1 }}
@@ -210,9 +210,9 @@ export default function ReuseDealScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View>
-            <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("reuseHub.templatesSection")}</Text>
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("reuseHub.templatesSection")}</Text>
             {templates.length === 0 ? (
-              <Text style={{ opacity: 0.65 }}>{t("reuseHub.templatesEmpty")}</Text>
+              <Text style={{ color: theme.mutedText }}>{t("reuseHub.templatesEmpty")}</Text>
             ) : (
               templates.map((row) => {
                 const tplPoster = resolveDealPosterDisplayUri(row.poster_url, null);
@@ -247,13 +247,13 @@ export default function ReuseDealScreen() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: Gray[200] }} />
+                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: theme.surfaceElevated }} />
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
+                      <Text style={{ color: theme.text, fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
                         {templateTitle(row)}
                       </Text>
-                      <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.55 }}>{t("reuseHub.openInAiAds")}</Text>
+                      <Text style={{ color: theme.mutedText, marginTop: 4, fontSize: 13 }}>{t("reuseHub.openInAiAds")}</Text>
                     </View>
                   </Pressable>
                   <Pressable
@@ -286,9 +286,9 @@ export default function ReuseDealScreen() {
           </View>
 
           <View>
-            <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("reuseHub.pastDealsSection")}</Text>
+            <Text style={{ color: theme.text, fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("reuseHub.pastDealsSection")}</Text>
             {deals.length === 0 ? (
-              <Text style={{ opacity: 0.65 }}>{t("reuseHub.dealsEmpty")}</Text>
+              <Text style={{ color: theme.mutedText }}>{t("reuseHub.dealsEmpty")}</Text>
             ) : (
               deals.map((row) => {
                 const dealPoster = resolveDealPosterDisplayUri(row.poster_url, row.poster_storage_path);
@@ -314,16 +314,16 @@ export default function ReuseDealScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: Gray[200] }} />
+                    <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: theme.surfaceElevated }} />
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
+                    <Text style={{ color: theme.text, fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
                       {dealTitle(row)}
                     </Text>
                     {row.price != null ? (
-                      <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>${Number(row.price).toFixed(2)}</Text>
+                      <Text style={{ color: theme.mutedText, marginTop: 4, fontSize: 14 }}>${Number(row.price).toFixed(2)}</Text>
                     ) : null}
-                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.primary }}>
+                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.accentText }}>
                       {t("reuseHub.repeatCta")}
                     </Text>
                   </View>
@@ -334,7 +334,7 @@ export default function ReuseDealScreen() {
           </View>
 
           <Pressable onPress={() => router.push("/create/ai" as Href)} style={{ paddingVertical: Spacing.md }}>
-            <Text style={{ fontWeight: "700", color: theme.primary }}>{t("reuseHub.backToCreate")}</Text>
+            <Text style={{ fontWeight: "700", color: theme.accentText }}>{t("reuseHub.backToCreate")}</Text>
           </Pressable>
         </ScrollView>
       )}

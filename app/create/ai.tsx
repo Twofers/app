@@ -6595,7 +6595,7 @@ export default function AiDealScreen() {
                   draftEditorSectionYRef.current = e.nativeEvent.layout.y;
                 }}
               >
-                <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
+                <Text style={{ color: theme.text, marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
                 {showPosterPreview ? (
                   <View style={{ marginTop: 10, gap: 12 }}>
                     {renderPosterPreview()}

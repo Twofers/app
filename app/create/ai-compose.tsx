@@ -6,9 +6,12 @@
 import { useEffect, useRef } from "react";
 import { View, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 
 export default function AiComposeRedirect() {
   const router = useRouter();
+  const theme = Colors[useColorScheme() === "dark" ? "dark" : "light"];
   const params = useLocalSearchParams();
   // useLocalSearchParams returns a fresh object every render, so depending on it
   // directly re-ran this redirect in a loop — the screen sat on "Redirecting..."
@@ -27,7 +30,7 @@ export default function AiComposeRedirect() {
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text style={{ opacity: 0.5 }}>Redirecting...</Text>
+      <Text style={{ color: theme.mutedText }}>Redirecting...</Text>
     </View>
   );
 }

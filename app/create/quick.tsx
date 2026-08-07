@@ -5,6 +5,8 @@
 import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
@@ -24,6 +26,7 @@ function redirectedParams(params: Record<string, string | string[]>): Record<str
 export default function QuickDealRedirect() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const theme = Colors[useColorScheme() === "dark" ? "dark" : "light"];
   // useLocalSearchParams returns a fresh object every render; depending on it re-ran
   // this redirect in a loop (visible "Redirecting..." stall + downstream re-render
   // churn). Fire once on mount — the params are available at first render.
@@ -40,7 +43,7 @@ export default function QuickDealRedirect() {
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text style={{ opacity: 0.5 }}>Redirecting...</Text>
+      <Text style={{ color: theme.mutedText }}>Redirecting...</Text>
     </View>
   );
 }

@@ -253,6 +253,7 @@ export function AiInsightsCard({
                   alignItems: "flex-start",
                 }}
               >
+                {/* eslint-disable-next-line twofer/require-text-color -- emoji glyph; it carries its own color and a text color would not apply */}
                 <Text style={{ fontSize: 16, lineHeight: 20, marginTop: 1 }} maxFontSizeMultiplier={1.05}>{s.icon}</Text>
                 <View style={{ flex: 1 }}>
                   <Text

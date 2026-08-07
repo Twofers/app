@@ -657,7 +657,7 @@ export default function WalletScreen() {
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
-                  style={{ width: posterWidth, height: posterHeight, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
+                  style={{ width: posterWidth, height: posterHeight, borderRadius: Radii.lg, backgroundColor: theme.surfaceElevated }}
                   contentFit="cover"
                 />
               ) : (
@@ -666,12 +666,12 @@ export default function WalletScreen() {
                     width: posterWidth,
                     height: posterHeight,
                     borderRadius: Radii.lg,
-                    backgroundColor: Gray[100],
+                    backgroundColor: theme.surfaceElevated,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 11, opacity: 0.5 }}>—</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 11 }}>—</Text>
                 </View>
               );
             })()}
@@ -710,12 +710,12 @@ export default function WalletScreen() {
                 </>
               )}
               {row.redeem_method === "visual" && bucket === "redeemed" ? (
-                <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55 }}>
+                <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55, color: theme.text }}>
                   {t("consumerWallet.redeemedViaVisual")}
                 </Text>
               ) : null}
               {row.redeem_method === "qr" && bucket === "redeemed" ? (
-                <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55 }}>
+                <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55, color: theme.text }}>
                   {t("consumerWallet.redeemedViaQr")}
                 </Text>
               ) : null}

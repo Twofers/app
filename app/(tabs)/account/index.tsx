@@ -1396,7 +1396,7 @@ export default function AccountScreen() {
 
               {lookupResults && lookupResults.length > 0 && (
                 <View style={{ gap: Spacing.sm }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6 }}>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
                     {t("businessSetup.selectResult")}
                   </Text>
                   {lookupResults.map((r, i) => (
@@ -1627,7 +1627,7 @@ export default function AccountScreen() {
                   optionalText={optionalFieldLabel}
                   theme={theme}
                 />
-                <Text style={{ opacity: 0.65, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+                <Text style={{ color: theme.mutedText, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
                   {t("account.fieldLatLngHelp")}
                 </Text>
                 <TextInput
@@ -1724,8 +1724,8 @@ export default function AccountScreen() {
                 padding: Spacing.md,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>{t("account.createBizCardTitle")}</Text>
-              <Text style={{ marginTop: 6, opacity: 0.7 }}>{t("account.createBizCardBody")}</Text>
+              <Text style={{ color: theme.text, fontWeight: "700" }}>{t("account.createBizCardTitle")}</Text>
+              <Text style={{ color: theme.mutedText, marginTop: 6 }}>{t("account.createBizCardBody")}</Text>
               <View style={{ marginTop: 10 }}>
                 <PrimaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
               </View>
