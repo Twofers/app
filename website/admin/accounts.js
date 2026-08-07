@@ -37,7 +37,7 @@
     const value = String(text || "unknown");
     const span = document.createElement("span");
     span.className = `admin-badge${/(suspended|archived|blocked|deleted)/i.test(value) ? " danger" : /(active|trialing)/i.test(value) ? " success" : ""}`;
-    span.textContent = value;
+    span.textContent = Shell.formatOptionLabel(value);
     return span;
   }
 
@@ -112,7 +112,7 @@
     for (const item of rows || []) {
       const tr = document.createElement("tr");
       cell(tr, "Admin", item.admin_email || "");
-      cell(tr, "Action", item.action || "");
+      cell(tr, "Action", Shell.formatOptionLabel(item.action));
       cell(tr, "Reason", item.reason || "");
       cell(tr, "Created", formatDate(item.created_at));
       tbody.appendChild(tr);
@@ -134,7 +134,7 @@
     const business = payload.businesses?.[0] || null;
     const consumer = payload.consumer_profile || {};
     $("[data-account-title]").textContent = business?.name || account.email || account.user_id;
-    $("[data-account-meta]").textContent = `${account.email || "No email"} | ${account.role} | Created ${formatDate(account.created_at)}`;
+    $("[data-account-meta]").textContent = `${account.email || "No email"} | ${Shell.formatOptionLabel(account.role)} | Created ${formatDate(account.created_at)}`;
     $("[data-account-status]").replaceChildren(badge(account.account_status));
     $("[data-last-sign-in]").textContent = formatDate(account.last_sign_in_at);
     $("[data-stripe-count]").textContent = String(payload.impact?.stripe_subscriptions || 0);

@@ -49,7 +49,7 @@
         { href: "/admin/offers", label: "Offers", icon: "O" },
         { href: "/admin/offers?view=redemptions", label: "Redemptions", icon: "R" },
         { href: "/admin/accounts", label: "Customers", icon: "C" },
-        { href: "/admin/reports", label: "Reports", icon: "!" },
+        { href: "/admin/reports", label: "Reports", icon: "≡" },
       ],
     },
     {
@@ -74,10 +74,10 @@
         { href: "/admin/prospects", label: "Prospects", icon: "P" },
         { href: "/admin/sales-ai", label: "Sales AI", icon: "S" },
         { href: "/admin/qr-campaigns", label: "QR Campaigns", icon: "Q" },
-        { href: "/admin/ai-prompts", label: "Prompts", icon: "P" },
-        { href: "/admin/ai-operating-report", label: "AI Report", icon: "A" },
+        { href: "/admin/ai-prompts", label: "Prompts", icon: ">" },
+        { href: "/admin/ai-operating-report", label: "AI Report", icon: "Σ" },
         { href: "/admin/audit-log", label: "Audit Log", icon: "L" },
-        { href: "/admin/settings", label: "Settings", icon: "S" },
+        { href: "/admin/settings", label: "Settings", icon: "⚙" },
         { href: "/admin/settings#system-health", label: "System Health", icon: "H" },
       ],
     },
@@ -399,6 +399,12 @@
     syncSessionActions();
   }
 
+  function formatOptionLabel(value) {
+    return String(value ?? "")
+      .replace(/[_.-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   window.TwoferAdminShell = {
     SUPABASE_FN_BASE,
     REQUEST_TIMEOUT_MS,
@@ -411,6 +417,7 @@
     getAccessToken,
     adminPost,
     readJson,
+    formatOptionLabel,
     renderNav,
     syncSessionActions,
     hydrate,

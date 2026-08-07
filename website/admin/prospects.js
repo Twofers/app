@@ -67,7 +67,7 @@
       not_on_twofer_yet: "Not on Twofer yet",
       on_twofer: "On Twofer",
       live_offer_available: "Live offer available",
-    }[value] || value || "";
+    }[value] || Shell.formatOptionLabel(value);
   }
 
   function getProspectId() {
@@ -130,11 +130,11 @@
       link.textContent = row.display_name || row.id;
       nameTd.appendChild(link);
       cell(tr, "City", [row.city, row.state].filter(Boolean).join(", "));
-      cell(tr, "Category", row.category || "");
+      cell(tr, "Category", Shell.formatOptionLabel(row.category));
       cell(tr, "Public state", labelState(row.public_label_state));
       cell(tr, "Demand", row.demand_count ?? 0);
       cell(tr, "Score", row.score ? `${row.score.total_score} / ${row.score.tier}` : "");
-      cell(tr, "Stage", row.sales_account?.stage || row.status || "");
+      cell(tr, "Stage", Shell.formatOptionLabel(row.sales_account?.stage || row.status));
       cell(tr, "Next action", row.sales_account?.next_action || row.score?.recommended_next_action || "");
       cell(tr, "Last contact", formatDate(row.sales_account?.last_contact_at));
       cell(tr, "Linked business", row.linked_business?.name || "");
@@ -194,6 +194,19 @@
     return row?.enrichment_json && typeof row.enrichment_json === "object" ? row.enrichment_json : null;
   }
 
+  function displayEnrichmentValue(value, key = "") {
+    if (Array.isArray(value)) return value.map((item) => displayEnrichmentValue(item, key));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        displayEnrichmentValue(childValue, childKey),
+      ]));
+    }
+    return typeof value === "string" && /(?:category|status|source|provider)$/.test(key)
+      ? Shell.formatOptionLabel(value)
+      : value;
+  }
+
   function selectedFactsFromLatest() {
     const json = latestEnrichmentJson() || {};
     return {
@@ -239,15 +252,19 @@
       return;
     }
     fillText("[data-prospect-title]", prospect.display_name);
-    fillText("[data-prospect-meta]", `${[prospect.city, prospect.state, prospect.postal_code].filter(Boolean).join(", ")} | ${prospect.category || "Uncategorized"} | ${labelState(prospect.public_label_state)}`);
-    fillText("[data-prospect-status]", `${String(prospect.status || "").replace(/_/g, " ")} / ${String(prospect.review_status || "").replace(/_/g, " ")}`);
+    fillText("[data-prospect-meta]", `${[prospect.city, prospect.state, prospect.postal_code].filter(Boolean).join(", ")} | ${Shell.formatOptionLabel(prospect.category) || "Uncategorized"} | ${labelState(prospect.public_label_state)}`);
+    fillText("[data-prospect-status]", `${Shell.formatOptionLabel(prospect.status)} / ${Shell.formatOptionLabel(prospect.review_status)}`);
     fillText("[data-prospect-linked]", payload.linked_business?.name || "Not linked");
-    fillText("[data-prospect-billing]", payload.billing ? `${payload.billing.app_access_status || ""} ${payload.billing.billing_status || ""}`.trim() : "No billing record");
+    fillText("[data-prospect-billing]", payload.billing
+      ? `${Shell.formatOptionLabel(payload.billing.app_access_status)} ${Shell.formatOptionLabel(payload.billing.billing_status)}`.trim()
+      : "No billing record");
     fillText("[data-prospect-private-contact]", JSON.stringify(prospect.private_contact_json || {}, null, 2));
-    fillText("[data-enrichment-json]", latestEnrichmentJson() ? JSON.stringify(latestEnrichmentJson(), null, 2) : "Run AI enrichment to draft reviewable facts.");
+    fillText("[data-enrichment-json]", latestEnrichmentJson()
+      ? JSON.stringify(displayEnrichmentValue(latestEnrichmentJson()), null, 2)
+      : "Run AI enrichment to draft reviewable facts.");
 
     renderList("[data-sources-body]", payload.sources || [], [
-      { label: "Provider", value: (r) => r.provider },
+      { label: "Provider", value: (r) => Shell.formatOptionLabel(r.provider) },
       { label: "URL", value: (r) => r.source_url || "" },
       { label: "Hash", value: (r) => r.source_payload_hash || "" },
       { label: "Confidence", value: (r) => r.confidence ?? "" },
@@ -255,9 +272,9 @@
       { label: "Stale", value: (r) => formatDate(r.stale_at) },
     ], "No sources yet.");
     renderList("[data-enrichments-body]", payload.enrichments || [], [
-      { label: "Provider", value: (r) => r.provider },
+      { label: "Provider", value: (r) => Shell.formatOptionLabel(r.provider) },
       { label: "Model", value: (r) => r.model || "" },
-      { label: "Review", value: (r) => r.review_status || "" },
+      { label: "Review", value: (r) => Shell.formatOptionLabel(r.review_status) },
       { label: "Confidence", value: (r) => r.confidence ?? "" },
       { label: "Created", value: (r) => formatDate(r.created_at) },
     ], "No enrichments yet.");
@@ -275,9 +292,9 @@
       { label: "Unique", value: (r) => r.unique_users_count ?? 0 },
     ], "No demand rollups yet.");
     renderList("[data-activities-body]", payload.sales_activities || [], [
-      { label: "Type", value: (r) => r.activity_type || "" },
+      { label: "Type", value: (r) => Shell.formatOptionLabel(r.activity_type) },
       { label: "Summary", value: (r) => r.summary || "" },
-      { label: "Outcome", value: (r) => r.outcome || "" },
+      { label: "Outcome", value: (r) => Shell.formatOptionLabel(r.outcome) },
       { label: "Created", value: (r) => formatDate(r.created_at) },
     ], "No sales activity yet.");
     renderList("[data-claim-links-body]", payload.claim_links || [], [

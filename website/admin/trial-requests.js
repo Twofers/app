@@ -87,7 +87,7 @@
 
   function statusLabel(status) {
     if (status === "approved_not_activated") return "approved setup";
-    return String(status || "unknown").replaceAll("_", " ");
+    return Shell.formatOptionLabel(status || "unknown");
   }
 
   // Mirrors riskLevel() in supabase/functions/admin-business-applications/index.ts.
@@ -300,7 +300,7 @@
         ["Business", app.business_name || "Unknown business", ""],
         ["Owner", app.contact_name || "", ""],
         ["Email", app.email || "", "admin-access-email"],
-        ["Launch area", app.launch_area || "Unspecified", ""],
+        ["Launch area", app.launch_area ? Shell.formatOptionLabel(app.launch_area) : "Unspecified", ""],
       ];
 
       for (const [label, value, className] of cells) {
@@ -416,7 +416,7 @@
       facts.className = "admin-note";
       facts.dataset.applicationFacts = app.id;
       facts.textContent = [
-        app.business_type ? `Type: ${app.business_type}` : "",
+        app.business_type ? `Type: ${Shell.formatOptionLabel(app.business_type)}` : "",
         app.phone ? `Phone: ${app.phone}` : "",
         app.website_or_instagram ? `Web/IG: ${app.website_or_instagram}` : "",
         app.address ? `Address: ${app.address}` : "",

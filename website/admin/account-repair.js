@@ -9,7 +9,7 @@
     if (node) node.textContent = String(value ?? "—");
   };
   const formatDate = (value) => value ? new Date(value).toLocaleString() : "—";
-  const humanize = (value) => String(value || "unknown").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const humanize = (value) => Shell.formatOptionLabel(value || "unknown");
 
   function setStatus(selector, message, tone = "") {
     const node = $(selector);

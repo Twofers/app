@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f7f4" />
-    <link rel="stylesheet" href="/styles.css?v=20260806-access-requests" />
+    <link rel="stylesheet" href="/styles.css?v=20260807-density-audit" />
     <script src="/admin/admin-guard.js?v=20260731-admin-session"></script>
   </head>
   <body
@@ -126,13 +126,14 @@
         </div>
       </section>
 
-      <section class="admin-section" aria-label="Claim and redemption activity">
-        <div class="admin-section-header">
-          <div>
-            <h2>Claims &amp; Redemptions</h2>
-            <p>Claims and redemptions are tracked separately. Redemptions use the canonical admin_redemption_facts_v1 metric.</p>
-          </div>
-        </div>
+      <!-- Everything below is drill-down detail an operator opens on demand,
+           not a first-glance number -- collapsed by default so the page
+           reads as onboarding + verification + health + offers, the same
+           density pattern the trial-requests legend already established. -->
+
+      <details class="admin-detail-section" aria-label="Claim and redemption activity">
+        <summary>Claims &amp; Redemptions</summary>
+        <p>Claims and redemptions are tracked separately. Redemptions use the canonical admin_redemption_facts_v1 metric.</p>
         <h3 class="admin-group-title">Claims</h3>
         <div class="admin-grid three">
           <article class="admin-card"><span>Claims 7d</span><strong data-claims-7d>0</strong></article>
@@ -145,15 +146,11 @@
           <article class="admin-card"><span>Redemptions 30d</span><strong data-redemptions-30d>0</strong></article>
           <article class="admin-card"><span>Last redeemed</span><span class="admin-badge" data-last-redeemed>&mdash;</span></article>
         </div>
-      </section>
+      </details>
 
-      <section class="admin-section" aria-label="Trial and access timing">
-        <div class="admin-section-header">
-          <div>
-            <h2>Trial &amp; Access Timing</h2>
-            <p>Current app access is canonical. Trial request fields below are historical context, not live access.</p>
-          </div>
-        </div>
+      <details class="admin-detail-section" aria-label="Trial and access timing">
+        <summary>Trial &amp; Access Timing</summary>
+        <p>Current app access is canonical. Trial request fields below are historical context, not live access.</p>
         <p class="status warning" data-access-mismatch-warning hidden></p>
         <p class="admin-note" data-trial-empty hidden>No trial timing data found.</p>
         <div class="admin-grid three">
@@ -163,29 +160,21 @@
           <article class="admin-card"><span>Trial request status (history)</span><span class="admin-badge" data-trial-request-status>&mdash;</span></article>
           <article class="admin-card"><span>Trial request created</span><span class="admin-badge" data-trial-request-created>&mdash;</span></article>
         </div>
-      </section>
+      </details>
 
-      <section class="admin-section" aria-label="AI usage">
-        <div class="admin-section-header">
-          <div>
-            <h2>AI Usage</h2>
-          </div>
-        </div>
+      <details class="admin-detail-section" aria-label="AI usage">
+        <summary>AI Usage</summary>
         <div class="admin-grid three">
           <article class="admin-card"><span>AI generations used this month (busiest scope)</span><strong data-ai-used>0</strong></article>
           <article class="admin-card"><span>AI generation limit this month (busiest scope)</span><strong data-ai-limit>0</strong></article>
           <article class="admin-card"><span>AI quota risk</span><span class="admin-badge" data-ai-risk>&mdash;</span></article>
           <article class="admin-card"><span>AI month cost</span><span class="admin-badge" data-ai-cost>&mdash;</span></article>
         </div>
-      </section>
+      </details>
 
-      <section class="admin-section" aria-label="Promotional materials">
-        <div class="admin-section-header">
-          <div>
-            <h2>Promotional Materials</h2>
-            <p>Optional per-location permission to place removable Twofer materials. This does not affect publishing, billing, or verification.</p>
-          </div>
-        </div>
+      <details class="admin-detail-section" aria-label="Promotional materials">
+        <summary>Promotional Materials</summary>
+        <p>Optional per-location permission to place removable Twofer materials. This does not affect publishing, billing, or verification.</p>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
             <thead><tr><th>Location</th><th>Status</th><th>Authorized by</th><th>Source</th><th>Authorized</th><th>Revoked</th></tr></thead>
@@ -209,10 +198,10 @@
           </div>
           <p class="status" data-promo-status role="status" aria-live="polite"></p>
         </details>
-      </section>
+      </details>
 
-      <section class="admin-section" id="business-record">
-        <h2>Applications</h2>
+      <details class="admin-detail-section" id="business-record">
+        <summary>Applications</summary>
         <p class="admin-note">Business access requests and field invites linked to this business. These are historical application records and do not change after a decision is made &mdash; they can go stale if access is later canceled or expired. Current app access is shown above under Trial &amp; Access Timing. Decisions are made on the Business Access page.</p>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
@@ -222,21 +211,19 @@
             </tbody>
           </table>
         </div>
-      </section>
-      <section class="admin-section">
-        <div class="admin-section-header">
-          <div><h2>Owner communication history</h2><p>Saved drafts and explicitly sent owner-support emails.</p></div>
-          <a class="button button-small button-secondary" href="/admin/communications">All communications</a>
-        </div>
+      </details>
+      <details class="admin-detail-section">
+        <summary>Owner communication history</summary>
+        <p>Saved drafts and explicitly sent owner-support emails. <a href="/admin/communications">All communications</a></p>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
             <thead><tr><th>Reason</th><th>Subject</th><th>Status</th><th>Created / sent</th></tr></thead>
             <tbody data-owner-communications><tr><td colspan="4" class="admin-row-detail">Loading communication history.</td></tr></tbody>
           </table>
         </div>
-      </section>
-      <section class="admin-section">
-        <h2>Audit History</h2>
+      </details>
+      <details class="admin-detail-section">
+        <summary>Audit History</summary>
         <div class="admin-table-wrap">
           <table class="admin-table" data-mobile-cards>
             <thead><tr><th>Admin</th><th>Action</th><th>Reason</th><th>Created</th></tr></thead>
@@ -245,11 +232,28 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
     </main>
     <script src="/admin/admin-shell.js?v=20260731-admin-session"></script>
     <script src="/admin/owner-email.js?v=20260728-admin-ops"></script>
     <script src="/admin/owner-view.js?v=20260728-admin-ops"></script>
     <script src="/admin/admin-directory.js?v=20260728-admin-ops"></script>
+    <script>
+      // "Open read-only business record" (and any future deep link) points
+      // at #business-record, which now lives inside a collapsed <details>.
+      // Not every browser auto-opens an ancestor <details> for a fragment
+      // target, so force it open rather than land on a hidden section.
+      (function openLinkedDetail() {
+        function openFromHash() {
+          var id = (location.hash || "").slice(1);
+          if (!id) return;
+          var target = document.getElementById(id);
+          var details = target && target.closest ? target.closest("details") : null;
+          if (details) details.open = true;
+        }
+        openFromHash();
+        window.addEventListener("hashchange", openFromHash);
+      })();
+    </script>
   </body>
 </html>

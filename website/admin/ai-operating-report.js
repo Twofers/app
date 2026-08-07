@@ -36,6 +36,10 @@
     statusEl.className = `admin-badge${tone === "danger" ? " danger" : tone === "warning" ? " warning" : ""}`;
   }
 
+  function formatOptionLabel(value) {
+    return Shell.formatOptionLabel(value);
+  }
+
   function fillMetric(key, value) {
     const node = document.querySelector(`[data-report-metric="${key}"]`);
     if (node) node.textContent = String(value ?? 0);
@@ -77,6 +81,7 @@
   function setFounderSummary(report) {
     const node = document.querySelector("[data-founder-summary]");
     if (!node) return;
+    const displayLine = (value) => String(value ?? "").replace(/\b[a-z]+(?:_[a-z]+)+\b/g, (token) => formatOptionLabel(token));
     node.textContent = [
       report.founder_summary || "",
       "",
@@ -85,7 +90,7 @@
       "",
       "Risks to watch:",
       ...(report.risks_to_watch || []),
-    ].filter((line) => line !== undefined).join("\n");
+    ].filter((line) => line !== undefined).map(displayLine).join("\n");
   }
 
   function csvEscape(value) {
@@ -294,7 +299,7 @@
     renderRows("[data-provider-body]", report.ai?.circuit_breakers || [], [
       { label: "Provider", value: (r) => r.provider },
       { label: "Capability", value: (r) => r.capability },
-      { label: "State", value: (r) => r.state },
+      { label: "State", value: (r) => formatOptionLabel(r.state) },
       { label: "Failures", value: (r) => r.failure_count },
       { label: "Disabled until", value: (r) => r.disabled_until || "" },
     ], "No circuit breaker rows.");
@@ -306,8 +311,8 @@
       { label: "Created", value: (r) => r.created_at ? new Date(r.created_at).toLocaleString() : "" },
     ], "No failed AI calls in this period.");
     renderRows("[data-audit-body]", report.recent_admin_activity || [], [
-      { label: "Action", value: (r) => r.action },
-      { label: "Target", value: (r) => r.target_type },
+      { label: "Action", value: (r) => formatOptionLabel(r.action) },
+      { label: "Target", value: (r) => formatOptionLabel(r.target_type) },
       { label: "Reason", value: (r) => r.reason || "" },
       { label: "Created", value: (r) => r.created_at ? new Date(r.created_at).toLocaleString() : "" },
     ], "No recent prospect activity.");

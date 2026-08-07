@@ -134,7 +134,10 @@
   function statusCell(raw) {
     const text = String(raw ?? "").trim();
     if (!text) return "";
-    return { badge: text, tone: toneForStatus(text) };
+    // Tone comes off the raw DB value (its keyword vocabulary is what
+    // toneForStatus matches against); the badge text is humanized so the
+    // operator never sees a raw enum like "pending_review".
+    return { badge: formatOptionLabel(text), tone: toneForStatus(text) };
   }
 
   const ERROR_MESSAGES = {
@@ -215,8 +218,10 @@
   }
 
   function formatOptionLabel(value) {
+    // DB enums use snake_case, Stripe event names use dotted.case, and a few
+    // values use hyphen-case; treat all three as word separators.
     return String(value)
-      .replace(/_/g, " ")
+      .replace(/[_.-]+/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
@@ -605,9 +610,14 @@
       ],
       columns: [
         { label: "Admin", value: (r) => r.admin_email || "" },
-        { label: "Action", value: (r) => r.action || "" },
-        { label: "Target", value: (r) => r.target_type || "" },
-        { label: "Business", value: (r) => r.business_id || "" },
+        { label: "Action", value: (r) => (r.action ? formatOptionLabel(r.action) : "") },
+        { label: "Target", value: (r) => (r.target_type ? formatOptionLabel(r.target_type) : "") },
+        {
+          label: "Business",
+          value: (r) => r.business_id
+            ? { href: `/admin/businesses/${r.business_id}`, text: r.business_name || r.business_id }
+            : (r.business_name || ""),
+        },
         { label: "Reason", value: (r) => r.reason || "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ],
@@ -636,6 +646,11 @@
         { label: "Timezone", value: (r) => r.timezone || "" },
       ], "No launch areas configured.");
       fillTable("[data-feature-flags]", payload.feature_flags || [], [
+        // Left verbatim (not run through formatOptionLabel) on purpose: this
+        // is an identifier an operator matches against config/code, not a
+        // status or category. Title-casing it ("Ios Trial Checkout") would
+        // make it harder to grep for, not easier to read. Styled as code in
+        // CSS instead (td[data-label="Flag"]).
         { label: "Flag", value: (r) => r.key || "" },
         { label: "Description", value: (r) => r.description || "" },
         { label: "Enabled", value: (r) => (r.enabled ? "On" : "Off") },
@@ -672,7 +687,7 @@
       ], "No applications linked to this business.");
       fillTable("[data-audit]", payload.audit_log || [], [
         { label: "Admin", value: (r) => r.admin_email || "" },
-        { label: "Action", value: (r) => r.action || "" },
+        { label: "Action", value: (r) => (r.action ? formatOptionLabel(r.action) : "") },
         { label: "Reason", value: (r) => r.reason || "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
       ], "No audit events for this business.");

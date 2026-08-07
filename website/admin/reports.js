@@ -64,10 +64,23 @@
     return Number.isFinite(date.getTime()) ? date.toLocaleString() : "";
   }
 
+  function formatOptionLabel(value) {
+    return Shell.formatOptionLabel(value);
+  }
+
+  function businessLink(id, name, fallback = "Business record") {
+    if (!id) return name || "Unknown business";
+    const link = document.createElement("a");
+    link.href = `/admin/businesses/detail?businessId=${encodeURIComponent(id)}`;
+    link.textContent = name || fallback;
+    return link;
+  }
+
   function addCell(row, label, text) {
     const td = document.createElement("td");
     td.dataset.label = label;
-    td.textContent = text == null ? "" : String(text);
+    if (text instanceof Node) td.appendChild(text);
+    else td.textContent = text == null ? "" : String(text);
     row.appendChild(td);
     return td;
   }
@@ -121,9 +134,9 @@
     }
     for (const report of reports) {
       const tr = document.createElement("tr");
-      addCell(tr, "Business", report.business_name || report.business_id || "");
+      addCell(tr, "Business", businessLink(report.business_id, report.business_name));
       addCell(tr, "Offer", report.deal_title || (report.deal_id ? "(offer)" : "—"));
-      addCell(tr, "Reason", BUSINESS_REASON_LABELS[report.reason] || report.reason || "");
+      addCell(tr, "Reason", BUSINESS_REASON_LABELS[report.reason] || formatOptionLabel(report.reason));
       addCell(tr, "Details", report.comment || "");
       addCell(tr, "Status", STATUS_LABELS[report.status] || report.status || "");
       addCell(tr, "Reported", formatDateTime(report.created_at));
@@ -141,8 +154,8 @@
     }
     for (const report of reports) {
       const tr = document.createElement("tr");
-      addCell(tr, "Reported by", report.reporter_business_name || report.reporter_business_id || "");
-      addCell(tr, "Reason", USER_REASON_LABELS[report.reason] || report.reason || "");
+      addCell(tr, "Reported by", businessLink(report.reporter_business_id, report.reporter_business_name, "Reporting business"));
+      addCell(tr, "Reason", USER_REASON_LABELS[report.reason] || formatOptionLabel(report.reason));
       addCell(tr, "Details", report.comment || "");
       addCell(tr, "Status", STATUS_LABELS[report.status] || report.status || "");
       addCell(tr, "Reported", formatDateTime(report.created_at));
@@ -173,11 +186,11 @@
     }
     for (const request of requests) {
       const tr = document.createElement("tr");
-      addCell(tr, "Business", request.business_name || request.business_id || "");
+      addCell(tr, "Business", businessLink(request.business_id, request.business_name));
       addCell(tr, "Current name", request.current_value || request.business_name || "");
       addCell(tr, "Requested name", request.proposed_value || "");
       addCell(tr, "Reason", request.reason || "");
-      addCell(tr, "Status", NAME_REQUEST_STATUS_LABELS[request.status] || request.status || "");
+      addCell(tr, "Status", NAME_REQUEST_STATUS_LABELS[request.status] || formatOptionLabel(request.status));
       addCell(tr, "Requested", formatDateTime(request.created_at));
       const cell = document.createElement("td");
       cell.dataset.label = "Actions";

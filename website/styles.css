@@ -3888,9 +3888,19 @@ main.content-page {
   margin: 0;
 }
 
-.admin-shell .admin-ops-main {
+/* The 2026-07-27 ops-console redesign only reached the dashboard
+   (.admin-ops-main sits inside .admin-main there but the other 18 admin pages
+   have bare .admin-main). Keying this to .admin-main instead promotes the
+   deeper card shadow and tighter top padding to every admin page in one
+   place, instead of leaving a dashboard-only copy to keep in sync. */
+.admin-shell .admin-main {
   --admin-card-shadow: 0 1px 2px rgb(15 23 20 / 5%), 0 12px 30px rgb(15 23 20 / 5%);
   padding-top: 24px;
+  /* .admin-main's 1180px cap is a marketing-page width; inside the ops
+     console there's no matching column to line up with, so on a wide monitor
+     it just wastes ~250px of dead space on each side of an already-cramped
+     table. Give the admin shell more room to breathe. */
+  width: min(1440px, calc(100% - 40px));
 }
 
 .admin-shell .admin-ops-header {
@@ -3963,15 +3973,17 @@ main.content-page {
   margin-top: 20px;
 }
 
-.admin-shell .admin-ops-main > .admin-section {
+/* Same promotion as the card-shadow rule above: the tighter section rhythm
+   applies to every admin page's top-level sections, not just the dashboard's. */
+.admin-shell .admin-main > .admin-section {
   margin-top: 24px;
 }
 
-.admin-shell .admin-ops-main > .admin-section > .admin-section-header {
+.admin-shell .admin-main > .admin-section > .admin-section-header {
   margin-bottom: 12px;
 }
 
-.admin-shell .admin-ops-main > .admin-section > .admin-section-header h2 {
+.admin-shell .admin-main > .admin-section > .admin-section-header h2 {
   font-size: 22px;
 }
 
@@ -4803,6 +4815,13 @@ main.content-page {
   justify-content: flex-end;
 }
 
+/* The session-status pill is the lone occupant of .admin-actions on most
+   directory pages. It must read as a small tag beside the title, never break
+   its own text onto a second line inside the pill. */
+.admin-shell .admin-actions .admin-badge {
+  white-space: nowrap;
+}
+
 .admin-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5165,18 +5184,69 @@ main.content-page {
   text-transform: uppercase;
 }
 
+/* No overflow-wrap/word-break here on purpose. "anywhere" + "break-word" used
+   to sit on every cell, which tells table auto-layout it may shrink ANY
+   column to a few characters because every word has a legal break point.
+   That's what crushed Owner/Business/badge columns to 24-93px on every
+   non-dashboard page. Normal wrapping (break at spaces only) gives auto-
+   layout an honest min-content floor per column instead. */
 .admin-table td {
   color: var(--ink);
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-.admin-shell .admin-ops-main .admin-table .button,
-.admin-shell .admin-ops-main .admin-table .admin-badge,
-.admin-shell .admin-ops-main .admin-table .admin-priority {
+/* This floor used to be scoped to .admin-ops-main (the dashboard only), so
+   every other admin page had it stripped by the .admin-table td rule above
+   and badges/buttons/priority pills broke mid-word. Every admin table needs
+   this, not just the dashboard's. */
+.admin-shell .admin-table .button,
+.admin-shell .admin-table .admin-badge,
+.admin-shell .admin-table .admin-priority {
   overflow-wrap: normal;
   white-space: nowrap;
   word-break: normal;
+}
+
+/* Email addresses are the one cell type with a single long unbreakable
+   token (no spaces to wrap on, and often no hyphens either). On desktop this
+   trades a few px of column width for legibility with no real overflow; on
+   the mobile card layout (data-mobile-cards, see the 720px block below)
+   there is no horizontal scroll to fall back on, so without this an email
+   like "owner@cedarandbean.example.com" genuinely overflows its card.
+   fillTable() stamps every <td> with data-label from its column config, so
+   this targets exactly the Owner/Email/Admin columns without needing
+   per-page column-index rules. */
+.admin-shell .admin-table td[data-label="Owner"],
+.admin-shell .admin-table td[data-label="Email"],
+.admin-shell .admin-table td[data-label="Admin"] {
+  overflow-wrap: anywhere;
+  /* Without a floor, auto-layout treats "can break anywhere" as "can shrink
+     to one character" and crushes this column the same way it crushed
+     badges before the A1 fix. Every box in this file is border-box, so this
+     needs to be content width (~224px, enough for a realistic ~27-character
+     address) plus the cell's own 16px+16px horizontal padding -- 190px
+     landed 3px short of fitting "unvmex2@gmail.com" because it didn't
+     account for the padding at all. */
+  min-width: 256px;
+}
+
+/* The Business/Offer/Event name column is the row's primary identifier and
+   is nearly always the first column; auto-layout otherwise starves it in
+   favor of columns with more, shorter cells competing for the same row. */
+.admin-shell .admin-table td[data-label="Business"],
+.admin-shell .admin-table td[data-label="Offer"],
+.admin-shell .admin-table td[data-label="Event"] {
+  min-width: 160px;
+}
+
+/* Identifiers an operator matches against config/code -- feature-flag keys,
+   AI prompt versions, endpoint/model names -- stay verbatim (never run
+   through formatOptionLabel) and read as code, not prose. */
+.admin-shell .admin-table td[data-label="Flag"],
+.admin-shell .admin-table td[data-label="Version"],
+.admin-shell .admin-table td[data-label="Endpoint"],
+.admin-shell .admin-table td[data-label="Model"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
 }
 
 .admin-table tbody tr {
@@ -5200,6 +5270,36 @@ main.content-page {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+/* Forms should size themselves to the fields they contain, while tables can
+   still use the full operations-console width. Four compact columns at the
+   desktop form cap keep state, ZIP, phone, and trial-day controls from
+   becoming half-page text boxes on a wide monitor. */
+.admin-shell .admin-form {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  max-width: 960px;
+}
+
+.admin-shell .admin-form .field-xs {
+  max-width: 160px;
+}
+
+.admin-shell .admin-form .field-sm {
+  max-width: 240px;
+}
+
+.admin-shell .admin-form .field-md {
+  max-width: 360px;
+}
+
+.admin-shell .admin-form.admin-login-form {
+  grid-template-columns: 1fr;
+}
+
+.admin-shell .admin-form.admin-qr-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: none;
 }
 
 .admin-form label {
@@ -5440,7 +5540,9 @@ main.content-page {
   padding: 8px 10px;
 }
 
-.admin-shell .admin-ops-main .admin-inline-actions .button-small {
+/* Same re-scope as the .admin-table text-integrity rule above: this needs to
+   hold on every admin page's inline action cluster, not only the dashboard's. */
+.admin-shell .admin-inline-actions .button-small {
   white-space: nowrap;
 }
 
@@ -5478,6 +5580,48 @@ main.content-page {
 
 .admin-shell .admin-legend[open] > summary {
   margin-bottom: 14px;
+}
+
+/* Business detail page ------------------------------------------------------ */
+
+/* Claims & Redemptions, Trial & Access Timing, AI Usage, Promotional
+   Materials, Applications, Owner communication history, and Audit History
+   are all drill-down detail an operator opens on demand -- not the four
+   sections (onboarding, verification, health, offer activity) they need at
+   a glance on every visit. Collapsing the rest behind <details> is the same
+   pattern trial-requests already uses for its legend, just applied to whole
+   sections instead of a reference card. */
+.admin-shell .admin-detail-section {
+  margin-top: 24px;
+}
+
+.admin-shell .admin-detail-section > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.admin-shell .admin-detail-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-shell .admin-detail-section > summary::before {
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--muted);
+  font-size: 16px;
+  transition: transform 0.14s ease;
+  content: "▸";
+}
+
+.admin-shell .admin-detail-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.admin-shell .admin-detail-section > summary + * {
+  margin-top: 14px;
 }
 
 /* Long emails and names must wrap between characters, not force the column to
@@ -5721,6 +5865,13 @@ body:not(.admin-shell) main.content-page .admin-panel {
   .admin-section-header,
   .admin-card-row {
     display: grid;
+  }
+
+  /* A lone status pill in .admin-actions used to inherit the 18px row gap
+     meant for full action clusters, leaving it floating well below the lede.
+     Pull it in close so it reads as part of the title block. */
+  .admin-title-row {
+    gap: 10px;
   }
 
   .admin-actions {
@@ -5999,6 +6150,15 @@ body:not(.admin-shell) main.content-page .admin-panel {
     overflow-x: visible;
   }
 
+  .admin-shell .admin-form {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
+  .admin-shell .admin-form.admin-qr-form {
+    grid-template-columns: 1fr;
+  }
+
   .admin-next-action {
     min-height: 0;
   }
@@ -6020,7 +6180,7 @@ body:not(.admin-shell) main.content-page .admin-panel {
   .admin-table[data-mobile-cards],
   .admin-table[data-mobile-cards] tbody,
   .admin-table[data-mobile-cards] tr,
-  .admin-table[data-mobile-cards] td {
+  .admin-shell .admin-table[data-mobile-cards] td {
     display: block;
     width: 100%;
   }
@@ -6034,12 +6194,26 @@ body:not(.admin-shell) main.content-page .admin-panel {
     border-bottom: 0;
   }
 
-  .admin-table[data-mobile-cards] td {
+  .admin-shell .admin-table[data-mobile-cards] td {
     display: grid;
     grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
     gap: 12px;
     border-bottom: 0;
     padding: 9px 14px;
+    /* Card mode has no horizontal scroll to fall back on (the wrap sets
+       overflow-x:visible above), so the desktop min-width floors (Owner,
+       Business, etc.) and the removal of overflow-wrap:anywhere from the
+       base .admin-table td rule both have to be undone here. Every cell in
+       card mode gets to shrink to its 100%-width column and wrap freely,
+       regardless of which column it is -- otherwise an email or a long
+       identifier overflows the card with no way to reach it. */
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-shell .admin-table[data-mobile-cards] .admin-badge {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .admin-table[data-mobile-cards] td::before {
@@ -6290,6 +6464,15 @@ body:not(.admin-shell) main.content-page .admin-panel {
 }
 
 @media (max-width: 520px) {
+  /* The status badge sits beside the page title on narrow screens. Let it use
+     the available title-row width and wrap at spaces; a 92px max-width clips
+     "Signed in as owner" instead of making it readable. */
+  .admin-shell .admin-title-row > .admin-badge,
+  .admin-shell .admin-title-row > .admin-actions .admin-badge {
+    max-width: 100%;
+    white-space: normal;
+  }
+
   .admin-shell .admin-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;

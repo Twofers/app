@@ -11,7 +11,15 @@
   }
 
   function humanize(value) {
-    return String(value || "unknown").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return Shell.formatOptionLabel(value || "unknown");
+  }
+
+  function businessLink(id, name) {
+    if (!id) return name || "Unknown business";
+    const link = document.createElement("a");
+    link.href = `/admin/businesses/detail?businessId=${encodeURIComponent(id)}`;
+    link.textContent = name || "Business record";
+    return link;
   }
 
   async function load() {
@@ -21,7 +29,7 @@
       for (const item of payload.communications || []) {
         const row = document.createElement("tr");
         const business = Array.isArray(item.businesses) ? item.businesses[0] : item.businesses;
-        addCell(row, "Business", business?.name || item.business_id);
+        addCell(row, "Business", businessLink(item.business_id, business?.name));
         addCell(row, "Reason", humanize(item.reason_category));
         addCell(row, "Subject", item.subject);
         addCell(row, "Status", humanize(item.status));

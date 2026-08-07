@@ -78,7 +78,7 @@
         ["Business", row.display_name || row.id],
         ["City", [row.city, row.state].filter(Boolean).join(", ")],
         ["Score", row.score ? `${row.score.total_score} / ${row.score.tier}` : ""],
-        ["Stage", row.sales_account?.stage || row.status || ""],
+        ["Stage", Shell.formatOptionLabel(row.sales_account?.stage || row.status)],
         ["Suggested next action", row.sales_account?.next_action || row.score?.recommended_next_action || ""],
       ];
       for (const [label, value] of cells) {

@@ -6,7 +6,7 @@
     <title>Import Prospects | Twofer Admin</title>
     <meta name="robots" content="noindex,nofollow" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="stylesheet" href="/styles.css?v=20260806-access-requests" />
+    <link rel="stylesheet" href="/styles.css?v=20260807-density-audit" />
     <script src="/admin/admin-guard.js?v=20260731-admin-session"></script>
   </head>
   <body
@@ -38,31 +38,31 @@
 
       <section class="admin-panel">
         <form class="admin-form" data-prospect-import-form novalidate>
-          <label>
+          <label class="field-md">
             Business name
             <input name="display_name" autocomplete="off" required maxlength="160" />
           </label>
-          <label>
+          <label class="field-md">
             Category
             <input name="category" autocomplete="off" maxlength="80" placeholder="Coffee shop" />
           </label>
-          <label>
+          <label class="field-md">
             Address
             <input name="address_line1" autocomplete="off" maxlength="200" />
           </label>
-          <label>
+          <label class="field-md">
             City
             <input name="city" autocomplete="off" maxlength="80" placeholder="Irving" />
           </label>
-          <label>
+          <label class="field-xs">
             State
             <input name="state" autocomplete="off" maxlength="40" value="TX" />
           </label>
-          <label>
+          <label class="field-xs">
             ZIP
             <input name="postal_code" autocomplete="off" maxlength="20" inputmode="numeric" />
           </label>
-          <label>
+          <label class="field-sm">
             Source type
             <select name="source_type">
               <option value="manual">Manual</option>
@@ -71,11 +71,11 @@
               <option value="web">Web</option>
             </select>
           </label>
-          <label>
+          <label class="field-md">
             Source URL
             <input name="source_url" autocomplete="off" maxlength="500" />
           </label>
-          <label>
+          <label class="field-sm">
             Review status
             <select name="review_status">
               <option value="needs_review">Needs review</option>

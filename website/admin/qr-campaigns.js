@@ -46,7 +46,7 @@
   }
 
   function label(value) {
-    return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    return Shell.formatOptionLabel(value);
   }
 
   function renderRows(selector, rows, columns, emptyText) {

@@ -1,7 +1,7 @@
 (() => {
   const Shell = window.TwoferAdminShell;
   const $ = (selector) => document.querySelector(selector);
-  const humanize = (value) => String(value || "unknown").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const humanize = (value) => Shell.formatOptionLabel(value || "unknown");
 
   function status(message, tone = "") {
     const node = $("[data-ai-usage-status]");
