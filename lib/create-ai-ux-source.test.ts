@@ -11,6 +11,7 @@ const aiInsightsSource = readFileSync(join(process.cwd(), "components", "ai-insi
 const redemptionModeSettingsSource = readFileSync(join(process.cwd(), "components", "redemption-mode-settings.tsx"), "utf8");
 const themePreferenceSelectorSource = readFileSync(join(process.cwd(), "components", "theme-preference-selector.tsx"), "utf8");
 const profileCompletenessBarSource = readFileSync(join(process.cwd(), "components", "profile-completeness-bar.tsx"), "utf8");
+const selectableChipSource = readFileSync(join(process.cwd(), "components", "ui", "selectable-chip.tsx"), "utf8");
 const dealEligibilityFormSource = readFileSync(join(process.cwd(), "components", "deal-eligibility-form.tsx"), "utf8");
 const welcomeWalkthroughSource = readFileSync(join(process.cwd(), "components", "welcome-walkthrough.tsx"), "utf8");
 
@@ -215,10 +216,16 @@ describe("AI create UX source guards", () => {
   });
 
   it("keeps lower business account settings compact on phones", () => {
-    expect(accountSource).toContain("helper && selected");
+    // The repeat-limit options moved from inline styling to the shared
+    // SelectableChip (plan A1, 2026-08-07). The compactness guarantees this
+    // test protects now live in that component, so assert them there rather
+    // than dropping them: 44px touch floor + capped font scaling.
+    expect(accountSource).toContain("SelectableChip");
+    expect(accountSource).toContain('variant="row"');
+    expect(selectableChipSource).toContain("minHeight: 44");
+    expect(selectableChipSource).toContain("maxFontSizeMultiplier={1.08}");
     expect(accountSource).toContain("defaultValue: \"Claim again after X days\"");
     expect(accountSource).toContain("defaultValue: \"Claim once ever\"");
-    expect(accountSource).toContain("style={{ minHeight: 44, paddingVertical: 8 }}");
     expect(accountSource).toContain("numberOfLines={3} maxFontSizeMultiplier={1.08}");
     expect(accountSource).not.toContain("Customers can claim again after X days");
     expect(accountSource).not.toContain("Customers can claim only once ever from my business");
@@ -234,9 +241,9 @@ describe("AI create UX source guards", () => {
     const ko = readLocale("ko");
 
     expect(en.account.repeatPolicyCooldown).toBe("Claim again after X days");
-    expect(es.account.expandBizProfile).toBe("Editar campos");
+    expect(es.account.expandBizProfile).toBe("Editar perfil del negocio");
     expect(es.account.advancedOptions).toBe("Más opciones");
-    expect(ko.account.expandBizProfile).toBe("전체 항목 편집");
+    expect(ko.account.expandBizProfile).toBe("비즈니스 프로필 수정");
     expect(ko.account.advancedOptions).toBe("추가 옵션");
     for (const locale of [en, es, ko]) {
       expect(locale.account.repeatPolicyCooldown).not.toContain("Customers can claim again");

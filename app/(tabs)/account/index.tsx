@@ -18,6 +18,7 @@ import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SelectableChip } from "@/components/ui/selectable-chip";
 import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
@@ -27,7 +28,7 @@ import { LegalExternalLinks } from "@/components/legal-external-links";
 import { updateBusinessProfileSection } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
@@ -777,92 +778,29 @@ export default function AccountScreen() {
 
   function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
     return (
-      <Pressable
+      <SelectableChip
         key={locale}
+        variant="chip"
+        label={label}
+        selected={active}
         onPress={onPress}
-        style={{
-          paddingVertical: Spacing.sm,
-          paddingHorizontal: Spacing.md,
-          borderRadius: Radii.pill,
-          backgroundColor: active ? theme.primary : theme.surfaceMuted,
-          marginRight: Spacing.sm,
-          marginBottom: Spacing.sm,
-          maxWidth: "100%",
-        }}
-      >
-        <Text
-          style={{ color: active ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700", fontSize: 13 }}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-          maxFontSizeMultiplier={1.15}
-        >
-          {label}
-        </Text>
-      </Pressable>
+        style={{ marginRight: Spacing.sm, marginBottom: Spacing.sm, maxWidth: "100%" }}
+      />
     );
   }
 
   function repeatPolicyOption(policyType: RepeatClaimPolicyType, label: string, helper?: string) {
     const selected = repeatPolicyType === policyType;
     return (
-      <Pressable
+      <SelectableChip
         key={policyType}
+        variant="row"
+        label={label}
+        subtitle={selected ? helper : undefined}
+        selected={selected}
         onPress={() => setRepeatPolicyType(policyType)}
         accessibilityRole="radio"
-        accessibilityState={{ selected }}
-        style={{
-          borderWidth: 1,
-          borderColor: selected ? theme.primary : theme.border,
-          borderRadius: Radii.md,
-          paddingVertical: 10,
-          paddingHorizontal: 10,
-          flexDirection: "row",
-          alignItems: helper && selected ? "flex-start" : "center",
-          gap: 8,
-          backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-        }}
-      >
-        <View
-          style={{
-            width: 16,
-            height: 16,
-            borderRadius: 8,
-            borderWidth: 2,
-            borderColor: selected ? theme.primary : theme.border,
-            alignItems: "center",
-            justifyContent: "center",
-            marginTop: helper && selected ? 1 : 0,
-          }}
-        >
-          {selected ? (
-            <View
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 3.5,
-                backgroundColor: theme.primary,
-              }}
-            />
-          ) : null}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{ color: theme.text, fontWeight: "800", fontSize: 14, lineHeight: 18 }}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.78}
-            maxFontSizeMultiplier={1.08}
-          >
-            {label}
-          </Text>
-          {helper && selected ? (
-            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 2 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-              {helper}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
+      />
     );
   }
 
@@ -1267,69 +1205,22 @@ export default function AccountScreen() {
                 {t("language.sectionBusinessHelp")}
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 2 }}>
-                <Pressable
+                <SelectableChip
+                  variant="chip"
+                  label={t("language.useAppLanguage")}
+                  selected={profilePreferredLocale == null}
                   onPress={() => setProfilePreferredLocale(null)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  accessibilityLabel={t("language.useAppLanguage")}
-                  accessibilityRole="button"
-                  style={{
-                    paddingVertical: 7,
-                    paddingHorizontal: 11,
-                    borderRadius: Radii.pill,
-                    backgroundColor: profilePreferredLocale == null ? theme.primary : theme.surfaceMuted,
-                    marginRight: 6,
-                    marginBottom: 6,
-                    maxWidth: "100%",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: profilePreferredLocale == null ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
-                      fontWeight: "700",
-                      fontSize: 12,
-                    }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.78}
-                    maxFontSizeMultiplier={1.08}
-                  >
-                    {t("language.useAppLanguage")}
-                  </Text>
-                </Pressable>
+                  style={{ marginRight: 6, marginBottom: 6, maxWidth: "100%" }}
+                />
                 {(["en", "es", "ko"] as const).map((loc) => (
-                  <Pressable
+                  <SelectableChip
                     key={loc}
+                    variant="chip"
+                    label={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
+                    selected={profilePreferredLocale === loc}
                     onPress={() => setProfilePreferredLocale(loc)}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    accessibilityLabel={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
-                    accessibilityRole="button"
-                    style={{
-                      paddingVertical: 7,
-                      paddingHorizontal: 11,
-                      borderRadius: Radii.pill,
-                      backgroundColor: profilePreferredLocale === loc ? theme.primary : theme.surfaceMuted,
-                      marginRight: 6,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: profilePreferredLocale === loc ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
-                        fontWeight: "700",
-                        fontSize: 12,
-                      }}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.78}
-                      maxFontSizeMultiplier={1.08}
-                    >
-                      {loc === "en"
-                        ? t("language.english")
-                        : loc === "es"
-                          ? t("language.spanish")
-                          : t("language.korean")}
-                    </Text>
-                  </Pressable>
+                    style={{ marginRight: 6, marginBottom: 6 }}
+                  />
                 ))}
               </View>
 
@@ -1781,11 +1672,18 @@ export default function AccountScreen() {
             <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
               {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
             </Text>
-            <PrimaryButton
+            <SecondaryButton
               title={t("deleteAccount.cta")}
               onPress={startDeleteAccount}
               disabled={busy || loading}
-              style={{ backgroundColor: theme.danger, minHeight: 44, paddingVertical: 8, marginTop: Spacing.xs }}
+              style={{
+                minHeight: 44,
+                paddingVertical: 8,
+                marginTop: Spacing.xs,
+                borderColor: theme.danger,
+                backgroundColor: "transparent",
+              }}
+              textStyle={{ color: theme.danger }}
             />
           </View>
         </ScrollView>

@@ -98,24 +98,32 @@ Icon-only delete gets a visible label.
 (grep + screenshot). The Offers list renders zero delete buttons; deleting
 requires opening `Manage`. Deal card height drops (see B1).
 
-### A4. Stack screens have no bottom safe-area inset — content is clipped (P0)
+### A4. ~~Stack screens have no bottom safe-area inset~~ — RETRACTED, NOT A BUG
 
-**What.** On every screen WITHOUT the tab bar, the last row is cut off
-behind the Android 3-button nav bar: Menu library (biz06, "THE SERGEANT'S
-STRIPES" sliced), Menu offer (biz07, "Oat Milk" sliced), Reuse & repeat
-(biz08), Deal analytics (biz10). Tabbed screens are fine because the tab bar
-supplies the inset. This is the same class as the revise-panel fix already
-shipped (`marginBottom: 32`, QA F-QA4) — that was a one-off patch, not a
-systemic fix.
+**Original claim:** the last row on Menu library / Menu offer / Reuse / Deal
+analytics is clipped behind the Android nav bar.
 
-**How.** `lib/screen-layout.ts` already exports `useScreenInsets`. Apply its
-bottom inset as `contentContainerStyle` padding on every stack screen's
-scroll container. Audit all `create/*`, `deal-analytics/*`,
-`business-setup`, `redemption-mode`.
+**RETRACTED 2026-08-07 before any code was written.** The claim was an
+artifact of the audit method: those screenshots were taken **mid-scroll**,
+so the next item was naturally half-visible at the fold — which is normal
+scrolling, not clipping. Verified by scrolling Menu library to its true end
+(`verify_menulib_end.png`): the final row ("Add-on Egg") renders fully with
+generous clearance above the nav bar.
 
-**Expected outcome (testable).** Scroll each stack screen to the very
-bottom: the final element is fully visible with clear space above the system
-nav bar. No content sits under the nav bar on any screen.
+Confirmed in source too — every screen named already does the right thing:
+`useScreenInsets("stack")` → `scrollBottom` applied to the ScrollView's
+`contentContainerStyle` (`menu-manager.tsx:39,178`, `reuse.tsx:102,209`,
+and the same pattern in menu-offer / menu-scan / menu / business-setup /
+deal-analytics). `getScreenLayoutMetrics` additionally floors the Android
+inset (`STACK_ANDROID_BOTTOM_FLOOR`) precisely for the edge-to-edge dev
+client case.
+
+**No work required.** The earlier revise-panel fix (QA F-QA4) was a genuine
+but unrelated case: that panel was nested inside a container that did not
+inherit the scroll padding.
+
+**Lesson for future audits:** never call something clipped from a single
+mid-scroll screenshot — scroll to the end first.
 
 ### A5. Cards are the app's visual language — except where they aren't (P1)
 
@@ -366,8 +374,8 @@ token" would make it worse. Needs a palette decision, not a screen fix.
 
 ## Sequencing
 
-1. **A4 (clipped content)** and **A3 (destructive prominence)** first — the
-   only two with real user-harm potential. Both are small.
+1. **A3 (destructive prominence)** first — the only item with real
+   user-harm potential, and it is small. (A4 was retracted as not-a-bug.)
 2. **A1 + A2** (the shared chip/action components) — unlocks most of Part B.
 3. **B1 + B2 + B3** (Offers) — the biggest clutter win per unit of work.
 4. **B4** (Deal analytics rebuild + the tz bug).
@@ -382,14 +390,21 @@ en/es/ko together (`check:i18n-keys` gates it).
 plan requires touching it — if A1/A2 rollout reaches the AI ads screen, that
 file needs the per-file approval + lock re-hash.
 
-## Decisions needed from Dan
+## Decisions — SETTLED by Dan 2026-08-07
 
-1. **Deal-card overflow (B1):** collapse to one action + `⋯`, or keep
-   `Run again` and `Manage` both visible and only move Delete?
-2. **Orange budget (A9):** should orange mark exactly one headline metric,
-   or all "growth" metrics (saved/repeat/engagement) as today?
-3. **Redeem dead space (B7):** add today's redemption activity, or leave the
-   screen deliberately minimal for counter use?
-4. **Account order (B6):** confirm Your business first / Log out last.
-5. **Placeholder palette (B10):** dim `inputPlaceholder`, or keep inputs on
-   `theme.icon` and leave the token unused?
+1. **Deal-card actions (B1):** KEEP both `Run again` and `Manage` visible.
+   Only `Delete old deal` leaves the card (into the Manage sheet, which
+   already hosts Delete). Card-height target relaxes to ≤330px accordingly.
+2. **Orange budget (A9):** KEEP all three growth metrics orange
+   (Engagement / Saved customers / Repeat customers). The white-vs-orange
+   split is therefore INTENTIONAL and stays — A9 drops its recolour clause
+   and keeps only: one shared `MetricTile` component, and re-labelling so no
+   two visible tiles restate the same number.
+3. **Redeem (B7):** KEEP MINIMAL. Do NOT add a redemption activity feed and
+   do NOT add a staff-mode entry point. The only change is wrapping the
+   camera-permission message in a card for consistency (A5). The empty space
+   is accepted as deliberate for counter use.
+4. **Account order (B6):** CONFIRMED — Your business first, Log out last
+   (directly above Delete account).
+5. **Placeholders (B10):** KEEP inputs on `theme.icon`. `inputPlaceholder`
+   stays unused. B10 is CLOSED, no change.

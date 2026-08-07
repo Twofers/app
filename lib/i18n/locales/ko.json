@@ -545,7 +545,7 @@
     "bizSetupFinish": "설정을 완료하여 만들기, 사용, 대시보드를 잠금 해제하세요.",
     "bizSetupStart": "초기 설정을 완료하여 딜을 시작하세요.",
     "createNewDeal": "새 딜 만들기",
-    "editProfile": "프로필 수정",
+    "editProfile": "비즈니스 프로필 수정",
     "billingRowTitle": "결제 및 요금제",
     "billingRowSubtitle": "구독, 무료 체험 및 결제",
     "profileHintCategory": "카테고리를 추가하여 고객이 찾을 수 있게 하세요",
@@ -562,7 +562,7 @@
     "aiDescDraftHelp": "AI는 이 초안 필드만 채웁니다. 공개하려면 비즈니스 프로필을 저장하세요.",
     "aiDescFailed": "설명을 생성할 수 없습니다.",
     "aiDescNeedsNameCategory": "먼저 비즈니스 이름과 카테고리를 추가하세요.",
-    "expandBizProfile": "전체 항목 편집",
+    "expandBizProfile": "비즈니스 프로필 수정",
     "collapseBizProfile": "항목 접기",
     "advancedOptions": "추가 옵션",
     "promoAuthTitle": "홍보물",
@@ -638,11 +638,12 @@
     "moreToolsHide": "접기",
     "newDeal": "새 오퍼 만들기",
     "newDealSub": "사진, 음성 또는 텍스트",
-    "reuseDeal": "지난 오퍼 반복",
+    "reuseDeal": "딜 반복하기",
     "reuseDealSub": "템플릿이나 지난 오퍼를 다시 시작",
     "setupApprovedTitle": "설정 승인 완료",
     "setupApprovedBody": "지금 프로필과 메뉴를 완성하세요. 활성화하려면 승인 이메일을 사용하거나 지원팀에 문의하세요.",
-    "setupApprovedCta": "보안 Checkout 열기"
+    "setupApprovedCta": "보안 Checkout 열기",
+    "demoAccessBody": "체험 액세스: AI 딜 생성을 1회 사용할 수 있어요. 딜을 게시하려면 먼저 Stripe를 연결하세요."
   },
   "menuScan": {
     "title": "메뉴 스캔",
@@ -682,7 +683,7 @@
     "sizePlaceholder": "표시된 크기 (선택)"
   },
   "menuOffer": {
-    "title": "메뉴 오퍼",
+    "title": "메뉴 항목 홍보하기",
     "loading": "메뉴 불러오는 중...",
     "emptyMenu": "먼저 메뉴 항목을 추가한 뒤 홍보할 항목을 선택하세요.",
     "stepMain": "어떤 항목으로 광고를 진행할까요?",
@@ -799,7 +800,7 @@
     "posterImageUnavailable": "이번에는 포스터 이미지를 만들지 못했습니다(API 또는 저장소). 위에 사진을 넣고 다시 생성하거나 그대로 진행하세요. 다음 화면에서 사진과 함께 게시할 수 있습니다."
   },
   "reuseHub": {
-    "title": "재사용·반복",
+    "title": "딜 반복하기",
     "subtitle": "지난 딜이나 템플릿을 몇 번의 탭으로 다시 시작하세요.",
     "loading": "불러오는 중…",
     "needBusiness": "먼저 비즈니스를 만드세요.",
@@ -808,7 +809,7 @@
     "pastDealsSection": "지난 딜",
     "dealsEmpty": "지난 딜이 없습니다.",
     "untitled": "제목 없음",
-    "openInAiAds": "AI 딜에서 열기",
+    "openInAiAds": "딜 작성 화면에서 열기",
     "openTemplateA11y": "템플릿 {{title}} 열기",
     "deleteTemplateShort": "삭제",
     "deleteTemplateA11y": "템플릿 {{title}} 삭제",
@@ -817,7 +818,7 @@
     "deleteTemplateCta": "템플릿 삭제",
     "deleteTemplateFailed": "이 템플릿을 삭제하지 못했습니다.",
     "templateDeleted": "템플릿을 삭제했습니다.",
-    "repeatCta": "빠른 딜로 반복 →",
+    "repeatCta": "이 딜 반복하기 →",
     "backToAiCompose": "← AI 오퍼로 돌아가기",
     "backToCreate": "← 만들기로 돌아가기"
   },
@@ -1711,8 +1712,8 @@
     "exportAnalytics": "내보내기",
     "exportAllTitle": "딜 분석 내보내기",
     "metricLiveDealsSub_one": "총 {{count}}개 딜",
-    "metricLiveDealsSub_other": "총 {{count}}개 딜"
-  , "publishScheduledBanner": "{{title}} 딜은 {{time}}에 예정되어 있습니다."
+    "metricLiveDealsSub_other": "총 {{count}}개 딜",
+    "publishScheduledBanner": "{{title}} 딜은 {{time}}에 예정되어 있습니다."
   },
   "consumerProfile": {
     "navTitle": "내 프로필",

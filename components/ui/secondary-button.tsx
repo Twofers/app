@@ -1,4 +1,4 @@
-import { Pressable, Text, type ViewStyle } from "react-native";
+import { Pressable, Text, type TextStyle, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
 import { Colors, Controls, Fonts, Radii } from "@/constants/theme";
@@ -12,6 +12,8 @@ type SecondaryButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  /** Override the label color — used for the outlined-red destructive rung (A3). */
+  textStyle?: TextStyle;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   testID?: string;
@@ -22,6 +24,7 @@ export function SecondaryButton({
   onPress,
   disabled,
   style,
+  textStyle,
   accessibilityLabel,
   accessibilityHint,
   testID,
@@ -71,14 +74,17 @@ export function SecondaryButton({
         adjustsFontSizeToFit
         minimumFontScale={0.8}
         maxFontSizeMultiplier={1.15}
-        style={{
-          color: theme.text,
-          fontSize: 17,
-          fontWeight: "800",
-          textAlign: "center",
-          letterSpacing: -0.2,
-          ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
-        }}
+        style={[
+          {
+            color: theme.text,
+            fontSize: 17,
+            fontWeight: "800",
+            textAlign: "center",
+            letterSpacing: -0.2,
+            ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
+          },
+          textStyle,
+        ]}
       >
         {title}
       </Text>

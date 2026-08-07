@@ -10,6 +10,7 @@ import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SelectableChip } from "@/components/ui/selectable-chip";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { consumePendingDeepLink } from "@/lib/post-auth-route";
 import { getBusinessSetupCopyKeys, type BusinessSetupMode } from "@/lib/business-setup-copy";
@@ -1388,20 +1389,13 @@ export default function BusinessSetupScreen() {
             {CATEGORY_KEYS.map((key) => {
               const active = category === key;
               return (
-                <Pressable
+                <SelectableChip
                   key={key}
+                  variant="chip"
+                  label={t(`businessSetup.cat.${key}`)}
+                  selected={active}
                   onPress={() => setCategory(active ? "" : key)}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 14,
-                    borderRadius: Radii.pill,
-                    backgroundColor: active ? primary : theme.surfaceMuted,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? theme.primaryText : theme.text }}>
-                    {t(`businessSetup.cat.${key}`)}
-                  </Text>
-                </Pressable>
+                />
               );
             })}
           </View>
@@ -1433,20 +1427,13 @@ export default function BusinessSetupScreen() {
             {HOURS_PRESET_KEYS.map((key) => {
               const active = hoursPreset === key;
               return (
-                <Pressable
+                <SelectableChip
                   key={key}
+                  variant="chip"
+                  label={t(`businessSetup.hoursPreset.${key}`)}
+                  selected={active}
                   onPress={() => setHoursPreset(active ? "" : key)}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 14,
-                    borderRadius: Radii.pill,
-                    backgroundColor: active ? primary : theme.surfaceMuted,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? theme.primaryText : theme.text }}>
-                    {t(`businessSetup.hoursPreset.${key}`)}
-                  </Text>
-                </Pressable>
+                />
               );
             })}
           </View>

@@ -448,7 +448,7 @@
   },
   "account": {
     "title": "Account",
-    "expandBizProfile": "Edit all fields",
+    "expandBizProfile": "Edit business profile",
     "collapseBizProfile": "Hide fields",
     "advancedOptions": "More options",
     "alertsEnableHint": "Enable notifications to receive deal alerts.",
@@ -548,7 +548,7 @@
     "bizSetupFinish": "Finish setup to create deals, redeem tickets, and view performance.",
     "bizSetupStart": "Complete your one-time setup to start launching deals.",
     "createNewDeal": "Create new deal",
-    "editProfile": "Edit profile",
+    "editProfile": "Edit business profile",
     "billingRowTitle": "Billing & plan",
     "billingRowSubtitle": "Subscription, trial, and payments",
     "profileHintCategory": "Add your category so customers can filter and find you",
@@ -638,11 +638,12 @@
     "moreToolsHide": "Hide",
     "newDeal": "Create new offer",
     "newDealSub": "Photo, voice, or text",
-    "reuseDeal": "Repeat a past deal",
+    "reuseDeal": "Repeat a deal",
     "reuseDealSub": "Relaunch a template or past offer",
     "setupApprovedTitle": "Approved for setup",
     "setupApprovedBody": "Finish your profile and menu now. To activate, use your approval email or contact support.",
-    "setupApprovedCta": "Open secure Checkout"
+    "setupApprovedCta": "Open secure Checkout",
+    "demoAccessBody": "Demo access: you have one AI deal generation. Connect Stripe before publishing a deal."
   },
   "menuScan": {
     "title": "Scan menu",
@@ -682,7 +683,7 @@
     "sizePlaceholder": "Sizes as shown (optional)"
   },
   "menuOffer": {
-    "title": "Menu offer",
+    "title": "Promote a menu item",
     "loading": "Loading menu…",
     "emptyMenu": "Add menu items first, then choose one to promote.",
     "stepMain": "Which item would you like to run the ad on?",
@@ -799,7 +800,7 @@
     "posterImageUnavailable": "We couldn't make a poster this time. Add a photo and try again, or continue with your offer."
   },
   "reuseHub": {
-    "title": "Reuse & repeat",
+    "title": "Repeat a deal",
     "subtitle": "Relaunch a past deal or template in a couple of taps.",
     "loading": "Loading…",
     "needBusiness": "Create a business first.",
@@ -808,7 +809,7 @@
     "pastDealsSection": "Past deals",
     "dealsEmpty": "No past deals yet.",
     "untitled": "Untitled",
-    "openInAiAds": "Opens in AI deal",
+    "openInAiAds": "Opens in the deal builder",
     "openTemplateA11y": "Open template {{title}}",
     "deleteTemplateShort": "Delete",
     "deleteTemplateA11y": "Delete template {{title}}",
@@ -817,7 +818,7 @@
     "deleteTemplateCta": "Delete template",
     "deleteTemplateFailed": "Couldn't delete this template.",
     "templateDeleted": "Template deleted.",
-    "repeatCta": "Repeat in quick deal →",
+    "repeatCta": "Repeat this deal →",
     "backToAiCompose": "← Back to AI offer",
     "backToCreate": "← Back to Create"
   },
@@ -2077,8 +2078,8 @@
     "errBulkResume": "Could not resume some deals.",
     "errBulkDelete": "Could not delete some deals.",
     "exportAnalytics": "Export",
-    "exportAllTitle": "Export deal analytics"
-  , "publishScheduledBanner": "{{title}} is scheduled for {{time}}."
+    "exportAllTitle": "Export deal analytics",
+    "publishScheduledBanner": "{{title}} is scheduled for {{time}}."
   },
   "consumerProfile": {
     "navTitle": "Your profile",

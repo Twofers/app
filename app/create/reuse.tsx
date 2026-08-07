@@ -266,18 +266,22 @@ export default function ReuseDealScreen() {
                     })}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
+                      flexDirection: "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      gap: 4,
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      borderRadius: 22,
                       backgroundColor: theme.surface,
                       borderWidth: 1,
                       borderColor: theme.border,
                       opacity: deletingTemplateId === row.id ? 0.45 : 1,
                     }}
                   >
-                    <MaterialIcons name="delete-outline" size={22} color={theme.danger} />
+                    <MaterialIcons name="delete-outline" size={18} color={theme.danger} />
+                    <Text style={{ color: theme.danger, fontWeight: "700", fontSize: 13 }}>
+                      {t("reuseHub.deleteTemplateShort", { defaultValue: "Delete" })}
+                    </Text>
                   </Pressable>
                 </View>
               );

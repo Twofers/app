@@ -545,7 +545,7 @@
     "bizSetupFinish": "Completa tu configuración para desbloquear crear, canjear y panel.",
     "bizSetupStart": "Completa la configuración inicial para empezar a lanzar ofertas.",
     "createNewDeal": "Crear nueva oferta",
-    "editProfile": "Editar perfil",
+    "editProfile": "Editar perfil del negocio",
     "billingRowTitle": "Facturación y plan",
     "billingRowSubtitle": "Suscripción, prueba y pagos",
     "profileHintCategory": "Agrega tu categoría para que los clientes te encuentren",
@@ -562,7 +562,7 @@
     "aiDescDraftHelp": "La IA solo llena este campo borrador. Guarda el perfil del negocio para publicarlo.",
     "aiDescFailed": "No se pudo generar la descripción.",
     "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero.",
-    "expandBizProfile": "Editar campos",
+    "expandBizProfile": "Editar perfil del negocio",
     "collapseBizProfile": "Ocultar campos",
     "advancedOptions": "Más opciones",
     "promoAuthTitle": "Materiales promocionales",
@@ -638,11 +638,12 @@
     "moreToolsHide": "Ocultar",
     "newDeal": "Crear nueva oferta",
     "newDealSub": "Foto, voz o texto",
-    "reuseDeal": "Repetir oferta anterior",
+    "reuseDeal": "Repetir una oferta",
     "reuseDealSub": "Relanza una plantilla u oferta anterior",
     "setupApprovedTitle": "Aprobado para configurar",
     "setupApprovedBody": "Termina tu perfil y menú ahora. Para activar, usa tu correo de aprobación o contacta a soporte.",
-    "setupApprovedCta": "Abrir Checkout seguro"
+    "setupApprovedCta": "Abrir Checkout seguro",
+    "demoAccessBody": "Acceso de prueba: tienes una generación de anuncio con IA. Conecta Stripe antes de publicar una oferta."
   },
   "menuScan": {
     "title": "Escanear menú",
@@ -682,7 +683,7 @@
     "sizePlaceholder": "Tamaños como se muestran (opcional)"
   },
   "menuOffer": {
-    "title": "Oferta del menú",
+    "title": "Promocionar un producto",
     "loading": "Cargando menú...",
     "emptyMenu": "Agrega productos primero y luego elige uno para promocionar.",
     "stepMain": "¿En qué producto quieres publicar el anuncio?",
@@ -799,7 +800,7 @@
     "posterImageUnavailable": "No pudimos generar un póster (API o almacenamiento). Añade una foto arriba y vuelve a generar, o sigue: podrás publicar con foto en la siguiente pantalla."
   },
   "reuseHub": {
-    "title": "Reusar y repetir",
+    "title": "Repetir una oferta",
     "subtitle": "Relanza una oferta o plantilla anterior en un par de toques.",
     "loading": "Cargando…",
     "needBusiness": "Primero crea un negocio.",
@@ -808,7 +809,7 @@
     "pastDealsSection": "Ofertas pasadas",
     "dealsEmpty": "Aún no hay ofertas pasadas.",
     "untitled": "Sin título",
-    "openInAiAds": "Abre en Oferta IA",
+    "openInAiAds": "Se abre en el creador de ofertas",
     "openTemplateA11y": "Abrir plantilla {{title}}",
     "deleteTemplateShort": "Eliminar",
     "deleteTemplateA11y": "Eliminar plantilla {{title}}",
@@ -817,7 +818,7 @@
     "deleteTemplateCta": "Eliminar plantilla",
     "deleteTemplateFailed": "No se pudo eliminar esta plantilla.",
     "templateDeleted": "Plantilla eliminada.",
-    "repeatCta": "Repetir en Oferta rápida →",
+    "repeatCta": "Repetir esta oferta →",
     "backToAiCompose": "← Volver a oferta IA",
     "backToCreate": "← Volver a Crear"
   },
@@ -1711,8 +1712,8 @@
     "exportAnalytics": "Exportar",
     "exportAllTitle": "Exportar analíticas de ofertas",
     "metricLiveDealsSub_one": "{{count}} oferta en total",
-    "metricLiveDealsSub_other": "{{count}} ofertas en total"
-  , "publishScheduledBanner": "{{title}} está programada para {{time}}."
+    "metricLiveDealsSub_other": "{{count}} ofertas en total",
+    "publishScheduledBanner": "{{title}} está programada para {{time}}."
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",

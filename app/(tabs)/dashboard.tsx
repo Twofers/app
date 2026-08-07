@@ -26,6 +26,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { SelectableChip } from "@/components/ui/selectable-chip";
 import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { useBusiness } from "@/hooks/use-business";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
@@ -505,54 +506,26 @@ function ScrollFilterRow({
   items,
   selected,
   onSelect,
-  activeTone = "primary",
 }: {
   items: { key: string; label: string }[];
   selected: string;
   onSelect: (key: string) => void;
-  activeTone?: "primary" | "subtle";
 }) {
-  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
-  const theme = Colors[colorScheme];
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: Spacing.xs, alignItems: "center" }}
     >
-      {items.map((item) => {
-        const active = item.key === selected;
-        const primaryActive = active && activeTone === "primary";
-        const subtleActive = active && activeTone === "subtle";
-        return (
-          <Pressable
-            key={item.key}
-            onPress={() => onSelect(item.key)}
-            style={{
-              paddingHorizontal: Spacing.md,
-              paddingVertical: 6,
-              borderRadius: Radii.pill,
-              borderWidth: subtleActive ? 1 : 0,
-              borderColor: subtleActive ? theme.primary : "transparent",
-              backgroundColor: primaryActive ? theme.primary : theme.surfaceMuted,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: active ? "800" : "600",
-                color: primaryActive ? theme.primaryText : subtleActive ? theme.accentText : colorScheme === "dark" ? theme.text : Gray[700],
-              }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.78}
-              maxFontSizeMultiplier={1.15}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {items.map((item) => (
+        <SelectableChip
+          key={item.key}
+          variant="chip"
+          label={item.label}
+          selected={item.key === selected}
+          onPress={() => onSelect(item.key)}
+        />
+      ))}
     </ScrollView>
   );
 }
@@ -1476,7 +1449,6 @@ export default function BusinessDashboard() {
                   ]}
                   selected={dealSort}
                   onSelect={(k) => setDealSort(k as typeof dealSort)}
-                  activeTone="subtle"
                 />
               </View>
             </View>
@@ -2006,18 +1978,6 @@ export default function BusinessDashboard() {
                             title={t("offersDashboard.runAgainCta")}
                             onPress={() => duplicateDeal(item)}
                           />
-                        ) : null}
-                        {canDeleteOldDeal(item) ? (
-                          deletingDealId === item.id ? (
-                            <View style={{ padding: Spacing.md, alignItems: "center" }}>
-                              <ActivityIndicator color={theme.danger} />
-                            </View>
-                          ) : (
-                            <EndEarlyButton
-                              title={t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" })}
-                              onPress={() => deleteOldDeal(item)}
-                            />
-                          )
                         ) : null}
                       </View>
                     </CardShell>
