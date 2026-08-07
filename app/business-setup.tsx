@@ -13,6 +13,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { consumePendingDeepLink } from "@/lib/post-auth-route";
 import { getBusinessSetupCopyKeys, type BusinessSetupMode } from "@/lib/business-setup-copy";
+import { formatBusinessHoursText } from "@/lib/business-hours-text";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
@@ -269,7 +270,7 @@ export default function BusinessSetupScreen() {
               (key) => key !== "custom_prompt" && t(`businessSetup.hoursPreset.${key}`) === storedHours,
             );
             setHoursPreset((prev) => prev || presetKey || "custom_prompt");
-            if (!presetKey) setCustomHours((prev) => prev || storedHours);
+            if (!presetKey) setCustomHours((prev) => prev || formatBusinessHoursText(storedHours));
           }
           const lat = row.latitude != null ? Number(row.latitude) : NaN;
           const lng = row.longitude != null ? Number(row.longitude) : NaN;
@@ -626,7 +627,7 @@ export default function BusinessSetupScreen() {
       applyCategoryFromLookup(details.category);
       if (details.hours_text) {
         setHoursPreset("custom_prompt");
-        setCustomHours(details.hours_text);
+        setCustomHours(formatBusinessHoursText(details.hours_text));
       }
       // Enable the (flag-gated) website-import card and clear any prior import.
       resetSiteImport();
@@ -1054,8 +1055,18 @@ export default function BusinessSetupScreen() {
             <Text style={{ fontWeight: "700", marginBottom: 6, color: theme.text }}>
               {t("businessSetup.businessName")}
             </Text>
+            {/*
+              Read-only affordance must survive DARK mode. The muted/normal
+              surface pair differs by ~5/255 per channel there (#202427 vs
+              #1b1e20) — invisible on an OLED panel — so a verified name looked
+              exactly like the editable Phone field. Dim the value and show a
+              lock glyph; both read correctly in either theme.
+            */}
             <View
               style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: Spacing.xs,
                 borderWidth: 1,
                 borderColor: theme.border,
                 borderRadius: Radii.lg,
@@ -1064,7 +1075,8 @@ export default function BusinessSetupScreen() {
                 paddingHorizontal: Spacing.md,
               }}
             >
-              <Text style={{ fontSize: 16, color: theme.text }}>{businessName}</Text>
+              <MaterialIcons name="lock-outline" size={16} color={theme.mutedText} />
+              <Text style={{ flex: 1, fontSize: 16, color: theme.mutedText }}>{businessName}</Text>
             </View>
             <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.6, color: theme.text }}>
               {t("businessSetup.nameChange.lockedHint")}
