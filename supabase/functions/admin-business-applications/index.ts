@@ -877,6 +877,16 @@ async function applyDecision(
     .single();
   if (updateError) throw updateError;
 
+  if (decision === "approve_full_access") {
+    // The auth trigger handles accounts created after the grant. This RPC also
+    // confirms the less common reverse ordering: an unconfirmed account that
+    // already existed when the admin granted full access.
+    const { error: confirmError } = await ctx.supabaseAdmin.rpc("confirm_full_access_business_users", {
+      p_email: String(application.email ?? "").trim().toLowerCase(),
+    });
+    if (confirmError) throw confirmError;
+  }
+
   if (onboardingRequestId) {
     await ctx.supabaseAdmin
       .from("business_onboarding_requests")

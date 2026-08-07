@@ -4503,6 +4503,8 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   let adminForCreditRelease: SupabaseClient | null = null;
   let chargeableRevisionCredit: ChargeableImageRevisionReservation | null = null;
+  let demoAdGenerationReserved = false;
+  let demoAdGenerationBusinessId: string | null = null;
 
   async function releaseReservedChargeableRevision(reason: string) {
     if (!adminForCreditRelease || !chargeableRevisionCredit) return;
@@ -4519,6 +4521,22 @@ Deno.serve(async (req) => {
           errorCode: "DEAL_CREDIT_RELEASE_FAILED",
         }),
       );
+    }
+  }
+
+  async function releaseReservedDemoGeneration() {
+    if (!adminForCreditRelease || !demoAdGenerationReserved || !demoAdGenerationBusinessId) return;
+    demoAdGenerationReserved = false;
+    try {
+      await adminForCreditRelease.rpc("release_demo_ai_generation", {
+        p_business_id: demoAdGenerationBusinessId,
+      });
+    } catch {
+      console.log(JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "demo_ai_generation_release_failed",
+        errorCode: "DEMO_AI_GENERATION_RELEASE_FAILED",
+      }));
     }
   }
 
@@ -4576,6 +4594,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    demoAdGenerationBusinessId = businessId;
     const quotaStatusOnly = body.quota_status_only === true || body.action === "quota_status";
 
     const photoPath = typeof body.photo_path === "string" ? body.photo_path.trim() : "";
@@ -4887,6 +4906,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Setup-approved businesses receive exactly one demo ad generation. Reserve
+    // it atomically immediately before provider work so all cheap validation
+    // failures leave the demo untouched. Provider failures release it below.
+    if (capabilities.reason_code === "demo") {
+      const { data: reserved, error: reserveError } = await admin.rpc("reserve_demo_ai_generation", {
+        p_business_id: businessId,
+      });
+      if (reserveError || reserved !== true) {
+        return new Response(JSON.stringify({
+          error: "Your demo AI generation has already been used. Connect Stripe to create and publish more deals.",
+          error_code: "DEMO_AI_GENERATION_LIMIT_REACHED",
+          reason_code: "demo_limit_reached",
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      demoAdGenerationReserved = true;
+    }
+
     // ── Build a SingleAd by running the right stages ──
     const costContext: AiCostContext = {
       admin,
@@ -5036,6 +5075,7 @@ Deno.serve(async (req) => {
           },
         });
         await releaseReservedChargeableRevision("copy_failed");
+        await releaseReservedDemoGeneration();
         return new Response(
           JSON.stringify({ error: "AI copy generation failed. Tap try again.", error_code: "COPY_FAILED" }),
           { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -5484,6 +5524,10 @@ Deno.serve(async (req) => {
       chargeableRevisionCredit = null;
     }
 
+    // A successful response, including a gradient fallback poster, consumes
+    // the demo generation permanently.
+    demoAdGenerationReserved = false;
+
     return new Response(JSON.stringify({
       ad,
       ads: [ad],
@@ -5500,6 +5544,7 @@ Deno.serve(async (req) => {
     });
   } catch {
     await releaseReservedChargeableRevision("server_error");
+    await releaseReservedDemoGeneration();
     console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", errorCode: "SERVER_ERROR" }));
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,

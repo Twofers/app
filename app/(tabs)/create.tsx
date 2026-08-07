@@ -333,6 +333,14 @@ export default function CreateDeal() {
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <ScreenHeader title={t("createHub.title")} subtitle={t("createHub.subtitle")} />
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+      {billingAccess.reason === "demo" ? (
+        <Banner
+          message={t("createHub.demoAccessBody", {
+            defaultValue: "Demo access: you have one AI deal generation. Connect Stripe before publishing a deal.",
+          })}
+          tone="info"
+        />
+      ) : null}
 
       {!isLoggedIn ? (
         <View style={{ marginTop: Spacing.lg }}>
