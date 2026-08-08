@@ -1143,7 +1143,7 @@
     "alertDismiss": "Aceptar"
   },
   "merchantInsights": {
-    "detailTitle": "Audiencia y horarios (agregado)",
+    "detailTitle": "Audiencia y horarios",
     "avgRedeemDelay": "Media reclamación → canje",
     "avgRedeemDelayMinutes": "~{{minutes}} min",
     "avgRedeemDelayNone": "Aún no hay suficientes canjes",

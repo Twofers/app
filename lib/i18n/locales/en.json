@@ -1143,7 +1143,7 @@
     "alertDismiss": "OK"
   },
   "merchantInsights": {
-    "detailTitle": "Audience & timing (aggregated)",
+    "detailTitle": "Audience & timing",
     "avgRedeemDelay": "Avg. time to redeem",
     "avgRedeemDelayMinutes": "~{{minutes}} min",
     "avgRedeemDelayNone": "Not enough redeemed claims yet",

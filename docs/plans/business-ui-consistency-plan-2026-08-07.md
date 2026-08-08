@@ -309,6 +309,50 @@ card/tile styling from the dashboard. A deal claimed at 10:40 PM store-local
 reports a 10 PM busiest hour, not 3 AM — assert with a unit test over the
 bucketing function.
 
+**VISUAL REBUILD DONE 2026-08-07 (workstream 3), device-verified**
+(`w3a_analytics.png`): every section now sits in `CardShell`; the raw
+`key: value` lines render as `MetricTile` grids; `MetricTile` was extracted
+from `dashboard.tsx` to `components/ui/metric-tile.tsx` and is now shared;
+one heading scale; "(aggregated)" dropped; "Edit deal" is primary and
+"Export analytics" secondary; the labeled "← My offers" pill became a plain
+`←` glyph so the title and date no longer wrap at a broken indent.
+
+**THE TIMEZONE BUG IS *NOT* FIXED — root cause found, and it is SERVER-SIDE.**
+Supervisor QA traced it properly rather than accepting the agent's account.
+The agent fixed a genuine but DIFFERENT latent defect: the client
+`bestTime` bucketing at `[id].tsx:167-175` used `getDay()`/`getHours()`
+(device timezone), plus an AM/PM label derived from the bucket's END hour so
+a 10 PM peak printed "10–12 AM". Both are now fixed behind a tested pure
+helper (`lib/deal-analytics-hours.ts`, 16 tests). Keep that work.
+
+But the string actually observed on device — "Claims by hour (local to each
+deal): Busiest around 3:00 AM local" — is rendered by
+`components/merchant-insights-panel.tsx:71` from `insights.claims_by_hour_local`,
+a **server-computed** field. The chain, verified in source:
+
+1. `app/create/ai.tsx:4444` — `timezone: isRecurring ? timezone : null`, so
+   **one-time deals persist a NULL timezone** (only recurring deals store one).
+2. `supabase/migrations/20260601153000_...sql:315` —
+   `COALESCE(NULLIF(trim(d.timezone), ''), 'UTC')`, so a NULL deal timezone
+   silently becomes **UTC**.
+3. The RPC buckets with `EXTRACT(hour FROM (f.created_at AT TIME ZONE v_tz))`
+   and the panel labels the result **"local"**.
+
+10:40 PM CDT = 03:40 UTC, which is exactly what was displayed. (Confirmed the
+S10 itself is `America/Chicago`, which is why a device-timezone read could
+never have produced 3 AM — that mismatch is what exposed the wrong diagnosis.)
+
+Note one RPC overload already does the right thing —
+`:501` uses `COALESCE(NULLIF(trim(b.timezone), ''), 'UTC') AS tz` off the
+**business** row — so the two overloads disagree.
+
+**FOUNDER-GATED, NOT DONE.** The fix is a prod migration (fall back to the
+business timezone instead of `'UTC'`, and ideally stop labelling a UTC bucket
+"local" when no timezone is known), and optionally persisting a timezone on
+one-time deals — which touches the hash-locked `app/create/ai.tsx`. Both need
+Dan's decision. Until then the client helper is correct but the merchant-facing
+number on this screen is still wrong for any one-time deal.
+
 ### B5. Create hub — two card species in one list (P2)
 
 **What.** Top three rows have a tinted rounded-square icon container with

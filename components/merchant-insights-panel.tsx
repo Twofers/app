@@ -1,5 +1,7 @@
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { CardShell } from "@/components/ui/card-shell";
+import { MetricTile } from "@/components/ui/metric-tile";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { MerchantInsightsRow, RepeatVisitStats } from "@/lib/merchant-insights";
@@ -34,12 +36,20 @@ type Props = {
   savedCustomersCount?: number | null;
   /** Redemption-confirmed repeat visits (business_repeat_visit_stats RPC); null hides the line. */
   repeatVisitStats?: RepeatVisitStats | null;
+  /**
+   * "flat" (default) renders the original bare-text stack used on the dashboard's
+   * collapsible insights section — unchanged, pixel-for-pixel.
+   * "sectioned" wraps each subsection in `CardShell` and renders count breakdowns as
+   * `MetricTile`s — used by the deal-analytics screen, which has no cards anywhere else.
+   */
+  variant?: "flat" | "sectioned";
 };
 
 export function MerchantInsightsPanel({
   insights,
   savedCustomersCount = null,
   repeatVisitStats = null,
+  variant = "flat",
 }: Props) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -62,6 +72,89 @@ export function MerchantInsightsPanel({
     (best, c, h) => (c > best.c ? { h, c } : best),
     { h: 0, c: -1 },
   );
+
+  if (variant === "sectioned") {
+    const ageEntries = mixEntries(insights.age_band_mix);
+    const zipEntries = mixEntries(insights.zip_cluster_mix);
+    const acqEntries = mixEntries(insights.acquisition_mix);
+    const methodEntries = mixEntries(insights.redeem_method_mix);
+    const blockedEntries = mixEntries(insights.claim_blocked_reason_mix);
+
+    const mixCard = (
+      titleKey: string,
+      entries: [string, number][],
+      formatLabel: (key: string) => string,
+    ) =>
+      entries.length > 0 ? (
+        <CardShell key={titleKey}>
+          <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md, color: theme.text }}>
+            {t(titleKey)}
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md }}>
+            {entries.map(([k, n], i) => (
+              <MetricTile key={k} label={formatLabel(k)} value={String(n)} delay={i * 30} />
+            ))}
+          </View>
+        </CardShell>
+      ) : null;
+
+    return (
+      <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>
+        <CardShell>
+          <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md, color: theme.text }}>
+            {t("merchantInsights.detailTitle")}
+          </Text>
+          <View style={{ gap: Spacing.xs }}>
+            <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+              {t("merchantInsights.avgRedeemDelay")}: {avgLine}
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+              {t("merchantInsights.newVsReturning", {
+                new: insights.new_customer_claims,
+                returning: insights.returning_customer_claims,
+              })}
+            </Text>
+            {savedCustomersCount != null ? (
+              <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+                {t("merchantInsights.savedCustomers", {
+                  defaultValue: "Customers who saved this business: {{count}}",
+                  count: savedCustomersCount,
+                })}
+              </Text>
+            ) : null}
+            {repeatVisitStats != null ? (
+              <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+                {t("merchantInsights.repeatVisits", {
+                  defaultValue: "Confirmed repeat customers: {{repeat}} of {{total}} redeemers came back",
+                  repeat: repeatVisitStats.repeat_customers,
+                  total: repeatVisitStats.redeemed_customers,
+                })}
+              </Text>
+            ) : null}
+            {peakHour.c > 0 ? (
+              <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
+                {t("merchantInsights.hourHeat")}:{" "}
+                {t("merchantInsights.hourPeak", {
+                  time: formatHourOfDayLabel(peakHour.h, i18n.language),
+                  count: peakHour.c,
+                })}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
+                {t("merchantInsights.hourHeatSparse")}
+              </Text>
+            )}
+          </View>
+        </CardShell>
+
+        {mixCard("merchantInsights.ageMix", ageEntries, (k) => t(`ageBands.${k}`, { defaultValue: k }))}
+        {mixCard("merchantInsights.zipMix", zipEntries, (k) => k)}
+        {mixCard("merchantInsights.acqMix", acqEntries, (k) => formatAcquisitionLabel(k, t))}
+        {mixCard("merchantInsights.methodMix", methodEntries, (k) => formatMethodLabel(k, t))}
+        {mixCard("merchantInsights.claimBlockedMix", blockedEntries, (k) => formatClaimBlockedReasonLabel(k, t))}
+      </View>
+    );
+  }
 
   return (
     <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>

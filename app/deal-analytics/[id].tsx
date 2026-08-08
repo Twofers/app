@@ -6,6 +6,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "@/lib/supabase";
 import { devWarn } from "@/lib/dev-log";
 import { Banner } from "@/components/ui/banner";
+import { CardShell } from "@/components/ui/card-shell";
+import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
@@ -19,6 +21,12 @@ import { getDealAnalyticsActivityState } from "@/lib/deal-analytics-state";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { localizedDealTitle } from "@/lib/deal-localization";
+import {
+  bucketStartHour,
+  getLocalDayAndHour,
+  periodForBucketStart,
+  to12Hour,
+} from "@/lib/deal-analytics-hours";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -92,7 +100,6 @@ export default function DealAnalyticsDetail() {
   );
 
   function renderBackAction() {
-    const label = t("dealAnalytics.backToOffers", "My offers");
     return (
       <Pressable
         onPress={goBack}
@@ -101,27 +108,14 @@ export default function DealAnalyticsDetail() {
         testID="deal-analytics-back-to-offers"
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
+          minWidth: 44,
           minHeight: 44,
-          paddingHorizontal: 10,
-          flexDirection: "row",
-          gap: 4,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: Radii.lg,
-          backgroundColor: theme.surfaceMuted,
-          borderWidth: 1,
-          borderColor: theme.border,
         }}
       >
-        <MaterialIcons name="arrow-back" size={20} color={theme.text} />
-        <Text
-          style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-        >
-          {label}
-        </Text>
+        <MaterialIcons name="arrow-back" size={22} color={theme.text} />
       </Pressable>
     );
   }
@@ -164,12 +158,14 @@ export default function DealAnalyticsDetail() {
       if (recent.length < 10) {
         setBestTime(t("dealAnalytics.notEnoughData"));
       } else {
+        // Bucket in the DEAL's own timezone (falls back to the device timezone when
+        // `timezone` is null/invalid) — bucketing on the device clock is what produced
+        // the live "10:40 PM local claims read as 3 AM local" bug.
+        const dealTimeZone = dealData?.timezone ?? null;
         const buckets: Record<string, number> = {};
         for (const c of recent) {
-          const dt = new Date(c.created_at);
-          const day = dt.getDay();
-          const hour = dt.getHours();
-          const bucketStart = Math.floor(hour / 2) * 2;
+          const { day, hour } = getLocalDayAndHour(c.created_at, dealTimeZone);
+          const bucketStart = bucketStartHour(hour);
           const key = `${day}-${bucketStart}`;
           buckets[key] = (buckets[key] || 0) + 1;
         }
@@ -184,13 +180,15 @@ export default function DealAnalyticsDetail() {
         if (bestKey) {
           const [dayStr, hourStr] = bestKey.split("-");
           const day = Number(dayStr);
-          const hour = Number(hourStr);
+          const bucketStart = Number(hourStr);
           const dayKey = CREATE_DEAL_DAY_KEYS[day] ?? "daySun";
           const dayName = t(`createDeal.${dayKey}`);
-          const startLabel = hour % 12 === 0 ? 12 : hour % 12;
-          const endHour = (hour + 2) % 24;
-          const endLabel = endHour % 12 === 0 ? 12 : endHour % 12;
-          const period = endHour < 12 ? t("dealAnalytics.periodAm") : t("dealAnalytics.periodPm");
+          const startLabel = to12Hour(bucketStart);
+          const endLabel = to12Hour(bucketStart + 2);
+          // Period is derived from the bucket's START hour, not its end — a 10 PM–12 AM
+          // bucket must read "PM" (the old end-hour logic mislabeled it "AM").
+          const period =
+            periodForBucketStart(bucketStart) === "AM" ? t("dealAnalytics.periodAm") : t("dealAnalytics.periodPm");
           setBestTime(
             t("dealAnalytics.bestTime", {
               day: dayName,
@@ -283,7 +281,7 @@ export default function DealAnalyticsDetail() {
       <ScreenHeader title={t("dealAnalytics.title")} subtitle={headerSubtitle} leftSlot={renderBackAction()} />
       {deal ? (
         <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs, gap: Spacing.xs }}>
-          <SecondaryButton
+          <PrimaryButton
             title={t("offersDashboard.editDeal")}
             onPress={openEditDeal}
           />
@@ -320,64 +318,67 @@ export default function DealAnalyticsDetail() {
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         style={{ flex: 1, marginTop: Spacing.sm }}
-        contentContainerStyle={{ paddingBottom: scrollBottom }}
+        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <MerchantInsightsPanel insights={insights} variant="sectioned" />
 
-        <MerchantInsightsPanel insights={insights} />
+        <CardShell>
+          <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md, color: theme.text }}>
+            {t("dealAnalytics.claimsOverTime")}
+          </Text>
+          {!hasAnalyticsData ? (
+            <View style={{ gap: Spacing.md }}>
+              <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>{t("dealAnalytics.noClaims")}</Text>
+              <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+                {t("dealAnalytics.noClaimsHelp", {
+                  defaultValue: "Analytics will appear after customers view, claim, or redeem this offer.",
+                })}
+              </Text>
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+                {t("dealAnalytics.emptyNextStep", {
+                  defaultValue: "You can edit the deal details or go back to My offers.",
+                })}
+              </Text>
+              {deal ? <SecondaryButton title={t("offersDashboard.editDeal")} onPress={openEditDeal} /> : null}
+              <SecondaryButton
+                title={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
+                accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
+                onPress={goBack}
+              />
+            </View>
+          ) : (
+            <View>
+              {claimsByDay.map((item, i) => (
+                <View
+                  key={item.day}
+                  style={{
+                    paddingVertical: Spacing.md,
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderTopColor: theme.border,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>
+                    {formatAppDateFromDayKey(item.day, i18n.language)}
+                  </Text>
+                  <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 15 }}>
+                    {t("dealAnalytics.dayRow", { claims: item.claims, redeems: item.redeems })}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </CardShell>
 
-        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md, color: theme.text }}>
-          {t("dealAnalytics.claimsOverTime")}
-        </Text>
-        {!hasAnalyticsData ? (
-          <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
-            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>{t("dealAnalytics.noClaims")}</Text>
-            <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
-              {t("dealAnalytics.noClaimsHelp", {
-                defaultValue: "Analytics will appear after customers view, claim, or redeem this offer.",
-              })}
-            </Text>
-            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
-              {t("dealAnalytics.emptyNextStep", {
-                defaultValue: "You can edit the deal details or go back to My offers.",
-              })}
-            </Text>
-            {deal ? <SecondaryButton title={t("offersDashboard.editDeal")} onPress={openEditDeal} /> : null}
-            <SecondaryButton
-              title={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
-              accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
-              onPress={goBack}
-            />
-          </View>
-        ) : (
-          <View style={{ marginBottom: Spacing.xl }}>
-            {claimsByDay.map((item) => (
-              <View
-                key={item.day}
-                style={{
-                  paddingVertical: Spacing.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.border,
-                }}
-              >
-                <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>
-                  {formatAppDateFromDayKey(item.day, i18n.language)}
-                </Text>
-                <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 15 }}>
-                  {t("dealAnalytics.dayRow", { claims: item.claims, redeems: item.redeems })}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.sm, color: theme.text }}>
-          {t("businessDashboard.whatWorked")}
-        </Text>
-        <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
-          {bestTime ?? t("dealAnalytics.notEnoughData")}
-        </Text>
+        <CardShell>
+          <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.sm, color: theme.text }}>
+            {t("businessDashboard.whatWorked")}
+          </Text>
+          <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+            {bestTime ?? t("dealAnalytics.notEnoughData")}
+          </Text>
+        </CardShell>
       </ScrollView>
     </View>
   );

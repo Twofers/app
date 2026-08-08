@@ -1143,7 +1143,7 @@
     "alertDismiss": "확인"
   },
   "merchantInsights": {
-    "detailTitle": "고객·시간대 (집계)",
+    "detailTitle": "고객·시간대",
     "avgRedeemDelay": "평균 클레임 → 사용 완료",
     "avgRedeemDelayMinutes": "약 {{minutes}}분",
     "avgRedeemDelayNone": "사용 완료된 클레임이 아직 부족합니다",
