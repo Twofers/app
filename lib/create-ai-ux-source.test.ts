@@ -247,10 +247,10 @@ describe("AI create UX source guards", () => {
     const ko = readLocale("ko");
 
     expect(en.account.repeatPolicyCooldown).toBe("Claim again after X days");
-    expect(es.account.expandBizProfile).toBe("Editar perfil del negocio");
-    expect(es.account.advancedOptions).toBe("Más opciones");
-    expect(ko.account.expandBizProfile).toBe("비즈니스 프로필 수정");
-    expect(ko.account.advancedOptions).toBe("추가 옵션");
+    expect(es.account.expandBizProfile).toBe("Ver todos los campos");
+    expect(es.account.advancedOptions).toBe("Configuración avanzada");
+    expect(ko.account.expandBizProfile).toBe("전체 항목 보기");
+    expect(ko.account.advancedOptions).toBe("고급 설정");
     for (const locale of [en, es, ko]) {
       expect(locale.account.repeatPolicyCooldown).not.toContain("Customers can claim again");
       expect(locale.account.repeatPolicyForever).not.toContain("Customers can claim only once");

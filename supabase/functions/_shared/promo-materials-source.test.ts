@@ -148,7 +148,10 @@ describe("promotional materials UI defaults", () => {
     expect(account).not.toMatch(/Alert\.alert\([^)]*promoAuth/);
     // Feature-detect: the row hides when the table isn't readable yet.
     expect(account).toMatch(/setPromoAuth\(status \? status\.authorized : null\)/);
-    expect(account).toMatch(/\{promoAuth !== null \? \(/);
+    // account/index.tsx builds this card as a named `cardPromoAuth` const
+    // (B6 reorder) rather than an inline `{promoAuth !== null ? (...)}`
+    // expression; the feature-detect guard itself is unchanged.
+    expect(account).toMatch(/cardPromoAuth =\s*\n?\s*promoAuth !== null \? \(/);
 
     const en = JSON.parse(read("lib/i18n/locales/en.json"));
     expect(en.account.promoAuthRevokeConfirm).toMatch(/remove any existing Twofer promotional materials/i);

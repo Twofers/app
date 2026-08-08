@@ -804,6 +804,885 @@ export default function AccountScreen() {
     );
   }
 
+  // Card blocks, named so the ScrollView below can lay them out in the
+  // founder-approved order (B6: Your business -> Redemption mode ->
+  // notifications/repeat-limit -> language/appearance -> Help & contact ->
+  // Log out -> Delete account) without moving any card's internals.
+  const cardLoggedIn = (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: Spacing.xs,
+        backgroundColor: theme.surface,
+      }}
+    >
+      <Text style={{ opacity: 0.7, fontSize: 12, color: theme.text }} maxFontSizeMultiplier={1.08}>
+        {t("account.loggedInAsLabel")}
+      </Text>
+      <Text
+        style={{ fontWeight: "800", fontSize: 15, lineHeight: 20, color: theme.text }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
+        maxFontSizeMultiplier={1.08}
+      >
+        {sessionEmail}
+      </Text>
+      <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} style={{ marginTop: Spacing.xs }} />
+    </View>
+  );
+
+  const cardSupport = (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: Spacing.xs,
+        backgroundColor: theme.surface,
+      }}
+    >
+      <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+        {t("supportContact.sectionTitle")}
+      </Text>
+      <Text style={{ opacity: 0.7, color: theme.text, fontSize: 13, lineHeight: 18 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+        {t("supportContact.sectionHelp")}
+      </Text>
+      <SecondaryButton
+        title={t("supportContact.contactSupportCta")}
+        onPress={() => void openSupportEmail()}
+        accessibilityLabel={t("supportContact.emailA11y")}
+        style={{ marginTop: Spacing.xs }}
+      />
+      <Text
+        style={{ color: theme.accentText, fontWeight: "800", fontSize: 13, lineHeight: 17 }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        maxFontSizeMultiplier={1.08}
+      >
+        {supportEmail}
+      </Text>
+    </View>
+  );
+
+  const cardYourBusiness =
+    tabMode === "business" ? (
+      <View
+        style={{
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          backgroundColor: theme.surface,
+          borderWidth: 1,
+          borderColor: theme.border,
+          gap: Spacing.xs,
+        }}
+      >
+        <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+          {t("account.bizCardTitle")}
+        </Text>
+        {businessProfileCheckLoading ? (
+          <Text style={{ opacity: 0.7, color: theme.text }}>{t("createHub.loading")}</Text>
+        ) : (
+          <>
+            <Text style={{ opacity: 0.86, fontSize: 14, lineHeight: 18, fontWeight: "700", color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
+              {businessSummaryName ?? t("account.bizYourBusiness")}
+            </Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+              {businessSummaryAddress ?? t("account.bizNoAddress")}
+            </Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
+              {t("account.bizCategory")}: {businessSummaryCategoryLabel ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
+            </Text>
+            {visibleBusinessContactName ? (
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
+                {t("account.fieldContactName")}: {visibleBusinessContactName}
+              </Text>
+            ) : null}
+            {visibleBusinessEmail ? (
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} maxFontSizeMultiplier={1.08}>
+                {t("account.fieldBusinessEmail")}: {visibleBusinessEmail}
+              </Text>
+            ) : null}
+            <ProfileCompletenessBar
+              percentage={completeness.percentage}
+              hint={completeness.nextHint ? t(completeness.nextHint) : null}
+            />
+            {!businessProfileComplete ? (
+              <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
+            ) : (
+              <Pressable onPress={goToBusinessSetup} style={{ paddingVertical: Spacing.sm, alignItems: "center" }}>
+                <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
+              </Pressable>
+            )}
+          </>
+        )}
+      </View>
+    ) : null;
+
+  const cardMerchantBlocked =
+    tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
+      <MerchantAccessBlockedCard
+        status={merchantAccess.status}
+        reason={merchantAccess.reason}
+        businessId={businessId}
+        canActivateTrialCheckout={merchantAccess.canActivateTrialCheckout}
+      />
+    ) : null;
+
+  const cardBilling =
+    mobileBillingEnabled && tabMode === "business" && businessId ? (
+      <Pressable
+        onPress={() => router.push("/(tabs)/account/billing" as Href)}
+        accessibilityRole="button"
+      >
+        <CardShell variant="elevated">
+          <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>{t("account.billingRowTitle")}</Text>
+          <Text style={{ marginTop: 6, opacity: 0.7, fontSize: 14, lineHeight: 20, color: theme.text }}>
+            {t("account.billingRowSubtitle")}
+          </Text>
+          <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
+            {t("billing.goToBilling", { defaultValue: "Open billing" })} →
+          </Text>
+        </CardShell>
+      </Pressable>
+    ) : null;
+
+  // B6(d): the old full-width "Open dashboard" button is dropped — Offers is
+  // already one tap away in the tab bar. The create-business prompt (shown
+  // only when there's no business yet) is unchanged.
+  const cardCreateBusinessPrompt =
+    !businessId ? (
+      <View
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: Radii.lg,
+          padding: Spacing.md,
+        }}
+      >
+        <Text style={{ color: theme.text, fontWeight: "700" }}>{t("account.createBizCardTitle")}</Text>
+        <Text style={{ color: theme.mutedText, marginTop: 6 }}>{t("account.createBizCardBody")}</Text>
+        <View style={{ marginTop: 10 }}>
+          <PrimaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
+        </View>
+      </View>
+    ) : null;
+
+  const cardRedemptionMode = <RedemptionModeSettings businessId={businessId} businessName={businessName} />;
+
+  const cardDealAlerts =
+    tabMode !== "business" ? (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+          <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+            {t("account.dealAlertsTitle")}
+          </Text>
+          <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+            {t("account.dealAlertsSubtitle")}
+          </Text>
+        </View>
+        <BrandedSwitch
+          value={alertsEnabled}
+          onValueChange={toggleAlerts}
+          disabled={alertsLoading}
+          accessibilityRole="switch"
+          accessibilityLabel={t("account.dealAlertsTitle")}
+          accessibilityHint={t("account.dealAlertsA11yHint")}
+          accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
+        />
+      </View>
+    ) : null;
+
+  const cardClaimNotif =
+    bizClaimNotif !== null ? (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+          <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+            {t("account.bizClaimNotifTitle")}
+          </Text>
+          <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+            {t("account.bizClaimNotifSubtitle")}
+          </Text>
+        </View>
+        <BrandedSwitch
+          value={bizClaimNotif}
+          onValueChange={(v) => void toggleBizClaimNotif(v)}
+          disabled={bizClaimNotifSaving}
+          accessibilityRole="switch"
+          accessibilityLabel={t("account.bizClaimNotifTitle")}
+          accessibilityHint={t("account.bizClaimNotifA11yHint")}
+          accessibilityState={getSwitchAccessibilityState(bizClaimNotif, bizClaimNotifSaving)}
+        />
+      </View>
+    ) : null;
+
+  const cardPromoAuth =
+    promoAuth !== null ? (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+          <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+            {t("account.promoAuthTitle")}
+          </Text>
+          <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+            {promoAuth ? t("account.promoAuthStatusOn") : t("account.promoAuthStatusOff")}
+          </Text>
+        </View>
+        <BrandedSwitch
+          value={promoAuth}
+          onValueChange={(v) => togglePromoAuth(v)}
+          disabled={promoAuthSaving}
+          accessibilityRole="switch"
+          accessibilityLabel={t("account.promoAuthTitle")}
+          accessibilityState={getSwitchAccessibilityState(promoAuth, promoAuthSaving)}
+        />
+      </View>
+    ) : null;
+
+  const cardRepeatPolicy =
+    repeatPolicyAvailable ? (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          gap: Spacing.xs,
+          backgroundColor: theme.surface,
+        }}
+      >
+        <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+          {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
+        </Text>
+        <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 17 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+          {t("account.repeatPolicyHelp", {
+            defaultValue: "Limit repeat claims when you want more first-time customers.",
+          })}
+        </Text>
+        {repeatPolicyOption(
+          "NONE",
+          t("account.repeatPolicyNone", { defaultValue: "No limit" }),
+        )}
+        {repeatPolicyOption(
+          "COOLDOWN_DAYS",
+          t("account.repeatPolicyCooldown", { defaultValue: "Claim again after X days" }),
+          t("account.repeatPolicyCooldownHelp", {
+            defaultValue: "Redeemed customers wait this many days before claiming again.",
+          }),
+        )}
+        {repeatPolicyType === "COOLDOWN_DAYS" ? (
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <TextInput
+                value={repeatCooldownDays}
+                onChangeText={(value) => setRepeatCooldownDays(value.replace(/\D/g, "").slice(0, 3))}
+                keyboardType="number-pad"
+                accessibilityLabel={t("account.repeatPolicyCooldownInputA11y", {
+                  defaultValue: "Repeat customer cooldown days",
+                })}
+                style={{
+                  width: 76,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: Radii.sm,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: 8,
+                  color: theme.text,
+                  backgroundColor: theme.surface,
+                  fontWeight: "700",
+                  textAlign: "center",
+                }}
+              />
+              <Text style={{ color: theme.text, fontWeight: "700" }}>
+                {t("account.repeatPolicyDays", { defaultValue: "days" })}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {repeatPolicyOption(
+          "FOREVER",
+          t("account.repeatPolicyForever", {
+            defaultValue: "Claim once ever",
+          }),
+          t("account.repeatPolicyForeverHelp", {
+            defaultValue: "After one redemption, that customer cannot claim another deal here.",
+          }),
+        )}
+        <SecondaryButton
+          title={
+            repeatPolicySaving
+              ? t("account.repeatPolicySaving", { defaultValue: "Saving..." })
+              : t("account.repeatPolicySave", { defaultValue: "Save repeat limit" })
+          }
+          onPress={() => void saveRepeatPolicy()}
+          disabled={repeatPolicySaving}
+          style={{ minHeight: 44, paddingVertical: 8 }}
+        />
+      </View>
+    ) : null;
+
+  const cardAppLanguage = (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: Spacing.xs,
+        backgroundColor: theme.surface,
+      }}
+    >
+      <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+        {t("language.sectionApp")}
+      </Text>
+      <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+        {t("language.sectionAppHelp")}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+        {localeChip(t("language.english"), "en", currentAppLocale === "en", () => chooseAppLocale("en"))}
+        {localeChip(t("language.spanish"), "es", currentAppLocale === "es", () => chooseAppLocale("es"))}
+        {localeChip(t("language.korean"), "ko", currentAppLocale === "ko", () => chooseAppLocale("ko"))}
+      </View>
+    </View>
+  );
+
+  const cardTheme = <ThemePreferenceSelector />;
+
+  // B6(b): AI/offer language lives on its own card now; the unrelated
+  // "Business profile" section below used to be nested inside this same
+  // card and is now cardBusinessProfile, a separate sibling.
+  const cardAiLanguage =
+    businessId ? (
+      <View
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          borderWidth: 1,
+          borderColor: theme.border,
+          gap: Spacing.xs,
+        }}
+      >
+        <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+          {t("language.sectionBusiness")}
+        </Text>
+        <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+          {t("language.sectionBusinessHelp")}
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 2 }}>
+          <SelectableChip
+            variant="chip"
+            label={t("language.useAppLanguage")}
+            selected={profilePreferredLocale == null}
+            onPress={() => setProfilePreferredLocale(null)}
+            style={{ marginRight: 6, marginBottom: 6, maxWidth: "100%" }}
+          />
+          {(["en", "es", "ko"] as const).map((loc) => (
+            <SelectableChip
+              key={loc}
+              variant="chip"
+              label={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
+              selected={profilePreferredLocale === loc}
+              onPress={() => setProfilePreferredLocale(loc)}
+              style={{ marginRight: 6, marginBottom: 6 }}
+            />
+          ))}
+        </View>
+      </View>
+    ) : null;
+
+  const cardBusinessProfile =
+    businessId ? (
+      <View
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          borderWidth: 1,
+          borderColor: theme.border,
+          gap: Spacing.xs,
+        }}
+      >
+        <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
+          {t("account.bizProfileHeader")}
+        </Text>
+        <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+          {t("account.bizProfileHelp")}
+        </Text>
+        <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: 6, alignSelf: "flex-start" }}>
+          <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
+            {bizProfileExpanded ? t("account.collapseBizProfile") : t("account.expandBizProfile")}
+          </Text>
+        </Pressable>
+        {bizProfileExpanded ? (
+          <>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldBusinessName")}
+                required
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                ref={profileBusinessNameRef}
+                value={profileBusinessName}
+                onChangeText={setProfileBusinessName}
+                placeholder={t("account.phBusinessName")}
+                autoCapitalize="words"
+                editable={!savingProfile && !bizNameLocked}
+                style={{
+                  borderWidth: 1,
+                  borderColor: profileNameMissing ? theme.danger : theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile || bizNameLocked ? theme.surfaceMuted : undefined,
+                }}
+              />
+              {bizNameLocked ? (
+                <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.6, color: theme.text }}>
+                  {t("businessSetup.nameChange.lockedHint")}
+                </Text>
+              ) : null}
+              {profileNameMissing ? <ProfileFieldError message={t("account.errBizNameRequired")} theme={theme} /> : null}
+            </View>
+
+            {bizNameLocked && businessId && userId ? (
+              <BusinessNameChangeCard
+                businessId={businessId}
+                userId={userId}
+                currentName={profileBusinessName.trim() || null}
+              />
+            ) : null}
+
+            {!bizNameLocked && (
+              <SecondaryButton
+                title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+                onPress={() => void lookupBusinessProfileByName()}
+                disabled={lookupSearching || lookupDetailsPlaceId !== null || !profileBusinessName.trim()}
+              />
+            )}
+
+            {lookupResults && lookupResults.length > 0 && (
+              <View style={{ gap: Spacing.sm }}>
+                <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
+                  {t("businessSetup.selectResult")}
+                </Text>
+                {lookupResults.map((r, i) => (
+                  <Pressable
+                    key={r.place_id || i}
+                    onPress={() => void applyBusinessLookupResult(r)}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: theme.surface,
+                        borderRadius: Radii.lg,
+                        padding: Spacing.md,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                      }}
+                    >
+                      <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
+                      <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
+                      {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
+                      <Text style={{ fontSize: 11, color: theme.accentText, marginTop: 4 }}>
+                        {t("businessSetup.verifiedSource")}
+                      </Text>
+                      {lookupDetailsPlaceId === r.place_id ? (
+                        <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.xs }} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldContactName")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileContactName}
+                onChangeText={setProfileContactName}
+                placeholder={t("account.phContactName")}
+                autoCapitalize="words"
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldBusinessEmail")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                ref={profileBusinessEmailRef}
+                value={profileBusinessEmail}
+                onChangeText={setProfileBusinessEmail}
+                placeholder={t("account.phBusinessEmail")}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                autoComplete="email"
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: profileBusinessEmailInvalid ? theme.danger : theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+              {profileBusinessEmailInvalid ? <ProfileFieldError message={t("account.errBizEmailInvalid")} theme={theme} /> : null}
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldAddress")}
+                required
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                ref={profileAddressRef}
+                value={profileAddress}
+                onChangeText={setProfileAddress}
+                placeholder={t("account.phAddress")}
+                autoCapitalize="words"
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: profileAddressMissing ? theme.danger : theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+              {profileAddressMissing ? <ProfileFieldError message={t("account.errBizAddressRequired")} theme={theme} /> : null}
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldPhone")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profilePhone}
+                onChangeText={setProfilePhone}
+                placeholder={t("account.phPhone")}
+                keyboardType="phone-pad"
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldCategory")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileCategory}
+                onChangeText={setProfileCategory}
+                placeholder={t("account.phCategory")}
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldHours")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileHours}
+                onChangeText={setProfileHours}
+                placeholder={t("account.phHours")}
+                multiline
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  minHeight: 56,
+                  textAlignVertical: "top",
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldTone")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileTone}
+                onChangeText={setProfileTone}
+                placeholder={t("account.phTone")}
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldLocation")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileLocation}
+                onChangeText={setProfileLocation}
+                placeholder={t("account.phLocation")}
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldLatLng")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <Text style={{ color: theme.mutedText, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+                {t("account.fieldLatLngHelp")}
+              </Text>
+              <TextInput
+                value={profileLatitude}
+                onChangeText={setProfileLatitude}
+                placeholder={t("account.phLat")}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 6,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+              <TextInput
+                value={profileLongitude}
+                onChangeText={setProfileLongitude}
+                placeholder={t("account.phLng")}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 8,
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+            </View>
+            <View>
+              <ProfileFieldLabel
+                label={t("account.fieldShortDescription")}
+                requiredText={requiredFieldLabel}
+                optionalText={optionalFieldLabel}
+                theme={theme}
+              />
+              <TextInput
+                value={profileShortDescription}
+                onChangeText={setProfileShortDescription}
+                placeholder={t("account.phShortDescription")}
+                multiline
+                editable={!savingProfile}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 4,
+                  minHeight: 72,
+                  textAlignVertical: "top",
+                  backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
+                }}
+              />
+              <SecondaryButton
+                title={generatingDescription ? t("account.aiDescGenerating") : t("account.aiDescGenerate")}
+                onPress={() => void generateAiDescription()}
+                disabled={generatingDescription}
+              />
+              <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16 }}>
+                {t("account.aiDescDraftHelp", {
+                  defaultValue: "AI fills this draft field only. Save your business profile to publish it.",
+                })}
+              </Text>
+            </View>
+            <PrimaryButton
+              title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
+              onPress={saveBusinessProfile}
+              disabled={savingProfile}
+            />
+          </>
+        ) : null}
+      </View>
+    ) : null;
+
+  const cardAdvanced = (
+    <>
+      <Pressable
+        onPress={() => setAdvancedOpen((v) => !v)}
+        style={{ paddingVertical: 6, alignSelf: "flex-start" }}
+      >
+        <Text style={{ fontWeight: "800", color: theme.accentText, fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
+          {advancedOpen ? "− " : "+ "}
+          {t("account.advancedOptions")}
+        </Text>
+      </Pressable>
+
+      {advancedOpen ? (
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: Radii.lg,
+            padding: Spacing.md,
+            gap: Spacing.sm,
+          }}
+        >
+          <Text style={{ fontWeight: "700", color: theme.text }}>{t("legal.sectionTitle")}</Text>
+          <LegalExternalLinks />
+        </View>
+      ) : null}
+    </>
+  );
+
+  const cardDeleteAccount = (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: Spacing.xs,
+        backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
+      }}
+    >
+      <Text
+        style={{
+          fontWeight: "800",
+          fontSize: 16,
+          lineHeight: 20,
+          color: colorScheme === "dark" ? theme.dangerText : "#B91C1C",
+        }}
+        maxFontSizeMultiplier={1.08}
+      >
+        {t("deleteAccount.sectionTitle")}
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
+        {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
+      </Text>
+      <SecondaryButton
+        title={t("deleteAccount.cta")}
+        onPress={startDeleteAccount}
+        disabled={busy || loading}
+        style={{
+          minHeight: 44,
+          paddingVertical: 8,
+          marginTop: Spacing.xs,
+          borderColor: theme.danger,
+          backgroundColor: "transparent",
+        }}
+        textStyle={{ color: theme.danger }}
+      />
+    </View>
+  );
+
   return (
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -847,845 +1726,23 @@ export default function AccountScreen() {
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.md,
-              padding: Spacing.md,
-              gap: Spacing.xs,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Text style={{ opacity: 0.7, fontSize: 12, color: theme.text }} maxFontSizeMultiplier={1.08}>
-              {t("account.loggedInAsLabel")}
-            </Text>
-            <Text
-              style={{ fontWeight: "800", fontSize: 15, lineHeight: 20, color: theme.text }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
-              maxFontSizeMultiplier={1.08}
-            >
-              {sessionEmail}
-            </Text>
-            <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} style={{ marginTop: Spacing.xs }} />
-          </View>
-
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.md,
-              padding: Spacing.md,
-              gap: Spacing.xs,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
-              {t("supportContact.sectionTitle")}
-            </Text>
-            <Text style={{ opacity: 0.7, color: theme.text, fontSize: 13, lineHeight: 18 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-              {t("supportContact.sectionHelp")}
-            </Text>
-            <SecondaryButton
-              title={t("supportContact.contactSupportCta")}
-              onPress={() => void openSupportEmail()}
-              accessibilityLabel={t("supportContact.emailA11y")}
-              style={{ marginTop: Spacing.xs }}
-            />
-            <Text
-              style={{ color: theme.accentText, fontWeight: "800", fontSize: 13, lineHeight: 17 }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-              maxFontSizeMultiplier={1.08}
-            >
-              {supportEmail}
-            </Text>
-          </View>
-
-          {tabMode === "business" ? (
-            <View
-              style={{
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                backgroundColor: theme.surface,
-                borderWidth: 1,
-                borderColor: theme.border,
-                gap: Spacing.xs,
-              }}
-            >
-              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                {t("account.bizCardTitle")}
-              </Text>
-              {businessProfileCheckLoading ? (
-                <Text style={{ opacity: 0.7, color: theme.text }}>{t("createHub.loading")}</Text>
-              ) : (
-                <>
-                  <Text style={{ opacity: 0.86, fontSize: 14, lineHeight: 18, fontWeight: "700", color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
-                    {businessSummaryName ?? t("account.bizYourBusiness")}
-                  </Text>
-                  <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                    {businessSummaryAddress ?? t("account.bizNoAddress")}
-                  </Text>
-                  <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
-                    {t("account.bizCategory")}: {businessSummaryCategoryLabel ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
-                  </Text>
-                  {visibleBusinessContactName ? (
-                    <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
-                      {t("account.fieldContactName")}: {visibleBusinessContactName}
-                    </Text>
-                  ) : null}
-                  {visibleBusinessEmail ? (
-                    <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} maxFontSizeMultiplier={1.08}>
-                      {t("account.fieldBusinessEmail")}: {visibleBusinessEmail}
-                    </Text>
-                  ) : null}
-                  <ProfileCompletenessBar
-                    percentage={completeness.percentage}
-                    hint={completeness.nextHint ? t(completeness.nextHint) : null}
-                  />
-                  {!businessProfileComplete ? (
-                    <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
-                  ) : (
-                    <Pressable onPress={goToBusinessSetup} style={{ paddingVertical: Spacing.sm, alignItems: "center" }}>
-                      <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
-                    </Pressable>
-                  )}
-                </>
-              )}
-            </View>
-          ) : null}
-
-          {tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
-            <MerchantAccessBlockedCard
-              status={merchantAccess.status}
-              reason={merchantAccess.reason}
-              businessId={businessId}
-              canActivateTrialCheckout={merchantAccess.canActivateTrialCheckout}
-            />
-          ) : null}
-
-          {mobileBillingEnabled && tabMode === "business" && businessId ? (
-            <Pressable
-              onPress={() => router.push("/(tabs)/account/billing" as Href)}
-              accessibilityRole="button"
-            >
-              <CardShell variant="elevated">
-                <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>{t("account.billingRowTitle")}</Text>
-                <Text style={{ marginTop: 6, opacity: 0.7, fontSize: 14, lineHeight: 20, color: theme.text }}>
-                  {t("account.billingRowSubtitle")}
-                </Text>
-                <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
-                  {t("billing.goToBilling", { defaultValue: "Open billing" })} →
-                </Text>
-              </CardShell>
-            </Pressable>
-          ) : null}
-
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.md,
-              padding: Spacing.md,
-              gap: Spacing.xs,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
-              {t("language.sectionApp")}
-            </Text>
-            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-              {t("language.sectionAppHelp")}
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
-              {localeChip(t("language.english"), "en", currentAppLocale === "en", () => chooseAppLocale("en"))}
-              {localeChip(t("language.spanish"), "es", currentAppLocale === "es", () => chooseAppLocale("es"))}
-              {localeChip(t("language.korean"), "ko", currentAppLocale === "ko", () => chooseAppLocale("ko"))}
-            </View>
-          </View>
-
-          <ThemePreferenceSelector />
-
-          {tabMode !== "business" ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
-                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                  {t("account.dealAlertsTitle")}
-                </Text>
-                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                  {t("account.dealAlertsSubtitle")}
-                </Text>
-              </View>
-              <BrandedSwitch
-                value={alertsEnabled}
-                onValueChange={toggleAlerts}
-                disabled={alertsLoading}
-                accessibilityRole="switch"
-                accessibilityLabel={t("account.dealAlertsTitle")}
-                accessibilityHint={t("account.dealAlertsA11yHint")}
-                accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
-              />
-            </View>
-          ) : null}
-
-          {bizClaimNotif !== null ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
-                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                  {t("account.bizClaimNotifTitle")}
-                </Text>
-                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                  {t("account.bizClaimNotifSubtitle")}
-                </Text>
-              </View>
-              <BrandedSwitch
-                value={bizClaimNotif}
-                onValueChange={(v) => void toggleBizClaimNotif(v)}
-                disabled={bizClaimNotifSaving}
-                accessibilityRole="switch"
-                accessibilityLabel={t("account.bizClaimNotifTitle")}
-                accessibilityHint={t("account.bizClaimNotifA11yHint")}
-                accessibilityState={getSwitchAccessibilityState(bizClaimNotif, bizClaimNotifSaving)}
-              />
-            </View>
-          ) : null}
-
-          {promoAuth !== null ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
-                <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                  {t("account.promoAuthTitle")}
-                </Text>
-                <Text style={{ opacity: 0.7, marginTop: 3, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                  {promoAuth ? t("account.promoAuthStatusOn") : t("account.promoAuthStatusOff")}
-                </Text>
-              </View>
-              <BrandedSwitch
-                value={promoAuth}
-                onValueChange={(v) => togglePromoAuth(v)}
-                disabled={promoAuthSaving}
-                accessibilityRole="switch"
-                accessibilityLabel={t("account.promoAuthTitle")}
-                accessibilityState={getSwitchAccessibilityState(promoAuth, promoAuthSaving)}
-              />
-            </View>
-          ) : null}
-
-          {repeatPolicyAvailable ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                gap: Spacing.xs,
-                backgroundColor: theme.surface,
-              }}
-            >
-              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
-              </Text>
-              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 17 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                {t("account.repeatPolicyHelp", {
-                  defaultValue: "Limit repeat claims when you want more first-time customers.",
-                })}
-              </Text>
-              {repeatPolicyOption(
-                "NONE",
-                t("account.repeatPolicyNone", { defaultValue: "No limit" }),
-              )}
-              {repeatPolicyOption(
-                "COOLDOWN_DAYS",
-                t("account.repeatPolicyCooldown", { defaultValue: "Claim again after X days" }),
-                t("account.repeatPolicyCooldownHelp", {
-                  defaultValue: "Redeemed customers wait this many days before claiming again.",
-                }),
-              )}
-              {repeatPolicyType === "COOLDOWN_DAYS" ? (
-                <View style={{ gap: 6 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-                    <TextInput
-                      value={repeatCooldownDays}
-                      onChangeText={(value) => setRepeatCooldownDays(value.replace(/\D/g, "").slice(0, 3))}
-                      keyboardType="number-pad"
-                      accessibilityLabel={t("account.repeatPolicyCooldownInputA11y", {
-                        defaultValue: "Repeat customer cooldown days",
-                      })}
-                      style={{
-                        width: 76,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: Radii.sm,
-                        paddingHorizontal: Spacing.sm,
-                        paddingVertical: 8,
-                        color: theme.text,
-                        backgroundColor: theme.surface,
-                        fontWeight: "700",
-                        textAlign: "center",
-                      }}
-                    />
-                    <Text style={{ color: theme.text, fontWeight: "700" }}>
-                      {t("account.repeatPolicyDays", { defaultValue: "days" })}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-              {repeatPolicyOption(
-                "FOREVER",
-                t("account.repeatPolicyForever", {
-                  defaultValue: "Claim once ever",
-                }),
-                t("account.repeatPolicyForeverHelp", {
-                  defaultValue: "After one redemption, that customer cannot claim another deal here.",
-                }),
-              )}
-              <SecondaryButton
-                title={
-                  repeatPolicySaving
-                    ? t("account.repeatPolicySaving", { defaultValue: "Saving..." })
-                    : t("account.repeatPolicySave", { defaultValue: "Save repeat limit" })
-                }
-                onPress={() => void saveRepeatPolicy()}
-                disabled={repeatPolicySaving}
-                style={{ minHeight: 44, paddingVertical: 8 }}
-              />
-            </View>
-          ) : null}
-
-          <RedemptionModeSettings businessId={businessId} businessName={businessName} />
-
-          {businessId ? (
-            <View
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: Radii.md,
-                padding: Spacing.md,
-                borderWidth: 1,
-                borderColor: theme.border,
-                gap: Spacing.xs,
-              }}
-            >
-              <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
-                {t("language.sectionBusiness")}
-              </Text>
-              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                {t("language.sectionBusinessHelp")}
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 2 }}>
-                <SelectableChip
-                  variant="chip"
-                  label={t("language.useAppLanguage")}
-                  selected={profilePreferredLocale == null}
-                  onPress={() => setProfilePreferredLocale(null)}
-                  style={{ marginRight: 6, marginBottom: 6, maxWidth: "100%" }}
-                />
-                {(["en", "es", "ko"] as const).map((loc) => (
-                  <SelectableChip
-                    key={loc}
-                    variant="chip"
-                    label={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
-                    selected={profilePreferredLocale === loc}
-                    onPress={() => setProfilePreferredLocale(loc)}
-                    style={{ marginRight: 6, marginBottom: 6 }}
-                  />
-                ))}
-              </View>
-
-              <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text, marginTop: 4 }} maxFontSizeMultiplier={1.08}>
-                {t("account.bizProfileHeader")}
-              </Text>
-              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
-                {t("account.bizProfileHelp")}
-              </Text>
-              <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: 6, alignSelf: "flex-start" }}>
-                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
-                  {bizProfileExpanded ? t("account.collapseBizProfile") : t("account.expandBizProfile")}
-                </Text>
-              </Pressable>
-              {bizProfileExpanded ? (
-                <>
-                  <View>
-                    <ProfileFieldLabel
-                      label={t("account.fieldBusinessName")}
-                      required
-                      requiredText={requiredFieldLabel}
-                      optionalText={optionalFieldLabel}
-                      theme={theme}
-                    />
-                <TextInput
-                  ref={profileBusinessNameRef}
-                  value={profileBusinessName}
-                  onChangeText={setProfileBusinessName}
-                  placeholder={t("account.phBusinessName")}
-                  autoCapitalize="words"
-                  editable={!savingProfile && !bizNameLocked}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: profileNameMissing ? theme.danger : theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile || bizNameLocked ? theme.surfaceMuted : undefined,
-                  }}
-                />
-                {bizNameLocked ? (
-                  <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.6, color: theme.text }}>
-                    {t("businessSetup.nameChange.lockedHint")}
-                  </Text>
-                ) : null}
-                {profileNameMissing ? <ProfileFieldError message={t("account.errBizNameRequired")} theme={theme} /> : null}
-              </View>
-
-              {bizNameLocked && businessId && userId ? (
-                <BusinessNameChangeCard
-                  businessId={businessId}
-                  userId={userId}
-                  currentName={profileBusinessName.trim() || null}
-                />
-              ) : null}
-
-              {!bizNameLocked && (
-                <SecondaryButton
-                  title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
-                  onPress={() => void lookupBusinessProfileByName()}
-                  disabled={lookupSearching || lookupDetailsPlaceId !== null || !profileBusinessName.trim()}
-                />
-              )}
-
-              {lookupResults && lookupResults.length > 0 && (
-                <View style={{ gap: Spacing.sm }}>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
-                    {t("businessSetup.selectResult")}
-                  </Text>
-                  {lookupResults.map((r, i) => (
-                    <Pressable
-                      key={r.place_id || i}
-                      onPress={() => void applyBusinessLookupResult(r)}
-                    >
-                      <View
-                        style={{
-                          backgroundColor: theme.surface,
-                          borderRadius: Radii.lg,
-                          padding: Spacing.md,
-                          borderWidth: 1,
-                          borderColor: theme.border,
-                        }}
-                      >
-                        <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
-                        <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
-                        {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
-                        <Text style={{ fontSize: 11, color: theme.accentText, marginTop: 4 }}>
-                          {t("businessSetup.verifiedSource")}
-                        </Text>
-                        {lookupDetailsPlaceId === r.place_id ? (
-                          <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.xs }} />
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldContactName")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileContactName}
-                  onChangeText={setProfileContactName}
-                  placeholder={t("account.phContactName")}
-                  autoCapitalize="words"
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldBusinessEmail")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  ref={profileBusinessEmailRef}
-                  value={profileBusinessEmail}
-                  onChangeText={setProfileBusinessEmail}
-                  placeholder={t("account.phBusinessEmail")}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoCorrect={false}
-                  textContentType="emailAddress"
-                  autoComplete="email"
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: profileBusinessEmailInvalid ? theme.danger : theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-                {profileBusinessEmailInvalid ? <ProfileFieldError message={t("account.errBizEmailInvalid")} theme={theme} /> : null}
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldAddress")}
-                  required
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  ref={profileAddressRef}
-                  value={profileAddress}
-                  onChangeText={setProfileAddress}
-                  placeholder={t("account.phAddress")}
-                  autoCapitalize="words"
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: profileAddressMissing ? theme.danger : theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-                {profileAddressMissing ? <ProfileFieldError message={t("account.errBizAddressRequired")} theme={theme} /> : null}
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldPhone")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profilePhone}
-                  onChangeText={setProfilePhone}
-                  placeholder={t("account.phPhone")}
-                  keyboardType="phone-pad"
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldCategory")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileCategory}
-                  onChangeText={setProfileCategory}
-                  placeholder={t("account.phCategory")}
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldHours")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileHours}
-                  onChangeText={setProfileHours}
-                  placeholder={t("account.phHours")}
-                  multiline
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    minHeight: 56,
-                    textAlignVertical: "top",
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldTone")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileTone}
-                  onChangeText={setProfileTone}
-                  placeholder={t("account.phTone")}
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldLocation")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileLocation}
-                  onChangeText={setProfileLocation}
-                  placeholder={t("account.phLocation")}
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldLatLng")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <Text style={{ color: theme.mutedText, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
-                  {t("account.fieldLatLngHelp")}
-                </Text>
-                <TextInput
-                  value={profileLatitude}
-                  onChangeText={setProfileLatitude}
-                  placeholder={t("account.phLat")}
-                  keyboardType="numbers-and-punctuation"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 6,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-                <TextInput
-                  value={profileLongitude}
-                  onChangeText={setProfileLongitude}
-                  placeholder={t("account.phLng")}
-                  keyboardType="numbers-and-punctuation"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 8,
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-              </View>
-              <View>
-                <ProfileFieldLabel
-                  label={t("account.fieldShortDescription")}
-                  requiredText={requiredFieldLabel}
-                  optionalText={optionalFieldLabel}
-                  theme={theme}
-                />
-                <TextInput
-                  value={profileShortDescription}
-                  onChangeText={setProfileShortDescription}
-                  placeholder={t("account.phShortDescription")}
-                  multiline
-                  editable={!savingProfile}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    marginTop: 4,
-                    minHeight: 72,
-                    textAlignVertical: "top",
-                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
-                  }}
-                />
-                <SecondaryButton
-                  title={generatingDescription ? t("account.aiDescGenerating") : t("account.aiDescGenerate")}
-                  onPress={() => void generateAiDescription()}
-                  disabled={generatingDescription}
-                />
-                <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16 }}>
-                  {t("account.aiDescDraftHelp", {
-                    defaultValue: "AI fills this draft field only. Save your business profile to publish it.",
-                  })}
-                </Text>
-              </View>
-                  <PrimaryButton
-                    title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
-                    onPress={saveBusinessProfile}
-                    disabled={savingProfile}
-                  />
-                </>
-              ) : null}
-            </View>
-          ) : null}
-
-          {businessId ? (
-            <SecondaryButton
-              title={t("account.businessDashboard")}
-              onPress={() => router.push("/(tabs)/dashboard")}
-              style={{ minHeight: 44, paddingVertical: 8 }}
-            />
-          ) : (
-            <View
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-              }}
-            >
-              <Text style={{ color: theme.text, fontWeight: "700" }}>{t("account.createBizCardTitle")}</Text>
-              <Text style={{ color: theme.mutedText, marginTop: 6 }}>{t("account.createBizCardBody")}</Text>
-              <View style={{ marginTop: 10 }}>
-                <PrimaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
-              </View>
-            </View>
-          )}
-
-          <Pressable
-            onPress={() => setAdvancedOpen((v) => !v)}
-            style={{ paddingVertical: 6, alignSelf: "flex-start" }}
-          >
-            <Text style={{ fontWeight: "800", color: theme.accentText, fontSize: 14, lineHeight: 18 }} maxFontSizeMultiplier={1.08}>
-              {advancedOpen ? "− " : "+ "}
-              {t("account.advancedOptions")}
-            </Text>
-          </Pressable>
-
-          {advancedOpen ? (
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                gap: Spacing.sm,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: theme.text }}>{t("legal.sectionTitle")}</Text>
-              <LegalExternalLinks />
-            </View>
-          ) : null}
-
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: colorScheme === "dark" ? "rgba(248,113,113,0.34)" : "#FECACA",
-              borderRadius: Radii.md,
-              padding: Spacing.md,
-              gap: Spacing.xs,
-              backgroundColor: colorScheme === "dark" ? "rgba(248,113,113,0.12)" : "#FEF2F2",
-            }}
-          >
-            <Text
-              style={{
-                fontWeight: "800",
-                fontSize: 16,
-                lineHeight: 20,
-                color: colorScheme === "dark" ? theme.dangerText : "#B91C1C",
-              }}
-              maxFontSizeMultiplier={1.08}
-            >
-              {t("deleteAccount.sectionTitle")}
-            </Text>
-            <Text style={{ fontSize: 12, lineHeight: 16, opacity: 0.85, color: colorScheme === "dark" ? theme.mutedText : Gray[600] }} numberOfLines={3} maxFontSizeMultiplier={1.08}>
-              {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
-            </Text>
-            <SecondaryButton
-              title={t("deleteAccount.cta")}
-              onPress={startDeleteAccount}
-              disabled={busy || loading}
-              style={{
-                minHeight: 44,
-                paddingVertical: 8,
-                marginTop: Spacing.xs,
-                borderColor: theme.danger,
-                backgroundColor: "transparent",
-              }}
-              textStyle={{ color: theme.danger }}
-            />
-          </View>
+          {cardYourBusiness}
+          {cardBusinessProfile}
+          {cardMerchantBlocked}
+          {cardBilling}
+          {cardCreateBusinessPrompt}
+          {cardRedemptionMode}
+          {cardDealAlerts}
+          {cardClaimNotif}
+          {cardPromoAuth}
+          {cardRepeatPolicy}
+          {cardAppLanguage}
+          {cardAiLanguage}
+          {cardTheme}
+          {cardSupport}
+          {cardAdvanced}
+          {cardLoggedIn}
+          {cardDeleteAccount}
         </ScrollView>
       )}
       {businessProfileDirty ? (

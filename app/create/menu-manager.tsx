@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { formatMenuPriceLabel } from "@/lib/display-format";
 import { getMenuManagerViewState } from "@/lib/menu-manager-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
+import { splitMenuItemDescription } from "@/lib/menu-item-text";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
@@ -34,12 +39,49 @@ type Row = {
 
 export default function MenuManagerScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const params = useLocalSearchParams<{ add?: string }>();
   const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+
+  // A6: this screen renders its own compact ScreenHeader (matching
+  // deal-analytics/account/dashboard) instead of the native stack header,
+  // which left a large gap before the first body copy.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/create" as Href);
+    }
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        goBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goBack]),
+  );
+
+  function renderBackAction() {
+    return (
+      <Pressable
+        onPress={goBack}
+        accessibilityRole="button"
+        accessibilityLabel={t("commonUi.goBack")}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: Radii.lg }}
+      >
+        <MaterialIcons name="arrow-back" size={22} color={theme.text} />
+      </Pressable>
+    );
+  }
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -154,8 +196,11 @@ export default function MenuManagerScreen() {
 
   if (bizLoading) {
     return (
-      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
-        <ActivityIndicator color={theme.primary} />
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+        <ScreenHeader title={t("menuManager.title")} leftSlot={renderBackAction()} />
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator color={theme.primary} />
+        </View>
       </View>
     );
   }
@@ -163,26 +208,32 @@ export default function MenuManagerScreen() {
   if (!businessId) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
-        <Text style={{ color: theme.text }}>{t("menuScan.needBusiness")}</Text>
+        <ScreenHeader title={t("menuManager.title")} leftSlot={renderBackAction()} />
+        <Text style={{ color: theme.text, marginTop: Spacing.md }}>{t("menuScan.needBusiness")}</Text>
       </View>
     );
   }
 
   return (
     <KeyboardScreen style={{ backgroundColor: theme.background }}>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={{
-          paddingHorizontal: horizontal,
-          paddingTop: Spacing.xxxl,
-          paddingBottom: scrollBottom,
-          gap: Spacing.md,
-        }}
-        {...FORM_SCROLL_KEYBOARD_PROPS}
-      >
-        <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuManager.subtitle")}</Text>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+        <ScreenHeader title={t("menuManager.title")} subtitle={t("menuManager.subtitle")} leftSlot={renderBackAction()} />
+        <ScrollView
+          style={{ flex: 1, marginTop: Spacing.md }}
+          contentContainerStyle={{
+            paddingBottom: scrollBottom,
+            gap: Spacing.md,
+          }}
+          {...FORM_SCROLL_KEYBOARD_PROPS}
+        >
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {loadErr ? <Banner message={loadErr} tone="error" /> : null}
+
+        {/* B8: primary action (Add item) comes before the secondary Show
+            archived toggle. */}
+        {!showArchived && !adding && !menuState.isActiveEmpty ? (
+          <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
+        ) : null}
 
         <SecondaryButton
           title={showArchived ? t("menuManager.hideArchived") : t("menuManager.showArchived")}
@@ -192,10 +243,6 @@ export default function MenuManagerScreen() {
             setEditingId(null);
           }}
         />
-
-        {!showArchived && !adding && !menuState.isActiveEmpty ? (
-          <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
-        ) : null}
 
         {adding ? (
           <View style={{ gap: Spacing.sm }}>
@@ -362,10 +409,21 @@ export default function MenuManagerScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{r.name}</Text>
-                  {r.category ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.category}</Text> : null}
-                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{formatMenuPriceLabel(r.price_text)}</Text> : null}
-                  {r.description ? <Text style={{ opacity: 0.8, color: theme.text }}>{r.description}</Text> : null}
+                  {/* B8: split the same way menu-offer.tsx does, so a menu item
+                      presents identically on both screens instead of running
+                      the name and description together as one title. */}
+                  {(() => {
+                    const split = splitMenuItemDescription(r.name);
+                    const displayDescription = r.description?.trim() || split.description;
+                    return (
+                      <>
+                        <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{split.name}</Text>
+                        {r.category ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.category}</Text> : null}
+                        {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{formatMenuPriceLabel(r.price_text)}</Text> : null}
+                        {displayDescription ? <Text style={{ opacity: 0.8, color: theme.text }}>{displayDescription}</Text> : null}
+                      </>
+                    );
+                  })()}
                   <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
                     <Pressable onPress={() => startEdit(r)}>
                       <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("menuManager.edit")}</Text>
@@ -380,7 +438,8 @@ export default function MenuManagerScreen() {
               )}
             </View>
           ))}
-      </ScrollView>
+        </ScrollView>
+      </View>
     </KeyboardScreen>
   );
 }

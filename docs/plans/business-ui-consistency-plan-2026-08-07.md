@@ -1,7 +1,11 @@
 # Business (merchant) UI consistency + clutter plan
 
 Date: 2026-08-07
-Status: PROPOSED — no code written yet. Needs founder sign-off on §Decisions.
+Status: IMPLEMENTED — workstreams 1–4 shipped 2026-08-07 (17495bdf, 90aea54c,
+903f4329, and this commit), each device-verified on the S10 in dark mode.
+ONE item remains open and FOUNDER-GATED: the B4 **server-side** timezone fix
+(prod migration; see B4). A4 was retracted as not-a-bug before any code was
+written; B10 was closed by decision #5.
 Source: full screenshot audit of every reachable business screen on the S10
 (dark mode, `test2@test.com` / Cedar & Bean Cafe). Evidence files are
 `biz01`–`biz12`, `dm_*` in the session scratchpad.

@@ -205,6 +205,7 @@ export default function CreateDeal() {
     onPress,
     accent = false,
     trailingIcon = "chevron-right",
+    accessibilityState,
   }: {
     title: string;
     subtitle: string;
@@ -212,11 +213,13 @@ export default function CreateDeal() {
     onPress: () => void;
     accent?: boolean;
     trailingIcon?: MaterialIconName;
+    accessibilityState?: { expanded?: boolean };
   }) {
     return (
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityState={accessibilityState}
         accessibilityLabel={`${title}. ${subtitle}`}
         style={{
           minHeight: 88,
@@ -273,6 +276,12 @@ export default function CreateDeal() {
     );
   }
 
+  // B5: the hub used to draw two visually different row species (a tinted
+  // icon tile for the top three rows vs. a bare-icon "compact" row for Menu
+  // library / Templates), producing a ragged left edge in one five-row list.
+  // renderCompactAction is now a thin alias onto renderHubAction so every
+  // row in the hub shares one treatment; kept as its own named function
+  // (rather than inlining the call) so call sites below stay unchanged.
   function renderCompactAction({
     title,
     subtitle,
@@ -288,39 +297,7 @@ export default function CreateDeal() {
     trailingIcon?: MaterialIconName;
     accessibilityState?: { expanded?: boolean };
   }) {
-    return (
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityState={accessibilityState}
-        accessibilityLabel={`${title}. ${subtitle}`}
-        style={{
-          minHeight: 64,
-          borderRadius: Radii.md,
-          padding: Spacing.md,
-          backgroundColor: theme.surface,
-          borderWidth: 1,
-          borderColor: theme.border,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.md,
-        }}
-      >
-        <MaterialIcons name={iconName} size={23} color={theme.accentText} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text
-            style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18, marginTop: 2 }}
-            numberOfLines={2}
-          >
-            {subtitle}
-          </Text>
-        </View>
-        <MaterialIcons name={trailingIcon} size={22} color={theme.icon} />
-      </Pressable>
-    );
+    return renderHubAction({ title, subtitle, iconName, onPress, trailingIcon, accessibilityState });
   }
 
   const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
@@ -495,16 +472,16 @@ export default function CreateDeal() {
                     })}
                     style={{ padding: Spacing.md }}
                   >
+                    {/* A8: no thumbnail -> no reserved image box; the text just
+                        fills the width instead of sitting under a blank rectangle. */}
                     {tplPoster ? (
                       <Image
                         source={{ uri: tplPoster }}
                         style={{ height: 140, width: "100%", borderRadius: 14 }}
                         contentFit="cover"
                       />
-                    ) : (
-                      <View style={{ height: 140, borderRadius: 14, backgroundColor: theme.surfaceMuted }} />
-                    )}
-                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16, color: theme.text }}>{tplTitle}</Text>
+                    ) : null}
+                    <Text style={{ marginTop: tplPoster ? Spacing.md : 0, fontWeight: "700", fontSize: 16, color: theme.text }}>{tplTitle}</Text>
                     {tpl.price != null ? (
                       <Text style={{ marginTop: Spacing.xs, color: theme.mutedText, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
                     ) : null}
@@ -516,9 +493,30 @@ export default function CreateDeal() {
                       paddingHorizontal: Spacing.md,
                       paddingBottom: Spacing.md,
                       paddingTop: Spacing.sm,
-                      alignItems: "flex-end",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: Spacing.sm,
                     }}
                   >
+                    {/* B9: the primary intent (use this template) now has a visible,
+                        left-aligned affordance; Delete stays the secondary, outlined
+                        action per A3 — never the loudest control on the card. */}
+                    <Pressable
+                      onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("reuseHub.useTemplateA11y", {
+                        defaultValue: "Use template {{title}}",
+                        title: tplTitle,
+                      })}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 2, minHeight: 44 }}
+                    >
+                      <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>
+                        {t("reuseHub.useTemplate", { defaultValue: "Use template" })}
+                      </Text>
+                      <MaterialIcons name="chevron-right" size={18} color={theme.accentText} />
+                    </Pressable>
                     <Pressable
                       onPress={() => confirmDeleteTemplate(tpl)}
                       disabled={deletingTemplateId !== null}
@@ -535,9 +533,9 @@ export default function CreateDeal() {
                         flexDirection: "row",
                         alignItems: "center",
                         gap: Spacing.xs,
-                        backgroundColor: theme.surfaceMuted,
+                        backgroundColor: "transparent",
                         borderWidth: 1,
-                        borderColor: theme.border,
+                        borderColor: theme.danger,
                         opacity: deletingTemplateId === tpl.id ? 0.45 : 1,
                       }}
                     >

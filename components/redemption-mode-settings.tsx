@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View, type TextInputProps } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -367,9 +368,11 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
             {t("redemptionMode.settingsSubtitle", { defaultValue: "Staff-only redemption device." })}
           </Text>
         </View>
-        <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 18 }} maxFontSizeMultiplier={1.08}>
-          {open ? "-" : "+"}
-        </Text>
+        <MaterialIcons
+          name={open ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+          size={24}
+          color={theme.icon}
+        />
       </Pressable>
 
       {open ? (

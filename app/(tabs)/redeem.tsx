@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Radii } from "@/constants/theme";
+import { CardShell } from "@/components/ui/card-shell";
 import { ReportSheet } from "@/components/report-sheet";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { submitUserReport, type UserReportReason } from "@/lib/reports";
@@ -521,40 +522,45 @@ export default function RedeemScanner() {
               </Text>
             </View>
           ) : !permission.granted ? (
-            <View style={{ gap: Spacing.md }}>
-              <Text style={{ opacity: 0.7, color: theme.text }}>
-                {cameraPermissionBlocked
-                  ? t("redeem.cameraBlocked", {
-                      defaultValue:
-                        "Camera access is blocked. Open Android settings to allow camera, or enter the ticket code instead.",
-                    })
-                  : t("redeem.cameraRequired")}
-              </Text>
-              {cameraPermissionError ? <Banner message={cameraPermissionError} tone="error" /> : null}
-              <PrimaryButton
-                title={
-                  cameraPermissionBlocked
-                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
-                    : cameraPermissionRequesting
-                      ? t("redeem.requestingCamera")
-                      : t("redeem.grantPermission")
-                }
-                accessibilityLabel={
-                  cameraPermissionBlocked
-                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
-                    : t("redeem.grantPermission")
-                }
-                testID={cameraPermissionBlocked ? "redeem-open-camera-settings" : "redeem-grant-camera-permission"}
-                onPress={() => {
-                  if (cameraPermissionBlocked) {
-                    void openCameraSettings();
-                    return;
+            // B7 (minimal): the only change on this screen — the camera-permission
+            // status message now sits in a card like every other status message
+            // in the app, instead of as naked text on the background.
+            <CardShell>
+              <View style={{ gap: Spacing.md }}>
+                <Text style={{ opacity: 0.7, color: theme.text }}>
+                  {cameraPermissionBlocked
+                    ? t("redeem.cameraBlocked", {
+                        defaultValue:
+                          "Camera access is blocked. Open Android settings to allow camera, or enter the ticket code instead.",
+                      })
+                    : t("redeem.cameraRequired")}
+                </Text>
+                {cameraPermissionError ? <Banner message={cameraPermissionError} tone="error" /> : null}
+                <PrimaryButton
+                  title={
+                    cameraPermissionBlocked
+                      ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
+                      : cameraPermissionRequesting
+                        ? t("redeem.requestingCamera")
+                        : t("redeem.grantPermission")
                   }
-                  void requestCameraAccess();
-                }}
-                disabled={cameraPermissionRequesting}
-              />
-            </View>
+                  accessibilityLabel={
+                    cameraPermissionBlocked
+                      ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
+                      : t("redeem.grantPermission")
+                  }
+                  testID={cameraPermissionBlocked ? "redeem-open-camera-settings" : "redeem-grant-camera-permission"}
+                  onPress={() => {
+                    if (cameraPermissionBlocked) {
+                      void openCameraSettings();
+                      return;
+                    }
+                    void requestCameraAccess();
+                  }}
+                  disabled={cameraPermissionRequesting}
+                />
+              </View>
+            </CardShell>
           ) : (
             <>
               {!scannerActive ? (

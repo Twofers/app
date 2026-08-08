@@ -67,10 +67,13 @@ export default function CreateLayout() {
             (`quick`, `ai-compose`) last — a shim as the fallback route renders
             "Redirecting..." and immediately navigates again. */}
         <Stack.Screen name="ai" options={{ title: t('createAi.titleScreen') }} />
-        <Stack.Screen name="reuse" options={{ title: t('reuseHub.title') }} />
+        {/* A6: reuse and menu-manager render their own in-body ScreenHeader
+            (matching deal-analytics/account/dashboard) instead of the native
+            header, which left a large gap before the first body copy. */}
+        <Stack.Screen name="reuse" options={{ title: t('reuseHub.title'), headerShown: false }} />
         <Stack.Screen name="menu" options={{ title: t("createHub.menuTitle") }} />
         <Stack.Screen name="menu-scan" options={{ title: t('menuScan.title') }} />
-        <Stack.Screen name="menu-manager" options={{ title: t('menuManager.title') }} />
+        <Stack.Screen name="menu-manager" options={{ title: t('menuManager.title'), headerShown: false }} />
         <Stack.Screen name="menu-offer" options={{ title: t('menuOffer.title') }} />
         <Stack.Screen name="ad-refine" options={{ title: t('adRefine.title') }} />
         <Stack.Screen name="quick" options={{ title: t('createAi.titleScreen') }} />

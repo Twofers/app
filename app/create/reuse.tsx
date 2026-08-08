@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { BackHandler, Platform, ScrollView, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -8,12 +8,13 @@ import { supabase } from "@/lib/supabase";
 import { useBusiness } from "@/hooks/use-business";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { localizedDealTitle } from "@/lib/deal-localization";
@@ -109,6 +110,39 @@ export default function ReuseDealScreen() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const { confirm, confirmModal } = useBrandedConfirm();
 
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/create" as Href);
+    }
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        goBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goBack]),
+  );
+
+  function renderBackAction() {
+    return (
+      <Pressable
+        onPress={goBack}
+        accessibilityRole="button"
+        accessibilityLabel={t("commonUi.goBack")}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: Radii.lg }}
+      >
+        <MaterialIcons name="arrow-back" size={22} color={theme.text} />
+      </Pressable>
+    );
+  }
+
   const load = useCallback(async () => {
     if (!businessId) return;
     setErr(null);
@@ -194,9 +228,8 @@ export default function ReuseDealScreen() {
   }
 
   return (
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      {/* The stack header already shows the screen title; only the subtitle renders in-page. */}
-      <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>{t("reuseHub.subtitle")}</Text>
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+      <ScreenHeader title={t("reuseHub.title")} subtitle={t("reuseHub.subtitle")} leftSlot={renderBackAction()} />
       {err ? <Banner message={err} tone="error" /> : null}
 
       {!isLoggedIn || loading ? (
@@ -247,7 +280,20 @@ export default function ReuseDealScreen() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: theme.surfaceElevated }} />
+                      // A8: no thumbnail -> a compact icon tile at row size, never a
+                      // blank rectangle reserved for an image that isn't coming.
+                      <View
+                        style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: 12,
+                          backgroundColor: theme.surfaceElevated,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <MaterialIcons name="local-offer" size={26} color={theme.icon} />
+                      </View>
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ color: theme.text, fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
