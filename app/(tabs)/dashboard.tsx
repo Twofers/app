@@ -13,6 +13,7 @@ import {
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { format, startOfDay, startOfMonth, subDays } from "date-fns";
@@ -443,63 +444,45 @@ function SnapshotMetric({
   );
 }
 
-function DealStatPill({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
-  const theme = Colors[colorScheme];
-  return (
-    <View
-      style={{
-        flexGrow: 1,
-        flexBasis: "22%",
-        minWidth: 0,
-        borderRadius: Radii.md,
-        backgroundColor: accent
-          ? colorScheme === "dark"
-            ? "rgba(255,159,28,0.18)"
-            : "rgba(255,159,28,0.14)"
-          : theme.surfaceMuted,
-        borderWidth: 1,
-        borderColor: accent ? "rgba(255,159,28,0.34)" : theme.border,
-        paddingHorizontal: 7,
-        paddingVertical: 6,
-      }}
-    >
-      <Text
-        style={{ fontSize: 10, lineHeight: 12, fontWeight: "800", color: theme.mutedText }}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.62}
-        maxFontSizeMultiplier={1}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          marginTop: 2,
-          fontSize: 13,
-          lineHeight: 16,
-          fontWeight: "900",
-          color: accent ? theme.accentText : theme.text,
-        }}
-        // Wrap short word values ("No claims") to a second line so they stay at a
-        // legible size instead of shrinking to fit one line next to numeric pills.
-        numberOfLines={2}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-        maxFontSizeMultiplier={1.05}
-      >
-        {value}
-      </Text>
-    </View>
-  );
+// B1: one compact inline metrics line replaces the deal card's four stacked
+// tiles. Same numbers, same semantics as before — only the presentation and
+// the omission of zero-value segments changed.
+function dealMetricsLine(
+  item: Pick<DealRow, "claims" | "redeems" | "expiredUnredeemed" | "conversion">,
+  t: TFunction,
+): string {
+  if (item.claims === 0) {
+    return t("offersDashboard.dealMetricsNoClaims", { defaultValue: "No claims yet" });
+  }
+  const parts: string[] = [
+    t("offersDashboard.dealMetricsClaims", {
+      defaultValue: "{{count}} claims",
+      count: item.claims,
+    }),
+  ];
+  if (item.redeems > 0) {
+    parts.push(
+      t("offersDashboard.dealMetricsRedeemed", {
+        defaultValue: "{{count}} redeemed",
+        count: item.redeems,
+      }),
+    );
+    parts.push(
+      t("offersDashboard.dealMetricsRate", {
+        defaultValue: "{{percent}}%",
+        percent: item.conversion,
+      }),
+    );
+  }
+  if (item.expiredUnredeemed > 0) {
+    parts.push(
+      t("offersDashboard.dealMetricsExpired", {
+        defaultValue: "{{count}} expired",
+        count: item.expiredUnredeemed,
+      }),
+    );
+  }
+  return parts.join(" · ");
 }
 
 function ScrollFilterRow({
@@ -579,6 +562,17 @@ export default function BusinessDashboard() {
   const [exportingAnalytics, setExportingAnalytics] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const dashboardFocused = useIsFocused();
+  // B2: collapse the header subtitle once the user has scrolled roughly past
+  // the first card so the pinned header stops wasting space (and stops
+  // showing a stale "at a glance" line) deep in a long deal list.
+  const [headerSubtitleCollapsed, setHeaderSubtitleCollapsed] = useState(false);
+  const handleDashboardScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const y = e.nativeEvent.contentOffset.y;
+      setHeaderSubtitleCollapsed((prev) => (prev ? y > 160 : y > 200));
+    },
+    [],
+  );
 
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -1149,17 +1143,22 @@ export default function BusinessDashboard() {
     [deals],
   );
 
+  // This tile is polymorphic — it shows opens, else a redemption PERCENTAGE,
+  // else a waiting state. The label has to travel with the value: a fixed
+  // "Deal opens" would render "Deal opens: 50%" for a merchant with claims but
+  // no opens. (The generic "Engagement" it used to carry was accurate but made
+  // the tile read as a duplicate of Claims when both showed the same count.)
   const engagementSnapshot = useMemo(() => {
     if (monthOpens > 0) {
       return {
+        label: t("offersDashboard.metricEngagement", { defaultValue: "Deal opens" }),
         value: String(monthOpens),
-        sublabel: t("offersDashboard.engagementOpensSub", {
-          defaultValue: "Deal opens this month",
-        }),
+        sublabel: t("offersDashboard.metricMonthToDate", { defaultValue: "This month" }),
       };
     }
     if (monthClaims > 0) {
       return {
+        label: t("offersDashboard.dealStatConversion", { defaultValue: "Redeem rate" }),
         value: `${monthRedemptionPct}%`,
         sublabel: t("offersDashboard.engagementRedemptionSub", {
           defaultValue: "Claims redeemed this month",
@@ -1167,6 +1166,7 @@ export default function BusinessDashboard() {
       };
     }
     return {
+      label: t("offersDashboard.metricEngagementWaiting", { defaultValue: "Engagement" }),
       value: t("offersDashboard.engagementWaitingValue", {
         defaultValue: "Waiting",
       }),
@@ -1258,7 +1258,7 @@ export default function BusinessDashboard() {
         <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
         {banner ? <Banner message={banner} tone="error" onRetry={() => void loadMetrics()} /> : null}
         <CardShell>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
+          <View>
             <View style={{ flex: 1 }}>
               <Text
                 style={{ fontSize: 18, lineHeight: 23, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}
@@ -1282,29 +1282,6 @@ export default function BusinessDashboard() {
               </Text>
               <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 16, fontWeight: "700", color: theme.mutedText }} maxFontSizeMultiplier={1.1}>
                 {lastUpdatedLabel}
-              </Text>
-            </View>
-            <View
-              style={{
-                borderRadius: Radii.pill,
-                backgroundColor: liveDeals.length > 0 ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
-                borderWidth: 1,
-                borderColor: liveDeals.length > 0 ? "rgba(255,159,28,0.36)" : theme.border,
-                paddingHorizontal: Spacing.md,
-                paddingVertical: 7,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "900",
-                  color: liveDeals.length > 0 ? theme.accentText : theme.mutedText,
-                }}
-              >
-                {t("offersDashboard.liveDealCount", {
-                  defaultValue: "{{count}} live",
-                  count: liveDeals.length,
-                })}
               </Text>
             </View>
           </View>
@@ -1336,7 +1313,7 @@ export default function BusinessDashboard() {
               sublabel={t("offersDashboard.metricMonthToDate", { defaultValue: "This month" })}
             />
             <SnapshotMetric
-              label={t("offersDashboard.metricEngagement", { defaultValue: "Engagement" })}
+              label={engagementSnapshot.label}
               value={engagementSnapshot.value}
               sublabel={engagementSnapshot.sublabel}
               accent={monthOpens > 0 || monthClaims > 0}
@@ -1710,7 +1687,10 @@ export default function BusinessDashboard() {
         businessId={businessId}
       />
       <Animated.View entering={FadeInDown.duration(400).springify()}>
-        <ScreenHeader title={t("tabs.dashboard")} subtitle={dashboardSubtitle} />
+        <ScreenHeader
+          title={t("tabs.dashboard")}
+          subtitle={headerSubtitleCollapsed ? null : dashboardSubtitle}
+        />
       </Animated.View>
 
       {!isLoggedIn ? (
@@ -1760,6 +1740,8 @@ export default function BusinessDashboard() {
               keyExtractor={(item) => item.id}
               ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
+              onScroll={handleDashboardScroll}
+              scrollEventThrottle={32}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
               contentContainerStyle={{ paddingBottom: listBottom + Spacing.xxxl * 3, flexGrow: 1 }}
               onEndReachedThreshold={0.35}
@@ -1934,49 +1916,36 @@ export default function BusinessDashboard() {
                                 t,
                               })}
                             </Text>
-                            <View
+                            <Text
                               style={{
-                                flexDirection: "row",
-                                flexWrap: "wrap",
-                                gap: Spacing.xs,
                                 marginTop: Spacing.sm,
+                                fontSize: 13,
+                                lineHeight: 18,
+                                fontWeight: "700",
+                                color: theme.mutedText,
                               }}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.85}
+                              maxFontSizeMultiplier={1.1}
                             >
-                              <DealStatPill
-                                label={t("offersDashboard.dealStatClaims", { defaultValue: "Claims" })}
-                                value={String(item.claims)}
-                                accent={active}
-                              />
-                              <DealStatPill
-                                label={t("offersDashboard.dealStatRedeems", { defaultValue: "Redeemed" })}
-                                value={String(item.redeems)}
-                              />
-                              <DealStatPill
-                                label={t("offersDashboard.dealStatConversion", { defaultValue: "Redeem rate" })}
-                                value={
-                                  item.claims > 0
-                                    ? `${item.conversion}%`
-                                    : t("offersDashboard.noClaimsYetShort", { defaultValue: "No claims" })
-                                }
-                              />
-                              <DealStatPill
-                                label={t("offersDashboard.dealStatExpired", { defaultValue: "Expired" })}
-                                value={String(item.expiredUnredeemed)}
-                              />
-                            </View>
+                              {dealMetricsLine(item, t)}
+                            </Text>
                           </View>
                         </View>
                       </HapticScalePressable>
 
-                      <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                      <View style={{ marginTop: Spacing.md, flexDirection: "row", gap: Spacing.sm }}>
                         <SecondaryButton
                           title={t("offersDashboard.manageDeal")}
                           onPress={() => setDealManageFor(item)}
+                          style={{ flex: 1 }}
                         />
                         {sched === "ended" ? (
                           <PrimaryButton
                             title={t("offersDashboard.runAgainCta")}
                             onPress={() => duplicateDeal(item)}
+                            style={{ flex: 1 }}
                           />
                         ) : null}
                       </View>

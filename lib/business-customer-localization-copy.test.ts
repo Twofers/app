@@ -25,6 +25,9 @@ const INTENTIONALLY_NEUTRAL_VALUES = new Set([
   "consumerWallet.passSecondsUnit",
   "consumerWallet.countdownLabel",
   "consumerWallet.statSavedValue",
+  // A bare "{{percent}}%" interpolation — no translatable words, identical
+  // across locales by design (B1, business-ui-consistency-plan-2026-08-07).
+  "offersDashboard.dealMetricsRate",
 ]);
 
 function readLocale(locale: "en" | "es" | "ko"): LocaleTree {

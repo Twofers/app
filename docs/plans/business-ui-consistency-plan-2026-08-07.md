@@ -205,8 +205,24 @@ decoration: neutral `text` for counts; orange reserved for the single
 headline metric. Re-label so no two visible tiles restate the same number.
 Decide one home for impressions/feed views.
 
-**Expected outcome (testable).** In the dashboard grid, at most one value is
-orange. No two visible tiles show the same number with different labels.
+**Expected outcome (testable).** ~~At most one value is orange~~ (voided by
+Dan's decision #2 — the orange growth-metric split is intentional). No two
+visible tiles show the same number with different labels.
+
+**DONE 2026-08-07, with a supervisor correction.** The deal card's divergent
+tile implementation (`DealStatPill`) is deleted, leaving `MetricTile` used
+only by the summary grid. The duplicate-looking pair was "Claims / 28 / This
+month" beside "Engagement / 28 / Deal opens this month".
+
+The agent relabelled `metricEngagement` to a FIXED "Deal opens" — which QA
+caught as a **defect**: that tile is polymorphic. It shows opens, ELSE a
+redemption PERCENTAGE, ELSE "Waiting", so a merchant with claims but no opens
+would have read "Deal opens: 50%". The generic "Engagement" it carried was
+imprecise but not wrong. Fixed by making the LABEL travel with the value:
+opens → "Deal opens" + "This month"; percentage → "Redeem rate" (reusing the
+existing `dealStatConversion` key) + its own sublabel; waiting → "Engagement"
+(new `metricEngagementWaiting`, en/es/ko). This removes the duplicate read
+AND keeps every branch correctly labelled.
 
 ---
 
@@ -228,6 +244,15 @@ Tapping the card body still opens analytics.
 **Expected outcome (testable).** ≥4 deal cards visible on one S10 screen
 (vs 2.5 today). Zero delete buttons in the list. Card height ≤240px.
 
+**DONE 2026-08-07 (workstream 2).** Per Dan's decision #1 both Manage and Run
+again stayed, so the card was slimmed without touching them: the 4-up stat
+grid became one inline muted line (`dealMetricsLine`, and a zero-claim deal
+now reads "No claims yet" instead of four zeros), and the two buttons moved
+side by side. Device-measured ~348px, above the original ≤240px target
+(that target assumed one action + overflow, which decision #1 ruled out) but
+down from ~610px. **The testable outcome is met: 4.5 cards now fit on one S10
+screen vs 2.5** (`w2b_scrolled.png`). Delete left the card in workstream 1.
+
 ### B2. Offers — the sticky header wastes 300px and lies (P2)
 
 **What.** "Offers / Welcome back, Cedar & Bean Cafe / This month at a glance
@@ -242,6 +267,11 @@ pill). Drop the "tap a deal" hint once B1 gives cards a clear tap target.
 **Expected outcome (testable).** After scrolling past the first card, the
 header occupies ≤120px.
 
+**DONE 2026-08-07.** Subtitle collapses past ~200px of scroll (160px
+hysteresis on the way back up); device-verified showing only "Offers" while
+deep in the list (`w2b_scrolled.png`). "· tap a deal for details" dropped
+from `offersDashboard.subtitle` in en/es/ko.
+
 ### B3. Offers — the same fact is stated three times (P2)
 
 **What.** The summary card says "**No live deals**" as its title, "**0
@@ -253,6 +283,9 @@ business-facing headline and drop the pill.
 
 **Expected outcome (testable).** The live-deal count appears exactly once
 in the summary card.
+
+**DONE 2026-08-07.** The top-right "N live" pill was removed; the card title
+and the "Live deals" tile remain (`w2a_offers.png`).
 
 ### B4. Deal analytics — full visual rebuild (P1) + a real bug (P1)
 

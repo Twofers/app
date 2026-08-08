@@ -198,7 +198,13 @@ describe("AI create UX source guards", () => {
   });
 
   it("keeps deeper offers dashboard sections compact on phones", () => {
-    expect(dashboardSource).toContain('flexBasis: "22%"');
+    // The deal card's 4-up stat grid (pinned here as flexBasis: "22%") was
+    // replaced by a single inline metrics line and a side-by-side action row
+    // (plan B1, 2026-08-07) — strictly more compact than what this guard was
+    // protecting, so pin the new shape rather than dropping the guarantee.
+    expect(dashboardSource).toContain("function dealMetricsLine(");
+    expect(dashboardSource).toContain("{dealMetricsLine(item, t)}");
+    expect(dashboardSource).not.toContain("DealStatPill");
     expect(dashboardSource).toContain("maxFontSizeMultiplier={1.08}");
     expect(dashboardSource).toContain('minWidth: 92');
     expect(dashboardSource).not.toContain("offersDashboard.dataCoverageTitle");
