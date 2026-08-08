@@ -350,12 +350,44 @@ Note one RPC overload already does the right thing —
 `:501` uses `COALESCE(NULLIF(trim(b.timezone), ''), 'UTC') AS tz` off the
 **business** row — so the two overloads disagree.
 
-**FOUNDER-GATED, NOT DONE.** The fix is a prod migration (fall back to the
-business timezone instead of `'UTC'`, and ideally stop labelling a UTC bucket
-"local" when no timezone is known), and optionally persisting a timezone on
-one-time deals — which touches the hash-locked `app/create/ai.tsx`. Both need
-Dan's decision. Until then the client helper is correct but the merchant-facing
-number on this screen is still wrong for any one-time deal.
+**WRITTEN 2026-08-07 on Dan's "do the timezone migration" — APPLY IS STILL
+FOUNDER-GATED.** Two halves, both committed:
+
+1. **`supabase/migrations/20260828120000_reporting_timezone_fallback.sql`** —
+   repairs EXISTING rows. New `public.resolve_reporting_timezone(text, uuid)`
+   resolves **deal tz → that business's most recent non-null deal tz → 'UTC'**,
+   and both RPC overloads route through it (the business overload resolves once
+   into `v_fallback_tz` rather than per claim row).
+2. **`app/create/ai.tsx`** (hash-locked, re-hashed with a chained ref) — the
+   publish payload now always persists `timezone` instead of
+   `isRecurring ? timezone : null`, so new one-time deals never need the
+   fallback at all.
+
+**Two corrections to this section's earlier analysis, found while building it:**
+- I claimed the two overloads "disagree", citing `b.timezone` at `:501` as the
+  *business* timezone. WRONG — `b` there aliases the `base` CTE
+  (deal_claims ⋈ deals), so both overloads were already using the **deal**
+  timezone identically.
+- I proposed falling back to "the business timezone". **There is no such
+  column**: `businesses` has none, and `business_profiles.timezone` was never
+  created — the guard in `20260703120004_timezone_validation.sql` always takes
+  its "column does not exist — skipping" branch. Hence the fallback actually
+  used: the business's own other deals, which do carry a timezone whenever one
+  was recurring or took the `deals.timezone` column default.
+
+Safety checks done before touching the locked file: nothing infers recurrence
+from a null timezone, and `lib/deal-time.ts:33` already defaults a null — so
+always storing it only makes resolution accurate. Scope held to the deals
+payload; the sibling `deal_templates` insert is unchanged.
+
+Guarded by `supabase/functions/_shared/reporting-timezone-fallback-migration.test.ts`
+(6 tests) including a **byte-identity check** that the two RPC bodies copied
+out of `20260601153000` differ ONLY at the two timezone expressions.
+
+**Remaining for Dan:** apply the migration to prod (`supabase db push` per the
+runbook). Until it is applied, one-time deals published before the client fix
+still report UTC hours. Nothing needs redeploying — these are RPCs, not edge
+functions — and the client half rides the next store build.
 
 ### B5. Create hub — two card species in one list (P2)
 

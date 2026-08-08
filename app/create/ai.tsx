@@ -4441,7 +4441,15 @@ export default function AiDealScreen() {
         days_of_week: isRecurring ? daysOfWeek : null,
         window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
-        timezone: isRecurring ? timezone : null,
+        // Persist the timezone for ONE-TIME deals too. A one-time deal does not
+        // need it to compute its window (start/end are absolute instants), which
+        // is why this was null — but analytics buckets claims "by hour, local to
+        // the deal", and a null here made merchant_deal_insights fall back to
+        // UTC while still labelling the result "local": a 10:40 PM
+        // America/Chicago claim reported as 3:00 AM (device-verified 2026-08-07).
+        // Migration 20260828120000 repairs existing rows by borrowing the
+        // business's last known deal timezone; this stops new rows needing that.
+        timezone,
         quality_tier: quality.tier,
         ...eligibilityColumns,
       };
