@@ -122,3 +122,42 @@ describe("reporting timezone fallback migration", () => {
     expect(insightsPanelSource).toContain("claims_by_hour_local");
   });
 });
+
+describe("null deal timezone backfill migration", () => {
+  const backfill = readFileSync(
+    join(MIGRATIONS, "20260828130000_backfill_null_deal_timezones.sql"),
+    "utf8",
+  );
+
+  it("is marked as approval gated", () => {
+    expect(backfill).toMatch(
+      /Do not apply[\s\S]{0,20}without Dan's[\s\S]{0,12}explicit migration approval/i,
+    );
+  });
+
+  it("only fills rows that have no timezone, and is therefore re-runnable", () => {
+    // Must never overwrite a timezone a merchant's deal already carries.
+    expect(backfill).toContain("WHERE timezone IS NULL OR trim(timezone) = ''");
+    expect(backfill).toContain("UPDATE public.deals");
+    // Exactly one UPDATE, and it is the guarded one — an unguarded second
+    // statement would silently rewrite timezones merchants already have.
+    expect(backfill.match(/UPDATE public\.deals/g) ?? []).toHaveLength(1);
+  });
+
+  it("writes the column's own declared default, validated before use", () => {
+    // deals.timezone has been TEXT DEFAULT 'America/Chicago' since
+    // 20260127000001; the NULLs exist only because the client overrode it.
+    expect(backfill).toContain("v_default text := 'America/Chicago'");
+    // 20260703120004 adds a CHECK that rejects non-IANA values — guard first
+    // so the migration fails loudly rather than aborting mid-UPDATE.
+    expect(backfill).toContain("public.is_valid_iana_timezone(v_default)");
+    expect(backfill).toMatch(/RAISE EXCEPTION 'backfill aborted/);
+  });
+
+  it("documents that it asserts a timezone, and why UTC was worse", () => {
+    // This is a judgement call on historical data — it must stay legible to
+    // whoever reads the migration later.
+    expect(backfill).toMatch(/ACCURACY NOTE/);
+    expect(backfill).toMatch(/DFW|Central/);
+  });
+});
